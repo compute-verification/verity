@@ -1,14 +1,4 @@
-"""What a live run got where it executes, and why it waits, from research.scopemem's `node` reading of its machine.
-
-    cpus     the workload's affinities, and its cgroups' AllowedCPUs (cpuset.cpus) where one sets them, else the cpuset
-             they allow (cpuset.cpus.effective): a check slot pins with `taskset`, a queued job's scope with AllowedCPUs
-    gpus     every live gpu-lease lease whose owner line names the run (`run=`, gpu-lease's RESEARCH_RUN_ID)
-    slot     the check slot (slot.py) or Lean slot (lean_slot.py) whose holder names the run
-    waits    a live gpu-lease wait file naming the run: its place among the directory's waiters and how many GPUs are
-             unlocked there; on node 1, the lease pool's record and the limit that binds it (`n1_limit`).  A check-line or
-             Lean-line ticket naming the run: its place in line, and the slots it may take (a lane's check never takes an
-             `only=trains` slot) or its pool's N
-"""
+"""What a live run got where it executes, and why it waits."""
 from __future__ import annotations
 
 import sys
@@ -19,14 +9,12 @@ from typing import Any
 
 from . import scopemem
 
-#: the cluster's description beside this package (infra/cluster), for node 1's lease-pool quotas
 DESCRIPTION = Path(__file__).resolve().parents[4] / "infra" / "cluster" / "descriptions" / "nebius.toml"
 NODE1 = "vy-nebius-1"
 DEFAULT_LEASE_DIR = "/run/gpu-lease"
 
 
 def _t(s: Any) -> str:
-    """A UTC timestamp to the minute."""
     s = str(s or "-")
     return s[:16] + "Z" if len(s) >= 16 and s[10:11] == "T" else s
 
@@ -41,7 +29,6 @@ def cpus(run: dict[str, Any]) -> str | None:
 
 
 def gpus(run_id: str, node: dict[str, Any]) -> list[str]:
-    """One line per lease (a pid's GPUs in one directory) that names the run."""
     out = []
     for d, ld in (node.get("leases") or {}).items():
         mine: dict[str, list[dict]] = {}
@@ -58,10 +45,6 @@ def gpus(run_id: str, node: dict[str, Any]) -> list[str]:
 
 
 def n1_limit(lease_dir: str, n: int, waits: list[dict], limits: str | None, now: datetime, desc: Path = DESCRIPTION) -> str | None:
-    """The limit node 1's lease pool in `lease_dir` holds a request for `n` GPUs to (n1_lease.py): at most its queue's nominal quota,
-    less what the queue's other admitted Workloads reserve, and `borrow` GPUs more only while every waiter is --preemptible
-    and before `borrow-until`, never more than `max`.  The quota is the description's; max, borrow and borrow-until are the
-    pool's `n1-lease.limits` when it writes one (under a policy command), else unknown here.  None without the description."""
     try:
         doc = tomllib.loads(desc.read_text())
         pools = doc["policy"][NODE1]["lease-pool"]
@@ -114,13 +97,10 @@ def _state(s: dict[str, Any]) -> str:
 
 
 def _held(h: dict[str, Any]) -> str:
-    """Since when a slot's holder has held it, where its record says (slot.py's `took`); else when its process started, as that:
-    a check is one process from joining the line on, so that start is not when it took the slot."""
     return f"since {h['took']}" if h.get("took") else f"for a time not recorded (its process started {h.get('since')})"
 
 
 def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """The check and Lean slots the run holds, and its places in their lines."""
     held: list[str] = []
     waits: list[str] = []
     sl = node.get("slots") or {}
@@ -146,8 +126,6 @@ def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
 
 
 def lines(run_id: str, machine: str | None, reading: dict[str, Any], now: datetime | None = None) -> list[tuple[str, str]]:
-    """(label, text) for `research status` and `inspect`: mem, cpus, gpus, slot and waits, from `remote.node_readings`' entry
-    (or a local `scopemem.node` reading's)."""
     now = now or datetime.now(UTC)
     run, node = reading.get("run") or {}, reading.get("node") or {}
     out = [("mem", scopemem.render(m)) for m in run.get("memory") or ()]

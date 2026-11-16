@@ -1,15 +1,4 @@
-"""py-spy dumps of a run's Python processes: every thread's stack, for a run that has stopped making progress.
-
-    processes  status.json `pid` (none when its start time is not `starttime_ticks`: the pid was reused) and its descendants by
-               /proc ppid, the Python ones (comm or exe name starting `python`), at most MAX_PROCS
-    dump       `py-spy dump --pid P --nonblocking` for each (read, never paused), each within DUMP_TIMEOUT_S, under a
-               `== pid P (comm)` header with py-spy's error when it failed
-
-Under kernel.yama.ptrace_scope 1 py-spy reads only its own descendants unless it runs as root or has CAP_SYS_PTRACE: the
-harness's py-spy is the workload's sibling, so without either each dump is py-spy's permission error.
-
-Self-contained (stdlib, no package imports): `tele run`'s stall watch imports it, and `research inspect --py-spy` sends this
-file to a live run's machine as `python3 - RUN_DIR`, which prints the dump (exit 3 when py-spy is not on PATH)."""
+"""py-spy dumps of a run's Python processes, for a run that has stopped making progress."""
 from __future__ import annotations
 
 import json
@@ -31,7 +20,6 @@ ARGV_LINE = re.compile(r"^Process (\d+): .*$", re.M)
 
 
 def _stat(proc: Path, pid: int) -> tuple[str, list[str]] | None:
-    """(comm, the /proc/<pid>/stat fields after it: [state, ppid, pgrp, ...]; starttime is index 19)."""
     try:
         raw = (proc / str(pid) / "stat").read_text()
     except OSError:
@@ -51,7 +39,6 @@ def _is_python(proc: Path, pid: int, comm: str) -> bool:
 
 
 def python_tree(root_pid: int, starttime: int | None = None, proc: Path | None = None) -> list[tuple[int, str]]:
-    """(pid, comm) of the Python processes among `root_pid` and its descendants, root first, at most MAX_PROCS."""
     proc = Path(proc or os.environ.get("RESEARCH_PROC_ROOT", "/proc"))
     root = _stat(proc, root_pid)
     if root is None or (starttime is not None and root[1][19:20] != [str(starttime)]):
@@ -76,7 +63,6 @@ def python_tree(root_pid: int, starttime: int | None = None, proc: Path | None =
 
 def dump(procs: list[tuple[int, str]], *, run: Callable[..., Any] = subprocess.run,
          which: Callable[[str], str | None] = shutil.which) -> list[dict[str, Any]] | None:
-    """[{pid, comm, rc, text}] per process (rc None: py-spy timed out or did not start), or None when py-spy is not on PATH."""
     exe = which("py-spy")
     if exe is None:
         return None
@@ -113,7 +99,6 @@ def _status(run_dir: Path) -> dict[str, Any]:
 
 
 def of_run(run_dir: Path, proc: Path | None = None, **kw: Any) -> list[dict[str, Any]] | None:
-    """`dump` of the live workload that `run_dir`'s status.json names ([] when it names none, or a reused pid)."""
     st = _status(run_dir)
     pid = st.get("pid")
     procs = python_tree(pid, st.get("starttime_ticks"), proc) if isinstance(pid, int) else []

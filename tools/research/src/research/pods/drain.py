@@ -1,26 +1,4 @@
-"""Pod teardown gated on durability, so no pod is terminated while it holds evidence the store hasn't preserved.
-
-    research pods unpreserved <machine|pod-id> [--mode head|readback|recorded] [--older-min N] [--json]
-        every Attempt the store recorded on that machine that is NOT `preserved` (the same predicate as `research data preserved`:
-        `store.preserved.check`), with the reasons.  Exit 0 = nothing unpreserved, 1 = something is, 2 = machine unknown / no store.
-    research pods drain <machine|pod-id> [--mode ...] [--force --reason TEXT] [--json]
-        the same report, then terminates the pod ONLY when nothing on it is unpreserved.  `--force` terminates anyway; the reason is
-        required and is logged (`~/.research/pods/drain.log` and the report) -- an operator's decision, on the record.  Exit 0 =
-        terminated, 1 = refused (unpreserved Attempts listed, pod left running), 2 = usage / machine unknown / API error.
-    research pods terminate <pod-id> --require-preserved [--force --reason TEXT]
-        `drain` by pod id (part.main routes it here).
-    --custody-r2 (either verb): from any machine -- the catalog is refreshed from the remote first, and `pod_custody` must pass too:
-        the pod guard's fresh state says every run dir on the pod has custody (.fetched or .custody; store.custody).
-
-Machine -> Attempt link.  `execution.machine` / the indexed condition `exec.machine` = the `machines.toml` name a `research run --on`
-ran on (recorded from job.json `run.remote.machine`, `env.KEYS`); older manifests carry it at `execution.remote.machine`.  Runs
-started ON the pod (no `--on`) have neither, so the pod id (`cost.pod_id`) and, when the pod answers ssh, its container hostname
-(`hw.hostname` / `execution.host`) are matched too; each Attempt's `matched_by` says which.  An Attempt that is in the store but
-whose files are only on the pod is exactly what this gate protects; an Attempt that never reached the store is invisible to it
-(the report says so: `note`), which is why `research data push` on the pod comes first.
-
-The predicate is imported, never re-implemented: `preserved.check(st, run_ids, mode)`; mode `recorded` works offline from the
-catalog, `head` (default) asks the remote."""
+"""Pod teardown gated on durability: no pod is terminated while it holds evidence the store hasn't preserved."""
 from __future__ import annotations
 
 import calendar
@@ -46,8 +24,6 @@ POD_ID_RE = re.compile(r"[a-z0-9]{12,20}")      # runpod ids; a typo'd machine n
 
 
 def resolve_target(name: str) -> dict[str, Any]:
-    """`name` is a machines.toml entry, the pod id of one, or a raw pod id (`POD_ID_RE`).  {"machine": name|None, "pod_id", "entry"};
-    `pod_id` None when it is none of these."""
     ms = remote.load_machines()
     if name in ms:
         return {"machine": name, "pod_id": ms[name].get("pod_id"), "entry": ms[name]}
@@ -58,7 +34,6 @@ def resolve_target(name: str) -> dict[str, Any]:
 
 
 def probe_hostname(pod_id: str | None, timeout: int = 30) -> str | None:
-    """The container hostname of a RUNNING pod (best effort, read-only; None when unreachable)."""
     if not pod_id:
         return None
     from . import runpod
@@ -76,8 +51,6 @@ def probe_hostname(pod_id: str | None, timeout: int = 30) -> str | None:
 
 
 def attempts_on(st: LocalStore, machine: str | None, pod_id: str | None = None, hostname: str | None = None) -> dict[str, list[str]]:
-    """run id -> the facts that tie it to the machine (`exec.machine`, `execution.machine`, `execution.remote.machine`, `cost.pod_id`,
-    `hw.hostname`), from the store's catalog."""
     out: dict[str, list[str]] = {}
 
     def hit(aid: str, why: str) -> None:
@@ -108,7 +81,6 @@ def attempts_on(st: LocalStore, machine: str | None, pod_id: str | None = None, 
 
 
 def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
-    """run id -> when it ended (`execution.end_utc`, else start plus wall time, else its start), from the catalog."""
     def epoch(utc: str | None) -> float | None:
         try:
             return calendar.timegm(time.strptime(utc[:19], "%Y-%m-%dT%H:%M:%S")) if utc else None
@@ -133,8 +105,6 @@ def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
 
 def report(st: LocalStore, target: str, mode: str = "head", hostname: str | None = None, probe: bool = True,
            older_min: float | None = None, now: float | None = None) -> dict[str, Any]:
-    """The `unpreserved` report for a machine (module docstring).  `older_min`: only attempts that ended over N minutes ago (one
-    whose end the catalog can't date counts); the younger ones are `settling`, still in custody's hands."""
     t = resolve_target(target)
     if hostname is None and probe:
         hostname = probe_hostname(t["pod_id"])
@@ -170,7 +140,7 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     if rep.get("check") and rep["check"].get("reason"):
         lines.append(f"  remote: {rep['check']['reason']}")
     for aid in rep["unpreserved"]:
-        if aid not in rep["attempts"]:                 # the --custody-r2 part (pod_custody)
+        if aid not in rep["attempts"]:
             lines.append(f"  NOT preserved  {aid}")
             continue
         a = rep["attempts"][aid]
@@ -183,11 +153,10 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     return lines
 
 
-GUARD_STATE_MAX_AGE_S = 600       # a guard ticks every minute; older state is a dead guard's
+GUARD_STATE_MAX_AGE_S = 600
 
 
 def guard_state(pod_id: str | None, root: str, timeout: int = 30) -> tuple[dict[str, Any] | None, str]:
-    """The pod guard's <root>/guard/state.json (read-only, over ssh), or (None, why not)."""
     if not pod_id:
         return None, "no pod id"
     try:
@@ -211,10 +180,6 @@ def guard_state(pod_id: str | None, root: str, timeout: int = 30) -> tuple[dict[
 
 def pod_custody(st: LocalStore, target: str, *, refresh: bool = True, probe: bool = True, mode: str = "recorded", now: float | None = None,
                 state: Callable[[str | None, str], tuple[dict[str, Any] | None, str]] = guard_state) -> tuple[bool, str, dict[str, Any]]:
-    """Custody of everything on a pod, from any machine (--custody-r2): the catalog refreshed from the store's remote (so attempts published
-    on the pod or by another launcher are seen), every attempt tied to the pod PRESERVED (`report`), and the pod guard's own verdict that
-    every run dir under <root>/runs has custody (a valid .fetched or .custody; pods/sh/pod_guard.sh).  Without a fresh guard state the
-    pod's unpublished run dirs are unknown, and custody does not pass.  -> (ok, why, detail)."""
     t = resolve_target(target)
     detail: dict[str, Any] = {"target": target, "pod_id": t["pod_id"], "refresh": None, "attempts": None, "guard": None}
     if refresh:
@@ -252,9 +217,6 @@ def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
 def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = False, reason: str | None = None, hostname: str | None = None,
           probe: bool = True, terminate=None, log_path: Path | None = None, custody_r2: bool = False,
           pod_custody_fn: Callable[..., tuple[bool, str, dict[str, Any]]] | None = None) -> tuple[int, dict[str, Any]]:
-    """Report, then terminate unless something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's; the
-    decision and its reason are appended to `log_path`.  `custody_r2`: the catalog is refreshed from the remote first and `pod_custody`
-    must pass too (every run dir on the pod has custody, by the pod guard's verdict).  Returns (exit code, report)."""
     log_path = log_path or drain_log_path()
     if custody_r2:
         ok, why, detail = (pod_custody_fn or pod_custody)(st, target, refresh=True, probe=probe)
@@ -318,7 +280,6 @@ def _parser(prog: str, drain_flags: bool):
 
 
 def main(argv: list[str]) -> int:
-    """`research pods unpreserved ...` | `research pods drain ...` | `research pods terminate <pod-id> --require-preserved ...`."""
     verb, rest = argv[0], argv[1:]
     if verb == "terminate":
         rest = [x for x in rest if x != "--require-preserved"]

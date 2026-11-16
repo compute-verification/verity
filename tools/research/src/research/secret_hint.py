@@ -1,8 +1,3 @@
-"""A Cursor secret this VM injects but this shell lacks: a long-lived shell on a cloud VM can lose them while a fresh tmux login
-shell still has them, so `research` first takes them from the tmux server, where that shell gets them (`recover`), and a command
-that still lacks one says so instead of failing as if it were never configured (`lost`). The server holds them only while it
-lives, which is while it has a session: a VM keeps one, KEPT_SESSION (`tools/agent-guard/kept_session.py`: boot starts it and
-the shell hook refuses to end it), and `research doctor` says when no server or no such session is there (`server`)."""
 from __future__ import annotations
 
 import os
@@ -10,9 +5,8 @@ import re
 import subprocess
 
 FRESH_SHELL = "rerun from a fresh tmux login shell"
-RECOVERED: list[str] = []          # every name `recover` set in this process (`research doctor` names them)
+RECOVERED: list[str] = []
 KEPT_SESSION = "vm-secrets"
-#: what starts the kept session by hand; where no tmux server runs it starts one, which holds what the shell running it has
 START_KEPT = f"tmux new-session -d -s {KEPT_SESSION}"
 
 
@@ -21,8 +15,6 @@ def _injected() -> list[str]:
 
 
 def _tmux(*args: str) -> subprocess.CompletedProcess | None:
-    """`tmux ARGS` on this VM's server, its output kept, never printed; None where tmux can't run, and under a test
-    (`$PYTEST_CURRENT_TEST`, which a test's subprocesses inherit), which asks no server of the machine it runs on."""
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return None
     try:
@@ -32,14 +24,10 @@ def _tmux(*args: str) -> subprocess.CompletedProcess | None:
 
 
 def recover() -> list[str]:
-    """Set each secret in $CLOUD_AGENT_INJECTED_SECRET_NAMES that is unset here from the tmux server's global environment, and
-    return the names set. A laptop, a pod or a node has no such list and runs nothing; a value is never printed. Nor does a
-    process under a test: a secret a test unset is its setup."""
     got = []
     for n in (n for n in _injected() if not os.environ.get(n)):
         if (p := _tmux("show-environment", "-g", n)) is None:
             break
-        # `NAME=value\n`; `-NAME` when tmux holds it removed, and an error when no server runs
         if p.returncode == 0 and p.stdout.startswith(f"{n}=") and (v := p.stdout[len(n) + 1:].removesuffix("\n")):
             os.environ[n] = v
             got.append(n)
@@ -48,9 +36,6 @@ def recover() -> list[str]:
 
 
 def server() -> tuple[list[str] | None, bool] | None:
-    """What `recover` would find on this VM: (the injected names its tmux server's environment holds, whether KEPT_SESSION is
-    there), the names None when no server answers. None where nothing is asked: without an injected list, without tmux, and
-    under a test."""
     names = _injected()
     if not names or (held := _tmux("show-environment", "-g")) is None:
         return None
@@ -61,7 +46,6 @@ def server() -> tuple[list[str] | None, bool] | None:
 
 
 def lost(*names: str) -> str:
-    """'' unless some of `names` are in $CLOUD_AGENT_INJECTED_SECRET_NAMES (a Cursor cloud VM's list) and unset here; then the hint."""
     injected = set(_injected())
     gone = [n for n in names if n in injected and not os.environ.get(n)]
     return f"{', '.join(gone)} not in this shell though this VM injects {'it' if len(gone) == 1 else 'them'}: {FRESH_SHELL}" if gone else ""

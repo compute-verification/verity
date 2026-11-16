@@ -60,7 +60,6 @@ def _read(p: Path) -> dict:
 
 
 def run_files(run_dir: Path) -> list[str]:
-    """Every regular file under the run dir, markers excluded, no symlink followed (store.custody.run_files)."""
     out = []
     for base, dirs, files in os.walk(run_dir):
         dirs.sort()
@@ -102,7 +101,6 @@ def marker_problem(run_dir: Path) -> str | None:
 
 
 def not_ended(run_dir: Path) -> str | None:
-    """None when the run has ended (module docstring); else why it hasn't, as far as this pass can tell."""
     state = _read(run_dir / "status.json").get("state")
     if state not in TERMINAL:
         return f"status {state or 'absent'}"
@@ -134,15 +132,13 @@ def _sealed_mode(mode: int) -> int:
 
 
 def seal_dir(parent_fd: int, name: str, uid: int = 0, gid: int = 0) -> int:
-    """Seal the dir `name` of the directory `parent_fd`; the number of entries sealed. No symlink is followed (module docstring)."""
-    os.close(os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd))   # ELOOP for a symlink
+    os.close(os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd))
     n = 0
-    # fwalk opens `name` itself and descends it only when it is the directory its lstat saw
     for _root, dirs, files, rootfd in os.fwalk(name, dir_fd=parent_fd, topdown=False, follow_symlinks=False):
         for entry in dirs + files:
             st = os.stat(entry, dir_fd=rootfd, follow_symlinks=False)
             if stat.S_ISDIR(st.st_mode):
-                continue                                  # sealed through its own fd, when fwalk yields it
+                continue
             if not stat.S_ISREG(st.st_mode):
                 os.chown(entry, uid, gid, dir_fd=rootfd, follow_symlinks=False)
                 n += 1
@@ -168,7 +164,6 @@ def seal_dir(parent_fd: int, name: str, uid: int = 0, gid: int = 0) -> int:
 
 
 def candidates(root: Path, uid: int = 0) -> list[str]:
-    """The names of the run dirs under `root` not sealed yet (no symlink, oldest name first: run ids sort by time)."""
     out = []
     try:
         entries = sorted(os.scandir(root), key=lambda e: e.name)
@@ -189,7 +184,6 @@ def candidates(root: Path, uid: int = 0) -> list[str]:
 
 def seal_pass(roots: list[str], *, dry_run: bool, max_dirs: int = MAX, quiet_s: float = QUIET_MIN * 60, now: float | None = None,
               uid: int = 0, gid: int = 0, ledger: str | None = LEDGER, say=print) -> dict:
-    """One pass: seal up to `max_dirs` ended run dirs under `roots`; {"sealed": [...], "skipped": N, "errors": [...]}."""
     t = time.time() if now is None else now
     rep: dict = {"sealed": [], "skipped": 0, "errors": []}
     for root in roots:
@@ -247,7 +241,6 @@ def seal_pass(roots: list[str], *, dry_run: bool, max_dirs: int = MAX, quiet_s: 
 
 
 def sealed_run(path: str, roots: list[str], uid: int = 0) -> tuple[Path | None, str | None]:
-    """(the run dir, None) when `path` is a sealed, ended run dir directly under one of `roots`; else (None, why not)."""
     if not os.path.isabs(path) or os.path.normpath(path) != path.rstrip("/") or "/../" in f"{path}/":
         return None, f"{path}: give the run dir's absolute, normalized path"
     p = Path(path.rstrip("/"))
@@ -278,7 +271,6 @@ def delete(path: str, roots: list[str], uid: int = 0, say=print, remove=shutil.r
 
 
 def evict(path: str, roots: list[str], min_bytes: int, uid: int = 0, gid: int = 0, say=print) -> int:
-    """store.evict.evict_custody's rule on a sealed run: stdout is its report as JSON, as `research data evict` reads it."""
     p, why = sealed_run(path, roots, uid)
     if p is None:
         say(f"vy-seal-runs evict: refused: {why}")

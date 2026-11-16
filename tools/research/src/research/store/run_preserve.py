@@ -1,31 +1,4 @@
-"""A workload preserves one file of its out/ while it runs: `research run-preserve PATH`, which its runner answers.
-
-A machine holds no store write key, and the custody key `research run --on` mints is the runner's alone (store.custody), so
-a workload puts nothing in the store itself, and the run's custody uploads out/ only once the workload has exited.  For a
-record that must not have its only copy on the machine until then, the workload asks and the runner puts; no key or remote
-address reaches the workload's environment or a file it can read:
-
-    workload   `research run-preserve PATH [--kind K] [--meta JSON] [--timeout S]` claims a request under
-               <run dir>/control/preserve/requests/, waits for the answer of the same name under answers/, prints the art id and
-               exits 0 when it says PRESERVED; anything else it says on stderr and exits 1, within --timeout
-    runner     `Preserver.poll`, once on each pass of the loop that waits for the workload (telemetry.run): it takes one request
-               at a time and starts a child of its own for it (`serve`), which checks the path, copies the file, reads the
-               custody key (`custody.custody_env`), puts the copy as an artifact carrying the run id, pushes it, verifies it
-               as custody verifies a run (`preserved.check`, head mode) and claims the answer: PRESERVED with the art id, bytes
-               and sha256, else REFUSED or NOT_PRESERVED with the reason and what to do about it
-
-A child and not the loop itself, because a remote that stalls would hold the loop that ends the workload on its timeout or
-a cancel: the runner stops a child at PUT_DEADLINE_S and answers for it.  The key is read only in that child, once the path
-is accepted.  Whatever the child writes that can name the remote stays in the custody dir, beside the key: its output (a
-store error) in preserve.log, and the store it puts from (whose index records where each artifact went) in preserve-store/,
-which the runner deletes once the workload has ended.  Its one file in the run dir is the answer.
-
-The file stays in out/, so the run's record at the end holds it too, by the same blob.  The answers are the runner's own
-files in that record (custody.RUN_FILE_GLOBS); a request is the workload's, like any other file it writes outside out/;
-and a run that made no request keeps nothing of this (`Preserver.close`).  Under --job-user the job writes into requests/
-and nowhere else here, so an answer is always the runner's, and the runner reads a request and the file it names as files
-it doesn't trust: no link followed, a regular file, a bounded read.
-"""
+"""A workload preserves one file of its out/ while it runs, through its runner."""
 from __future__ import annotations
 
 import argparse
@@ -49,29 +22,20 @@ from ..telemetry.run import OUT_DIR
 from ..telemetry.scope import claim
 from . import kinds
 
-DIR = Path("control") / "preserve"                   # run-dir relative, the runner's: made only by a runner that holds a custody key
+DIR = Path("control") / "preserve"
 REQUESTS, ANSWERS = DIR / "requests", DIR / "answers"
-#: Claimed by the runner when it takes no more requests, each holding the refusal a request without an answer gets: the
-#: workload has ended, or the run has made MAX_REQUESTS.  Beside the answers: all that the runner writes here is in one place.
 CLOSED, FULL = ANSWERS / "closed", ANSWERS / "full"
 REQUEST_SCHEMA, ANSWER_SCHEMA = "research/run-preserve-request/v1", "research/run-preserve-answer/v1"
 KIND = "run-file/v1"
 PRESERVED, REFUSED, NOT_PRESERVED = "PRESERVED", "REFUSED", "NOT_PRESERVED"
-#: The largest file a request may name.  A record that can't wait for the run's end (a coin, a digest, a verdict) is a few
-#: KiB; this is hundreds of them, still one conditional PUT (no multipart) that takes about a second beside the workload it
-#: must not disturb, and anything bigger is a result, which the run's custody uploads from out/ when the run ends.
 MAX_BYTES = 1 << 20
-#: The most requests a run may make: what a workload that asks in a loop can make its runner upload while it runs (this
-#: many files of MAX_BYTES) and add to its record (two small files a request).
 MAX_REQUESTS = 64
-REQUEST_MAX_BYTES = 64 << 10                         # a request file, its --meta included
-#: How long the runner gives one put before it stops it and answers NOT_PRESERVED: a healthy remote takes about a second.
+REQUEST_MAX_BYTES = 64 << 10
 PUT_DEADLINE_S = 60.0
-#: How long the command waits for its answer by default: a put ahead of it and its own, each to its deadline.
 TIMEOUT_S = 150.0
-POLL_S = 0.25                                        # the command's wait between looks, the runner loop's own period
-LOG = "preserve.log"                                 # in the custody dir: the children's output, which may name the remote
-STORE = "preserve-store"                             # in the custody dir: the store the children put from, the run's alone
+POLL_S = 0.25
+LOG = "preserve.log"
+STORE = "preserve-store"
 NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}\.json")
 MODULE = "research.store.run_preserve"
 
@@ -91,31 +55,22 @@ class Refusal(Exception):
 
 
 class NotPreserved(Exception):
-    """The remote isn't known to hold the artifact.  `what` is for the answer; the text, with the store's errors, is for the
-    runner's log only."""
-
     def __init__(self, what: str, errors: str):
         super().__init__(f"{what}: {errors}")
         self.what = what
 
-
-# ---- the workload's side ------------------------------------------------------------------------------------------------------------------
 
 def _say(msg: str) -> None:
     print(f"research run-preserve: {msg}", file=sys.stderr)
 
 
 def _read(path: Path) -> dict[str, Any] | None:
-    """A claimed file's document once it is there (`claim` creates it whole)."""
     return json.loads(path.read_text()) if path.exists() else None
 
 
 def _wait(run_dir: Path, rid: str, timeout: float) -> dict[str, Any]:
-    """The answer to request `rid`: the runner's, else the refusal of the marker that says it takes no more, else, once `timeout`
-    has passed, NOT_PRESERVED."""
     answer, end = run_dir / ANSWERS / f"{rid}.json", time.monotonic() + timeout
     while True:
-        # the marker first: the runner answers what it took before it claims one, so a request with neither has no answer coming
         marker = next((m for m in (CLOSED, FULL) if (run_dir / m).exists()), None)
         if (ans := _read(answer)) is not None:
             return ans
@@ -143,7 +98,7 @@ def main(argv: list[str], environ: Mapping[str, str] | None = None) -> int:
     ns = ap.parse_args(argv)
     environ = os.environ if environ is None else environ
     try:
-        from .cli import _meta  # `research data put`'s reading of --meta
+        from .cli import _meta
 
         meta = _meta(ns.meta)
     except (OSError, ValueError) as e:
@@ -165,11 +120,10 @@ def main(argv: list[str], environ: Mapping[str, str] | None = None) -> int:
     if not kinds.is_known(ns.kind):
         _say(f"unknown kind {ns.kind!r} (store/kinds.py lists the known ones); asking anyway")
     rid = f"{os.getpid()}-{secrets.token_hex(4)}"
-    # taken no more: say so without leaving a request nothing will answer
     ans = next((_read(d / m) for m in (CLOSED, FULL) if (d / m).exists()), None)
     if ans is None:
         try:
-            claim(d / REQUESTS / f"{rid}.json", doc, mode=0o644)         # the runner may be another user (--job-user)
+            claim(d / REQUESTS / f"{rid}.json", doc, mode=0o644)
         except OSError as e:
             _say(f"NOT_PRESERVED: can't write the request under {d / REQUESTS} ({e.strerror}); {ns.path} stays where it is")
             return 1
@@ -182,20 +136,13 @@ def main(argv: list[str], environ: Mapping[str, str] | None = None) -> int:
     return 1
 
 
-# ---- the runner's side: the loop ---------------------------------------------------------------------------------------------------------
-
 class Preserver:
-    """The runner's side for one run dir.  Making it is the offer (the directories a workload's command looks for), so only a
-    runner that holds a custody key makes one; `poll` on each pass of the runner's loop; `close` once the workload has ended
-    and before anything takes the run's record.  `shared`: the workload is another user (--job-user), who may write requests
-    and read answers."""
-
     def __init__(self, run_dir: Path | str, custody_dir: Path | str, *, shared: bool = False,
                  popen: Callable[..., Any] = subprocess.Popen):
         self.run_dir, self.custody_dir, self.shared, self.popen = Path(run_dir), Path(custody_dir), shared, popen
-        self.env = dict(os.environ)                  # the runner's own, as it is before the workload's --env is set for the spawn
+        self.env = dict(os.environ)
         self.seen: set[str] = set()
-        self.child: tuple[str, Any, float] | None = None       # the request in flight, its process and when it is stopped
+        self.child: tuple[str, Any, float] | None = None
         self.full = self.closed = False
         for d in (ANSWERS, REQUESTS):
             (self.run_dir / d).mkdir(parents=True, exist_ok=True)
@@ -211,7 +158,6 @@ class Preserver:
             return sorted(e.name for e in entries if not e.name.startswith(".") and e.name not in self.seen)
 
     def _answer(self, name: str, verdict: str, reason: str) -> None:
-        """Answer for a request no child answered (`claim` creates once: a child's own answer stands), and say so in the log."""
         path = self.run_dir / ANSWERS / name
         claim(path, {"schema": ANSWER_SCHEMA, "request": name.removesuffix(".json"), "verdict": verdict, "reason": reason}, mode=0o644)
         ans = _read(path) or {}
@@ -232,8 +178,6 @@ class Preserver:
         self.child = (name, proc, time.monotonic() + PUT_DEADLINE_S)
 
     def _reap(self, wait: bool = False) -> bool:
-        """Whether no put is in flight now.  One that has exited is answered for if it left no answer, and so is one stopped at its
-        deadline; with `wait`, after waiting for it until then."""
         if self.child is None:
             return True
         name, proc, end = self.child
@@ -257,7 +201,6 @@ class Preserver:
         return True
 
     def poll(self) -> None:
-        """One pass of the runner's loop: answer for the put in flight once it is over, else take the next request."""
         if self.closed or not self._reap() or self.full:
             return
         for name in self._pending()[:1]:
@@ -273,9 +216,6 @@ class Preserver:
                 print(f"research: run-preserve: {name!r} under {REQUESTS} is not a request's name, and counts as one; {USE}", file=sys.stderr)
 
     def close(self) -> None:
-        """The workload has ended: the put in flight gets the rest of its deadline, each request not taken is refused (up to the
-        run's MAX_REQUESTS answers), none is read after, and the store the puts went through is deleted.  A run that made no
-        request keeps nothing of the offer."""
         if self.closed:
             return
         self.closed = True
@@ -289,12 +229,11 @@ class Preserver:
                         self._answer(name, REFUSED, ENDED)
                 if self.shared:
                     os.chmod(self.run_dir / REQUESTS, 0o755)
-        except OSError as e:            # the run's custody comes next, whatever became of this directory
+        except OSError as e:
             print(f"research: run-preserve: closing {self.run_dir / DIR}: {e}", file=sys.stderr)
         shutil.rmtree(self.custody_dir / STORE, ignore_errors=True)
 
     def _retract(self) -> bool:
-        """Remove the offer's directories; False when a request is there after all."""
         try:
             os.rmdir(self.run_dir / REQUESTS)
         except OSError:
@@ -304,10 +243,7 @@ class Preserver:
         return True
 
 
-# ---- the runner's side: one request, in a child -------------------------------------------------------------------------------------------
-
 def _request(path: Path) -> dict[str, Any]:
-    """The request at `path`, read as a file the runner doesn't trust (under --job-user the job wrote it)."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as e:
@@ -328,9 +264,6 @@ def _request(path: Path) -> dict[str, Any]:
 
 
 def _open(run_dir: Path, path: str) -> tuple[int, str]:
-    """(an open descriptor of the regular file `path` names inside the run's out/, its path relative to the run dir).  Links and
-    `..` are resolved first, and what they resolve to must be under out/; that path is then opened one component at a time
-    following no link, so one swapped for a link after the check is refused, not read."""
     out = os.path.join(os.path.realpath(run_dir), OUT_DIR)
     real = os.path.realpath(path) if os.path.isabs(path) and "\0" not in path else ""
     if not real.startswith(out + os.sep):
@@ -373,7 +306,6 @@ def _too_big(rel: str, size: str) -> str:
 
 
 def _copy(src: IO[bytes], into: Path, rel: str) -> tuple[str, int]:
-    """Copy `src` to `into`, at most MAX_BYTES (a file that grew past it since it was opened is refused); (sha256, bytes)."""
     h, n = hashlib.sha256(), 0
     with open(into, "wb") as dst:
         while chunk := src.read(1 << 16):
@@ -390,8 +322,6 @@ def _warn(msg: str) -> None:
 
 
 def _withdrawn(st: Any, run_id: str, rel: str) -> str | None:
-    """The refusal when a `withdrawn` label of one of the run's artifacts covers `rel` (`withdraw.refused`, as `research data put
-    --tree` asks): a tree of the run names the file by its run-dir path, a file this command preserved earlier by its meta."""
     from . import withdraw
 
     for path, art, w in withdraw.refused(st, run_id, [rel, Path(rel).name], _warn):
@@ -403,8 +333,6 @@ def _withdrawn(st: Any, run_id: str, rel: str) -> str | None:
 
 
 def _preserve(run_dir: Path, custody_dir: Path, req: dict[str, Any]) -> dict[str, Any]:
-    """The PRESERVED answer for `req`, once the remote was checked to hold its artifact; else Refusal, or whatever the store
-    raised."""
     from . import custody as CU
     from . import preserved
     from .local import LocalStore
@@ -419,10 +347,10 @@ def _preserve(run_dir: Path, custody_dir: Path, req: dict[str, Any]) -> dict[str
         os.close(fd)
         raise
     try:
-        staged = tmp / Path(rel).name                # the runner's own copy: what is hashed is what is put
+        staged = tmp / Path(rel).name
         with os.fdopen(fd, "rb") as src:
             sha, n = _copy(src, staged, rel)
-        with CU.custody_env(custody_dir):            # the key, in this process's environment alone, for the store calls below
+        with CU.custody_env(custody_dir):
             st = LocalStore(root)
             if why := _withdrawn(st, run_id, rel):
                 raise Refusal(why)
@@ -440,7 +368,7 @@ def _preserve(run_dir: Path, custody_dir: Path, req: dict[str, Any]) -> dict[str
 
 
 def _failed(custody_dir: Path, e: Exception) -> str:
-    """The answer's reason for a put that failed: the kind of failure, never its text, which can name the remote."""
+    """The kind of failure, never its text, which can name the remote."""
     from . import custody as CU
 
     expires = CU._key_expiry(custody_dir)
@@ -454,8 +382,6 @@ def _failed(custody_dir: Path, e: Exception) -> str:
 
 
 def serve(run_dir: Path | str, custody_dir: Path | str, name: str) -> dict[str, Any]:
-    """Decide the request `name` of `run_dir` and claim its answer, which is returned.  PRESERVED only once the remote was
-    checked to hold the artifact; a failure's text goes to stderr (the runner's LOG), its kind into the answer."""
     d = Path(run_dir)
     try:
         ans = _preserve(d, Path(custody_dir), _request(d / REQUESTS / name))

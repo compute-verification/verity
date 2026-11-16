@@ -47,7 +47,7 @@ def ts(s: str) -> float:
 def prom_range(query: str, start: float, end: float) -> list[dict]:
     out: list[dict] = []
     t = start
-    while t < end:  # Prometheus limits a range to 11,000 points
+    while t < end:
         e = min(end, t + 10000 * STEP)
         qs = urllib.parse.urlencode({"query": query, "start": int(t), "end": int(e), "step": STEP})
         doc = json.loads(ssh("n1", f"sudo k3s kubectl get --raw '{PROM}?{qs}'"))
@@ -91,7 +91,7 @@ def summarize_n1(prom: dict, start: float, end: float) -> dict:
 
 
 def kueue_allocated(queue_lines: list[dict], start: float) -> dict[str, float]:
-    """GPU-hours Kueue had admitted per UTC hour, from vy-usage's 5-minute samples (each sample stands for the 5 min before it)."""
+    """GPU-hours a UTC hour; each 5-minute sample stands for the 5 minutes before it."""
     per: dict[str, float] = defaultdict(float)
     for d in queue_lines:
         if d.get("t", 0) < start:

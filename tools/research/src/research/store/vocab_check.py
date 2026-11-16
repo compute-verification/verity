@@ -1,20 +1,4 @@
-"""`research data vocab-check`: what in a store's labels/ is off the vocabulary (README §8.1), read-only.
-
-The audit reads the assertion FILES, not the catalog: the catalog stores every value as text (`index.scalar_text`), so `true` the
-boolean and `"true"` the word look the same there, and the point of the check is to tell them apart.  Findings, each with counts,
-the asserters and a few example targets:
-
-    unknown_keys      keys no vocabulary entry describes
-    alias_keys        old spellings of a key (`notes` / `verify_note` -> `note`, `batch` -> `B`, `checker` -> `verifier`)
-    alias_values      old spellings of a value (`candidate=A` -> `A-GKR`)
-    string_typed      bool / int / number keys holding the word (`zk="true"`) instead of the value
-    off_enum          enum keys holding a value outside the closed set
-    ref_keys          `path` / `result_artifact` / `constructed_from_attempt` written as labels (they are refs)
-    measurement_keys  measurements / run parameters written as labels (`vocab.MEASUREMENT_KEYS`: `l`, `subbatches`, ...)
-    unreadable        files that do not parse as an assertion
-
-Nothing is written; correcting is the coordinator's call (`labels` are append-only: a correction is a new assertion, never an edit).
-"""
+"""`research data vocab-check`: what in a store's labels/ is off the vocabulary, read-only."""
 from __future__ import annotations
 
 import json
@@ -53,7 +37,6 @@ def classify(label: Label) -> tuple[str, str] | None:
 
 
 def audit(store: LocalStore) -> dict[str, Any]:
-    """The report: `{"labels": n, "findings": n, "by_category": {cat: {detail: {"count", "by": {...}, "examples": [target, ...]}}}}`."""
     cats: dict[str, dict[str, dict[str, Any]]] = {c: {} for c in CATEGORIES}
     n = 0
     for p in sorted((store.root / "labels").glob("*/*.json")):

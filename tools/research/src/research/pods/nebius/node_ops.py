@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""Node operations for a shared GPU server: an OOM guard, one status page, and alerts (stdlib only; runs as the job user).
-
-    node_ops.py            the loop: the guard every GUARD_S (5 s); the page and the alerts every PAGE_S (60 s)
-    node_ops.py --page     write the page once and print it
-
-OOM guard.  The kernel's OOM killer picks by size alone and can take the lease loop (which stops the VM on time), sshd sessions or
-the samplers.  When MemAvailable falls under ACT_PCT of MemTotal, the guard stops the largest process group of this user by
-resident memory, outside PROTECT: SIGTERM, then SIGKILL after 10 s.  Under WARN_PCT it only alerts.  Every OOM kill anywhere
-(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup limit) is an alert, with the user journal's line naming
-the unit.
-
-Page: OUT/status.md, with who holds which GPU (gpu-lease status), the GPUs' latest sample (gpu_util_sampler's JSONL, so no NVML
-query here and none during a timed window), waiters, the fill queue, research runs live and failed in the last 2 h, CPU, RAM,
-disks, and open alerts.
-
-Alerts: OUT/alerts.jsonl, one JSON line per alert, repeated at most once an hour per key: disk at or over DISK_PCT, memory low,
-OOM kills, the guard's kills, a run marked running whose process is gone, a failed fill job, a sampler or fill runner gone quiet.
-"""
+"""Node operations for a shared GPU server: an OOM guard, one status page and alerts (stdlib only; runs as the job user)."""
 from __future__ import annotations
 
 import json
@@ -64,7 +47,6 @@ def meminfo() -> dict[str, int]:
 
 
 def in_verity_scope(pid: int) -> bool:
-    """Verity's guest CPU jobs run in `fill-verity-*` scopes (fill_runner.py); the OOM guard stops them before any pous work."""
     try:
         return "fill-verity-" in Path(f"/proc/{pid}/cgroup").read_text()
     except OSError:
@@ -75,8 +57,6 @@ TIMING_SLICE = os.environ.get("FILL_TIMING_SLICE", "vy-timing.slice")
 
 
 def in_timing_slice(pid: int) -> bool:
-    """Fill's timing jobs run in scopes of the top-level FILL_TIMING_SLICE (fill_runner.py, through root's systemd-run), on cores
-    of their own.  A slice of that name under a user's manager (`systemd-run --user --slice=...`) is anyone's to make."""
     try:
         return any(l.startswith(f"0::/{TIMING_SLICE}/") for l in Path(f"/proc/{pid}/cgroup").read_text().splitlines())
     except OSError:
@@ -84,8 +64,6 @@ def in_timing_slice(pid: int) -> bool:
 
 
 def in_lease_scope(pid: int) -> bool:
-    """A GPU lease's job runs in a `gpu-lease-<pid>.scope` (gpu_lease.sh): Quiet leaves it, and every group its builds start (ninja
-    gives each compile a group of its own), running, since a paused build can hold a lock a timed lease's job then waits on."""
     try:
         return "/gpu-lease-" in Path(f"/proc/{pid}/cgroup").read_text()
     except OSError:
@@ -100,7 +78,6 @@ def oom_kills() -> int:
 
 
 def groups() -> dict[int, dict]:
-    """This user's process groups: resident bytes and the leader's command line."""
     uid, page = os.getuid(), os.sysconf("SC_PAGE_SIZE")
     out: dict[int, dict] = {}
     for d in Path("/proc").iterdir():
@@ -126,7 +103,6 @@ def groups() -> dict[int, dict]:
 
 
 def signalled(pgid: int, sig: int) -> bool:
-    """Whether `sig` reached process group `pgid`: False once the group is gone."""
     try:
         os.killpg(pgid, sig)
         return True
@@ -176,29 +152,14 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-# a candidate's check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
-# --timed lease would otherwise freeze a candidate's check for the whole window. The check's directory either way a tree spells it
-# (slot_only.CHECK_DIRS; this file is installed alone), as a whole path (slot_only.check_file)
 CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 CHECK_PY = rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))})(?:check|slot)\.py(?![\w.-])"
 QUIET_EXEMPT = re.compile(rf"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |{CHECK_PY}")
-# of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research
-# runner's are not, since every run's workload descends from one
 QUIET_EXEMPT_TREE = re.compile(rf"/workspace/pouw/fill/running/|timeout |{CHECK_PY}")
-# `research run`'s per-run sampler polls nvidia-smi every 5 s for the whole life of a run, the timed run's own included,
-# so every one is paused for a window whatever its CPU use (the pous root, 17:19Z); its run records the gap.
 SAMPLER = re.compile(r"-m research\.telemetry sample ")
 
 
 class Quiet:
-    """While a timed window holds GPUs (a lease tagged timed=1, or every GPU held by one holder), stop this user's CPU-heavy
-    process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
-    tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
-    (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
-    anything under GNU `timeout` (it would lose the paused time), candidates' checks (slot.py, check.py), every process a GPU lease runs
-    (`in_lease_scope`), the descendants of those in groups of their own, and PROTECT's daemons.  Measured
-    reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
-
     STATE = OUT / "logs" / "quiet-paused.json"
 
     def __init__(self) -> None:
@@ -206,7 +167,7 @@ class Quiet:
         self.ticks: dict[int, int] = {}
         self.t = time.monotonic()
         self.hz = os.sysconf("SC_CLK_TCK")
-        try:                                   # groups an earlier instance stopped: kept stopped while the window lasts, else continued
+        try:
             earlier = [int(p) for p in json.loads(self.STATE.read_text())] if self.STATE.exists() else []
         except (OSError, ValueError) as e:
             print(f"node_ops: {self.STATE} unread, so no group an earlier instance stopped is kept ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
@@ -277,7 +238,7 @@ class Quiet:
                 self.resume("window over")
             self.ticks = {p: v["cpu"] for p, v in procs.items()}
             return
-        mine, p = set(), ME                                      # this process's own ancestors seed nothing (a test under `timeout`)
+        mine, p = set(), ME
         while p in procs and p not in mine:
             mine.add(p)
             p = procs[p]["ppid"]
@@ -320,7 +281,6 @@ QUIET: "Quiet | None" = None
 
 
 def busy_last_hour() -> str:
-    """Busy share of GPU time over the last 60 min of samples: a kernel resident, DCGM SM activity >= 1%, or a timed window."""
     cutoff = (now() - __import__("datetime").timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     busy = total = 0
     for f in sorted(UTIL.glob("*.jsonl"))[-2:]:
@@ -376,7 +336,6 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
         except (OSError, ValueError) as e:
             print(f"node_ops: run {d.name} skipped, its status unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
-        # the runner's transition, the last naming a pid: `tele set-timeout` appends a `running` one without
         trs = [t for t in st.get("transitions") or [] if isinstance(t, dict)]
         tr = next((t for t in reversed(trs) if t.get("pid") is not None), trs[-1] if trs else {})
         cmd = " ".join(tr.get("command") or [])[:120]
@@ -408,7 +367,7 @@ def disks() -> list[tuple[str, float, float]]:
 
 
 def stop_at() -> datetime | None:
-    """When lease.sh stops the VM: the lease's expiry, never later than 5 min before root's deadline (both `EPOCH ...`)."""
+    """Never later than 5 min before root's deadline."""
     ends = []
     for f, margin in ((LEASE_FILE, 0), (DEADLINE_FILE, 300)):
         if not f.exists():
@@ -421,8 +380,6 @@ def stop_at() -> datetime | None:
 
 
 def fill_alerts() -> None:
-    """The fill runner's last 50 events that need a person: a failed job, and a timing job's scope that root's systemctl couldn't
-    kill (its processes keep the GPU's lease until someone does)."""
     for line in (FILL / "events.jsonl").read_text().splitlines()[-50:] if (FILL / "events.jsonl").exists() else []:
         e = json.loads(line)
         if e.get("event") == "failed":

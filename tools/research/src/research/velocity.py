@@ -55,22 +55,22 @@ from .goals import PACIFIC
 from .goals_audit import _waits, due_at
 
 WINDOW_H = 6
-STEP_H = 24                 # a goal with nothing under it written in this is stalled
-GRACE_H = 1                 # and a step is dead this long past its hour: a reading on the hour meets steps due that hour
-SLACK_S = 900               # readings drift by minutes: a dump taken this long after a time still stands for it
-LIMIT = 100                 # the agents that may run at once
+STEP_H = 24
+GRACE_H = 1
+SLACK_S = 900
+LIMIT = 100
 KIND = "goals-dump/v1"
 WHAT = "research goals show --json"
 CONTROL = "vy-control-verity"
-SWEEP_GOALS = "/data/watchers/goals"        # where the hourly sweep saves the page on the control pod
-POD_FLEET = "/data/watchers/fleet"          # and where the pod keeps the fleet's samples
+SWEEP_GOALS = "/data/watchers/goals"
+POD_FLEET = "/data/watchers/fleet"
 DATA = Path(__file__).with_name("velocity.json")
 STAMP = "%Y%m%dT%H%MZ"
 DUMP_NAME = re.compile(r"goals-(\d{8}T\d{4}Z)\.json(\.gz)?$")
 ISSUE_KEY = re.compile(r"([A-Z][A-Z0-9]*)-\d+\b")
 UNNAMED = "unnamed"
 SCOPES = {"hand": "top priority, set by hand", "p1": "priority 1", "all": "every goal"}
-SHARE, MEDIAN = "Share on `main` within 2 h of the mark", "Mark to `main`"      # the rows of `research queue stats` read
+SHARE, MEDIAN = "Share on `main` within 2 h of the mark", "Mark to `main`"
 
 
 class Unread(Exception):
@@ -78,7 +78,6 @@ class Unread(Exception):
 
 
 def when(text: str) -> datetime:
-    """A time written with its offset (2026-11-11T12:00-08:00), or a dump's stamp (20261111T2002Z)."""
     if re.fullmatch(r"\d{8}T\d{4}Z", text):
         return datetime.strptime(text, STAMP).replace(tzinfo=UTC)
     t = datetime.fromisoformat(text)
@@ -92,13 +91,11 @@ def pst(t: datetime) -> str:
 
 
 def span(a: datetime, b: datetime) -> str:
-    """`a` to `b` in Pacific time, the day said once when both are on it."""
     a, b = a.astimezone(PACIFIC), b.astimezone(PACIFIC)
     return f"{a:%a %-d %b %-I:%M %p} to {b:%-I:%M %p %Z}" if a.date() == b.date() else f"{a:%a %-d %b %-I:%M %p} to {pst(b)}"
 
 
 def row(read: Callable[[], dict]) -> dict:
-    """What `read` gives, or `{"not_read": why}`: a row that can't be read says so, and the others are still read."""
     try:
         return read()
     except Unread as e:
@@ -107,24 +104,17 @@ def row(read: Callable[[], dict]) -> dict:
         return {"not_read": f"{type(e).__name__}: {e}"}
 
 
-# ---- goals: pure functions of two dumps -------------------------------------------------------------------------------------
-
 def in_scope(g: dict, scope: str) -> bool:
     return scope == "all" or g.get("priority") == 1 and (scope == "p1" or bool(g.get("prioritySet")))
 
 
 def standing(goals: list[dict], scope: str) -> dict:
-    """The scope's goals in one dump: how many, how many open, and how many of those off track."""
     mine = [g for g in goals if in_scope(g, scope)]
     return {"goals": len(mine), "open": sum(g["status"] != "done" for g in mine),
             "off_track": sum(g["status"] == "off-track" for g in mine)}
 
 
 def moved(before: list[dict], after: list[dict], scope: str) -> dict:
-    """What changed from one dump to a later one, over the goals the later dump has in the scope and the earlier had open:
-    how many finished, and how many moved earlier and later with their days in total (a goal finished since counts with its
-    move). Beside them, not in the score: the scope's goals done now that the earlier dump didn't hold (`new_done`), and
-    the goals the earlier dump had open in the scope that the page no longer holds (`removed`)."""
     was, here = {g["id"]: g for g in before}, {g["id"] for g in after}
     mine = [g for g in after if in_scope(g, scope)]
     held = [g for g in mine if g["id"] in was and was[g["id"]]["status"] != "done"]
@@ -138,10 +128,6 @@ def moved(before: list[dict], after: list[dict], scope: str) -> dict:
 
 
 def stalls(goals: list[dict], now: datetime) -> list[dict]:
-    """The open top-priority goals set by hand that are stalled at `now`, each with why. A goal's steps are itself and
-    every open goal it waits on, through any number of links. A step is dead when it is GRACE_H hours past its hour and
-    hasn't been updated since that hour. The goal is stalled when a step is dead, or when nothing under it has been
-    written in STEP_H hours: every open step's `updatedAt` is older than that, a step with none counting as unwritten."""
     by = {g["id"]: g for g in goals}
 
     def dead(s: dict) -> bool:
@@ -169,8 +155,6 @@ def stalls(goals: list[dict], now: datetime) -> list[dict]:
     return out
 
 
-# ---- dumps ------------------------------------------------------------------------------------------------------------------
-
 def read_page() -> list[dict]:
     from .goals import Route
 
@@ -185,7 +169,6 @@ def open_store():
 
 @functools.cache
 def control_ssh() -> tuple[str, ...]:
-    """The ssh command line to the control pod, as `research pods ssh` builds it: asked for once a reading."""
     from . import remote
     from .pods import connect
 
@@ -196,7 +179,6 @@ def control_ssh() -> tuple[str, ...]:
 
 
 def pod(cmd: str, timeout: float = 120) -> str:
-    """What the shell command `cmd` prints on the control pod; run here when this machine is the pod."""
     argv = ["sh", "-c", cmd] if Path(SWEEP_GOALS).parent.is_dir() else [*control_ssh(), cmd]
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
@@ -215,8 +197,6 @@ def parse(raw: bytes | str, what: str) -> list[dict]:
 
 
 def load(spec: str) -> dict:
-    """The dump `spec` names, `{goals, taken, source}`: an `art:` id, a file (`.gz` or not; taken at its name's stamp, else
-    at its newest update), or `sweep:NAME`, one the hourly sweep saved."""
     if spec.startswith("art:"):
         st = open_store()
         return {"goals": parse(st.fetch(spec).read_bytes(), spec), "taken": when(st.get_manifest(spec).meta["taken"]),
@@ -237,7 +217,6 @@ def load(spec: str) -> dict:
 
 
 def open_index():
-    """The store's index (`bucket_index.reader`), or Unread saying why it can't be asked from here."""
     from .store import bucket_index as BI
 
     if (idx := BI.reader(open_store().root)) is None:
@@ -246,7 +225,6 @@ def open_index():
 
 
 def by_minute(pairs, what: str, notes: list[str]) -> dict[datetime, str]:
-    """`{taken: art}` from (`art:` id, its stamp) pairs; a pair whose stamp isn't one is left out, and `notes` says which."""
     out: dict[datetime, str] = {}
     for art, stamp in pairs:
         try:
@@ -259,7 +237,6 @@ def by_minute(pairs, what: str, notes: list[str]) -> dict[datetime, str]:
 
 
 def indexed_dumps(notes: list[str]) -> dict[datetime, str]:
-    """Every dump in the store, from its index, which lists the bucket whatever machine put each one there."""
     from .store import bucket_index as BI
 
     idx = open_index()
@@ -274,16 +251,12 @@ def indexed_dumps(notes: list[str]) -> dict[datetime, str]:
 
 
 def dumps_target() -> str:
-    """What every dump's GOALS_DUMP label is on: the derivation of the request each dump answers (`research goals show
-    --json`), so one listing of that target's labels on the store's remote finds every dump, whatever machine put it there."""
     from .store.derivation import derivation_id
 
     return derivation_id(WHAT, None, None, None, None)
 
 
 def labelled_dumps(notes: list[str]) -> dict[datetime, str]:
-    """Every dump `save` put in the store, from its label on `dumps_target()`, pulled from the store's remote: the listing an
-    agent's machine can make with the store's keys alone."""
     from .store import labels_sync
     from .store import vocab as VOC
 
@@ -298,10 +271,6 @@ def labelled_dumps(notes: list[str]) -> dict[datetime, str]:
 
 
 def known_dumps(notes: list[str]) -> dict[datetime, str]:
-    """Each known dump by when it was taken, one a minute: the ones the hourly sweep saved on the control pod, the ones
-    `velocity.json` names, the store's (its index's, or where the index can't be asked their labels' on its remote, and this
-    machine's store's, which holds what the index hasn't listed yet, and alone answers when neither can be read), a dump in
-    the store taking a minute's place over a file on the pod. Which sources answered, and why one didn't, is said in `notes`."""
     out: dict[datetime, str] = {}
     indexed = False
     for what, read in (("the sweep's dumps", lambda: {when(m[1]): f"sweep:{m[0]}" for name in
@@ -325,10 +294,6 @@ def known_dumps(notes: list[str]) -> dict[datetime, str]:
 
 
 def save(goals: list[dict], taken: datetime, store=None) -> tuple[str | None, str]:
-    """The dump put in `store` (default `open_store()`) and pushed to its remote, with its GOALS_DUMP label on
-    `dumps_target()`: its `art:` id, and why it isn't preserved and labelled there ('' when it is). The artifact and its label
-    are functions of `goals` and `taken`'s minute alone (the file's bytes and name, meta naming no caller, and the label's
-    time the minute), so every save of one copy, the hourly sweep's and a person's, is the one `art:` id and the one label."""
     from .store import labels_sync
     from .store import vocab as VOC
     from .store.local import StoreError
@@ -355,13 +320,7 @@ def save(goals: list[dict], taken: datetime, store=None) -> tuple[str | None, st
     return art, "; ".join(f"its label isn't on the remote: {f}" for f in failed)
 
 
-# ---- the other rows ---------------------------------------------------------------------------------------------------------
-
 def landing(since: datetime, until: datetime, live: bool) -> dict:
-    """The share on `main` within two hours of the mark and the mark-to-`main` times over the window, as the table of
-    `research queue stats` gives them for its long window: its document is gathered to `until` (`live`: nothing after it
-    is cut, for it is now) and its long window started at `since`. The document holds queue_table.WINDOW_H hours, so a
-    longer window is not read, and neither is one whose document lacks the queue's loop."""
     from . import queue_table
 
     hours = (until - since).total_seconds() / 3600
@@ -372,14 +331,11 @@ def landing(since: datetime, until: datetime, live: bool) -> dict:
     if not doc.get("control"):
         raise Unread("`research queue stats` didn't read the queue's loop (" + "; ".join(doc["errors"]) + ")")
     cells = {r["name"]: r["day"] for r in queue_table.table(doc | {"day": f"{since.astimezone(UTC):%Y-%m-%dT%H:%M:%SZ}"})}
-    return {"share": cells[SHARE], "mark_to_main": cells[MEDIAN],       # a node's run directories are no part of these rows
+    return {"share": cells[SHARE], "mark_to_main": cells[MEDIAN],
             "unread": [e for e in doc["errors"] if e.split(":")[0] not in queue_table.CPU_NODES]}
 
 
 def agents(text: str, reg: dict) -> dict:
-    """The agents running, by lane, from the saved output of the cursor-cloud `list-cloud-agents` tool (a line of prose,
-    then its JSON). A name that starts with an issue key is its team's lane's, one that is a handle (`verity: HANDLE`
-    too) is that lane's, and any other is UNNAMED."""
     try:
         doc = json.loads(text[text.index("{"):])
         listed = doc["agents"]
@@ -398,7 +354,6 @@ def agents(text: str, reg: dict) -> dict:
 
 
 def machines(since: datetime, until: datetime) -> dict:
-    """The dollars spent and the idle dollars in the window, by fleet.py's report over the control pod's samples."""
     from .pods.nebius import fleet
 
     hours = (until - since).total_seconds() / 3600
@@ -424,14 +379,11 @@ def read_asks(now: float) -> list[dict]:
 
 
 def asks(rows: list[dict], now: float) -> dict:
-    """People's asks not delivered, and those of them off track (`linear.ask_findings`), by kind."""
     found = linear.ask_findings(rows, now)
     return {"open": sum(map(linear.ask_open, rows)), "off_track": len({f["issue"] for f in found}),
             "kinds": {k: n for k in linear.ASK_KINDS if (n := sum(f["kind"] == k for f in found))},
             "issues": sorted({f["issue"] for f in found})}
 
-
-# ---- the reading ------------------------------------------------------------------------------------------------------------
 
 def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None, now: datetime) -> dict:
     notes: list[str] = []
@@ -498,7 +450,6 @@ def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None,
 
 
 def _saved(d: dict) -> str:
-    """Where the page read now was saved, when it was to be: its `art:` id, and why it isn't preserved when it isn't."""
     if "art" not in d:
         return ""
     return (f"saved as {d['art']}" if d["art"] else "not saved") + (f" (NOT preserved: {d['unpreserved']})" if d["unpreserved"] else "")
@@ -516,7 +467,6 @@ def _cells(m: dict) -> list[str]:
 
 
 def _rest(r: dict) -> list[tuple[str, str]]:
-    """The rows below the goals, each `(name, what it read and from where)`."""
     def cell(key: str, text: Callable[[dict], str]) -> str:
         return f"not read: {r[key]['not_read']}" if "not_read" in r[key] else text(r[key])
     hours = f"the {r['hours']:g} h to {pst(r['until'])}"
@@ -565,7 +515,6 @@ def render(r: dict) -> str:
 
 
 def line(r: dict) -> str:
-    """The reading as one line for a chat: the score of the top-priority goals set by hand, then the other rows in short."""
     def score(m: dict) -> str:
         return "not read" if "not_read" in m else (f"{m['finished']} finished, {m['earlier_days']:.1f} days earlier less "
                                                    f"{m['later_days']:.1f} later (net {m['net_days']:+.1f})")

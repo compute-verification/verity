@@ -1,58 +1,3 @@
-"""Evict local copies whose bytes are PRESERVED on the remote (README §7): the remote is the durable home, `objects/` is a hot cache.
-
-Two kinds of local copy can go, and only these:
-
-* **store blobs** (`objects/sha256/<hex>`): a blob is evictable when EVERY artifact that holds it has a remote replica with a
-  `verified_utc` in the catalog (PRESERVED), the local object has the manifest's size, and the blob is at least `min_bytes`.
-  Largest first, until the target free space is reached.  `LocalStore._resolve_blob` re-fetches an evicted blob on demand;
-  `has_local` / `where` report the eviction honestly, and `index.set_presence(local=...)` is refreshed for every touched artifact.
-  A blob any artifact in `keep` holds stays (`--keep-registry`: the fixture registry, for a node that can't refetch from the remote).
-  `trees/` (materialised tree copies) is a pure cache: its entries nobody fetched within `TREE_KEEP_S` go unless `keep_trees`
-  (a fresher one may be open in a run's view; the node's hourly eviction runs below its mark all day).
-* **run-directory files** (`~/.research/runs/<run>/...`, `evict_runs`): the big files of a finished run that appear, with the same
-  size (and the same sha256 when the file is <= `hash_max` bytes), in a PRESERVED tree artifact of its attempt: `run_record` /
-  `run_files`, or a typed output its `outputs.json` declares, laid out under that output's `tree` path (a Build's `outputs/build`).
-  Oldest run first.  A run touched in the last `quiet_s` seconds (a day by default: an agent VM's runs are read for hours
-  after they end, and a node's evictor passes its own shorter window), or whose status is not terminal, is left alone.
-  `run-files.evicted.json` in the run dir lists what went and the `research data fetch`es that bring it back.
-  A sealed run dir (store.sealed) is the root helper's to change: `sudo -n vy-seal-runs evict` removes the files its
-  `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
-
-* **source trees** (`<root>/src/<sha>`, `evict_src`): the trees `research run --on` ships per commit (remote.py `ship_source`;
-  up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets three
-  conditions, each established afresh: (1) it is
-  recoverable on the node: its commit is reachable from a ref of the node's `<root>/git/verity.git`, which holds
-  `refs/research/src/<sha>` for every tree shipped and from which `research run` re-ships it (`git ls-remote`, or of
-  `--src-origin`, `--no-replace-objects`), and the tree is exactly that commit: its `.git` is a ship's (no config key, exclude,
-  object, ref or stash of its own), its HEAD is the commit, no index entry is marked skip-worktree or assume-unchanged, and
-  `git status`, run without system or global config, shows nothing but READY.json, build caches and fetched fixtures, ignored
-  files included (`_local_changes`); (2) nothing uses it: no live process names it (cwd, root, exe, open file, map, command line,
-  environment, any `src/<sha>` they spell, any sha a process inside `<src>` names, a thread's cwd when its leader exited), no git
-  worktree made from it that may still exist (`_worktrees`: a registration in its `.git/worktrees` whose worktree is gone, which
-  git itself prunes only months later, keeps nothing), no run that has not ended and no request without a
-  run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
-  (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
-  record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it, but a refused
-  one (refused.json, no status.json: its workload never ran), names that commit as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
-  size and sha256 job.json names, listed by the run's `.custody`; `_dirty_preserved`).  A tree with a `research keep` record is left
-  to `research retention`.  This pass is the only thing that deletes a whole source tree (`node_sweep.sh` no longer does).  Not on a free-space target: an
-  unused tree costs inodes as much as bytes, and `research run` re-ships one from
-  `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
-  by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
-  time (`<src>/.evict.lock`).  It fails closed: a condition
-  it cannot establish (the repository unlisted, a process it cannot read, a record it cannot read) deletes nothing and says why.
-  The one process it passes over unread is an nginx worker whose configuration cannot name a tree (`_nginx_worker`): RunPod's
-  proxy, which runs as `nobody` on every pod, where the pass has no CAP_SYS_PTRACE.
-
-`leftovers.py` holds the command's other passes, over what a node's work leaves that nothing else removes: request directories
-whose run dir is gone, the clones of runs that are over or whose run dir is gone, the store's lock files, a uv cache's idle
-shards.
-
-Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
-Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
-`research data verify` / `push` them first.  `free_fn` is the free-space probe (an `os.statvfs` over the store root by default);
-tests inject their own.
-"""
 from __future__ import annotations
 
 import fcntl
@@ -74,12 +19,10 @@ from . import ids, sealed
 from .local import REPLICA_MAPS, LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
-MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
-#: a `trees/` entry fetched within this long may still be read (a view a run links into: the vLLM regression's rebuilds read
-#: theirs for most of an hour), so eviction leaves it; `LocalStore.fetch` refreshes an entry's mtime on every fetch
+MIN_BYTES = 1 << 20
 TREE_KEEP_S = 24 * 3600
-HASH_MAX = 64 << 20          # run files up to this size are sha256-checked against the artifact before eviction
-QUIET_S = 24 * 3600          # a run directory touched more recently than this may still be read (collected, inspected)
+HASH_MAX = 64 << 20
+QUIET_S = 24 * 3600
 TERMINAL_STATES = ("done", "failed", "dead", "timed_out", "exited", "cancelled")
 EVICTED_SCHEMA = "research/run-files-evicted/v0.1"
 EVICTED_FILE = "run-files.evicted.json"
@@ -91,20 +34,15 @@ def free_bytes(path: Path | str) -> int:
 
 
 def verified_remote(store: LocalStore) -> set[str]:
-    """Artifacts whose remote replica carries a `verified_utc` (PRESERVED per README §7)."""
     return {r[0] for r in store.index.db.execute("SELECT id FROM replicas WHERE location='remote' AND verified_utc IS NOT NULL")}
 
 
 def flagged_remote(store: LocalStore) -> set[str]:
-    """Artifacts the catalog flags as present on the remote (pushed or listed), verified or not."""
     return {r[0] for r in store.index.db.execute("SELECT id FROM artifacts WHERE remote=1")}
 
 
 def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, keep: frozenset[str] = frozenset(),
                log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """What could go: `candidates` = [(bytes, hex, holders)] largest first, `trees_bytes`, `held_back_bytes` (local blobs of
-    artifacts flagged remote but not verified), `kept_bytes` (local blobs an artifact in `keep` holds), `skipped` (size mismatch /
-    unreadable manifest)."""
     say = log or (lambda s: None)
     verified, flagged = verified_remote(store), flagged_remote(store)
     holders: dict[str, set[str]] = {}
@@ -146,7 +84,6 @@ def plan_store(store: LocalStore, *, min_bytes: int = MIN_BYTES, keep: frozenset
 
 
 def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
-    """The `trees/` entries nobody fetched within TREE_KEEP_S of ``now``, their bytes, and how many entries are fresher."""
     trees = store.root / "trees"
     stale, n, kept = [], 0, 0
     for entry in os.listdir(trees) if trees.is_dir() else []:
@@ -165,8 +102,6 @@ def stale_trees(store: LocalStore, now: float) -> tuple[list[str], int, int]:
 def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = False, min_bytes: int = MIN_BYTES, keep_trees: bool = False,
                 keep: frozenset[str] = frozenset(), free_fn: Callable[[], int] | None = None, log: Callable[[str], None] | None = None,
                 now: float | None = None) -> dict[str, Any]:
-    """Evict verified-remote blobs (largest first) and the `trees/` entries not fetched within TREE_KEEP_S until `free_fn()` >=
-    `target_free_bytes`.  The report says what was (or, with `dry_run`, would be) removed; nothing else is touched."""
     say = log or (lambda s: None)
     free = free_fn or (lambda: free_bytes(store.root))
     plan = plan_store(store, min_bytes=min_bytes, keep=keep, log=log)
@@ -213,15 +148,11 @@ def evict_store(store: LocalStore, *, target_free_bytes: int, dry_run: bool = Fa
     return rep
 
 
-# ---- run directories ---------------------------------------------------------------------------------------------------------------------
-
 def _sha256(p: Path) -> str:
     return sha256_file(p)[0]
 
 
 def on_remote(store: LocalStore, art: str) -> bool:
-    """`art`'s manifest and every blob it names are on the remote at their sizes: one HEAD each, no read-back. Enough to drop a
-    local copy whose files match the manifest (`plan_runs` hashes them), and so not recorded as a verified replica."""
     r = store.remote
     if r is None:
         return False
@@ -238,10 +169,6 @@ def on_remote(store: LocalStore, art: str) -> bool:
 def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES, quiet_s: float = QUIET_S, hash_max: int = HASH_MAX,
               now: float | None = None, log: Callable[[str], None] | None = None, remote_check: bool = False,
               jobs: int = 16) -> list[dict[str, Any]]:
-    """Per run dir with evictable files: `{"run", "dir", "artifact", "files": [{"path", "bytes", "sha256", "artifact"}], "restore"}`,
-    oldest run first; `artifact` is the first of the run's PRESERVED trees (`_sources`) that holds one of them. With `remote_check`
-    (an agent VM, whose copies `research fetch` made and whose catalog records no verified replica), a tree the catalog doesn't
-    record as verified counts once `on_remote` finds it on the remote, `jobs` trees at a time."""
     say = log or (lambda s: None)
     now = time.time() if now is None else now
     verified = verified_remote(store)
@@ -267,7 +194,7 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
                     big.append((p.relative_to(rd).as_posix(), st.st_size))
         if not big:
             continue
-        big.sort(key=lambda t: (-t[1], t[0]))                      # largest first, not the filesystem's listing order
+        big.sort(key=lambda t: (-t[1], t[0]))
         if now - newest < quiet_s:
             say(f"{run}: touched {int((now - newest) / 60)} min ago, skipping")
             continue
@@ -313,7 +240,6 @@ def plan_runs(store: LocalStore, runs_root: Path, *, min_bytes: int = MIN_BYTES,
 
 def _plan_files(store: LocalStore, run: str, rd: Path, big: list[tuple[str, int]], preserved: list[tuple[str, str]], hash_max: int,
                 plan: list[dict[str, Any]], say: Callable[[str], None]) -> None:
-    """Add to `plan` the run dir's big files that match a file of one of its `preserved` trees (sha256-checked up to `hash_max`)."""
     tree: dict[str, tuple[str, int, str]] = {}
     for art, under in preserved:
         try:
@@ -338,9 +264,6 @@ def _plan_files(store: LocalStore, run: str, rd: Path, big: list[tuple[str, int]
 
 
 def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
-    """The attempt's tree artifacts that hold copies of the run dir's files, as (art id, the run-dir path the tree is laid out
-    under, "" for the run dir itself): `run_record` / `run_files`, a `files` output (staged relative to the run dir) and a `tree`
-    output at its `tree` path, as the run's `outputs.json` declares them (`attempt.typed_outputs`)."""
     src = [(outs[k], "") for k in ("run_record", "run_files") if isinstance(outs.get(k), str)]
     try:
         doc = json.loads((rd / "outputs.json").read_bytes()) if (rd / "outputs.json").exists() else None
@@ -403,11 +326,6 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
 
 
 def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MIN_BYTES) -> dict[str, Any]:
-    """The run dir's files that `custody.verify` has just found in the run record on the remote (`custody`, its report with
-    `preserved`), at least `min_bytes` each: `research data custody --publish` removes them, so a published run stops holding the
-    disk.  A file is removed only while it is still the size it had and
-    unchanged since `verified_from`; the small records (job.json, status.json, result.json, the logs under `min_bytes`) stay, so
-    `status` and `inspect` still read the run.  `run-files.evicted.json` lists what went and the fetch that brings it back."""
     rd = Path(run_dir)
     rep: dict[str, Any] = {"run": rd.name, "artifact": custody.get("run_record"), "files": [], "evicted_bytes": 0}
     if not custody.get("preserved") or not custody.get("run_record"):
@@ -453,26 +371,21 @@ def parse_gb(text: str) -> int:
     return int(float(text) * 1e9)
 
 
-# ---- source trees --------------------------------------------------------------------------------------------------------------------
-
-SRC_KEEP_S = 3600            # a tree changed, or named by a run recorded, this recently may be being shipped or about to run;
-#   a live run's tree is kept by its process anyway, and at 2 h a busy node keeps about 100 trees and runs out of inodes
-SRC_BUDGET_S = 30 * 60       # no deletion starts after this long, so the unit's `timeout 3000` never cuts a pass off mid-tree
+SRC_KEEP_S = 3600
+SRC_BUDGET_S = 30 * 60
 GIT_TIMEOUT_S = 300
-ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
-READY_FILE = "READY.json"    # remote.READY_FILE: the marker that makes <src>/<sha> executable
-LOCK = ".evict.lock"         # <src>/.evict.lock: one pass at a time
-#: a run marked running whose runner (status.json's last pid, at its start time) is gone: a node restart or a killed runner
-#: leaves it so, and such records, some weeks old, kept half of a node's trees
+ASIDE = ".evicting-"
+READY_FILE = "READY.json"
+LOCK = ".evict.lock"
 LOST = "lost"
 ENDED = TERMINAL_STATES + ("refused", LOST)
-PF_KTHREAD = 0x00200000      # /proc/<pid>/stat flags: a kernel thread, which opens no file of ours
-NGINX_CONF = Path("/etc/nginx/nginx.conf")  # a bare `/usr/sbin/nginx` master's configuration (Debian/Ubuntu build)
+PF_KTHREAD = 0x00200000
+NGINX_CONF = Path("/etc/nginx/nginx.conf")
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
 class Unestablished(Exception):
-    """A condition of `evict_src` that could not be established; the message says which and why.  Nothing more is deleted."""
+    pass
 
 
 def _redact(url: str) -> str:
@@ -485,8 +398,6 @@ def _git(args: list[str], stdin: str | None = None, env: dict[str, str] | None =
 
 
 def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
-    """The commits of `shas` reachable from a ref of `origin` (`git ls-remote`: any ref): a tip itself, or in the history of a tip
-    that `git_dir` holds (a commit's id covers its parents, so an ancestor there is reachable from the tip)."""
     def run(args: list[str], what: str, stdin: str | None = None) -> str:
         try:
             r = _git(args, stdin)
@@ -512,11 +423,9 @@ def on_origin(shas: set[str], origin: str, git_dir: Path) -> set[str]:
 
 
 _LOOSE = re.compile(rf"(?:^|[/\0\s:=])src/+(?:\./)*(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
-"""A tree named however a process spells it (`src/<sha>` relative to its cwd, `//`, `/./`): any `src/<sha>` keeps that sha."""
 
 
 _BARE = re.compile(rf"(?:^|[/\0\s:=])(?:{re.escape(ASIDE)})?([0-9a-f]{{40}})(?![0-9a-f])")
-"""Any sha a process inside <src> names (`../<sha>` from a tree, `<sha>/x.py` from <src>): it may be a sibling tree."""
 
 
 def _roots(src_root: Path) -> str:
@@ -532,7 +441,6 @@ def _inside(src_root: Path) -> re.Pattern[str]:
 
 
 def _quiet(fn: Callable[[], Any]) -> Any:
-    """`fn()`, or None when what it reads is gone (a process that exited, a file removed meanwhile)."""
     try:
         return fn()
     except (FileNotFoundError, ProcessLookupError, NotADirectoryError):
@@ -540,8 +448,6 @@ def _quiet(fn: Callable[[], Any]) -> Any:
 
 
 def _proc_texts(base: Path) -> list[str]:
-    """Every path and string process `base` names: cwd, root, exe, open files, maps, command line, environment.  Empty for a kernel
-    thread or a process gone meanwhile; PermissionError when it can't be read."""
     task = base.parent.name == "task"
     stat = _quiet((base / "stat").read_text)
     if not task and (stat is None or int(stat.rsplit(")", 1)[1].split()[6]) & PF_KTHREAD):
@@ -549,7 +455,7 @@ def _proc_texts(base: Path) -> list[str]:
     out = [_quiet(lambda n=n: os.readlink(base / n)) for n in ("cwd", "root", "exe")]
     out += [_quiet(lambda f=f: os.readlink(base / "fd" / f)) for f in _quiet(lambda: os.listdir(base / "fd")) or []]
     out += [_quiet(lambda n=n: (base / n).read_bytes().decode(errors="replace")) for n in ("maps", "cmdline", "environ")]
-    if out[0] is None and not task:     # a leader that exited while its threads run: they show under task/
+    if out[0] is None and not task:
         for tid in _quiet(lambda: os.listdir(base / "task")) or []:
             if tid != base.name:
                 out += _proc_texts(base / "task" / tid)
@@ -561,16 +467,10 @@ def _field(status: str, key: str) -> list[str]:
 
 
 def _tops(path: Path | str) -> frozenset[str]:
-    """The top directories `path` is under, as it is spelled and as it resolves."""
     return frozenset(Path(p).parts[1] for p in (os.path.abspath(path), os.path.realpath(path)) if len(Path(p).parts) > 1)
 
 
 def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
-    """Whether unreadable process `pid` is an nginx worker that cannot name a tree: RunPod's proxy (a worker as `nobody` on every
-    pod, which a container without CAP_SYS_PTRACE can't read).  A worker is forked from its master without exec and opens only what
-    the master's configuration names, so it qualifies when it runs as a uid other than root, its parent is readable and is a bare
-    `/usr/sbin/nginx` master (no `-c`, `-p` or `-g`: the configuration is `conf`), and `conf` includes no other file, loads no
-    module and never names the top directory of `src_root`."""
     status = _quiet((proc / pid / "status").read_text)
     if not status or _field(status, "Name") != ["nginx"] or "0" in _field(status, "Uid") or not _field(status, "PPid"):
         return False
@@ -588,10 +488,6 @@ def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
 
 def live_texts(proc: Path = Path("/proc"), src_root: Path | None = None,
                nginx_conf: Path = NGINX_CONF) -> Iterator[tuple[str, str, str]]:
-    """(pid, cwd, every path and string it names) for each live process (`_proc_texts`).  Unestablished when `proc` can't be listed
-    or a live process outside the kernel can't be read: as anyone but root, without CAP_SYS_PTRACE, most can't.  Given `src_root`,
-    an unreadable nginx worker that cannot name a path under it (`_nginx_worker`) is passed over; its master is read like any
-    process."""
     try:
         pids = sorted((p for p in os.listdir(proc) if p.isdigit()), key=int)
     except OSError as e:
@@ -616,8 +512,6 @@ def comm(proc: Path, pid: str) -> str:
 
 def proc_uses(pattern: re.Pattern[str], proc: Path = Path("/proc"), inside: re.Pattern[str] | None = None,
               src_root: Path | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
-    """{sha: reasons} for the trees a live process names (`live_texts`); a process whose cwd `inside` matches (<src> or a tree in
-    it) keeps every sha it names."""
     uses: dict[str, set[str]] = {}
     for pid, cwd, joined in live_texts(proc, src_root, nginx_conf):
         bare = _BARE.finditer(joined) if cwd and inside and inside.match(cwd) else ()
@@ -645,7 +539,6 @@ def _entries(d: Path) -> list[str]:
 
 
 def _doc(text: str | None) -> dict[str, Any] | None:
-    """The JSON object `text` holds; {} when it holds something else, None when there is no text."""
     if text is None:
         return None
     try:
@@ -676,8 +569,6 @@ def _get(d: Any, *keys: str) -> Any:
 
 
 def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool:
-    """Whether the run's record on the remote holds its dirty source: job.json names a capture (`store.dirty_capture`, cli.py) of the
-    digest its conditions record, and the run's valid `.custody` (store.custody) lists that file at the capture's size and sha256."""
     capture = _get(job, "store", "dirty_capture")
     digest = src.get("dirty_digest")
     if not isinstance(capture, dict) or not digest or digest == "too-large" or capture.get("dirty_digest") != digest:
@@ -689,10 +580,6 @@ def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool
 
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
                 keep_s: float = SRC_KEEP_S, proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
-    not ended, or was recorded within `keep_s`, or whose source is not the tree's own clean commit (condition 3; a refused run ran
-    nothing, so it is no run's source and keeps a tree only while recent), and a request
-    with no run dir yet or whose run has not ended. A run marked running whose runner is gone (`LOST`) has ended."""
     uses: dict[str, set[str]] = {}
 
     def add(shas: set[str], why: str) -> None:
@@ -743,8 +630,6 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
 
 
 def slot_uses(pattern: re.Pattern[str], locks: Path, proc: Path = Path("/proc")) -> dict[str, set[str]]:
-    """{sha: reasons} from the check and Lean slots (`tools/check/slot.py`, `lean_slot.py`): a holder's `<locks>/*.who` and a waiter's
-    ticket in `<locks>/*line*/`, each `{"pid", "run", "tree", "by"}`, while its pid lives (a pid reused since only keeps more)."""
     files = [locks / n for n in _entries(locks) if n.endswith(".who")]
     files += [locks / d / n for d in _entries(locks) if "line" in d and (locks / d).is_dir() for n in _entries(locks / d)]
     uses: dict[str, set[str]] = {}
@@ -763,7 +648,6 @@ def slot_uses(pattern: re.Pattern[str], locks: Path, proc: Path = Path("/proc"))
 
 
 def _newest(tree: Path) -> float:
-    """The newest mtime of the tree and its top-level entries (a ship writes them; a `research keep` record doesn't count)."""
     t = os.lstat(tree).st_mtime
     for e in os.listdir(tree):
         if e != ".retention.json":
@@ -772,8 +656,6 @@ def _newest(tree: Path) -> float:
 
 
 def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[set[str], float]:
-    """What the tree itself says, and its `_newest` mtime: its READY.json must name its commit (condition 3), it must not have
-    changed within `keep_s`, and a `research keep` record leaves it to `research retention`."""
     from .. import retention as RT
 
     tree, why = src_root / sha, set()
@@ -798,29 +680,20 @@ def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[s
 
 SHIP_CONFIG = re.compile(r"core\.(?:repositoryformatversion|filemode|bare|logallrefupdates)|remote\.origin\.(?:url|fetch)"
                          r"|branch\.[^\n]+\.(?:remote|merge)")
-"""The keys a ship's clone has in .git/config (every shipped tree has these).  Any other key may change what `git status`
-reports (excludes, fsmonitor, filters, sparse checkout, an include) or run a command, so the tree is kept rather than trusted."""
 SHIP_EXCLUDE = frozenset({f"/{READY_FILE}"})
 REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules"
                          r"|target|[^/]*\.egg-info)(?:/|$)|\.py[co]$")
-"""Ignored paths a build or test run regenerates.  Every other ignored path but READY.json and a fetched fixture (re-fetchable by
-its id) may be a workload's only output (`out/`, `results/`, `*.png`...) and keeps the tree."""
 _CLEAN_GIT = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
 _CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.excludesFile=/dev/null",
             "-c", "core.hooksPath=/dev/null"]
 
 
 def _fixture_paths(tree: Path) -> list[str]:
-    """The paths the tree's registry registers (fetched fixtures are among them), read at each place a tree may hold it
-    (`REPLICA_MAPS`); [] when it is absent or unreadable.  A tree holding it at both gives both's paths, where the store reads
-    the first: a research of either age may have fetched into the tree, each from the place it names, so a path either
-    registers is one whose bytes its id fetches again."""
     docs = [_doc(_quiet((tree / place).read_text)) for place in REPLICA_MAPS]
     return [p.strip("/") for doc in docs for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
 
 
 def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:
-    """Whether ignored `path` (a directory ends in /) holds only READY.json, regenerable files and fetched fixtures."""
     def ok(p: str) -> bool:
         return p == READY_FILE or bool(REGENERABLE.search(p)) or any(p == f or p.startswith(f + "/") for f in fixtures)
     p = path.rstrip("/")
@@ -840,14 +713,6 @@ WORKTREE = "2: a git worktree made from it (.git/worktrees) may be in use"
 
 
 def _worktrees(gd: Path) -> tuple[str | None, set[str]]:
-    """What `gd/worktrees`, git's registrations of the worktrees made from this repository, says: why one may still exist, or
-    None and the directories of the registered worktrees, every one of them gone.  A worktree's work is in its own directory (and
-    its commits in the repository's objects, which `_local_changes` reads), and git keeps the registration of one removed without
-    `git worktree remove` for months, so a registration alone keeps nothing.  Its worktree is gone only when it is not locked
-    (git's mark on one being made, or kept where it is not always mounted), its `gitdir` reads as one absolute path to a
-    worktree's `.git`, as git writes it, and that worktree's directory is not there: ENOENT, since any other failure leaves it
-    unknown.  Whether a process still names such a directory, which it would where the directory is out of this pass's sight, is
-    `dir_uses`'s to say."""
     d = gd / "worktrees"
     try:
         names = sorted(os.listdir(d))
@@ -868,7 +733,7 @@ def _worktrees(gd: Path) -> tuple[str | None, set[str]]:
         try:
             if there(d / n / "locked"):
                 return f"{WORKTREE}: {n} is locked", set()
-            path = (d / n / "gitdir").read_bytes().rstrip(b" \t\n\r").decode()       # what git trims, and no more
+            path = (d / n / "gitdir").read_bytes().rstrip(b" \t\n\r").decode()
             wt, base = os.path.split(path)
             if not path.startswith("/") or base != ".git" or "\0" in path or "\n" in path:
                 return f"{WORKTREE}: {n}'s gitdir is not an absolute path to a worktree's .git: {path[-120:]!r}", set()
@@ -881,9 +746,6 @@ def _worktrees(gd: Path) -> tuple[str | None, set[str]]:
 
 
 def dir_uses(dirs: set[str], proc: Path = Path("/proc"), nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
-    """{directory: reasons} for the directories of `dirs` a live process names, as spelled or as resolved, in anything
-    `proc_uses` reads.  Unestablished as there; an unreadable nginx worker is passed over only when its configuration cannot
-    name the directories either, so they are read for one group of top directories at a time."""
     groups: dict[frozenset[str], list[str]] = {}
     for d in sorted(dirs):
         groups.setdefault(_tops(d), []).append(d)
@@ -893,19 +755,12 @@ def dir_uses(dirs: set[str], proc: Path = Path("/proc"), nginx_conf: Path = NGIN
         pattern = re.compile("(" + "|".join(map(re.escape, sorted(spelled, key=len, reverse=True))) + ")")
         for found, why in proc_uses(pattern, proc, None, Path(ds[0]), nginx_conf).items():
             for s, d in spelled.items():
-                if found.startswith(s):         # a longer spelling found is also every spelling it starts with
+                if found.startswith(s):
                     uses.setdefault(d, set()).update(why)
     return uses
 
 
 def _local_changes(tree: Path, sha: str, uses: Callable[[set[str]], dict[str, set[str]]]) -> set[str]:
-    """Why the tree is not exactly its commit, so deleting it would lose work no ref of the node's repo holds: a `.git` that is not
-    a ship's (any config key but SHIP_CONFIG's, an exclude, a sparse checkout, an object or ref of its own, a stash, a worktree made
-    from it that may still exist), a HEAD other than `sha`, an index entry `git status` is told to skip, or any change `git status`
-    shows, tracked, untracked, or ignored but READY.json, regenerable caches and fetched fixtures.  Git runs without system or
-    global config and with every command-running key off.  Run only for a tree about to go: it reads every file's metadata, and
-    for a tree nothing else keeps whose registered worktrees are all gone (`_worktrees`), the live processes once more (`uses`,
-    `dir_uses` of those worktrees' directories): one that names such a directory, or that cannot be read, keeps the tree."""
     gd = tree / ".git"
     if not os.path.lexists(gd):
         return {"1: not recoverable on the node: no .git to compare it with its commit"}
@@ -979,7 +834,6 @@ def _local_changes(tree: Path, sha: str, uses: Callable[[set[str]], dict[str, se
 
 
 def _remove_tree(path: Path) -> tuple[int, int]:
-    """`rm -r path`, READY.json first; (inodes, bytes) it frees, so a hard link into the uv cache counts once, where it goes."""
     inodes = nbytes = 0
 
     def unlink(p: str) -> None:
@@ -1019,11 +873,6 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
               jobs_dirs: list[Path] | None = None, proc: Path = Path("/proc"), keep_s: float = SRC_KEEP_S,
               budget_s: float = SRC_BUDGET_S, now: float | None = None, clock: Callable[[], float] = time.monotonic,
               log: Callable[[str], None] | None = None, nginx_conf: Path = NGINX_CONF) -> dict[str, Any]:
-    """Delete, oldest first, the source trees under `src_root` (`<root>/src`) that meet every condition (module docstring), and the
-    `.evicting-*` leftovers of an interrupted pass that nothing uses.  The report lists every tree deleted (inodes, bytes) and every
-    tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
-    `error` says what could not be established, and then nothing more was deleted.  `<root>` is `src_root`'s parent: its
-    `git/verity.git` (also `origin`, condition 1's repository), `runs/` and `runs-aside/`, `requests/` and `locks/` unless given."""
     from .. import retention as RT
 
     say = log or (lambda s: None)
@@ -1041,7 +890,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
                            "kept": [], "deleted_inodes": 0, "deleted_bytes": 0, "kept_by": {}, "error": None}
     if not dry_run and src_root.is_dir():
         try:
-            lock = open(src_root / LOCK, "a")  # held for the pass: another pass would take this one's aside tree for a leftover
+            lock = open(src_root / LOCK, "a")
         except OSError as e:
             rep["error"] = f"cannot open {src_root / LOCK}: {type(e).__name__}: {e} (made by another user? remove it)"
             say(f"src: nothing done: {rep['error']}")
@@ -1055,7 +904,6 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
             return rep
 
     def live(shas: set[str]) -> dict[str, set[str]]:
-        """Condition 2 and the run records' part of 3, read afresh."""
         why: dict[str, set[str]] = {}
         for found in (proc_uses(pattern, proc, inside, src_root, nginx_conf), record_uses(pattern, runs_dirs, requests_dir, now=t_wall + clock() - t0, keep_s=keep_s, proc=proc),
                       slot_uses(pattern, locks_dir, proc)):
@@ -1156,7 +1004,6 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
 
 
 def _put_back(aside: Path, home: Path) -> bool:
-    """Rename a tree back into place; False when it was shipped again meanwhile (or the rename failed) and it stays aside."""
     if os.path.lexists(home):
         return False
     try:

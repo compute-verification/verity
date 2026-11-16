@@ -1,22 +1,4 @@
-"""Asks as Linear issues: `research msg ask` files the ask in its owner's team, the registry's `linear` key (a lane with no
-team of its own: its parent's, with its `linear_label`), on that team's current milestone (`current_milestone`), and rings on
-Slack with the issue's link; `send` files nothing.  `close` and `close --declined` move the issue to done or canceled.
-
-Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials
-grant (never the authorization-code flow): an `app` actor, so each issue and comment shows as filed by the asking handle
-(`createAsUser`). Without them, LINEAR_API_KEY is a person's key. Either way the acting user is unsubscribed from each issue
-after filing it and after each comment (a comment subscribes its author again), so a person's inbox stays quiet. Either way an issue carries a `from:<handle>` label and
-is never assigned or delegated: an issue assigned to the Cursor app starts a new agent instead of waking the lead.
-
-`audit` reads every open issue once and names what keeps it off its board or stale (AUDIT_KINDS); `research msg linear audit`
-prints it and top's hourly sweep rings each lane with its findings.  An issue tracks an ask and never answers it: a person's
-ask carries `asker:<name>` (`--asker`), is done only when its outcome exists, and `asks` reads every one, open, parked or
-recently closed, so the audit also finds those parked, unstaffed, slipped or restated (ASK_KINDS) and `research msg linear
-audit --asks` is their ledger.  `close_strays` cancels the asks the audit finds stray, and only on `research msg linear audit
---close-strays`.  `edit` changes an issue's title, due date, description
-or parent, `relate` and `unrelate` its relations, `update` posts a project update, `create_project` and `milestone` make
-projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as whoever connected it.  None
-of them sends a state. Stdlib only."""
+"""Asks as Linear issues, filed in the owner's team."""
 from __future__ import annotations
 
 import base64
@@ -37,47 +19,47 @@ from .timefmt import PACIFIC
 
 API = "https://api.linear.app/graphql"
 TOKEN_URL = "https://api.linear.app/oauth/token"
-SCOPES = "read,write"   # always the same: a grant with other scopes revokes every live token of the app
-EARLY_S = 3600          # a cached token is refetched this long before it expires
+SCOPES = "read,write"
+EARLY_S = 3600
 TITLE_MAX = 80
-OPEN_TYPES = ("triage", "unstarted", "started")                  # open work: Backlog is parked
-LIVE_TYPES = (*OPEN_TYPES, "backlog")                            # not closed: what the one-tracker rules hold to a board
-TAKEN = ("Todo", "In Progress", "In Review")                     # taken up: it belongs on a board, with a date
-QUIET_H = 24                                                     # In Progress with no comment and no start for this long
-STALE_D = 7                                                      # Todo not updated or commented on for this long
-ORPHAN_H = 48                                                    # filed this long ago, it is in a project
-UNLINKED_H = 24                                                  # In Review this long, it has an attached open PR
-UNHEARD_H = 2                                                    # a person's new issue with no answer this long rings its lane
-STRAY_H = 48                                                     # an ask in another lane's team untouched this long is closed
-FROM_LABEL = "from:"                                             # the handle that filed an ask: `from:top`
+OPEN_TYPES = ("triage", "unstarted", "started")
+LIVE_TYPES = (*OPEN_TYPES, "backlog")
+TAKEN = ("Todo", "In Progress", "In Review")
+QUIET_H = 24
+STALE_D = 7
+ORPHAN_H = 48
+UNLINKED_H = 24
+UNHEARD_H = 2
+STRAY_H = 48
+FROM_LABEL = "from:"
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
               f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
-AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
-COMMENT_PAGE = 250                                               # Linear's largest page; `comments` asks for few fields
-AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
-LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
+AUDIT_PAGE = 25
+COMMENT_PAGE = 250
+AUDIT_CHILDREN = 50
+LANE_LABEL = "lane:"
 NO_LANE = "-"
-ASKER_LABEL = "asker:"                                           # a person asked for its outcome: `asker:daniel`
-ASKER_OK = "asker-ok"                                            # the asker's own yes to park or cancel it, quoted in a comment
-ASK_START_H = 1                                                  # a person's ask is In Progress, with its worker, this soon
-ASK_SLIPS = 2                                                    # its date moved later this often: it has slipped
-ASK_RECENT_D = 7                                                 # a person's ask closed this recently is still read
-SENDER = r"\s*(?:@[\w./-]+:\s*)?"                                # a personal key's comment starts `@sender: `
-ASKED_AGAIN_RE = re.compile(SENDER + r"asked again\b", re.I)    # a comment recording that the asker restated it
-POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)      # a comment answering one restatement
-SLIP_RE = re.compile(SENDER + r"slip\b", re.I)                  # a comment answering the slips up to it
+ASKER_LABEL = "asker:"
+ASKER_OK = "asker-ok"
+ASK_START_H = 1
+ASK_SLIPS = 2
+ASK_RECENT_D = 7
+SENDER = r"\s*(?:@[\w./-]+:\s*)?"
+ASKED_AGAIN_RE = re.compile(SENDER + r"asked again\b", re.I)
+POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)
+SLIP_RE = re.compile(SENDER + r"slip\b", re.I)
 ASKER_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
 ASK_KINDS = ("parked", "unstaffed", "slipped", "repeated")
 AUDIT_KINDS = ("unheard", "orphan", "milestone", "lapsed", "undated", "overdue", "quiet", "stale", "title", "landed", "unlinked",
                "stray", "lane", *ASK_KINDS)
 RING_TAGS_RE = re.compile(r"(?:(?:<!subteam\^[A-Z0-9]+(?:\|[^>]*)?>|<@[A-Z0-9]+(?:\|[^>]*)?>|<!(?:here|channel)>"
                           r"|@[a-z0-9][a-z0-9._-]*)[\s,:;]*)+")
-PAREN = r"(?:\s*\([^()\n]{1,30}\))?"                              # `(URGENT)`, `(sent 01:48Z)`
+PAREN = r"(?:\s*\([^()\n]{1,30}\))?"
 SIGNED_RE = re.compile(rf"[a-z][a-z0-9._-]*{PAREN}[\s,:;]+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}}Z{PAREN}[\s,:;]*")
-LOWER_WORD_RE = re.compile(r"[a-z][a-z'\u2019-]*(?![\w./`@])")   # `a`, `can't`; never `vLLM`, `hm96` or `tools/research`
+LOWER_WORD_RE = re.compile(r"[a-z][a-z'\u2019-]*(?![\w./`@])")
 DUE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-DATES, TEXTS = ("dueDate", "targetDate"), ("description", "content", "body")   # `_input`'s dates and markdown bodies
-RELATE = {"blocks": "blocks", "blocked-by": "blocks", "related": "related", "duplicate": "duplicate"}   # the verb's word: Linear's type
+DATES, TEXTS = ("dueDate", "targetDate"), ("description", "content", "body")
+RELATE = {"blocks": "blocks", "blocked-by": "blocks", "related": "related", "duplicate": "duplicate"}
 SAYS = {"blocks": "blocks", "duplicate": "is a duplicate of", "related": "is related to", "similar": "is similar to"}
 HEALTH = ("onTrack", "atRisk", "offTrack")
 PAIR_Q = ("query($a: String!, $b: String!) { a: issue(id: $a) { id identifier "
@@ -120,12 +102,10 @@ def _capped(line: str) -> str:
 
 
 def first_line(body: str) -> str:
-    """The body's first line, capped: what the Slack root of a filed ask carries."""
     return _capped(next((s.strip() for s in body.splitlines() if s.strip()), "(no text)"))
 
 
 def unsigned(text: str) -> str:
-    """`text` without its leading ring tags and the sender's signature (`@HANDLE NAME, 12:15Z, `)."""
     text = text.lstrip()
     if m := RING_TAGS_RE.match(text):
         text = text[m.end():]
@@ -135,26 +115,20 @@ def unsigned(text: str) -> str:
 
 
 def title(body: str) -> str:
-    """An issue's title from a Slack post's body: its first line without the leading ring tags and the sender's signature
-    (`@HANDLE NAME, 12:15Z, an ask…` is `An ask…`), capitalized and capped; the first line as it is when nothing
-    else is left."""
     line = next((s.strip() for s in unsigned(body).splitlines() if s.strip()), "")
     if not line:
         return first_line(body)
     return _capped(line[0].upper() + line[1:] if LOWER_WORD_RE.match(line) else line)
 
 
-_title = title                                                   # `Linear.file`'s `title` argument shadows it
+_title = title
 
 
 def owners(reg: dict) -> dict[str, str]:
-    """Each Linear team key a handle owns (the Slack registry's `linear`), to its handle; a lane that files in its parent's
-    team (`linear_label`) owns none."""
     return {h["linear"]: h["handle"] for h in reg.get("handles", []) if h.get("linear") and not h.get("linear_label")}
 
 
 def _pick(nodes: list[dict], prefix: str, what: str) -> dict:
-    """The one node whose name starts with `prefix` (any case), or whose name or first word is it when several do."""
     want = prefix.strip().lower()
     hits = [n for n in nodes if n["name"].lower().startswith(want)] if want else []
     if len(hits) > 1:
@@ -167,8 +141,6 @@ def _pick(nodes: list[dict], prefix: str, what: str) -> dict:
 
 
 def _input(**given: tuple[str, str | None]) -> dict:
-    """The input fields given, each `field=(flag, value)` and left out when the value is None, checked: a date (DATES) is
-    YYYY-MM-DD or `none` (clears it), a markdown body (TEXTS) is not empty, a title or name is not blank (and is stripped)."""
     out: dict = {}
     for k, (flag, v) in given.items():
         if v is None:
@@ -195,12 +167,10 @@ def _input(**given: tuple[str, str | None]) -> dict:
 
 
 def said(i: dict) -> str:
-    """What an input sets, as `field value, ...`, a markdown body by its length."""
     return ", ".join(f"{k} {f'{len(v)} characters' if k in TEXTS else v}" for k, v in i.items())
 
 
 def _says(r: dict) -> str:
-    """A relation as a sentence: `TEAM-1 blocks TEAM-2`."""
     return f"{r['issue']['identifier']} {SAYS.get(r['type'], r['type'])} {r['relatedIssue']['identifier']}"
 
 
@@ -208,22 +178,18 @@ def _epoch(stamp: str | None) -> float | None:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() if stamp else None
 
 
-# A host with no tz database reads the team's days at PST, an hour off in summer.
 _TEAM_TZ = PACIFIC or timezone(timedelta(hours=-8))
 
 
 def team_day(now: float) -> str:
-    """The date at `now` where the team sets its dates (Pacific), as Linear writes a due or target date: YYYY-MM-DD."""
     return datetime.fromtimestamp(now, _TEAM_TZ).date().isoformat()
 
 
 def day_end(day: str) -> float:
-    """When the Pacific day `day` (YYYY-MM-DD) ends, as an epoch."""
     return (datetime.fromisoformat(day).replace(tzinfo=_TEAM_TZ) + timedelta(days=1)).timestamp()
 
 
 def asker_label(name: str) -> str:
-    """The label of an ask whose outcome the person `name` asked for: `asker:daniel`."""
     who = name.strip().lower()
     if not ASKER_RE.fullmatch(who):
         raise LinearError(f"asker {name!r}: give the person's first name in lower case (daniel)")
@@ -243,8 +209,6 @@ def _lane(i: dict, owners: dict[str, str]) -> str:
 
 
 def lane(i: dict, reg: dict) -> str | None:
-    """The handle an issue (with its `team { key }` and `labels { nodes { name } }`) belongs to: its `lane:` label's when
-    the Slack registry `reg` has that handle, else its team's handle (`owners`), else None."""
     label = _lane_label(i)
     if label and any(h["handle"] == label for h in reg.get("handles", [])):
         return label
@@ -252,17 +216,10 @@ def lane(i: dict, reg: dict) -> str | None:
 
 
 def ask_open(a: dict) -> bool:
-    """Whether a person's ask (`Linear.asks`) is not delivered: open, parked, or canceled without its asker's yes."""
     return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
 
 
 def ask_findings(asks: list[dict], now: float) -> list[dict]:
-    """The audit's findings on people's asks (`Linear.asks`), as `audit` gives them (ASK_KINDS):
-    - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
-      ask goes on in the issue it duplicates.
-    - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, its date moved later ASK_SLIPS times or more, and no `slip:` comment since its last move.
-    - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
         ident, who, t = a["issue"], a["asker"], a["type"]
@@ -288,7 +245,6 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
 
 
 def tally(findings: list[dict]) -> dict[str, dict[str, int]]:
-    """The findings' counts by lane, then by kind (in AUDIT_KINDS' order)."""
     out: dict[str, dict[str, int]] = {}
     for f in findings:
         out.setdefault(f["lane"], {}).setdefault(f["kind"], 0)
@@ -305,7 +261,7 @@ class Linear:
         if not self.app and not self.key:
             raise LinearError("no Linear credentials: LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET (the app), or LINEAR_API_KEY")
         self.http, self.now, self.cache = transport or _http, now, cache or token_cache()
-        self.landing: list[dict] = []                             # `audit`'s issues that wait only on landing
+        self.landing: list[dict] = []
 
     @property
     def mode(self) -> str:
@@ -346,7 +302,7 @@ class Linear:
                 r = self.http(API, body, {"Authorization": auth, "Content-Type": "application/json"})
                 break
             except urllib.error.HTTPError as e:
-                if e.code == 401 and self.app and not fresh:     # a cached token Linear no longer takes (revoked, rotated)
+                if e.code == 401 and self.app and not fresh:
                     continue
                 raise LinearError(f"Linear: {_why(e)}") from None
         if r.get("errors"):
@@ -354,7 +310,6 @@ class Linear:
         return r["data"]
 
     def team(self, name: str) -> dict:
-        """The team named `name` (a handle), or whose key it is."""
         q = "query($n: String!) { teams(filter: {or: [{name: {eq: $n}}, {key: {eq: $n}}]}) { nodes { id key name } } }"
         nodes = self.gql(q, {"n": name})["teams"]["nodes"]
         if not nodes:
@@ -378,12 +333,6 @@ class Linear:
 
     def file(self, team: str, sender: str, body: str, parent: str | None = None, title: str | None = None,
              asker: str | None = None, label: str | None = None, current: bool = False) -> dict:
-        """The ask as an issue in `team`, from `sender`: {id, identifier, url, project, projectMilestone}. With `parent` (an
-        identifier such as TEAM-92) it is that issue's sub-issue, on its project and milestone, so it lands on the board of the
-        deliverable it serves; where Linear refuses the project (the team isn't in it), under the parent alone, said on stderr.
-        Without one, `current` puts it on the team's current milestone (`current_milestone`), and in no project, said on
-        stderr, when the team has none. `title` replaces the one derived from the body. `asker` names the person who asked
-        for its outcome (`asker_label`); `label` is one more label (a lane's `lane:<handle>` in its parent's team)."""
         t = self.team(team)
         i = {"teamId": t["id"], "title": title.strip() if title else _title(body), "description": body,
              "labelIds": [self.label(f"from:{sender}"), *([self.label(asker_label(asker))] if asker else []),
@@ -415,10 +364,6 @@ class Linear:
         return issue
 
     def current_milestone(self, team_id: str) -> dict | None:
-        """The milestone an ask to the team (its id) lands on: of the milestones not yet past (a target date today or later,
-        Pacific) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
-        project first by name.  {id, name, targetDate, sortOrder, project: {id, name}}, or None when no active project of
-        the team has one (an undated milestone has no place on the ladder)."""
         q = ('query($id: String!) { team(id: $id) { projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name targetDate sortOrder } } } } } }")
         today = team_day(self.now())
@@ -427,26 +372,20 @@ class Linear:
         return min(ms, key=lambda m: (m["targetDate"], m.get("sortOrder") or 0, m["project"]["name"]), default=None)
 
     def tag(self, issue: str, name: str, remove: bool = False) -> str:
-        """Add the label `name` to the issue (its identifier), or remove it: the issue's labels after."""
         verb = "issueRemoveLabel" if remove else "issueAddLabel"
         r = self.gql(f"mutation($id: String!, $l: String!) {{ {verb}(id: $id, labelId: $l) {{ issue {{ labels {{ nodes {{ name }} }} }} }} }}",
                      {"id": self.issue_id(issue), "l": self.label(name)})
         return ", ".join(sorted(x["name"] for x in r[verb]["issue"]["labels"]["nodes"]))
 
     def projects(self) -> list[dict]:
-        """The active projects (not completed or canceled), each with its milestones: {id, name, projectMilestones}."""
         q = ('{ projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name } } } } }")
         return self.gql(q)["projects"]["nodes"]
 
     def project(self, prefix: str) -> dict:
-        """The one active project whose name starts with `prefix` (any case), as `projects` gives it. A prefix that matches
-        none or several is refused, naming the candidates."""
         return _pick(self.projects(), prefix, "active project")
 
     def place(self, issue: str, project: str, milestone: str | None = None) -> dict:
-        """Put the issue (an identifier such as TEAM-92) in the active `project` (a prefix of its name), and with `milestone`
-        in that project's milestone whose name starts with it (`M3`, `F2`): {issue, project, milestone}."""
         p = self.project(project)
         i, m = {"projectId": p["id"]}, None
         if milestone:
@@ -458,9 +397,6 @@ class Linear:
 
     def edit(self, issue: str, title: str | None = None, due: str | None = None, description: str | None = None,
              parent: str | None = None, send: bool = True) -> dict:
-        """Change the issue's title, due date (YYYY-MM-DD, or `none` to clear it), description (replaced whole, as markdown) or
-        parent (an identifier), at least one, through these credentials rather than a person's (the MCP connector acts as
-        whoever connected it): the IssueUpdateInput it sends, which `send=False` only builds."""
         i = _input(title=("--title", title), dueDate=("--due", due), description=("--file", description))
         if parent is not None:
             i["parentId"] = self.issue_id(parent) if send else parent
@@ -472,7 +408,6 @@ class Linear:
         return i
 
     def _pair(self, issue: str, other: str) -> tuple[dict, dict, list[dict]]:
-        """The two issues ({id, identifier}) and the relations between them, either way; two names of one issue are refused."""
         d = self.gql(PAIR_Q, {"a": issue, "b": other})
         a, b = d["a"], d["b"]
         if a["id"] == b["id"]:
@@ -482,9 +417,6 @@ class Linear:
         return a, b, rels
 
     def relate(self, issue: str, kind: str, other: str) -> str:
-        """Relate `issue` to `other` (identifiers) by `kind`, a key of RELATE (`blocked-by` is `other` blocks `issue`): the
-        relation as a sentence. The same relation again is refused (`related` either way round). Linear itself moves an issue
-        marked a duplicate to its Duplicate status, and the sentence says so."""
         if kind not in RELATE:
             raise LinearError(f"relate: {kind!r} is no relation: give one of {', '.join(RELATE)}")
         a, b, rels = self._pair(issue, other)
@@ -498,7 +430,6 @@ class Linear:
         return _says(new) + (f" (Linear moves {x['identifier']} to its Duplicate status)" if t == "duplicate" else "")
 
     def unrelate(self, issue: str, other: str) -> list[str]:
-        """Delete every relation between the two issues, either way: each as a sentence. None is refused."""
         a, b, rels = self._pair(issue, other)
         if not rels:
             raise LinearError(f"{a['identifier']} and {b['identifier']} have no relation to remove")
@@ -507,8 +438,6 @@ class Linear:
         return [_says(r) for r in rels]
 
     def update(self, project: str, health: str | None, body: str | None) -> str:
-        """Post a project update on the active `project` (a prefix of its name, as `place` takes it), with its health (one of
-        HEALTH, any case) and markdown body: a line with its link."""
         h = {x.lower(): x for x in HEALTH}.get((health or "").lower())
         if not h:
             raise LinearError(f"--health{f' {health!r}' if health else ''}: give one of {', '.join(HEALTH)}")
@@ -522,9 +451,7 @@ class Linear:
 
     def create_project(self, name: str, teams: list[str], lead: str | None = None, target: str | None = None,
                        content: str | None = None) -> str:
-        """A new project named `name` in `teams` (keys or names), led by `lead` (a prefix of a Linear user's name: Linear's
-        lead is a person, never a team or handle), with its target date and markdown body: a line with its link. A name some
-        project has already (any case) is refused."""
+        """``lead`` is a prefix of a Linear user's name: Linear's lead is a person, never a team or handle."""
         if not teams:
             raise LinearError("project create: give its team, --team KEY (more: repeat it)")
         name, opt = name.strip(), _input(targetDate=("--target", target), content=("--description-file", content))
@@ -540,10 +467,6 @@ class Linear:
         return f"project {name} created: {said({**shown, **opt})} {p['projectCreate']['project']['url']}"
 
     def project_edit(self, project: str, teams: list[str] = (), date: str | None = None, status: str | None = None) -> str:
-        """Edit the active `project` (a prefix of its name): add `teams` (keys or names, so their issues can be placed in it;
-        the teams it has stay), set its target `date` (YYYY-MM-DD, or `none`) and its `status` (a prefix of a project
-        status's name: Backlog, Planned, In Progress, Completed, Canceled). A line with its name, target and status after,
-        and the teams it added."""
         if not (teams or date or status):
             raise LinearError("project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS")
         p = self.project(project)
@@ -565,9 +488,6 @@ class Linear:
 
     def milestone(self, project: str, name: str, date: str | None = None, description: str | None = None,
                   rename: str | None = None, create: bool = False) -> str:
-        """Make the milestone `name` in the active `project` (a prefix of its name), or (`create=False`) change the one whose
-        name starts with `name`: its target date, markdown description and (editing) its name. A name another milestone of
-        the project has (any case) is refused."""
         i = _input(name=("NAME", name) if create else ("--rename", rename), targetDate=("--date", date),
                    description=("--description-file", description))
         if not i:
@@ -588,44 +508,12 @@ class Linear:
         return f"{p['name']} / {m['name']}: set {said(i)}"
 
     def unread(self, teams: list[str]) -> list[str]:
-        """Those of `teams` (keys or names, any case) these credentials can't see, which the audit skips: Linear answers a
-        filter on such a team with no issues, not an error."""
         nodes = self.gql("{ teams(first: 100) { nodes { key name } } }")["teams"]["nodes"]
         seen = {x.lower() for t in nodes for x in (t["key"], t["name"])}
         return [t for t in teams if t.lower() not in seen]
 
     def audit(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
               waiting: Callable[[list[int]], bool] | None = None) -> list[dict]:
-        """One pass over the issues not closed (LIVE_TYPES), of `teams` (names or keys) or every team: each finding
-        {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS).  These hold in Backlog too:
-        - lapsed: its milestone's target date is before today (Pacific).
-        - stray: labelled `from:<handle>` in another lane's team (the team has a handle, and the issue's lane isn't that one),
-          not a person's ask, nobody took it up (it isn't started, and lacks a project or a due date) and nothing touched it
-          (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
-        - unheard: filed by a person (a creator and no bot) and not assigned to that person (a note to themself), not yet
-          started, with no comment UNHEARD_H after it was filed.
-          The sweep rings its lane for it, so no lane subscribes to its team's issue events, which wake it for its own.
-        The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
-        - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
-        - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (Pacific).
-        - quiet: In Progress with no comment and no start for QUIET_H (the last comment's and the start's times, not updatedAt,
-          which bulk edits move).  stale: Todo neither updated nor commented on for STALE_D days (a comment leaves
-          updatedAt as it was).  A parent counts its children's (AUDIT_CHILDREN of them) as its own: each one's updatedAt,
-          which its start and state changes move, and its last comment.
-        - title: it starts with ring tags or a sender's signature (`unsigned` would change it), or ends in "…": a Slack
-          post's first line, not a deliverable.  An area prefix (`pous: …`) and a long title are fine.
-        - landed: In Progress or In Review with GitHub PRs attached, every one merged or closed, and no comment since the
-          last of them closed (its metadata's closedAt; an attachment's own updatedAt never moves): a comment naming the
-          piece left answers it.
-        - unlinked: In Review UNLINKED_H after it last entered In Review (its state history, else its start), with no
-          attached open PR (a draft is open), where `landed` doesn't already say so.
-        - lane: its team has no handle (`owners`, team key to handle) and it has no `lane:<handle>` label.
-        - and on a person's ask (`asks`), in any state, the kinds `ask_findings` names.
-        `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
-        (`unread`) has no issues here, so it adds no finding and no error.
-        An issue In Review whose attached PRs are all open and, by `waiting` (their numbers), marked ready at their heads waits
-        on landing: it is neither overdue nor slipped, since the wait is the landing queue's.  Each such issue is in `landing`
-        afterwards ({issue, lane, due, late_h}), for the one line the audit prints about them."""
         now, owners = self.now() if now is None else now, owners or {}
         today = team_day(now)
         f: dict = {"state": {"type": {"in": list(LIVE_TYPES)}}}
@@ -719,7 +607,6 @@ class Linear:
         return sorted(out, key=lambda x: (x["lane"], x["team"], int(x["issue"].rsplit("-", 1)[1]), order[x["kind"]]))
 
     def _entered_review(self, ids: list[str]) -> dict[str, float]:
-        """When each of these issues (ids) last entered In Review, by its state history: one more pass, over them alone."""
         out: dict[str, float] = {}
         for i in self._paged("id history(first: 50, orderBy: createdAt) { nodes { createdAt toState { name } } }",
                              {"id": {"in": ids}}) if ids else []:
@@ -728,8 +615,6 @@ class Linear:
         return out
 
     def close_strays(self, found: list[dict], sender: str) -> list[str]:
-        """Cancel the issue of each `stray` among the audit's findings, after a comment from `sender` naming the rule: a line
-        each.  Only `research msg linear audit --close-strays` calls this; the audit and the sweep only report."""
         out = []
         for f in (x for x in found if x["kind"] == "stray"):
             iid = self.issue_id(f["issue"])
@@ -739,11 +624,6 @@ class Linear:
 
     def asks(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
              days: float = ASK_RECENT_D) -> list[dict]:
-        """Every issue a person asked for (an `asker:` label) that is open, in Backlog, or closed within `days`, of `teams` or
-        every team, oldest first: {issue, url, title, team, lane, asker, state, type (its state's), due, created, closed
-        (epochs), dates (each due date it was given, in order), slips (moves to a later date), explained (a `slip:` comment
-        follows its last slip), again (`asked again` comments), postmortems (`postmortem` comments), ok (it carries
-        ASKER_OK)}.  Delivered is `type` completed; filing it, dating it or starting it is not."""
         now, owners = self.now() if now is None else now, owners or {}
         since = datetime.fromtimestamp(now - days * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         f: dict = {"labels": {"some": {"name": {"startsWith": ASKER_LABEL}}},
@@ -773,7 +653,6 @@ class Linear:
         return sorted(out, key=lambda a: (a["created"] or 0, a["issue"]))
 
     def _paged(self, fields: str, f: dict) -> list[dict]:
-        """Every issue the filter `f` matches, with `fields`, AUDIT_PAGE a page."""
         q = ("query($f: IssueFilter!, $after: String) { issues(filter: $f, first: " + str(AUDIT_PAGE) + ", after: $after) { "
              "pageInfo { hasNextPage endCursor } nodes { " + fields + " } } }")
         issues, after = [], None
@@ -785,8 +664,6 @@ class Linear:
             after = page["pageInfo"]["endCursor"]
 
     def comments(self, since: str) -> list[dict]:
-        """Every comment created after `since` (UTC ISO), on every team's issues these credentials read, COMMENT_PAGE a page:
-        {id, createdAt, body, user {name}, botActor {userDisplayName}, issue {identifier, url}}."""
         q = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(COMMENT_PAGE) + ", after: $after) "
              "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body user { name } botActor { userDisplayName } "
              "issue { identifier url } } } }")
@@ -806,9 +683,6 @@ class Linear:
         self._quiet(issue_id)
 
     def move(self, issue_id: str, state: str) -> str:
-        """Move the issue (its id, or an identifier such as `TEAM-12`) to its team's state named `state` (any case), else to the
-        team's first state of that type (`completed`, `canceled`); that state's name. By name, `In Progress` is never the
-        `started` state that happens to come first (In Review)."""
         issue = self.gql("query($id: String!) { issue(id: $id) { id team { states { nodes { id name type } } } } }",
                          {"id": issue_id})["issue"]
         nodes = issue["team"]["states"]["nodes"]
@@ -821,7 +695,6 @@ class Linear:
         return to["name"]
 
     def _issue(self, issue: str, fields: str) -> dict:
-        """The issue a team key and number identify, with `fields`; `NoIssue` when Linear has none."""
         try:
             return self.gql(f"query($id: String!) {{ issue(id: $id) {{ {fields} }} }}", {"id": issue})["issue"]
         except LinearError as e:
@@ -830,17 +703,12 @@ class Linear:
             raise
 
     def issue_id(self, issue: str) -> str:
-        """The id of the issue a team key and number identify; `NoIssue` when Linear has none."""
         return self._issue(issue, "id")["id"]
 
     def issue_labels(self, issue: str) -> list[str]:
-        """The names of the labels of the issue a team key and number identify, sorted; `NoIssue` when Linear has none."""
         return sorted(x["name"] for x in self._issue(issue, "labels { nodes { name } }")["labels"]["nodes"])
 
     def link_pr(self, issue_id: str, url: str) -> bool:
-        """Attach the GitHub pull request at `url` to the issue (its id) as Linear's GitHub integration would, which is off
-        for this repository, so a PR body's magic words link nothing: True, or False when the issue has it attached already.
-        Attached to other issues only, it is refused, naming them."""
         q = ("mutation($i: String!, $u: String!) { attachmentLinkGitHubPR(issueId: $i, url: $u) "
              "{ success attachment { id url } } }")
         try:
@@ -858,7 +726,6 @@ class Linear:
         return True
 
     def issues(self, team: str, state: str | None = None) -> list[dict]:
-        """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""
         f = {"team": {"id": {"eq": self.team(team)["id"]}},
              "state": {"name": {"eqIgnoreCase": state}} if state else {"type": {"nin": ["completed", "canceled"]}}}
         q = "query($f: IssueFilter!) { issues(filter: $f, first: 250) { nodes { identifier title createdAt state { name } } } }"
@@ -869,7 +736,6 @@ class Linear:
         return [n["name"] for n in self.gql(q, {"id": issue_id})["issue"]["subscribers"]["nodes"]]
 
     def authors(self, issue_id: str) -> tuple[str, list[str]]:
-        """Who the issue and each of its comments show as filed by: an app's `createAsUser` name, else the user's."""
         q = ("query($id: String!) { issue(id: $id) { creator { name } botActor { name userDisplayName } "
              "comments { nodes { user { name } botActor { name userDisplayName } } } } }")
         i = self.gql(q, {"id": issue_id})["issue"]
@@ -880,8 +746,6 @@ class Linear:
         return who(i), [who(c) for c in i["comments"]["nodes"]]
 
     def check(self, write_team: str | None = None, sender: str = "comms") -> tuple[list[str], bool]:
-        """What these credentials reach, as lines, and whether they're fit for asks: no admin scope, and (with `write_team`)
-        a test issue filed, commented on and canceled there."""
         d = self.gql("{ viewer { name } organization { urlKey } teams(first: 100) { nodes { name key } } }")
         lines = [f"credentials: {self.mode}, acting as {d['viewer']['name']} in {d['organization']['urlKey']}",
                  f"teams ({len(d['teams']['nodes'])}): " + ", ".join(f"{t['name']} {t['key']}"
@@ -907,8 +771,6 @@ class Linear:
 
 def ask_issue(owner: str, sender: str, body: str, linear: Any = None, parent: str | None = None,
               title: str | None = None, asker: str | None = None, label: str | None = None) -> tuple[dict | None, str | None]:
-    """`msg ask`'s issue, on its parent's board or else its team's current milestone: (issue, None), or (None, why) when it
-    couldn't be filed, so the ask still goes out on Slack."""
     try:
         return (linear or Linear()).file(owner, sender, body, parent=parent, title=title, asker=asker, label=label,
                                          current=True), None

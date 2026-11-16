@@ -1,10 +1,4 @@
-"""Envelopes (README §2, §4, §8): the artifact manifest, its payload, labels, and the top-level shape of an attempt.
-
-The store validates envelopes only.  `ArtifactManifest.validate()` enforces §2: schema, kind syntax, `meta` canonical size
-<= 256 KiB, `refs` values are `art:` ids or lists of them, payload file/tree rules (relative sorted unique paths, no `..`,
-no absolute, no path that is both a file and a directory, tree sha256 = sha256(canon(files)), bytes = sum).  Attempts are plain
-dicts built by `research run` (the other half of this package); `validate_attempt_doc` checks schema, id and the §4 keys.
-"""
+"""Envelopes: the artifact manifest, its payload, labels, and the top-level shape of an attempt."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -71,7 +65,6 @@ class Payload:
         return cls(type="tree", sha256=cls.tree_digest(files), bytes=sum(f.bytes for f in files), files=files)
 
     def blobs(self) -> list[tuple[str, int]]:
-        """(sha256, bytes) of every blob this payload needs."""
         if self.type == "file":
             return [(self.sha256, self.bytes)]
         return [(f.sha256, f.bytes) for f in self.files or []]
@@ -255,7 +248,6 @@ class Label:
 
 
 def attempt_errors(doc: Any) -> list[str]:
-    """Top-level shape of `research/attempt/v0.1` (README §4).  Contents of the sections are the runner's business."""
     if not isinstance(doc, dict):
         return ["attempt must be an object"]
     errs = []

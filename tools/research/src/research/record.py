@@ -1,14 +1,3 @@
-"""The run record: job.json v0.2 = the harness's v0.1 plus identity the harness does not know.
-
-    tool                  which `research` (version, git sha, dirty) and which telemetry schema/collector/classifier wrote the record
-    run                   run id, registry root, where it was launched from, remote target if any
-    workload_fingerprint  {"expected": ...} supplied before launch; the OBSERVED fingerprint is the workload's, in result.json
-    cost                  provider, pod id, rate + when it was observed, sharing; the estimate is derived at read time (cost_estimate)
-    store                 optional: tool / derivation / reuse_key / key params / closure / conditions computed before launch (research.store)
-
-Records written by the harness alone are v0.1 and stay readable: `read_job` returns the same shape with the v0.2 sections set to None,
-which means unknown, never a default.  The harness is never modified for this; `research run` pre-writes job.json and the harness keeps it.
-"""
 from __future__ import annotations
 
 import json
@@ -25,7 +14,7 @@ from .telemetry.events import utc_now_ms
 
 JOB_SCHEMA = "telemetry/job/v0.2"
 READABLE_JOB_SCHEMAS = (JOB_SCHEMA_V1, JOB_SCHEMA)
-V2_SECTIONS = ("tool", "run", "workload_fingerprint", "cost", "store")   # store: optional, None when the run had no store step
+V2_SECTIONS = ("tool", "run", "workload_fingerprint", "cost", "store")
 
 
 def _git(args: list[str], cwd: Path) -> str | None:
@@ -61,11 +50,6 @@ def cost_section(*, provider: str | None = None, pod_id: str | None = None, mach
 def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fingerprint: dict[str, Any] | None,
                cost: dict[str, Any] | None = None, remote: dict[str, Any] | None = None, store: dict[str, Any] | None = None,
                cwd: dict[str, Any] | None = None) -> dict[str, Any]:
-    """v0.1 job (from telemetry.job.build_job) -> v0.2.  Adds sections; changes nothing the harness wrote.
-
-    `store` (optional): what `research run` computed BEFORE launch for the evidence store -- tool identity, derivation id,
-    reuse_key, key params (content-resolved), inputs, closure manifest, conditions, scratch dirs (research.store README §4/§6).
-    `cwd` (optional): {"path": the workload's cwd, "basis": "run_dir" | "source" | "clone" | "explicit"} -> run.cwd / run.cwd_basis."""
     if job.get("schema") != JOB_SCHEMA_V1:
         raise ValueError(f"extend_job expects a {JOB_SCHEMA_V1} record, got {job.get('schema')!r}")
     out = dict(job)
@@ -81,7 +65,6 @@ def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fi
 
 
 def read_job(run_dir: str | Path) -> dict[str, Any] | None:
-    """Normalized read.  Unknown schema -> None.  v0.1 -> v0.2 sections present and None (unknown)."""
     p = Path(run_dir) / "job.json"
     if not p.exists():
         return None
@@ -98,8 +81,6 @@ def read_job(run_dir: str | Path) -> dict[str, Any] | None:
 
 
 def cost_estimate(job: dict[str, Any] | None, status: dict[str, Any] | None) -> dict[str, Any]:
-    """rate x run wall time.  Run occupancy only: setup, idle, retention, and teardown sit outside the command's interval.
-    Missing pricing is unknown, not zero.  A shared pod is reported, not divided."""
     cost = (job or {}).get("cost") or {}
     rate = cost.get("rate_usd_per_hour")
     wall = (status or {}).get("wall_s")

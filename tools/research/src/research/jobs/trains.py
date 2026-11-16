@@ -1,39 +1,4 @@
-"""Step 1.5 of the Job queue: trains that the service builds, checks and lands, as an in-memory model beside `model.py`.
-
-The research coordinator names a train (`POST /api/trains`: PR numbers in order).  The service, with the `verity-merge-queue`
-App's token, merges each PR's head onto a new `train/{id}` branch through GitHub's Merges API and adds one `merge-check` job for
-the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) lands a train whose check passed:
-  rebuild   when `main` is no longer an ancestor of the tip, the train is rebuilt on the new `main` from the same heads and
-            checked again (at most REBUILDS), before any gate: the gate's diff is main..tip, which GitHub's three-dot compare
-            gives only while `main` is an ancestor.
-  gate      `research merge`'s gate, ported: the Attempt `attempts/{run id}.json` of the job's run in the evidence store is a
-            `check` of exactly the tip, clean, done with rc 0, its result is of a kind `main`'s declaration `produces` and not
-            in `research.merge.REFUSED_KINDS` and lists each step once (as `research merge` requires: it reads a step's first
-            entry), and every step `main`'s `merge_requires` asks for the change (main..tip, `rule_touches`) passed in that
-            result.  The worker's report of "passed" is never the verdict.  The declaration is `CHECK = Tool(...)` in main's
-            `tools/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
-            nothing.
-  land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
-            push in between) rebuilds the train too.
-  sweep     then every open PR whose head is on `main` and whose base isn't `main` is closed with a comment naming the landing
-            (GitHub marks those based on `main` merged itself), and every open PR based on a branch whose tip is on `main` is
-            retargeted onto `main` (`research merge --sweep`'s rule).  This needs the App's Pull requests (write).
-A train with `land: false` stops at `would-land`: the shadow run beside the RC's `research merge`.
-
-Lean records.  GitHub's Merges API runs no custom merge driver, so a merge step whose two sides both changed a `lean-audit.json`
-is prepared first: the service computes the record merge with `tools/verity/lean/merge.py`'s `merge()`, writes the result onto
-both sides (one small commit on the train, one on top of the PR's head, through the Git Data API), and the Merges API then sees
-identical records and merges every other file as usual.  `merge()` never refuses (only the driver around it does, on the
-guards merge.py's docstring names):
-where the sides disagree on an entry it keeps the side that changed it over the side that removed it, and theirs' (the PR's)
-where both changed it, and the train names each such entry (`taken`).  The merged record is a candidate, which the merge
-check's Lean audit judges as it judges any record.  `merge_record` here is a stand-in for `merge()` on records like the train
-cases' (no `reads`, and only sections it merges entry by entry), with `record_text` for check.py's `text()`; the site ports the
-real ones, and the train cases pin their output byte for byte.
-
-`FakeGitHub` and `FakeStore` stand in for GitHub and the store's R2 bucket; `train_vectors.json` pins every rule against them,
-and the site's TypeScript runs the same file with the same two fakes.
-"""
+"""Trains that the Job queue builds, checks and lands, as an in-memory model beside `model.py`."""
 from __future__ import annotations
 
 import ast
@@ -48,7 +13,6 @@ from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 REPO = "compute-verification/verity"
 HOLD = "hold"
 RECORD = "lean-audit.json"
-#: the sections of check.py's ORDER, in its order, and of merge.py's SORTED / NESTED that the stand-in record merge models
 ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
          "upstream", "guarantees", "reads", "dependencies")
 SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
@@ -63,8 +27,6 @@ TRAIN_STATES = ("checking", "landed", "would-land", "failed", "stuck", "refused"
 
 @dataclass
 class FakeGitHub:
-    """Commits by id (`parents`, and `files`: the paths the commit sets against its first parent, null deleting one), refs, and PRs
-    (`head`, `base`, `head_ref`, `labels`, `state` open | merged | closed).  A merge's new commit is named `{base tip}+{head}`."""
     commits: dict[str, dict] = field(default_factory=dict)
     refs: dict[str, str] = field(default_factory=dict)
     prs: dict[int, dict] = field(default_factory=dict)
@@ -106,7 +68,6 @@ class FakeGitHub:
         return {p for p in ta.keys() | tb.keys() if ta.get(p) != tb.get(p)}
 
     def merge(self, ref: str, head: str, message: str) -> tuple[int, str | None]:
-        """`POST /repos/{o}/{r}/merges`: 201 with the new commit, 204 when `head` is already in `ref`, 409 on a conflict."""
         base = self.refs[ref]
         if self.is_ancestor(head, base):
             return 204, None
@@ -121,39 +82,33 @@ class FakeGitHub:
         return 201, sha
 
     def update_ref(self, ref: str, sha: str) -> int:
-        """`PATCH /git/refs/heads/{ref}` with `force: false`: 200, or 422 when it isn't a fast-forward."""
         if not self.is_ancestor(self.refs[ref], sha):
             return 422
         self._move(ref, sha)
         return 200
 
     def commit(self, sha: str, parent: str, files: dict[str, str], message: str) -> str:
-        """The Git Data API's blobs, a tree on `parent`'s and a commit, as one step."""
         self.commits[sha] = {"parents": [parent], "files": dict(files), "message": message}
         return sha
 
     def push(self, ref: str, sha: str, parents: list[str], files: dict) -> None:
-        """Someone else's push (a vector step): a new commit, and `ref` moved to it with no fast-forward rule."""
         self.commits[sha] = {"parents": parents, "files": files}
         self._move(ref, sha)
 
     def _move(self, ref: str, sha: str) -> None:
         self.refs[ref] = sha
-        for pr in self.prs.values():                 # GitHub marks a PR merged once its head is on its base
+        for pr in self.prs.values():
             if pr["state"] == "open" and pr["base"] == ref and self.is_ancestor(pr["head"], sha):
                 pr["state"] = "merged"
 
 
 @dataclass
 class FakeStore:
-    attempts: dict[str, dict] = field(default_factory=dict)     # attempts/{run id}.json
-    manifests: dict[str, dict] = field(default_factory=dict)    # an art id's manifest: a result's `kind` and `meta`
+    attempts: dict[str, dict] = field(default_factory=dict)
+    manifests: dict[str, dict] = field(default_factory=dict)
 
 
 def _one(path, o, a, b, why):
-    """merge.py's `one()`: a side's change applies.  Where the sides disagree it still merges, naming ``path`` in ``why``: a
-    value one side removed and the other changed is the changed one, and one both sides added or changed differently is
-    theirs'."""
     if a == b:
         return a
     if a == o:
@@ -186,10 +141,6 @@ def _entries(path, o, a, b, why, depth=1):
 
 
 def merge_record(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
-    """merge.py's `merge()` on records such as the train cases hold, whose sections it merges entry by entry with `one()`:
-    none of `reads`, guarantees' map records, premises, `JUDGED` sections, `layers`, lists of names, or `shape`, `claims` and
-    `trees`, which the site's port of merge.py merges.  (The merged record, each entry the sides disagreed on with the side
-    taken: empty when none); it never refuses."""
     if any("reads" in r for r in (base, ours, theirs)):
         raise NotImplementedError("the stand-in merges records without `reads`; the site ports tools/verity/lean/merge.py")
     why: list[str] = []
@@ -215,7 +166,6 @@ def _layout(v, pad: str = "") -> str:
 
 
 def record_text(record: dict) -> str:
-    """check.py's `text()`: the sections in ORDER, then the rest, laid out one entry per line."""
     return _layout({k: record[k] for k in ORDER if k in record} | {k: v for k, v in record.items() if k not in ORDER}) + "\n"
 
 
@@ -224,9 +174,7 @@ def _strings(v) -> bool:
 
 
 def declared(text: str) -> tuple[list[str], dict[str, list[str]]]:
-    """The `produces` and `merge_requires` of TOOL_PY's `CHECK = Tool(...)`, parsed and never run: the one module-level
-    assignment to CHECK, a call of `Tool` with keyword arguments only, each keyword read with `ast.literal_eval`.  A missing
-    `produces` is no kind and a missing `merge_requires` no step.  Raises ValueError, saying why, on anything else."""
+    """Parsed from TOOL_PY, never run."""
     try:
         tree = ast.parse(text, TOOL_PY)
     except SyntaxError as e:
@@ -258,17 +206,17 @@ def declared(text: str) -> tuple[list[str], dict[str, list[str]]]:
 @dataclass
 class Train:
     id: int
-    prs: list[dict]                 # [{"number", "head"}], in order
+    prs: list[dict]
     base: str
     tip: str
-    job: int | None                 # None for a train that was refused before it was checked
+    job: int | None
     land: bool
     requirements: dict
     by: str
-    line: str | None = None         # passed on to its merge-check jobs
+    line: str | None = None
     state: str = "checking"
     why: str | None = None
-    taken: list[str] = field(default_factory=list)   # each record entry merge() took from one side, as `#PR path: why`
+    taken: list[str] = field(default_factory=list)
     rebuilds: int = 0
     run_id: str | None = None
     landed_at: float | None = None
@@ -305,8 +253,6 @@ class TrainService(JobService):
             raise Refused(404, "no such train")
         return self.trains[int(i)]
 
-    # -- building
-
     def add_train(self, t, body: dict, now: float) -> tuple[int, dict]:
         numbers, land = body.get("prs"), body.get("land", True)
         if not (isinstance(numbers, list) and numbers and all(isinstance(n, int) and not isinstance(n, bool) for n in numbers)
@@ -337,7 +283,6 @@ class TrainService(JobService):
         return 201, self.view_train(tr)
 
     def _build(self, tid: int, base: str, heads: list[dict]) -> tuple[str, int | None, list[str]]:
-        """(the tip, the PR that didn't merge or None, each record entry merge() took from one side)."""
         gh, branch, taken = self.github, f"train/{tid}", []
         gh.refs[branch] = base
         for p in heads:
@@ -349,8 +294,6 @@ class TrainService(JobService):
         return gh.refs[branch], None, taken
 
     def _prepare_records(self, tid: int, branch: str, p: dict, taken: list[str]) -> str:
-        """For each `lean-audit.json` both sides changed since their merge base, put merge()'s record on both, naming in
-        ``taken`` each entry it took from one side.  Returns the head to merge: the PR's, or one on top of it."""
         gh, tip, head = self.github, self.github.refs[branch], p["head"]
         if gh.is_ancestor(head, tip):
             return head
@@ -386,10 +329,7 @@ class TrainService(JobService):
         self._event(now, "train.cancelled", f"train:{tr.id}", t.name, {})
         return 200, self.view_train(tr)
 
-    # -- the reconcile cron
-
     def reconcile(self, now: float) -> list[int]:
-        """Every train in `checking` whose job has finished: landed, would-land, rebuilt, failed or stuck.  Returns their ids."""
         moved = []
         for tr in sorted(self.trains.values(), key=lambda t: t.id):
             if tr.state != "checking" or self.jobs[tr.job].state in ("queued", "running"):
@@ -402,7 +342,7 @@ class TrainService(JobService):
             elif j.state != "done":
                 self._end(tr, "stuck", f"the check of {tr.tip} is {j.state}: no verdict", now)
             elif not self.github.is_ancestor(self.github.refs["main"], tr.tip):
-                self._rebuild(tr, now)                  # main moved: the gate's diff would be against a main the tip lacks
+                self._rebuild(tr, now)
             elif why := self.gate(tr):
                 self._end(tr, "stuck", why, now)
             elif not tr.land:
@@ -416,7 +356,6 @@ class TrainService(JobService):
         return moved
 
     def gate(self, tr: Train) -> str | None:
-        """Why `tr.tip` may not land, or None: `research merge`'s gate, on the Attempt of the job's run."""
         a = self.store.attempts.get(tr.run_id or "")
         if a is None:
             return f"no Attempt attempts/{tr.run_id}.json in the store"
@@ -483,8 +422,6 @@ class TrainService(JobService):
         self._event(now, f"train.{state.replace('-', '_')}", f"train:{tr.id}", "cron", {**payload, **({"why": why} if why else {})})
 
     def sweep(self, tr: Train, now: float) -> None:
-        """After a landing: close the open PRs whose heads are on `main` (those based on `main` GitHub marked merged), then retarget
-        onto `main` the open PRs whose base branch's tip is on it."""
         gh, main = self.github, self.github.refs["main"]
         opened = [p for n, p in sorted(gh.prs.items()) if p["state"] == "open"]
         done = [p for p in opened if gh.is_ancestor(p["head"], main)]

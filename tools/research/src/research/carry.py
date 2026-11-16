@@ -47,19 +47,13 @@ from typing import Callable, Iterable
 
 from . import queue as Q
 
-#: what `delta` says of a pair: the first carries the verdict, the rest name why not
 CARRIES = ("merge-only",)
 KINDS = CARRIES + ("missing", "rebased", "authored", "untrusted-parent", "hand-resolved", "edited-merge", "octopus")
-#: a restack's commit across a move (`tools/move/restack.py`): the move it reran on its parent
 RESTACK_MOVE_RE = re.compile(r"^Restack-move: ([0-9a-f]{40,64})$", re.M)
-#: `moved_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
-#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
-#: worktree), and prints the tree it leaves (`MOVED_RE`)
 _MOVED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None) or sys.exit(f'{sys.argv[3][:12]} has no move line')\n"
           "print('moved', R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
 MOVED_RE = re.compile(r"^moved ([0-9a-f]{40,64})$", re.M)
-#: how long one move's script runs at most on one commit (`moved_tree`): a layout map on the whole tree, `uv lock` with it
 MOVED_TIMEOUT_S = 1800.0
 
 
@@ -68,8 +62,6 @@ class Delta:
     kind: str
     why: str = ""
     commits: int = 0
-    #: the files whose change the carry left to the checks (generated content), the trusted parents it merged, and the moves
-    #: whose script it reran
     generated: tuple[str, ...] = ()
     parents: tuple[str, ...] = ()
     moves: tuple[str, ...] = ()
@@ -84,10 +76,6 @@ class Delta:
 
 
 def lock_policy(text: bytes | None) -> dict | None:
-    """What of a lock a person writes, which a Lean check keeps as written: all of it but its records, which `check.py
-    --regenerate` rewrites from the build (`check.py`'s `regenerated`): `reads`, each guarantee's entry but its `owner`, and
-    each assumption's `digest`.  The names of the guarantees and assumptions stay: they decide what is locked and which
-    hypotheses count as named.  None for no lock, or one whose JSON isn't an object; a lock that isn't JSON raises ValueError."""
     doc = json.loads(text) if text is not None else None
     if not isinstance(doc, dict):
         return None
@@ -120,8 +108,6 @@ def _some(files: Iterable[str]) -> str:
 
 
 def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -> tuple[list[str], list[str]]:
-    """(the PR's own changes, the generated ones) among ``files``, those commit ``got`` changes against ``want`` (a commit or
-    a tree): a pin is generated, and so is a lock with the same policy (`lock_policy`) on both sides, each JSON."""
     locks = [f for f in files if PurePosixPath(f).name == Q.LEAN_LOCK and f not in pins]
     blobs = Q._blobs(repo, [f"{t}:{f}" for t in (want, got) for f in locks]) if locks else {}
 
@@ -141,12 +127,6 @@ def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -
 
 
 def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float = MOVED_TIMEOUT_S) -> tuple[str | None, str]:
-    """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MOVED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
-    ``timeout`` seconds pass (`queue.run_group`), with its scratch worktree in a temporary directory, which goes once it has
-    run, and with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock
-    (`queue.WORKTREES_LOCK`).  The tree's own code runs there but needs neither the queue's credentials nor the store's keys,
-    which drive and the loop hold (`queue.tree_env`), so the run gets none, and `gh` a config that isn't there."""
     with tempfile.TemporaryDirectory(prefix="research-carry-", ignore_cleanup_errors=True) as d:
         env = Q.tree_env(Q._script_env())
         rc, out = Q.run_group([sys.executable, "-c", _MOVED, str(restack), commit, move], repo, timeout,
@@ -163,8 +143,6 @@ def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float
 
 
 def _reruns(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], bool]) -> dict[str, str]:
-    """{commit: the move it reran} of each restack's commit on the PR's own line: one parent, and one `Restack-move:` trailer,
-    naming a landed move."""
     log = Q._out(repo, "log", "--first-parent", "--no-merges", "--format=%H%x00%B%x1e", f"{old}..{new}")
     found = {}
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
@@ -175,10 +153,6 @@ def _reruns(repo: Path, old: str, new: str, trusted: Callable[[str, str | None],
 
 
 def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], bool], restack: str | None = None) -> Delta:
-    """`Delta` of ``new`` over ``old`` (the module's docstring).  ``trusted(commit, merge)``: whether ``commit`` may come in
-    unreviewed, as a parent ``merge`` brings in, or with ``merge`` None as a commit of the PR's own line (landed only).
-    ``restack``: a landed commit whose `tools/move/restack.py` reruns the move a restack's commit names; without it, such a
-    commit is the PR's own."""
     repo = Path(repo)
     for c in (old, new):
         if not _ok(repo, "cat-file", "-e", f"{c}^{{commit}}"):
@@ -253,8 +227,6 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
 
 
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = ()) -> Callable[[str, str | None], bool]:
-    """``trusted`` for `delta`: a commit that is one of ``landed`` (the tips of `checked` and `main`) or an ancestor of one, and,
-    as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold)."""
     landed, heads = [t for t in landed if t], {h for h in heads if h}
 
     def trusted(c: str, merge: str | None = None) -> bool:

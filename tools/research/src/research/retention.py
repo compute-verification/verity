@@ -157,31 +157,16 @@ FIELDS = ("schema", "path", "node", "owner", "by", "created", "expires", "priori
 PRIORITIES = ("low", "normal", "high", "keep")
 COLLECTABLE = ("low", "normal")
 RUN_EXPIRY = timedelta(hours=48)
-#: How long after its last write the directory of an ended run that custody did not preserve keeps its implicit record (module
-#: docstring): the one number of that rule, which the record's `why`, gc's lines and the README state.
 UNPRESERVED_RUN_EXPIRY = timedelta(days=7)
-#: The source (`Found.source`, `Row.source`) of that record.
 UNPRESERVED = "unpreserved"
-#: How long after its last write a launcher's copy of a run on another machine keeps its implicit record (module docstring): the
-#: one number of that rule, which the record's `why`, gc's lines and the README state.
 LAUNCHER_COPY_EXPIRY = timedelta(hours=48)
-#: The source of that record, which only a walk under --launcher-copies gives.
 LAUNCHER = "launcher"
-#: The schema of the launcher's record of a remote run (`remote.launch`, `remote.adopt`), whatever its version.
 LAUNCHER_SCHEMA = "research/remote/"
-#: Why a pass under --launcher-copies leaves a path it would otherwise delete: a unit runs such a pass forced over a whole runs
-#: root, for the launchers' copies there and nothing else.
 ONLY_LAUNCHER = "left for a pass without --launcher-copies: this one deletes launchers' copies alone"
-#: The threads `launcher_check` asks the remote for a run record's blobs with.
 LAUNCHER_HEADS = 32
-#: What the report calls an implicit record, by its source.
 IMPLICIT = {"custody": ".custody", UNPRESERVED: "unpreserved run", LAUNCHER: "launcher's copy"}
-#: The directory beside a machine's runs root that holds its runs' clones, `<CLONES>/<run id>` (`clone.home`).
 CLONES = "scratch"
-#: The directory beside a machine's runs root that holds its launches' requests, `<REQUESTS>/<run id>/request.json`
-#: (`remote.stage_request`).
 REQUESTS = "requests"
-#: The line the report and gc print above the unpreserved runs, which they list after every other path.
 UNPRESERVED_HEAD = (f"unpreserved runs (ended, or refused before they ran, and custody did not preserve them: each directory is its "
                     f"run's only copy, and expires {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
 DEFAULT_ROOT = Path("/workspace")
@@ -192,10 +177,7 @@ KIND = "node-data/v1"
 LOG = Path("research/retention/deletions.jsonl")
 PASSES = "passes"
 LOG_SCHEMA = "research/retention-log/v1"
-#: The paths one gc pass deletes at most (--max-paths): a pass that is wrong about what may go is wrong about this many.
 MAX_PATHS = 200
-#: What the remote check finds of a preserved path's stored copy (module docstring), in the order a pass counts them; gc deletes on
-#: COLLECTED and keeps the path on the rest.
 STORED = ("verified", "expired", "withdrawn", "uncovered", "mismatch", "unknown", "unreachable")
 COLLECTED = STORED[:3]
 RM_SCHEMA = "research/retention-rm/v0"
@@ -204,20 +186,15 @@ TS = "%Y-%m-%dT%H:%M:%SZ"
 NAME_CHAR = r"[\w.-]"
 
 disk_usage = shutil.disk_usage
-#: The process table a recorded runner's death is read from (`_ended`).
 PROC = Path("/proc")
 
 
 def inode_usage(path: Path) -> tuple[int, int]:
-    """(total, used) inodes of the filesystem holding `path`; (0, 0) where it doesn't count them."""
     st = os.statvfs(path)
     return st.f_files, st.f_files - st.f_ffree
 
 
 class RecordError(ValueError):
-    """A record that is not `research/retention/v0`, or a path that cannot have one; the message says how to fix it. `source` is
-    the implicit record's (UNPRESERVED, LAUNCHER) when it is of a run directory too little of which can be read to give it one."""
-
     source = "unpreserved"
 
 
@@ -226,7 +203,6 @@ def utc_now() -> datetime:
 
 
 def parse_utc(s: Any) -> datetime:
-    """An ISO-8601 UTC time (`2026-10-08T00:00:00Z`; fractional seconds and `+00:00` accepted); ValueError otherwise."""
     if not isinstance(s, str):
         raise ValueError(f"not a time: {s!r}")
     t = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
@@ -240,7 +216,6 @@ def fmt_utc(t: datetime) -> str:
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
-    """`--expires`: `never` (None), `now`, a date (its midnight UTC), a UTC time, or an offset from now (`7d`, `36h`)."""
     if s == "never":
         return None
     if s == "now":
@@ -265,10 +240,7 @@ def _utc_or_none(s: Any) -> datetime | None:
         return None
 
 
-# ---- the record -------------------------------------------------------------------------------------------------------------------------
-
 def problems(doc: Any) -> list[str]:
-    """What makes `doc` not a valid explicit record, each with how to fix it; [] when it is one."""
     if not isinstance(doc, dict):
         return ["a record is a JSON object: rewrite it with `research keep PATH ...`"]
     out = []
@@ -319,8 +291,6 @@ def _places(path: Path) -> list[Path]:
 
 
 def sidecar(path: Path) -> Path:
-    """Where `path`'s record lives or would be written: an existing sidecar, else `<dir>/.retention.json` for a directory it can
-    write into, else `<path>.retention.json` beside it."""
     places = _places(path)
     for sc in places:
         if os.path.lexists(sc):
@@ -329,8 +299,6 @@ def sidecar(path: Path) -> Path:
 
 
 def load(path: Path) -> dict | None:
-    """`path`'s explicit record, or None when it has no sidecar; RecordError when the sidecar is unreadable or invalid, or when a
-    directory has one inside and one beside it."""
     docs = []
     for sc in _places(path):
         try:
@@ -353,7 +321,6 @@ def load(path: Path) -> dict | None:
 
 
 def write(path: Path, record: dict) -> Path:
-    """Write `path`'s sidecar atomically (a temp file, then a rename) after validating it."""
     sc = sidecar(path)
     check(record)
     write_json_atomic(sc, {k: record[k] for k in FIELDS})
@@ -372,8 +339,6 @@ def _read_json(p: Path) -> dict | None:
 
 
 def _last_write(path: Path) -> float:
-    """The newest mtime of the directory `path` and of every directory and file under it, by os.scandir and lstat (no symlink is
-    followed); OSError when any of it can't be read, so a directory never reads as older than it is."""
     newest, stack = os.lstat(path).st_mtime, [str(path)]
     while stack:
         with os.scandir(stack.pop()) as it:
@@ -385,10 +350,6 @@ def _last_write(path: Path) -> float:
 
 
 def _ended(run_dir: Path, host: Any) -> str | None:
-    """The state the run of `run_dir` ended in (one of `evict.ENDED`), or None while nothing shows that it ended: a state that is
-    not final, or a `running` whose runner is not known gone. A recorded runner is gone as `evict._run_state` decides it, and
-    only where this host's process table can say (module docstring); `host` is job.json's. `evict.Unestablished` when its status
-    can't be read."""
     state = EV._run_state(run_dir, PROC)
     if state == EV.LOST and (host != socket.gethostname() or not (PROC / "1" / "stat").is_file()):
         return None
@@ -396,14 +357,10 @@ def _ended(run_dir: Path, host: Any) -> str | None:
 
 
 def _in_runs_root(d: Path, runs_root: Any) -> bool:
-    """Whether `runs_root`, as a record of the run of `d` names it, is the directory `d` lies in."""
     return isinstance(runs_root, str) and os.path.isabs(runs_root) and os.path.realpath(runs_root) == os.path.realpath(d.parent)
 
 
 def _refused_launch(d: Path) -> tuple[str, str] | None:
-    """(this host, its request file) when `d`, which holds no job.json, is the directory of a launch that was refused before
-    it ran (module docstring); None for any other. `evict.Unestablished` or OSError when one of the records that say so can't
-    be read."""
     request = d.parent.parent / REQUESTS / d.name / "request.json"
     if not ids.is_run_id(d.name) or os.path.lexists(d / "status.json"):
         return None
@@ -423,10 +380,6 @@ def _refused_launch(d: Path) -> tuple[str, str] | None:
 
 
 def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
-    """The record of an ended run that custody did not preserve, or of a launch refused before it ran (module docstring), given
-    that `.custody` doesn't say preserved; None for a directory that is neither's. RecordError when it is a run directory and
-    what decides whether it may go can't be read: its status, the records of its launch, something under it, or its runner's
-    custody key."""
     run_id, host, request = EV._get(job, "run", "id"), EV._get(job, "environment", "hostname"), EV._get(job, "run", "remote", "request")
     above = d.parents[:rel.count("/")]
     if os.path.lexists(d / CU.LAUNCHER_RECORD) or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
@@ -471,14 +424,11 @@ def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
 
 
 def _owner(job: dict) -> str:
-    """Who an implicit record names as owner: the job's lane, else its campaign, else `runner`."""
     return (EV._get(job, "ownership", "lane") or EV._get(job, "store", "campaign") or EV._get(job, "store", "conditions", "exec.campaign")
             or "runner")
 
 
 def _launcher_copy(d: Path, rel: str) -> dict | None:
-    """The record of a launcher's copy of a run on another machine (module docstring); None for any other directory. RecordError
-    (source LAUNCHER) when it is one and when it was last written can't be read."""
     launched = _read_json(d / CU.LAUNCHER_RECORD) if ids.is_run_id(d.name) else None
     if launched is None or not str(launched.get("schema")).startswith(LAUNCHER_SCHEMA) or launched.get("run_id") != d.name:
         return None
@@ -488,7 +438,7 @@ def _launcher_copy(d: Path, rel: str) -> dict | None:
         return None
     job = _read_json(d / "job.json") or {}
     if EV._get(job, "environment", "hostname") == socket.gethostname() and _in_runs_root(d, EV._get(job, "run", "runs_root")):
-        return None                                   # the run's own directory, on the machine it ran on: never a copy
+        return None
     try:
         expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + LAUNCHER_COPY_EXPIRY
     except (OSError, OverflowError, ValueError) as e:
@@ -504,14 +454,11 @@ def _launcher_copy(d: Path, rel: str) -> dict | None:
 
 
 def _implicit(run_dir: Path, rel: str, launcher: bool = False) -> tuple[dict, str] | None:
-    """`implicit`'s record with its source: "custody" for a preserved run's, UNPRESERVED for an ended, unpreserved one's, and with
-    `launcher` LAUNCHER for a launcher's copy's, whatever marker it fetched; `_unpreserved`'s and `_launcher_copy`'s RecordError."""
     d = Path(run_dir)
     if launcher and (rec := _launcher_copy(d, rel)) is not None:
         return rec, LAUNCHER
     m = _read_json(d / CU.MARKER)
     if m is None:
-        # a marker that can't be read says nothing of what custody did; and only a directory named as a run can be an unpreserved one
         if os.path.lexists(d / CU.MARKER) or not ids.is_run_id(d.name):
             return None
     elif m.get("schema") != CU.SCHEMA or not isinstance(m.get("preserved"), bool):
@@ -532,9 +479,6 @@ def _implicit(run_dir: Path, rel: str, launcher: bool = False) -> tuple[dict, st
 
 
 def implicit(run_dir: Path, rel: str) -> dict | None:
-    """The record a run directory has without a sidecar (module docstring): a preserved run's, from its `.custody` marker, or an
-    ended run's that custody did not preserve; None for any other directory. RecordError for a run directory whose status, files
-    or custody key can't be read, so that whether it may go is unknown."""
     found = _implicit(run_dir, rel)
     return found[0] if found else None
 
@@ -543,14 +487,11 @@ def implicit(run_dir: Path, rel: str) -> dict | None:
 class Found:
     path: Path
     record: dict | None
-    source: str                  # "sidecar" | "custody" | UNPRESERVED | LAUNCHER
-    error: str | None = None     # an invalid sidecar's problems, or what of a run directory can't be read (then no record)
+    source: str
+    error: str | None = None
 
 
 def record_at(path: Path, rel: str, launcher: bool = False) -> Found | None:
-    """The record of exactly `path` (its sidecar, else a directory's implicit one), or None. A sidecar that is invalid, and a run
-    directory of which too little can be read to say whether it may go, is a Found with its `error` and no record. `launcher`
-    (gc's --launcher-copies) gives a launcher's copy of a run its implicit record, which nothing else reads."""
     p = Path(path)
     try:
         doc = load(p)
@@ -569,7 +510,6 @@ def record_at(path: Path, rel: str, launcher: bool = False) -> Found | None:
 
 
 def relative(path: Path | str, root: Path | str) -> str:
-    """`path` relative to `root` (posix); RecordError when it is not strictly under it."""
     p, r = Path(os.path.abspath(path)), Path(os.path.abspath(root))
     try:
         rel = p.relative_to(r)
@@ -584,7 +524,6 @@ def relative(path: Path | str, root: Path | str) -> str:
 
 
 def find(path: Path | str, root: Path | str = DEFAULT_ROOT) -> Found | None:
-    """The record covering `path`: its own, else the nearest ancestor's below the root."""
     rel = relative(path, root)
     parts = rel.split("/")
     for n in range(len(parts), 0, -1):
@@ -595,7 +534,6 @@ def find(path: Path | str, root: Path | str = DEFAULT_ROOT) -> Found | None:
 
 
 def target(path: Path | str, root: Path | str) -> str:
-    """The relative path of data `research keep` may record; RecordError when there is none to record."""
     p = Path(path)
     if not os.path.lexists(p):
         raise RecordError(f"{p} does not exist")
@@ -607,8 +545,6 @@ def target(path: Path | str, root: Path | str) -> str:
 def keep(path: Path | str, *, owner: str, expires: str | None, priority: str, root: Path | str = DEFAULT_ROOT,
          regenerate: str | None = None, preserved: str | None = None, why: str | None = None, by: str | None = None,
          now: Callable[[], datetime] = utc_now, node: str | None = None) -> dict:
-    """Write or update `path`'s sidecar and return the record. An update keeps `created`, and an optional field not given (None)
-    keeps its value; an empty string clears it."""
     p = Path(path)
     rel = target(p, root)
     try:
@@ -625,19 +561,17 @@ def keep(path: Path | str, *, owner: str, expires: str | None, priority: str, ro
     return {k: rec[k] for k in FIELDS}
 
 
-# ---- the walk -----------------------------------------------------------------------------------------------------------------------------
-
 @dataclass
 class Row:
     path: str
     bytes: int = 0
     files: int = 0
     record: dict | None = None
-    source: str | None = None            # "sidecar" | "custody" | UNPRESERVED | LAUNCHER; None: no record
+    source: str | None = None
     error: str | None = None
     nested: list[str] = field(default_factory=list)
-    rest: bool = False                   # an unowned row for the unrecorded rest of a partly recorded area
-    dirs: int = 0                        # the directories among a recorded path's inodes, itself included
+    rest: bool = False
+    dirs: int = 0
 
     def state(self, now: datetime) -> str:
         if self.error:
@@ -661,8 +595,6 @@ def expired(record: dict, now: datetime) -> bool:
 
 
 def measure(path: Path, errors: list[str]) -> tuple[int, int, int, list[Path]]:
-    """(apparent bytes and count of every non-directory entry under `path`, the count of its directories with itself, the sidecars
-    beneath its own), by os.scandir and lstat; symlinks are never followed."""
     try:
         st = os.lstat(path)
     except OSError as e:
@@ -700,10 +632,6 @@ class Scan:
 
 
 def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2, launcher: bool = False) -> Scan:
-    """Every recorded path under `root` (never descending into one), and the areas in its top `depth` levels with no record
-    beneath them (`unowned`). The unrecorded bytes of a partly recorded area are one `rest` row: the loose files of one in the
-    top levels, everything unrecorded beneath one at `depth`. With `launcher` a launcher's copy of a run is a recorded path
-    (`record_at`)."""
     root = Path(root)
     rows: list[Row] = []
     errors: list[str] = []
@@ -762,9 +690,6 @@ ORDER = {"invalid": 0, "unowned": 0, "expired": 1, "recorded": 2}
 
 
 def unpreserved_runs(docs: Sequence[dict[str, Any]]) -> dict[str, dict[str, int]]:
-    """The unpreserved runs among the rows `docs` (`Row.doc`), counted apart from every other path: the `expired` ones, past
-    UNPRESERVED_RUN_EXPIRY after their last write, the `recorded` ones, still inside it, and the `invalid` ones, run directories
-    with no record because too little of them can be read; each with its paths, bytes and inodes."""
     out = {state: {"paths": 0, "bytes": 0, "inodes": 0} for state in ("expired", "recorded", "invalid")}
     for d in docs:
         if d["source"] == UNPRESERVED:
@@ -775,8 +700,6 @@ def unpreserved_runs(docs: Sequence[dict[str, Any]]) -> dict[str, dict[str, int]
 
 def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[], datetime] = utc_now,
            usage: Callable[[Path], Any] = shutil.disk_usage, node: str | None = None) -> dict[str, Any]:
-    """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size.
-    `unpreserved` counts the unpreserved runs apart (`unpreserved_runs`)."""
     t = now()
     sc = scan(root, depth)
     docs = sorted((r.doc(t) for r in sc.rows), key=lambda d: (ORDER[d["state"]], -d["bytes"], d["path"]))
@@ -793,20 +716,12 @@ def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[],
             "rows": docs, "totals": totals, "unpreserved": unpreserved_runs(docs), "errors": sc.errors}
 
 
-# ---- gc -----------------------------------------------------------------------------------------------------------------------------------
-
 class JobScripts:
-    """The v0 in-use check: a path is in use while some file in the job-script directories names it (its path under the root,
-    alone or as the tail of an absolute path, whole or as the prefix of a longer one). The directories are listed again on every
-    call, so a job queued meanwhile counts; unchanged files are read once. Any read error makes every path in use."""
-
     def __init__(self, dirs: Sequence[Path | str], root: Path | str = DEFAULT_ROOT):
         self.dirs, self.root = [Path(d) for d in dirs], Path(root)
         self._cache: dict[str, tuple[tuple[int, int], str]] = {}
 
     def _texts(self) -> list[tuple[str, str]]:
-        """(path, text) of every file, in the directories' order: a job that moves from queue/ to running/ meanwhile is read in one
-        of them, so a file gone before it is read is skipped."""
         out = []
         for d in self.dirs:
             for base, dirnames, files in os.walk(d, onerror=_raise):
@@ -843,11 +758,6 @@ def _raise(e: OSError) -> None:
 
 
 def covers(man: Any, path: Path, launcher: bool = False, out: list[tuple[str, int]] | None = None) -> str | None:
-    """None when the artifact's payload holds every regular file now under `path` at its size (a directory's own sidecar and
-    custody's markers aside); else what it lacks, each (path, bytes) appended to `out` too. A symlink or other non-regular entry is
-    passed over: it holds no bytes, and deleting it deletes nothing it points at. An unreadable directory raises. With `launcher`,
-    `path` is a launcher's copy of the run whose record the artifact is: its `remote.json` is the launcher's own, and a file at its
-    top is held by its path, whatever its size (module docstring)."""
     pl = man.payload
     p = Path(path)
     if pl is None:
@@ -883,8 +793,6 @@ def covers(man: Any, path: Path, launcher: bool = False, out: list[tuple[str, in
 
 @dataclass(frozen=True)
 class Stored:
-    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words. An `uncovered` answer also
-    counts the files the artifact lacks and their bytes, which are stored nowhere else."""
     state: str
     why: str
     lost_files: int = field(default=0, compare=False)
@@ -892,16 +800,6 @@ class Stored:
 
 
 def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc_now) -> Callable[[str, Path], Stored]:
-    """The default remote check, run just before a deletion: what became of the path's stored copy (STORED, module docstring).
-    The artifact must hold the path's files (`covers`), else the answer is `uncovered` where the remote's would have let the path
-    go, and the remote's own where it keeps the path; `preserved.check` in head mode says whether the remote holds it (remote
-    sizes, and the single-part ETag against the local blob's MD5 where the blob is here, else a read-back; `LocalStore.verify`
-    would read back every blob). Where it holds the manifest and lacks blobs, the store gave the copy up when that check's verdict is
-    WITHDRAWN (it pulls the artifact's labels from the remote, and a `withdrawn` label covers every blob the remote lacks), or when
-    the manifest is older at `now` than its kind's time to live; a blob absent that neither explains is a `mismatch`. Without a
-    usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified when custody
-    pushed it, which is what the store eviction trusts too; an artifact that catalog doesn't vouch for is `unreachable`, since
-    nothing here can be asked."""
     st = None
 
     def chk(art: str, path: Path) -> Stored:
@@ -937,7 +835,6 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
                 return Stored("unreachable", err)
             if rep["verdict"] == P.WITHDRAWN:
                 return Stored("withdrawn", f"withdrawn from the remote: {st.withdrawn(art)}")
-            # what fails besides withdrawn blobs: `preserved` lists those in the artifact's `withdrawn`, never as absent in its errors
             errs = (rep["artifacts"][art]["errors"] + [e for x in rep["not_preserved"] if x["kind"] == "labels" for e in x["errors"]]
                     or [rep.get("reason") or "not preserved"])
             if r is None:
@@ -959,11 +856,6 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
 
 
 def launcher_check(now: Callable[[], datetime] = utc_now) -> Callable[[Path], Stored]:
-    """The remote check for a launcher's copy of a run, made just before its deletion: whether the run is over and the remote
-    holds its record with the copy's files (module docstring), as one of STORED. Only the remote is asked, through an empty
-    store made for each copy and removed after it, since a store on the launcher may hold an attempt the remote never got; a
-    remote that can't be asked is `unreachable`. A blob the remote held at its size is not asked for again in the pass: one
-    service's runs share most of theirs."""
     held: set[str] = set()
 
     def chk(path: Path) -> Stored:
@@ -1027,11 +919,11 @@ def launcher_check(now: Callable[[], datetime] = utc_now) -> Callable[[Path], St
 @dataclass
 class Action:
     row: Row
-    action: str                  # "delete" | "skip"
+    action: str
     reason: str
     pct_after: float | None = None
     error: str | None = None
-    stored: str | None = None    # the remote check's answer (STORED), where an --apply asked
+    stored: str | None = None
 
     def doc(self, now: datetime) -> dict[str, Any]:
         return {**self.row.doc(now), "action": self.action, "reason": self.reason, "pct_after": self.pct_after, "error": self.error,
@@ -1039,7 +931,6 @@ class Action:
 
 
 def ineligible(row: Row, now: datetime, node: str) -> str | None:
-    """Why the policy never deletes `row`'s path, from its record alone; None when it may."""
     rec = row.record
     if row.error:
         return f"no record: {row.error}" if row.source in (UNPRESERVED, LAUNCHER) else f"invalid record: {row.error}"
@@ -1078,8 +969,6 @@ def _why_deletable(row: Row, found: Stored | None) -> str:
 
 
 def uncovered_until(record: dict) -> datetime:
-    """When the files custody did not store of a preserved run go (module docstring): UNPRESERVED_RUN_EXPIRY after custody verified
-    the run, which its implicit record's expiry is RUN_EXPIRY after."""
     return parse_utc(record["expires"]) - RUN_EXPIRY + UNPRESERVED_RUN_EXPIRY
 
 
@@ -1088,7 +977,6 @@ def _lost(found: Stored) -> str:
 
 
 def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreserved: bool) -> str | None:
-    """Why gc keeps a preserved run whose run record lacks files custody trimmed (`uncovered`), or None once it may go."""
     until, days = uncovered_until(row.record), UNPRESERVED_RUN_EXPIRY // timedelta(days=1)
     lack = f"custody trimmed {_lost(found)} from its run record {row.record['preserved']}"
     keep = (f"; to keep it: `research keep {path} --owner @LANE --expires DATE --priority P`, or a custody that declares the files "
@@ -1102,15 +990,11 @@ def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreser
 
 
 def keeping(run_dir: Path) -> str:
-    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted; the first
-    alone for a refused launch, which has no job.json: it ran nothing that custody could preserve."""
     keep = f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`"
     return keep if not os.path.lexists(run_dir / "job.json") else f"{keep}, or preserve it: `research data custody {run_dir.name} --publish`"
 
 
 def _clone_first(run_dir: Path) -> str | None:
-    """Why gc leaves the unpreserved run of `run_dir` for now: its clone still stands (module docstring; a directory, never a
-    link to one), or whether it does can't be read. None when it has no clone."""
     clone = run_dir.parent.parent / CLONES / run_dir.name
     try:
         st = EV._quiet(lambda: os.lstat(clone))
@@ -1130,7 +1014,6 @@ def _read_only_dir(path: Path) -> str | None:
 
 
 def _unwritable(path: Path) -> str | None:
-    """Why this user can't remove the tree `path` whole (a directory in it that it can't write into, or can't read), or None."""
     try:
         ro = _read_only_dir(path)
     except OSError as e:
@@ -1144,16 +1027,10 @@ def _in_sealed(path: Path) -> str | None:
     return None
 
 
-#: A Lean records tree (`lean_changed.py --records`, `--try`, `--build`): a slot's checkout and its builds, `lean-records/build-I`
-#: under the check cache (`lean_changed.RECORDS`), or that link's target on a larger volume. The run working in it holds its
-#: `.lock` (a flock) and names itself in its `.who` (`lean_changed.hold_tree`). `lean_audit.prune_records` removes a tree only
-#: while it holds that lock, and so do gc and rm (`_lean_locks`): a build whose tree goes from under it fails on a missing `.olean`.
 LEAN_RECORDS, LEAN_LOCK, LEAN_WHO = "lean-records", ".lock", ".who"
 
 
 def _lean_tree(d: Path) -> bool:
-    """Whether `d` (or the directory a link `d` names) is a Lean records tree: it holds a `.lock`, and lies in `lean-records/`
-    or holds a `.who`."""
     try:
         return (d / LEAN_LOCK).is_file() and (d.parent.name == LEAN_RECORDS or (d / LEAN_WHO).is_file())
     except OSError:
@@ -1161,8 +1038,6 @@ def _lean_tree(d: Path) -> bool:
 
 
 def lean_trees(path: Path, root: Path) -> list[Path]:
-    """The Lean records trees `path` is or lies in (below `root`), else those it holds: a link to one counts, and the walk never
-    follows a link or descends into a tree or CODE_DIRS. OSError when a directory can't be read."""
     p = Path(os.path.abspath(path))
     out = [d for d in (p, *p.parents) if Path(root) in d.parents and _lean_tree(d)]
     if out or not p.is_dir() or p.is_symlink():
@@ -1186,8 +1061,6 @@ def _lean_holder(tree: Path) -> str:
 
 @contextmanager
 def _lean_locks(path: Path, root: Path) -> Iterator[str | None]:
-    """Hold the lock of every Lean records tree `path` is, lies in or holds (`lean_trees`) while the block runs, so no run takes
-    one meanwhile; yields None, or why not when a run holds one. OSError when a directory or a lock can't be read."""
     with ExitStack() as stack:
         held = None
         for tree in lean_trees(path, root):
@@ -1202,7 +1075,6 @@ def _lean_locks(path: Path, root: Path) -> Iterator[str | None]:
 
 
 def lean_in_use(path: Path, root: Path) -> str | None:
-    """Why a Lean build is (or may be) working in `path` (`_lean_locks`), or None."""
     try:
         with _lean_locks(path, root) as held:
             return held
@@ -1211,11 +1083,6 @@ def lean_in_use(path: Path, root: Path) -> str | None:
 
 
 def _delete(root: Path, path: Path, last: str | None = None) -> str | None:
-    """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
-    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root. The
-    locks of the Lean records trees it is, lies in or holds are held throughout (`_lean_locks`), and one a run holds refuses it.
-    `last` is the file at the path's top that gives it its record (a launcher's copy's remote.json): it goes after everything
-    else, so a deletion cut short leaves a path that still has its record, which a later pass takes."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
@@ -1251,17 +1118,6 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
        node: str | None = None, store_root: str | None = None,
        inodes: Callable[[Path], tuple[int, int]] | None = None, max_paths: int | None = None,
        unpreserved: bool = False, launcher: bool = False, copy_check: Callable[[Path], Stored] | None = None) -> dict[str, Any]:
-    """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
-    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
-    `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
-    `max_paths` limits the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
-    unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
-    their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
-    `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
-    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the limit left
-    for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
-    `deleted` ones this pass deleted, or in a dry run would. `trimmed` counts the preserved runs whose files custody trimmed
-    (`uncovered`) apart again: those deleted, with the `files` and `bytes` of theirs stored nowhere else, and those `kept`."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -1381,17 +1237,11 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     return plan
 
 
-# ---- rm -----------------------------------------------------------------------------------------------------------------------------------
-
 def _handle(owner: Any) -> str:
-    """An owner as a lane handle: implicit records name the job's lane without the @."""
     return "@" + str(owner or "").lstrip("@")
 
 
 def beneath(path: Path, root: Path) -> list[Found]:
-    """Every record strictly beneath `path`: each sidecar's, and the implicit record of each preserved `.custody` marker without one
-    (an unpreserved run has no record beneath a recorded path or another run's directory, `_unpreserved`).
-    Symlinks are never followed; OSError when a directory can't be read."""
     p = Path(path)
     if not p.is_dir() or p.is_symlink():
         return []
@@ -1414,7 +1264,6 @@ def beneath(path: Path, root: Path) -> list[Found]:
 
 
 def _covering(path: Path, root: Path) -> tuple[Found | None, list[Found]]:
-    """The record covering `path` (its own or the nearest ancestor's), or None, and every record beneath it."""
     return find(path, root), beneath(path, root)
 
 
@@ -1430,7 +1279,6 @@ def _kept(f: Found, root: Path) -> str:
 
 def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below: list[Found],
              in_use: Callable[[Path], str | None]) -> str | None:
-    """Why `rm` may not delete `path` with `approved_by`'s yes, given the records `_covering` found; None when it may."""
     if top is None:
         return (f"no record covers it, so nobody can say yes: its owner records it first (`research keep {path} --owner @LANE "
                 f"--expires now --priority low`), or deletes it")
@@ -1461,17 +1309,13 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
 
 
 CODE_DIRS = frozenset({".venv", "venv", "site-packages", "dist-packages", "node_modules", ".lake", "__pycache__"})
-"""Directories that hold code, never a retained pass: not walked for PASSES (torch's and vLLM's `passes` packages sit in every
-venv, and taken for passes they would refuse every approved tree holding one)."""
 
 
 def _pass_dir(d: Path) -> bool:
-    """A PASSES directory that holds passes: not a Python package of that name (`torch/fx/passes`, `vllm/compilation/passes`)."""
     return d.name == PASSES and not (d / "__init__.py").exists()
 
 
 def _holds_passes(path: Path, root: Path) -> bool:
-    """Whether `path` is, holds or lies under a PASSES directory that holds passes (`_pass_dir`), outside CODE_DIRS."""
     parts = relative(path, root).split("/")
     if any(x == PASSES and not set(parts[:i]) & CODE_DIRS and _pass_dir(root.joinpath(*parts[:i + 1]))
            for i, x in enumerate(parts)):
@@ -1489,10 +1333,6 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
        by: str | None = None, in_use: Callable[[Path], str | None] | None = None, now: Callable[[], datetime] = utc_now,
        node: str | None = None, log: Path | str | None = None, remote_check: Callable[[str, Path], Stored] | None = None,
        store_root: str | None = None) -> dict[str, Any]:
-    """`research retention rm` (module docstring): the plan for `paths`, and with `apply` their deletions, every decision a line in the
-    deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist; `remote_check` None
-    is `store_check(store_root, now)`, read only by an --apply that deletes passes, which needs its answer `verified`. RecordError when --approved-by is not a handle or --ref
-    is empty, and with `apply` when `by` is missing or the log can't be written."""
     root = Path(os.path.abspath(root))
     if not OWNER_RE.match(approved_by or ""):
         raise RecordError(f"--approved-by {approved_by!r}: give the owner's lane handle, such as @compute-accounting")
@@ -1575,8 +1415,6 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
     return plan
 
 
-# ---- the command line ---------------------------------------------------------------------------------------------------------------------
-
 def _size(n: int) -> str:
     for unit, k in (("TiB", 40), ("GiB", 30), ("MiB", 20), ("KiB", 10)):
         if n >= 1 << k:
@@ -1600,7 +1438,6 @@ def _row_line(d: dict[str, Any]) -> str:
 
 
 def _apart(rows: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """`rows` without the unpreserved runs, and those: the report and gc print them after every other path, under UNPRESERVED_HEAD."""
     return [d for d in rows if d["source"] != UNPRESERVED], [d for d in rows if d["source"] == UNPRESERVED]
 
 
@@ -1657,7 +1494,6 @@ def keep_main(argv: list[str]) -> int:
 
 
 def _preserve(path: Path, rel: str, owner: str, store_root: str | None) -> str | None:
-    """`keep --preserve`: put the path in the evidence store and push it, verified; its art id, or None after a message."""
     from .store.local import LocalStore, StoreError
 
     st = LocalStore(store_root)

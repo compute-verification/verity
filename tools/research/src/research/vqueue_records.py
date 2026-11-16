@@ -1,31 +1,4 @@
-"""The records run of a candidate of the verified queue (`research.vqueue`) with a member that changes Lean, a lock or a spec,
-which runs before its check (`vqueue.Build.records`), and the records commit made of it.
-
-The run is a lock run (`Landing.launch_locks`: `train.sh SHA MACHINES --deferred lean-audit`, its check at
-`AFTER_LANDING_SLOT_RANK`, its lean-audit regenerating each lock record it finds stale, with `--bookkeeping-warn`, the loop's own
-train.sh), on the queue's machines (`Landing.on`), judged by `lock_outcome`: one its machine failed (lost, killed, out of disk
-or memory, its Lean pool closed: `machine_fault`) runs again once on the other machines (`resend_locks`); one that registered
-no run, never ran or was stopped is infra, which the loop launches again once; one that failed refuses.  A passed run passes
-once its Lean report
-(`merge.lean_report`) can be read: every package it regenerated is committed, and a change to what a guarantee says (the
-report's `statement_changes`: a guarantee's statement, a definition one reads, a listed premise or listed compile-time code)
-refuses nothing.  The records commit names each such change (`_changes`), and the spec DM shows each one once it lands on
-`main` (`merge.caught_up`, on the loop's `on_main`): that DM is the check.
-
-A records commit is a lock commit: the records the run regenerated (`regenerated_locks`, from the store, else from its run dir
-on its node), each at its path in the tree (`lock_path`), committed on top of the candidate with a lock commit's message
-(`lock_message`: `Lock records regenerated for #N...`, each change to what a guarantee says with the owners of what it names,
-the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as the queue
-(`Queue.identity`: the author its repository's rules name, else `queue.IDENTITY`), and
-vouched for by the merge gate against the run (`unvouched`, `merge.regenerated_parent`), so post_train reads it as a lock
-commit, and neither reads who made it; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and
-each owner a warning names).  A run
-that regenerated nothing, or only the records the candidate holds, makes none, and the candidate is checked as built.  It is
-made in a scratch index, without a checkout or a ref.  The candidate is a staged batch, off main's chain; when the chain's top
-it goes onto is another base, its members are merged again there, and the records commit, made and vouched for on the staged
-tree, is carried onto that merge, the same files byte for byte, only when the two trees' Lean inputs are the same
-(`same_inputs`, `vqueue_slim.lean_key`), which are all the records depend on.  Under a dry run or the queue's shadow nothing launches (`start`), as
-`vqueue_slim.start`.  The loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call."""
+"""The records run of a verified-queue candidate whose member changes Lean, a lock or a spec."""
 from __future__ import annotations
 
 import contextlib
@@ -42,47 +15,29 @@ from .merge import AUDIT, bookkeeping_warnings, lean_report
 from .queue import IDENTITY, QueueError, _git, _out
 from .vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
 
-#: what is told of the bookkeeping a records run repaired, and to whom (`bookkeeping_told`)
 Told = tuple[str, tuple[str, ...]]
-#: a review line naming a guarantee or a listed premise (`check.py`'s `review` and `assumption_changes`), by the lock's
-#: section that records its owner
 NAMED = (("guarantees", re.compile(r"^guarantee (\S+): ")), ("assumptions", re.compile(r"^assumption (\S+): ")),
          ("domain", re.compile(r"^domain hypothesis (\S+): ")), ("open", re.compile(r"^open premise (\S+): ")))
-#: a review line of a definition the build's guarantees read, which names them
 READ_BY = re.compile(r"^definition .*, read by (.+): (?:new|gone|changed|in a changed module)$")
-#: a failed step's log saying its machine ran out of disk or memory, or closed the Lean slot pool it asked for: the machine's
-#: fault, not the change's (`machine_fault`); pytest's `mktemp` drops the errno of a full disk, saying only that its numbered
-#: directory could not be made
 FAULT_RE = re.compile(r"No space left on device|\bENOSPC\b|\[Errno 28\]|Cannot allocate memory|\[Errno 12\]|\bMemoryError\b"
                       r"|\b[Oo]ut of memory\b|could not create numbered dir with prefix \S+ in \S+ after \d+ tries"
                       r"|pool '[^']+' is closed on this machine")
-#: a Lake package's lock, which a lock run may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
-#: the subject a lock commit opens with (`lock_message`), before the PRs whose records it regenerated
 LOCK_SUBJECT = "Lock records regenerated for "
 
 
 def lock_path(pkg: str) -> str:
-    """Where a record lock run's Lean report names under ``pkg`` (`merge.regenerated_records`) goes in the tree: the package's
-    lock, or a file of `merge.REPAIRED` at its own path."""
     from .merge import REPAIRED
 
     return pkg if pkg in REPAIRED else f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
 
 
 def lock_checked(rid: str, into: str, tip: str) -> str:
-    """A lock commit's `Checked:` line, its parenthesis left open (`lock_message` closes it; a merge onto a moved branch says
-    so first): lock run ``rid`` of ``into``'s ``tip``, whose parent the merge gate vouches for the commit against."""
     return f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
 
 
 def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], files: list[str],
                  changed: Iterable[str] = (), onto: str | None = None) -> str:
-    """A lock commit's message (`commit`), which the merge gate (`merge.regenerated_parent`), the loop (`LOCK_SUBJECT`) and
-    post_train read: `Lock records regenerated for PRS`, what its records change of what a
-    guarantee says (``changed``, which the spec DM shows once they land), the bookkeeping the lock run repaired (``warned``,
-    each a warning for the next PR to fix), with ``onto`` the tree they were carried onto from ``tip``, its `Checked:` line
-    (`lock_checked`) and `Regenerated: FILES`."""
     said = ("What these records change of what a guarantee says, which the spec DM shows once they land:\n" +
             "".join(f"  {c}\n" for c in changed) + "\n") if (changed := list(changed)) else ""
     repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
@@ -93,14 +48,10 @@ def lock_message(prs: str, rid: str, into: str, tip: str, warned: list[str], fil
             f"Regenerated: {', '.join(files)}\n")
 
 
-#: how many bookkeeping warnings of a lock run its post lists (`bookkeeping_told`); the lock commit lists them all
 BOOKKEEPING_SHOWN = 12
 
 
 def bookkeeping_told(rid: str, into: str, tip: str, prs: str, lock: str, warned: list[str]) -> tuple[str, tuple[str, ...]]:
-    """What is told of the bookkeeping lock run ``rid`` of ``into``'s ``tip`` repaired in lock commit ``lock`` (``warned``,
-    `merge.bookkeeping_warnings`: each a warning for the next PR to fix), and to whom, as handles with no `@`: the Lean check's
-    owner, `lean`, and each owner a warning names."""
     owners = sorted({h for w in warned for h in re.findall(r"\(@([\w-]+)\)", w)} - {"lean"})
     shown = "; ".join(warned[:BOOKKEEPING_SHOWN]) + (f"; and {len(warned) - BOOKKEEPING_SHOWN} more in the commit"
                                                     if len(warned) > BOOKKEEPING_SHOWN else "")
@@ -109,10 +60,6 @@ def bookkeeping_told(rid: str, into: str, tip: str, prs: str, lock: str, warned:
 
 
 def start(driver: Landing, sha: str, on: str = "") -> dict | None:
-    """Launch candidate ``sha``'s records run (`Landing.launch_locks`, on ``on``'s machines, else `Landing.on`).  The record to
-    keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``),
-    when it launched (``at``) and ``on`` when given, which its resend stays on (`resend_locks`).  None, logged, when it
-    registered no run, or when ``driver`` launches nothing (a dry run, or its queue's shadow)."""
     if not (machines := on or driver.on):
         raise ValueError("a candidate's records run needs the queue's machines: build the Landing with drive.toml's `on` "
                          "(`research.queue.flags_at(repo, main).on`)")
@@ -129,11 +76,6 @@ def start(driver: Landing, sha: str, on: str = "") -> dict | None:
 
 
 def judge(driver: Landing, rec: dict | None) -> RecordsRun:
-    """The records run `start` recorded in ``rec``.  Pending while it launches or runs; infra when it registered no run
-    (``rec`` None, or a detached launch that printed no run ids), never ran or was stopped; launched again once elsewhere
-    when its machine failed it, and pending then; fail when it failed (or its resend registered no run), or passed with
-    records that can't be committed (`_passed`); else pass.  A passed run whose Lean report can't be read yet is pending,
-    with why.  Every verdict but pending is kept in ``rec`` (``verdict``, with the run that passed) and read from there."""
     if rec is None:
         return RecordsRun(INFRA, "it registered no run")
     if "verdict" in rec:
@@ -166,8 +108,6 @@ def judge(driver: Landing, rec: dict | None) -> RecordsRun:
 
 
 def _passed(driver: Landing, rec: dict, rid: str) -> RecordsRun:
-    """The verdict of records run ``rid``, passed: pass once its Lean report can be read, whatever its records change of what a
-    guarantee says (the records commit names it: `_changes`); pending, with why, while it can't be."""
     try:
         report = lean_report(driver.q.store, rid, driver.fetch)
     except Exception as e:  # noqa: BLE001  (unread, it holds the commit: it is never taken as passed)
@@ -179,7 +119,6 @@ def _passed(driver: Landing, rec: dict, rid: str) -> RecordsRun:
 
 
 def _keep(rec: dict, r: RecordsRun, run: str | None = None) -> RecordsRun:
-    """``r``, kept in ``rec`` (``verdict``), with ``run``, the run that passed."""
     rec["verdict"] = {"state": r.state, "why": r.why, **({"run": run} if run else {})}
     return r
 
@@ -189,10 +128,6 @@ def _kept(got: dict) -> RecordsRun:
 
 
 def _changes(driver: Landing, rid: str, tip: str) -> list[str]:
-    """What the records passed records run ``rid`` regenerated change of what a guarantee says: each line of the review of each
-    package it regenerated whose report says its records do (`statement_changes`), its details aside, under the package and
-    with the owners of what it names in ``tip``'s lock (`_owners`), which a package new at ``tip`` hasn't.  Raises when its Lean
-    report, or a lock of ``tip`` it names, can't be read."""
     report = lean_report(driver.q.store, rid, driver.fetch)
     if not isinstance(report, dict):
         raise QueueError(f"{rid}'s Lean report ({AUDIT}) can't be read from the store or from its run dir on its node")
@@ -211,7 +146,6 @@ def _changes(driver: Landing, rid: str, tip: str) -> list[str]:
 
 
 def _owners(lock: dict, line: str) -> tuple[str, ...]:
-    """The owners, in ``lock``, of each guarantee and premise review line ``line`` names; `CI` when none is found."""
     named = [(s, m[1]) for s, rx in NAMED if (m := rx.match(line))]
     if m := READ_BY.match(line):
         named += [("guarantees", g.strip()) for g in m[1].split(",")]
@@ -224,23 +158,12 @@ def _owners(lock: dict, line: str) -> tuple[str, ...]:
 
 
 def same_inputs(repo: Path, a: str, b: str) -> bool:
-    """Whether commits ``a`` and ``b`` have the same Lean inputs (`vqueue_slim.lean_key`), so the same lock records."""
     from .vqueue_slim import lean_key
     return (key := lean_key(repo, a)) is not None and key == lean_key(repo, b)
 
 
 def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
            onto: str | None = None) -> tuple[str, list[str], Told | None] | str | None:
-    """Staged batch ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files, what
-    is told of the bookkeeping the run repaired and to whom, `bookkeeping_told`, None when it repaired none), the records the
-    run regenerated committed on top of ``sha`` as a lock commit (`lock_message`), naming what they change of what a guarantee
-    says (`_changes`), and vouched for by the merge gate.  None when there is none to make: the run regenerated nothing
-    (`regenerated_locks`), or only the records ``sha`` holds.  Why not, instead, while its records or its Lean report can't
-    be read, or the gate refuses the commit.
-
-    With ``onto``, ``prs`` merged again onto another base, that commit is made and vouched for as above, then carried onto
-    ``onto``: the same files, byte for byte, committed on top of it, its message saying so.  Records depend on a tree's Lean
-    inputs alone, so this raises unless ``onto``'s are ``sha``'s (`same_inputs`); None means ``onto`` is checked as built."""
     repo, into = driver.repo, f"queue/{sha[:12]}"
     if onto is not None and not same_inputs(repo, sha, onto):
         raise QueueError(f"{onto[:12]}'s Lean inputs aren't {sha[:12]}'s: the records {rid} regenerated on {sha[:12]} aren't "
@@ -248,7 +171,7 @@ def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
     scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
     try:
         locks, held = regenerated_locks(driver, rid, scratch)
-        if held:                            # the loop rings a held commit once a why: one naming this call's dir would ring each tick
+        if held:
             return held.replace(str(scratch), "<scratch>")
         if not locks:
             return None
@@ -285,7 +208,6 @@ def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
 
 
 def _carry(repo: Path, made: str, onto: str, files: list[str], message: str, identity: dict[str, str] = IDENTITY) -> str:
-    """Records commit ``made``'s ``files``, as it holds them, committed on top of ``onto`` with ``message`` as ``identity``."""
     scratch = Path(tempfile.mkdtemp(prefix="vqueue-records-"))
     try:
         index = {"GIT_INDEX_FILE": str(scratch / "index")}
@@ -303,10 +225,6 @@ def _carry(repo: Path, made: str, onto: str, files: list[str], message: str, ide
 
 
 def lock_outcome(driver: Landing, rec: dict, states: dict, lost: bool) -> tuple[str, str]:
-    """How lock run ``rec`` came out once it ended or was ``lost`` (`Landing._lost`), its runs' ``states`` read: ("fault", what)
-    when its machine failed it (lost, killed, out of disk or memory: `machine_fault`), and it runs again once elsewhere
-    (`resend_locks`), never a resend nor in a dry run or the shadow; ("passed", the run that exited 0 with lean-audit
-    passed in its steps.jsonl); ("unrun", "") when every twin exited 75 or was stopped; else ("failed", why)."""
     rcs = [rc for _, rc, *_ in states.values()]
     fault = None
     if rec.get("resend") or driver.dry_run or driver.q.shadow:
@@ -333,9 +251,6 @@ def lock_outcome(driver: Landing, rec: dict, states: dict, lost: bool) -> tuple[
 
 
 def resend_locks(driver: Landing, rec: dict, states: dict) -> tuple[str, dict | None, str]:
-    """Launch lock run ``rec`` of ``rec["tip"]`` again, once, after its machine failed it (`lock_outcome`), on the machines
-    of its ``on`` (else `Landing.on`) its runs (``states``) didn't run on (`Landing._elsewhere`): (where, the new launch's
-    fields, which ``rec`` then holds as a resend; None, with train.sh's output's tail, when it registered no run)."""
     where = driver._elsewhere(states, rec.get("on") or "")
     again, tail = driver._started(driver.launch_locks(driver.repo, rec["tip"], where))
     if again is not None:
@@ -344,10 +259,6 @@ def resend_locks(driver: Landing, rec: dict, states: dict) -> tuple[str, dict | 
 
 
 def regenerated_locks(driver: Landing, rid: str, scratch: Path) -> tuple[dict[str, Path], str | None]:
-    """({package: its regenerated lock, fetched under ``scratch`` or from its node}, why its records can't be committed
-    instead) of passed lock run ``rid``; ({}, None) when it regenerated none.  Read from the run's files in the store, else
-    from its run dir on its node (`merge.live_records`).  Held, never committed without them, when its Lean report names
-    records neither holds, or can't be read at all unless its lean-audit step was skipped (`lean_audit_ran`)."""
     from .merge import AUDIT, live_records, regenerated_records
 
     try:
@@ -363,8 +274,6 @@ def regenerated_locks(driver: Landing, rid: str, scratch: Path) -> tuple[dict[st
 
 
 def unvouched(driver: Landing, rid: str, commit: str = "HEAD") -> str | None:
-    """Why the merge gate refuses lock commit ``commit`` (`merge.regenerated_parent`, reading the records itself: from the
-    store, else from ``rid``'s run dir on its node), or None when it vouches for it."""
     from .merge import declared_command, produced, regenerated_parent
 
     if regenerated_parent(driver.repo, commit, driver.q.store, tool="check", kinds=produced(driver.repo, "check"),
@@ -375,8 +284,6 @@ def unvouched(driver: Landing, rid: str, commit: str = "HEAD") -> str | None:
 
 
 def lean_audit_ran(driver: Landing, rid: str) -> bool:
-    """Whether run ``rid``'s lean-audit step may have regenerated records: true unless its result in the store, else its
-    steps.jsonl (`evidence`), says the step was skipped or never ran; a run neither can be read of may have."""
     from .merge import step_status
 
     try:
@@ -395,9 +302,6 @@ def lean_audit_ran(driver: Landing, rid: str) -> bool:
 
 
 def machine_fault(driver: Landing, ids: list[str]) -> str | None:
-    """What says a lock run that failed failed by its machine rather than by the Lean it checked, or None: a step killed
-    (`killed`), a failed step's log saying its machine ran out of disk or memory or closed its Lean pool (`FAULT_RE`), or
-    lean-audit passed in a run that failed anyway (a disk that fills after every audit passed is no failure of the change)."""
     for d in driver.evidence(driver.repo, ids):
         if d.name not in ids:
             continue

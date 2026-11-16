@@ -51,7 +51,7 @@ FIELDS = {"id": "id", "kind": "kind", "status": "status", "from": "sender", "to"
 FIELD_RE = re.compile(r"^([A-Za-z_][\w-]*):[ \t]*(.*?)[ \t]*$")
 RUN_CITE_RE = re.compile(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b")
 MAX_ROWS = 200
-SQL_BUDGET = 100_000        # progress-handler ticks of 1000 SQLite instructions each: a runaway query stops, deterministically
+SQL_BUDGET = 100_000
 READ_MAX = 60_000
 
 
@@ -69,7 +69,6 @@ def _uri(p: Path, ro: bool = False) -> str:
 
 
 def _utc(m: re.Match | None) -> str | None:
-    """`created:` (CREATED_RE) as `YYYY-MM-DDTHH:MMZ`; an offset is applied, none means UTC."""
     if m is None:
         return None
     try:
@@ -98,7 +97,6 @@ def _files(root: Path) -> dict[str, tuple[int, int]]:
 
 
 def read_note(root: Path, rel: str, size: int, mtime_ns: int) -> tuple[dict, str, set[tuple[str, str]]]:
-    """(the `notes` row, the body, {(target, kind)}) of one file (module docstring)."""
     text = (root / rel).read_text(errors="replace")
     front, body = _split_front_matter(text)
     fm: dict[str, str | None] = {}
@@ -126,7 +124,6 @@ def _clip(v: object, n: int = 200) -> str:
 
 
 def _quoted(query: str) -> str:
-    """Each word as an FTS5 string, for text that is not FTS5 syntax (`sm_90`, `art:cc59`, `r20260928-042319-9aac`)."""
     return " ".join('"' + w.replace('"', '""') + '"' for w in query.split())
 
 
@@ -135,8 +132,7 @@ def _deny_attach(action: int, *_args) -> int:
 
 
 class NotesIndex:
-    """Writes go through a short-lived connection without the catalog: a write transaction would hold the attached catalog's
-    lock and stall the store's own writers.  Queries go through `db`, which has the catalog attached as `ev`."""
+    """Writes use a short-lived connection without the catalog, so a write never holds the attached catalog's lock."""
 
     def __init__(self, root: Path, path: Path | None = None, catalog: Path | None = None):
         self.root = Path(root)
@@ -178,7 +174,6 @@ class NotesIndex:
         self.db.close()
 
     def refresh(self) -> dict:
-        """Catch up with the files (module docstring), in one write transaction: {notes, read, dropped}."""
         return self._write(self._refresh)
 
     def _refresh(self, w: sqlite3.Connection) -> dict:
@@ -201,10 +196,7 @@ class NotesIndex:
             w.executemany("INSERT INTO cites VALUES (?, ?, ?)", [(p, t, k) for t, k in sorted(cites)])
         return {"notes": len(now), "read": len(todo), "dropped": len(gone)}
 
-    # ---- queries (what the MCP tools print) -----------------------------------------------------------------------------------
-
     def in_catalog(self, target: str, kind: str) -> bool | None:
-        """None without a catalog (module docstring for what counts)."""
         if not self.catalog:
             return None
         if kind == "run":
@@ -244,9 +236,6 @@ class NotesIndex:
         return "\n".join(out)
 
     def resolve(self, ref: str) -> list[str]:
-        """The notes a citation names, newest first: a path under the root or a front matter `id:`; else the file name it ends in
-        (`note:<name>`, `note:<lane>/<name>`, `note:<campaign>/<lane>/<name>`, a path from before a move into a month folder),
-        narrowed to the lane or top folder the citation names when that leaves any."""
         ref = ref.strip().removeprefix("note:").strip("/")
         exact = self.db.execute("SELECT path FROM notes WHERE path = ? OR id = ? ORDER BY time DESC, path", (ref, ref)).fetchall()
         if exact or not ref:
@@ -273,7 +262,6 @@ class NotesIndex:
                           *(self._summary(t, k) for t, k in cites)])
 
     def _summary(self, target: str, kind: str) -> str:
-        """One line: what the catalog holds for a cited id."""
         if not self.catalog:
             return f"- {target}: no catalog attached"
         if kind == "run":
@@ -358,8 +346,6 @@ class NotesIndex:
             f"  {k} = {_clip(v)}  ({by}, {ts}{', ref ' + _clip(ref, 80) if ref else ''})" for k, v, by, ts, ref in rows]
 
     def sql(self, query: str) -> str:
-        """`query` on a read-only connection to the index, with the catalog attached as `ev`: no writes, no ATTACH, at most
-        MAX_ROWS rows and SQL_BUDGET progress ticks."""
         ro = sqlite3.connect(_uri(self.path, ro=True), uri=True, timeout=30)
         try:
             if self.catalog:

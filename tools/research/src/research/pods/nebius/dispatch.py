@@ -141,7 +141,7 @@ ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
 
 
 def load_settings(path: Path) -> None:
-    """`KEY=VALUE` lines of `path` into os.environ, each only where the caller's environment doesn't set it; no file, no change."""
+    """Only where the caller's environment doesn't set the key; no file, no change."""
     if not path.exists():
         return
     lines = path.read_text().splitlines()
@@ -151,7 +151,7 @@ def load_settings(path: Path) -> None:
             os.environ.setdefault(k.strip(), v.strip())
 
 
-CALLER_ENV = dict(os.environ)   # before dispatch.env: what each of the loop's ticks starts from
+CALLER_ENV = dict(os.environ)
 load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "verity-sky-gpu:3dbe60044f88c462")
@@ -161,7 +161,7 @@ PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 SECRET = "research-r2"
 REQUEUE_RC = 99
-TICK_FAILED = 3     # `loop --once`'s exit status after it has printed `tick failed: ...`
+TICK_FAILED = 3
 MAX_TRIES = 50
 DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
@@ -178,7 +178,6 @@ PACK_PODS = int(os.environ.get("PACK_PODS", "1"))
 PACK_SLOTS = 3
 PACK_TEMPLATE = "commit-pack"
 PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b",
-               # a model joins only once a packed twin's run root equals its unpacked row's
                "qwen3-06b", "qwen25-05b-instruct", "falcon3-1b", "qwen25-coder-15b", "r1-distill-qwen-15b", "qwen3-17b", "smollm2-17b",
                "qwen25-3b", "llama32-3b")
 PACK_MAX_BATCH = 8
@@ -186,14 +185,14 @@ PACK_DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 PACK_REPLAY_K = 460
 PACK_ALERTS = Path(os.environ.get("PACK_ALERT_DIR", "/workspace/monitoring/alerts/outbox"))
 QUIET = ((12, 30), (13, 30))
-PACK_HOLD = ((12, 10), QUIET[1])     # node 1's daily quota cutover and quiet hour: Kueue holds every queue at 12:10Z
-PACK_DRAIN = (12, 33)                # pack pods must be gone by 12:35Z
+PACK_HOLD = ((12, 10), QUIET[1])
+PACK_DRAIN = (12, 33)
 N2 = os.environ.get("VY_N2", "vy-n2")
 SPILL = ROOT / "n2-spill"
 SPILL_FLAG = Path(os.environ.get("VY_N2_SPILL_FLAG", str(ROOT / "n2-spill.on")))
 SPILL_WAIT_S = int(os.environ.get("VY_N2_SPILL_WAIT_S", "120"))
 SPILL_TRIES = 2
-SPILL_SLACK_MIN = 2                  # node 2's runner starts a queued job at its own poll, a little after this tick
+SPILL_SLACK_MIN = 2
 N2_FILL = os.environ.get("VY_N2_FILL", "/workspace/pouw/fill")
 N2_LEASES = "/run/gpu-lease"
 N2_SPILL = os.environ.get("VY_N2_SPILL_DIR", "/workspace/verity-guest/spill")
@@ -227,8 +226,6 @@ def template_sha(text: str) -> str:
 
 
 def load_template(name: str, sha: str | None = None) -> tuple[list[dict], str]:
-    """The template's tasks and sha: sky/jobs/<name>.yaml as it is now, or with `sha` exactly that content (its pinned copy, else
-    the live file while it still hashes to `sha`)."""
     import yaml
 
     live = TEMPLATES / f"{name}.yaml"
@@ -245,7 +242,6 @@ def load_template(name: str, sha: str | None = None) -> tuple[list[dict], str]:
 
 
 def pin(item: dict, dry: bool = False) -> dict:
-    """The item pinned to its template as it is now, keeping a copy under PINNED (an item's first submit); a pinned item as is."""
     if item.get("template_sha") is not None:
         return item
     text = (TEMPLATES / f"{item['template']}.yaml").read_text()
@@ -260,12 +256,10 @@ def pin(item: dict, dry: bool = False) -> dict:
 
 
 def pinned_item(item: dict, template: str) -> dict:
-    """`item` pinned to `template` (a Job's or spool entry's `name@sha`): Jobs rendered before pinning carry it only there."""
     return item if item.get("template_sha") is not None else {**item, "template_sha": template.rpartition("@")[2]}
 
 
 def job_item(job: dict) -> dict:
-    """The item a Job was rendered from, pinned to that Job's template."""
     a = job["metadata"]["annotations"]
     return pinned_item(json.loads(a["verity.dev/item-json"]), a.get("verity.dev/template", ""))
 
@@ -275,7 +269,6 @@ def dns(s: str, n: int) -> str:
 
 
 def classes() -> dict[str, tuple[int, int, int]]:
-    """submit.sh's VY_ROW_CLASS table, {class: (build GB, gpu GB, GPUs)} for config-run's two tasks, read from submit.sh itself."""
     m = re.search(r"(?ms)^table = (\{.*?\})\s*(#[^\n]*)?\n(?!\s)", (HERE / "sky" / "submit.sh").read_text())
     if not m:
         raise ValueError("no VY_ROW_CLASS table in sky/submit.sh")
@@ -296,14 +289,12 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
         if idx == 0:
             mem = build
         elif idx == 1:
-            mem, gpus, cpus = gpu, n, 4 * n          # submit.sh: the GPU queue's fixed 4 vCPU per GPU
-        # config-run's replay task (idx 2) keeps its template resources, as submit.sh does without VY_REPLAY_MEMORY
+            mem, gpus, cpus = gpu, n, 4 * n
     o = (item.get("resources") or {}).get(task.get("name") or str(idx)) or {}
     return int(o.get("cpus", cpus)), int(o.get("memory", mem)), int(o.get("gpus", gpus))
 
 
 def render(item: dict, key: str, idx: int, tries: int) -> dict:
-    """The batch/v1 Job for task `idx` of the item's template (its pinned content, when the item is pinned)."""
     tasks, tsha = load_template(item["template"], item.get("template_sha"))
     task = tasks[idx]
     cpus, mem, gpus = task_resources(item, task, idx, len(tasks))
@@ -380,9 +371,6 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         "metadata": {"name": name, "labels": labels,
                      "annotations": {"verity.dev/item": key, "verity.dev/template": f"{item['template']}@{tsha}",
                                      "verity.dev/item-json": json.dumps(item, sort_keys=True)}},
-        # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too.
-        # podReplacementPolicy Failed: a Job Kueue preempts and resumes starts its next pod only once the old one has ended, never
-        # beside it in the same row, where both would run the same Commit
         "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600, "podReplacementPolicy": "Failed",
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},
@@ -390,7 +378,6 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
 
 
 def lease_mode(item: dict, key: str) -> str | None:
-    """"wrap", "self" or None: the item's `lease`, else wrap when its workstream/template is in VY_LEASE_CLASSES."""
     if item.get("lease"):
         if item["lease"] not in ("wrap", "self"):
             raise ValueError(f"lease {item['lease']!r}: wrap or self")
@@ -400,7 +387,6 @@ def lease_mode(item: dict, key: str) -> str | None:
 
 
 def kind_of(key: str) -> dict:
-    """The kind in the queue's kinds/circuits.toml whose `keys` globs first match the item id, with its name; {} for none."""
     try:
         kinds = tomllib.loads((QUEUE_SRC / "kinds" / "circuits.toml").read_text()).get("kinds", {})
     except (OSError, tomllib.TOMLDecodeError) as e:
@@ -414,7 +400,6 @@ def kind_of(key: str) -> dict:
 
 
 def quantity(v, unit: float) -> float:
-    """A Kubernetes quantity ("500m", "8", "64Gi", "96G") in `unit` (1 for CPUs, 1e9 for GB)."""
     s = str(v)
     for suffix, mult in (("m", 1e-3), ("Ki", 2**10), ("Mi", 2**20), ("Gi", 2**30), ("Ti", 2**40), ("k", 1e3), ("M", 1e6),
                          ("G", 1e9), ("T", 1e12)):
@@ -424,7 +409,7 @@ def quantity(v, unit: float) -> float:
 
 
 def place(item: dict, key: str, job: dict) -> dict:
-    """The queue's placement of a created Job, appended to PLACED; never raises (a failure is the row's `refused` or `error`)."""
+    """Never raises: a failure is the row's `refused` or `error`."""
     req = job["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
     kind = kind_of(key)
     question = str(item.get("question") or kind.get("question") or "")
@@ -459,8 +444,6 @@ def place(item: dict, key: str, job: dict) -> dict:
 
 
 def submitted(name: str, key: str, idx: int, tries: int) -> bool:
-    """Whether Job `name` is already this item's task `idx`, try `tries`: submitted by another path (by hand, or a feeder) before the
-    tick routed the task before it. Without this, the tick's `create` fails on every pass and nothing after that Job is handled."""
     try:
         meta = json.loads(kubectl("get", "job", name, "-o", "json"))["metadata"]
     except (RuntimeError, ValueError, KeyError):
@@ -521,7 +504,6 @@ def stops_file() -> Path:
 
 
 def stop_entries() -> list[dict]:
-    """The stop list's entries, oldest first ([] when there is none); raises when the file can't be read as a list."""
     p = stops_file()
     if not p.exists():
         return []
@@ -532,7 +514,6 @@ def stop_entries() -> list[dict]:
 
 
 def stopped_models() -> dict[str, dict] | None:
-    """{model: its stop entry} for every model whose last entry is a stop, or None when the list can't be read."""
     try:
         entries = stop_entries()
     except (OSError, ValueError) as e:
@@ -557,10 +538,9 @@ def append_stop(entry: dict) -> None:
 
 
 def stop_model(model: str, key: str, run: str | None, reason: str, **extra) -> None:
-    """Stop packing `model`: a stop entry, an `ev: pack-stop` line and an alert note for node1-dispatcher."""
     try:
         append_stop({"model": model, "key": key, "run": run, "reason": reason, **extra})
-    except (OSError, ValueError) as e:     # an unreadable list already stops every model (packable)
+    except (OSError, ValueError) as e:
         extra = {**extra, "unrecorded": str(e)}
     append("log.jsonl", {"ev": "pack-stop", "model": model, "key": key, "run": run, "reason": reason, **extra})
     print(f"pack-stop {model}: {reason} ({key})", file=sys.stderr)
@@ -595,7 +575,6 @@ def lift_model(model: str, by: str, why: str) -> None:
 
 
 def packable(item: dict, key: str, idx: int) -> str | None:
-    """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
     if item.get("template") != "config-run":
         return "not a config-run"
     if lease_mode(item, key):
@@ -633,7 +612,6 @@ def packable(item: dict, key: str, idx: int) -> str | None:
 
 
 def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
-    """Queue task `idx` for a commit-pack pod: the Job it would be, as its env and script."""
     item = pin(item, dry)
     job = render(item, key, idx, tries)
     name = job["metadata"]["name"]
@@ -656,7 +634,6 @@ def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> 
 
 
 def pack_tree() -> None:
-    """The spool's directories, writable by the pack pods (uid 1000) as well as this dispatcher."""
     for d in ("queue", "claimed", "results/done", "logs", "stats"):
         (PACK / d).mkdir(parents=True, exist_ok=True)
     for d in (PACK, *(PACK / d for d in ("queue", "claimed", "results", "results/done", "logs", "stats"))):
@@ -681,9 +658,6 @@ def row_dir(job: dict) -> Path:
 
 
 def packed_replay(job: dict, state: str, rc: int | None) -> tuple[str | None, dict]:
-    """(why a packed Commit's ended replay task falls short of 460/460, else None; the record's replay counts). It passes only when it
-    exited 0 and the row's config_record.json, written since the Job started, is PASS with k = evaluated = equal = PACK_REPLAY_K and
-    nothing mismatched or unevaluated."""
     rec_path = row_dir(job) / "config_record.json"
     try:
         started = (job.get("status") or {}).get("startTime")
@@ -709,7 +683,6 @@ def packed_replay(job: dict, state: str, rc: int | None) -> tuple[str | None, di
 
 
 def run_ids(job: dict, pod_list: list[dict]) -> tuple[str | None, str | None]:
-    """(the replay's research run id, from its pod's log; the Commit's, from <row>/pipeline-commit-run), None where unknown."""
     try:
         p = row_dir(job) / "pipeline-commit-run"
         commit = (p.read_text().strip() or None) if p.exists() else None
@@ -729,7 +702,6 @@ def run_ids(job: dict, pod_list: list[dict]) -> tuple[str | None, str | None]:
 
 
 def pack_keys() -> set[str]:
-    """Keys whose task is in the spool: queued, claimed or with a result not yet read back."""
     keys = set()
     for f in [*PACK.glob("queue/*.json"), *PACK.glob("claimed/*/*.json"), *PACK.glob("results/*.json")]:
         try:
@@ -740,7 +712,6 @@ def pack_keys() -> set[str]:
 
 
 def pack_results(pods: list[dict], dry: bool = False) -> None:
-    """Read commit-pack results back into their chains; entries claimed by a pod that is gone are a fault."""
     live = {p["metadata"]["name"] for p in pods if (p.get("status") or {}).get("phase") in ("Pending", "Running")}
     for d in sorted(p for p in PACK.glob("claimed/*") if p.is_dir()):
         if d.name in live:
@@ -777,7 +748,7 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
                              "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason"),
                              "label": res.get("label")})
         if rc == 0 and idx + 1 < ntasks:
-            route({**item, "packed": res.get("pod")}, key, idx + 1, 0)     # its replay is judged by circuits' 460/460 rule (tick)
+            route({**item, "packed": res.get("pod")}, key, idx + 1, 0)
         elif rc == REQUEUE_RC and not res.get("fault") and tries + 1 < MAX_TRIES:
             route(item, key, idx, tries + 1)
         elif rc != 0 and not item.get("unpacked"):
@@ -793,7 +764,6 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
 
 
 def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
-    """Move still-suspended gpu Jobs of eligible items into the spool, keeping it at most two pods' slots deep."""
     if disk_full() or held():
         return
     room = 2 * PACK_PODS * PACK_SLOTS - len(list(PACK.glob("queue/*.json")))
@@ -830,8 +800,6 @@ def active_pack_jobs(jobs: list[dict]) -> list[dict]:
 
 
 def pack_hold(jobs: list[dict], dry: bool = False) -> None:
-    """In the hold (PACK_HOLD): queued spool entries go out as normal Jobs, pack Jobs not yet started are deleted, and from
-    PACK_DRAIN every pack Job still active is deleted (pack_results requeues its claimed Commits unpacked)."""
     if not held():
         return
     for f in sorted(PACK.glob("queue/*.json")):
@@ -866,8 +834,6 @@ def pack_hold(jobs: list[dict], dry: bool = False) -> None:
 
 
 def pack_pods(jobs: list[dict], dry: bool = False) -> None:
-    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots and a new pod could
-    claim one of its entries."""
     if quiet() or held() or disk_full():
         return
     active = active_pack_jobs(jobs)
@@ -892,11 +858,9 @@ def read_entries(pattern: str) -> list[dict]:
 
 
 def pack_fits() -> bool:
-    """Whether some queued entry passes the pilot's own claim rule (sky/commit_pack.py's bundle_ok), on the bundles waiting now
-    and with every claimed entry counted as running."""
     spec = importlib.util.spec_from_file_location("dispatch_commit_pack", HERE / "sky" / "commit_pack.py")
     pilot = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = pilot     # its dataclass looks its module up by name while the module runs
+    sys.modules[spec.name] = pilot
     try:
         spec.loader.exec_module(pilot)
     finally:
@@ -979,7 +943,7 @@ print("queued", n)
 
 
 def n2_python(code: str, *args: str, stdin: str | None = None) -> str:
-    """`python3 -c code args...` on node 2 over ssh, its stdout; raises RuntimeError when it fails."""
+    """Its stdout; raises RuntimeError when it fails."""
     try:
         r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", N2, shlex.join(["python3", "-c", code, *args])],
                            input=stdin, capture_output=True, text=True, timeout=60, check=False)
@@ -991,7 +955,7 @@ def n2_python(code: str, *args: str, stdin: str | None = None) -> str:
 
 
 def n2_block(item: dict) -> dict:
-    """The item's `n2` block with its defaults; raises ValueError when it can't become a node-2 fill job."""
+    """Raises ValueError when the item can't become a node-2 fill job."""
     b = item.get("n2")
     if not isinstance(b, dict) or not b.get("cmd") or not b.get("owner"):
         raise ValueError("no n2 block with a cmd and an owner")
@@ -1012,8 +976,6 @@ def n2_block(item: dict) -> dict:
 
 
 def spill_script(name: str, job: str, key: str, idx: int, queue: str, b: dict) -> str:
-    """Node 2's fill job for a spilled task. It keeps its state in N2_SPILL/<name>/: tries (each start), result.json and exit
-    (written once it ended for good). A rerun after that only repeats the exit; the third start ends it as stopped (rc null)."""
     d = f"{N2_SPILL}/{name}"
     run = f"bash -c {shlex.quote(b['cmd'])}"
     if b.get("pool") == "provers":
@@ -1051,7 +1013,6 @@ exit "$rc"
 
 
 def gpu_list(s: str | None) -> set[int]:
-    """GPU indices as the fill runner reads them (`7`, `0,1`, `2-7`), before any `# comment`."""
     out: set[int] = set()
     for part in re.split(r"[,\s]+", (s or "").split("#")[0].strip()):
         lo, _, hi = part.partition("-")
@@ -1061,7 +1022,6 @@ def gpu_list(s: str | None) -> set[int]:
 
 
 def booked(text: str | None) -> list[tuple[float, float]]:
-    """The fill runner's booked windows (`2026-10-01T10:00Z 30 # who`), as (start, end) epoch seconds."""
     out = []
     for line in (text or "").splitlines():
         f = line.split("#")[0].split()
@@ -1076,8 +1036,6 @@ def booked(text: str | None) -> list[tuple[float, float]]:
 
 
 def n2_room(probe: dict, b: dict, t: float) -> tuple[list[int], str | None]:
-    """(node 2's idle GPUs the block's fill job could take, None), or ([], why node 2's runner wouldn't start it now): keep-free,
-    the runner's order (Commit guests, then pous, then Verity by prio), its 2+ free GPUs for a Verity GPU job, and the windows."""
     status = probe.get("status") or ""
     if "timed False, window waiting False" not in status:
         return [], f"node 2's runner: {status[:160] or 'no status'}"
@@ -1129,8 +1087,6 @@ def ts(s: str) -> float:
 
 
 def spill_candidates(jobs: list[dict], wls: list[dict], t: float) -> list[tuple[dict, dict, dict, dict]]:
-    """(Job, workload, item, n2 block) for each GPU Job of this dispatcher that Kueue has held SPILL_WAIT_S and never started,
-    whose item has an n2 block, and that was never spilled before; oldest workload first."""
     by_name = {j["metadata"]["name"]: j for j in jobs}
     out = []
     for w in sorted(wls, key=lambda w: w["metadata"].get("creationTimestamp", "")):
@@ -1160,8 +1116,6 @@ def spill_candidates(jobs: list[dict], wls: list[dict], t: float) -> list[tuple[
 
 
 def spill(j: dict, w: dict, item: dict, b: dict, idle: list[int], t: float, dry: bool = False) -> bool:
-    """Deactivate the held workload (only while it is still unadmitted at the resourceVersion just read), then queue its fill job
-    on node 2; a node-2 write that fails reactivates it at once."""
     name, wl = j["metadata"]["name"], w["metadata"]["name"]
     key, labels = j["metadata"]["annotations"]["verity.dev/item"], j["metadata"]["labels"]
     idx, tries, queue = int(labels["verity.dev/task"]), int(labels["verity.dev/try"]), (w.get("spec") or {}).get("queueName", "")
@@ -1195,7 +1149,6 @@ def spill(j: dict, w: dict, item: dict, b: dict, idle: list[int], t: float, dry:
 
 
 def spill_back(rec: dict, why: str) -> bool:
-    """Back to node 1's queue: the workload active again. False when Kueue couldn't be told (retried next tick)."""
     try:
         kubectl("patch", "workload", rec["workload"], "--type", "merge", "-p", json.dumps({"spec": {"active": True}}))
         outcome = "back"
@@ -1213,7 +1166,6 @@ def spill_back(rec: dict, why: str) -> bool:
 
 
 def spill_done(rec: dict, res: dict) -> None:
-    """A spilled task that exited 0 on node 2: its node-1 Job goes, and the chain continues as it would from that Job."""
     item, key, idx = rec["item"], rec["key"], rec["task"]
     try:
         ntasks = len(load_template(item["template"], item["template_sha"])[0])
@@ -1263,8 +1215,6 @@ SPILL_WHY: dict[str, str] = {}
 
 
 def n2_spill(jobs: list[dict], wls: list[dict], dry: bool = False, t: float | None = None) -> set[str]:
-    """Read back every outstanding spill, then spill at most one held GPU Job to node 2 (while SPILL_FLAG exists, outside node 1's
-    hold). The workloads it deactivated."""
     t = time.time() if t is None else t
     recs = spill_records()
     cands = spill_candidates(jobs, wls, t) if SPILL_FLAG.exists() and not held(t) else []
@@ -1295,7 +1245,6 @@ def done_keys() -> set[str]:
 
 
 def ready_items() -> list[tuple[str, dict, Path]]:
-    """[(key, item, file)] in dispatch order: rank desc, then workstreams take turns, each oldest file first."""
     per_ws: dict[str, list[tuple[int, str, dict, Path]]] = {}
     for d in sorted(p for p in READY.glob("*") if p.is_dir()):
         files = []
@@ -1346,8 +1295,6 @@ def job_state(job: dict, pods: dict) -> tuple[str, int | None]:
 
 
 def end_job(j: dict, key: str, state: str, rc: int | None, pods: dict, inflight: set[str], dry: bool = False) -> None:
-    """A finished Job of this dispatcher's, not yet seen: log its end, then route its chain's next task or end its item, and
-    label it seen."""
     item = job_item(j)
     idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
     try:
@@ -1393,7 +1340,6 @@ def end_job(j: dict, key: str, state: str, rc: int | None, pods: dict, inflight:
 
 
 def tick(dry: bool = False) -> list[str]:
-    """One pass. The finished Jobs whose handling raised (`name: error`): each stays unseen, so the next tick tries it again."""
     failed: list[str] = []
     jobs = json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"]
     pods: dict[str, list] = {}
@@ -1501,7 +1447,6 @@ def busy() -> dict:
 
 
 def outcomes() -> dict[str, dict]:
-    """Each ended item's outcome: its last done.jsonl line (a correction supersedes the line it names)."""
     p = ROOT / "done.jsonl"
     return {r["key"]: r for r in (json.loads(line) for line in p.read_text().splitlines() if line.strip())} if p.exists() else {}
 
@@ -1521,8 +1466,6 @@ class _Stop(Exception):
 
 
 def run_loop(tick: Callable[[], int], every: float, sleep: Callable[[float], None] | None = None) -> int:
-    """`loop`: a tick (its exit status) every `every` s. SIGTERM, the unit's stop (KillMode=mixed sends it to this process
-    alone), lets the tick in flight finish and then ends the loop; between ticks it ends it at once."""
     busy = stop = False
 
     def term(signum, frame) -> None:
@@ -1537,7 +1480,7 @@ def run_loop(tick: Callable[[], int], every: float, sleep: Callable[[float], Non
             busy = True
             rc = tick()
             busy = False
-            if rc not in (0, TICK_FAILED):    # it died before saying so (an import error in a redeployed copy, a kill)
+            if rc not in (0, TICK_FAILED):
                 print(f"{now_utc()} tick failed: exit {rc}", file=sys.stderr, flush=True)
             if not stop:
                 (sleep or time.sleep)(every)
@@ -1617,7 +1560,7 @@ def main(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001  (a failed tick is retried next time, never the end of the loop)
             print(f"{now_utc()} tick failed: {e}", file=sys.stderr, flush=True)
             return TICK_FAILED
-        if failed:      # the rest of the tick ran; the steward's failed-tick alert counts this line
+        if failed:
             print(f"{now_utc()} tick failed: {len(failed)} Job(s) left unseen: {'; '.join(failed)[:500]}", file=sys.stderr, flush=True)
             return TICK_FAILED
         print(f"{now_utc()} tick {json.dumps(busy())}", flush=True)

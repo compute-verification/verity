@@ -1,40 +1,3 @@
-"""Run custody on the remote (cloud migration step f): every file of a run dir -- stdout.log, stderr.log, launcher.log, job.json,
-status.json, the outputs -- goes to the store's remote as one `run-record/v1` tree that the attempt names (`outputs.run_record`),
-published on the machine that ran it with a minted key, so custody no longer depends on the launcher's disk or on it staying up.
-
-    research run --on M --custody-r2 [--custody-ttl 6h] ...
-        launcher (`mint_for_machine`): an action-scoped temporary key (`credentials.mint`; no DeleteObject / CopyObject) and a
-        secret-free store.toml, staged under <root>/requests/<run-id>/custody/ (mode 600; never in request.json, remote.json or
-        the workload's environment).  Minting needs the parent key here (the Cursor secrets, or ~/.config/verity/r2.env sourced):
-        without it the launch is refused, never silently downgraded.
-        runner (`runner_publish`, after the workload exits): publishes the attempt with its run record, pushes and verifies it
-        (`preserved.check`, head mode; up to PUSH_TRIES), deletes the key, and writes <run>/.custody.
-    research data custody RUN [--publish] [--runs-dir D] [--json]        verify a run's custody on the remote and (re)write .custody;
-                                                                          --publish first publishes it with a run record and pushes,
-                                                                          and leaves a failed verdict in .custody when nothing vouches
-    research data custody --triage [--runs-dir D ...] [--verify] [--older-min N] [--json]
-                                                                          every run under the runs roots by custody state (F2); with
-                                                                          --older-min, the ended runs not on the remote after N minutes
-
-The record uploads the run's own files, everything under out/ (the workload's $OUT), the files matching its `--declared-output`
-globs, and undeclared files up to UNDECLARED_LIMIT_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
-.agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
-file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
-(CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
-holds one; a refused launch deletes it from the request dir (remote.py).
-
-`.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
-file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before
-hashing).  A run dir has custody when its `.fetched` is valid (a verified copy on the launcher, `research fetch --all`) or its
-`.custody` is: every file in the dir is listed and none changed at or after `verified_from` (`marker_problem`; the pod guard,
-pods/sh/pod_guard.sh, applies the same rule without hashing).  Once the marker is written the runner writes nothing more into the
-run dir, so launcher.log in the record is the whole of it.
-
-A run's custody is a remote fact, so any machine can check it: `research data preserved <run id>` (head mode) and `research data
-custody RUN` answer the same everywhere.  Waivers and never-ran verdicts for the triage are labels on the run id:
-`research data label <run id> custody waived|never-ran --by <who>`; a never-ran holds only while the run dir shows no sign that
-its workload started (`ran_evidence`), and a later `custody needed` withdraws either.
-"""
 from __future__ import annotations
 
 import calendar
@@ -59,19 +22,16 @@ MARKER = ".custody"
 SCHEMA = "research/run-custody/v0.1"
 KIND = "run-record/v1"
 TRIMMED_LISTING = ".custody-trimmed.json"
-EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json", EVICTED_FILE,   # markers about the dir, not of it
+EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json", EVICTED_FILE,
                       TRIMMED_LISTING})
-DIR_NAME = "custody"                          # <root>/requests/<run-id>/custody/ on the machine
+DIR_NAME = "custody"
 CRED_FILE = "cred.json"
 STORE_TOML = "store.toml"
 DEFAULT_TTL = "6h"
 ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2", "ListMultipartUploads", "ListParts",
            "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
-# `research run --store-read`: a second, read-only key for the workload itself (its `research data fetch`), staged apart from
-# custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment
 READ_DIR_NAME = "store-read"
 READ_ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2")
-#: the variables a minted key travels in: cred.json's keys, which the store.toml staged beside it names
 KEY_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
@@ -79,11 +39,7 @@ TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "att
                  "never-ran", "waived")
 
 
-# ---- the run dir ------------------------------------------------------------------------------------------------------------------------
-
 def run_files(run_dir: Path) -> list[str]:
-    """Every regular file under the run dir (relative posix paths, sorted), markers excluded, and the `.custody.tmp.<pid>` a publish
-    killed between write_json_atomic's write and its rename leaves; symlinks are not followed (as `fetch --all`)."""
     d = Path(run_dir)
     out = []
     for base, dirs, files in os.walk(d):
@@ -98,7 +54,6 @@ def run_files(run_dir: Path) -> list[str]:
 
 
 def run_id_of(run_dir: Path) -> str:
-    """The attempt id `attempt.publish` gives the run dir: job.json's run id, else the directory name."""
     job = _read(Path(run_dir) / "job.json") or {}
     return (job.get("run") or {}).get("id") or (job.get("ownership") or {}).get("job") or Path(run_dir).name
 
@@ -110,20 +65,11 @@ def _sha256(p: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-#: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
-#: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
                        "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
-#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run),
-#: and the runner's answers to `research run-preserve` (run_preserve.ANSWERS).
 RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
-#: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
-#: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"
-#: Undeclared files are uploaded (in path order) while their total stays within this; the rest are trimmed.  0 = never upload undeclared.
 UNDECLARED_LIMIT_BYTES = 256 << 20
-#: A trimmed listing bigger than this goes in the record's tree: a manifest's meta is capped at 256 KiB (model.META_MAX_BYTES), and a
-#: `check` run lists thousands of files (r20261001-091202-7aa6: 3719 files, a 561 KB meta, so its passing attempt never published).
 TRIMMED_INLINE_BYTES = 64 << 10
 SKILL = ".agents/skills/writing-runs/SKILL.md"
 
@@ -133,15 +79,11 @@ def is_run_file(rel: str) -> bool:
 
 
 def declared_globs(run_dir: Path) -> list[str]:
-    """`out/*` (the workload's $OUT), always, then the run's own `--declared-output` globs."""
     job = _read(Path(run_dir) / "job.json") or {}
     return [f"{OUT_DIR}/*", *(str(g) for g in (job.get("execution") or {}).get("declared_outputs") or [])]
 
 
 def select(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dict[str, Any]]]:
-    """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists): the run's own files, every file matching a
-    declared glob (`declared_globs`; fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is
-    everything), and undeclared files up to `limit` bytes in total."""
     d = Path(run_dir)
     limit = UNDECLARED_LIMIT_BYTES if limit is None else limit
     globs = declared_globs(d)
@@ -167,7 +109,6 @@ def trim_warning(trimmed: list[dict[str, Any]]) -> str | None:
 
 
 def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]:
-    """Hard-link (else copy) the run files `rels` (default all) under `into`; the store copies what it ingests, so a link never aliases a blob."""
     rels = run_files(run_dir) if rels is None else rels
     for rel in rels:
         src, dst = Path(run_dir) / rel, Path(into) / rel
@@ -179,17 +120,10 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
-#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: the presigned URLs
-#: of the Lean bundles a check or a Lean records run is sent (`tools/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
-#: which a run of anything else never takes out of inputs/,
-#: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
-#: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
 CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json", "inputs/agreement-urls.json")
 
 
 def drop_credentials(d: Path) -> None:
-    """Delete each file (or symlink) under ``d`` that CREDENTIALS names; whatever else a workload left at those paths, a directory or a
-    file where inputs/ should be, stays, and a symlinked inputs/ is not followed, as `run_files` doesn't follow it."""
     for pattern in CREDENTIALS:
         parent, name = pattern.rsplit("/", 1)
         where = Path(d) / parent
@@ -203,8 +137,6 @@ def drop_credentials(d: Path) -> None:
 
 
 def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
-    """The `run-record/v1` artifact of the run dir (None when it holds no file): the files `select` keeps, and the listing of the trimmed
-    ones (module docstring).  CREDENTIALS are deleted from the run dir first: `verify` needs the record to hold every file left there."""
     drop_credentials(run_dir)
     root = Path(getattr(st, "root", None) or Path(run_dir).parent) / "scratch"
     tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
@@ -230,7 +162,6 @@ def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
 
 
 def trimmed_of(st: Any, record: str, man: Any = None) -> list[dict[str, Any]]:
-    """The run record's listing of the files it holds no bytes of: `meta.trimmed`, or its TRIMMED_LISTING file (fetched when not local)."""
     man = man or st.get_manifest(record)
     meta = man.meta or {}
     if not meta.get("trimmed_listing"):
@@ -240,7 +171,6 @@ def trimmed_of(st: Any, record: str, man: Any = None) -> list[dict[str, Any]]:
 
 
 def marker_problem(run_dir: Path) -> str | None:
-    """None when `.custody` vouches for the run dir as it is now; else why not (module docstring)."""
     try:
         m = json.loads((Path(run_dir) / MARKER).read_text())
     except FileNotFoundError:
@@ -267,7 +197,6 @@ def marker_problem(run_dir: Path) -> str | None:
 
 
 def has_custody(run_dir: Path) -> tuple[bool, str]:
-    """(True, how) when `preserved.json` (a verified copy here) or a valid `.custody` covers the run dir."""
     d = Path(run_dir)
     if (d / "preserved.json").exists():
         return True, "fetched (preserved.json)"
@@ -276,9 +205,6 @@ def has_custody(run_dir: Path) -> tuple[bool, str]:
 
 
 def custody_run(run_dir: Path) -> str | None:
-    """Why the run dir is a run launched with run custody (its runner's `.custody`, the launcher's remote.json, or the request the
-    machine's job.json names), else None.  Its attempt must name its run record: `research data custody RUN --publish` publishes
-    one, and an attempt published without one is write-once and closes custody to it."""
     d = Path(run_dir)
     if (d / MARKER).exists():
         return f"its runner wrote {MARKER}"
@@ -290,10 +216,7 @@ def custody_run(run_dir: Path) -> str | None:
     return None
 
 
-# ---- verify / push / mark -----------------------------------------------------------------------------------------------------------
-
 def push_run(st: Any, run_id: str) -> list[str]:
-    """Upload an attempt's artifacts (verified), its manifest and the assertions about it; the errors (empty = all went up)."""
     from . import labels_sync as LS
     from .preserved import attempt_artifacts
 
@@ -315,7 +238,6 @@ def push_run(st: Any, run_id: str) -> list[str]:
 
 
 def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = True) -> dict[str, Any]:
-    """The custody predicate for one run dir (module docstring); with `mark`, writes `.custody` when it holds."""
     from . import preserved
 
     d = Path(run_dir)
@@ -362,22 +284,16 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
 
 
 def mark_failed(run_dir: Path, rep: dict[str, Any]) -> None:
-    """Leave a failed verdict in .custody (as `runner_publish` does), for triage and whoever looks next: `preserved` false, `error`."""
     rep.setdefault("verified_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     rep.setdefault("host", os.uname().nodename)
     write_json_atomic(Path(run_dir) / MARKER, rep)
 
 
-# ---- the launcher: a minted, delete-free key for the machine ---------------------------------------------------------------------------
-
 def mint_for_machine(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
-    """(public facts for request.json, [(relative path, bytes)] to stage under <requests>/<id>/custody/).  MintError when this machine
-    cannot mint (no parent key, a temporary credential in the environment, no endpoint/bucket)."""
     return _mint(ttl, ACTIONS, DIR_NAME, "--custody-r2", environ)
 
 
 def mint_reader(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
-    """`--store-read`: a read-only key (READ_ACTIONS) for the workload, as mint_for_machine's, staged under READ_DIR_NAME."""
     return _mint(ttl, READ_ACTIONS, READ_DIR_NAME, "--store-read", environ)
 
 
@@ -399,14 +315,11 @@ JOB_ACCESS = {"push": mint_for_machine, "fetch": mint_reader}
 
 
 def job_env(access: str, ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> dict[str, str]:
-    """A cluster job's store key, which it holds in place of the parent pair: the three AWS_* variables and `expires_utc` of the key
-    `mint_for_machine` mints (`access` "push": write, no delete or copy) or `mint_reader` ("fetch": read only).  MintError as theirs."""
     _, files = JOB_ACCESS[access](ttl, environ=environ)
     return json.loads(next(data for path, data in files if path.endswith("/" + CRED_FILE)))
 
 
 def reader_env(read_dir: Path) -> dict[str, str]:
-    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the KEY_ENV variables."""
     d = Path(read_dir)
     cred = json.loads((d / CRED_FILE).read_text())
     return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
@@ -414,7 +327,6 @@ def reader_env(read_dir: Path) -> dict[str, str]:
 
 @contextlib.contextmanager
 def custody_env(custody_dir: Path) -> Iterator[None]:
-    """The store's remote for the duration: RESEARCH_STORE_CONFIG -> the staged store.toml, AWS_* from cred.json; restored after."""
     d = Path(custody_dir)
     cred = json.loads((d / CRED_FILE).read_text())
     want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
@@ -439,9 +351,6 @@ PUBLISH_LOG = "publish.log"
 
 
 def divert_output(run_dir: Path, custody_dir: Path) -> bool:
-    """When this process's stderr is the run dir's launcher.log (the machine-side runner), point fds 1 and 2 at <custody dir>/publish.log
-    for the rest of the process.  The run record is taken next, and any line printed into launcher.log after it (an S3 retry notice, the
-    failure line) makes the run dir differ from its record, so custody could never be verified, not even after a repair push."""
     try:
         if not os.path.samestat(os.fstat(2), os.stat(Path(run_dir) / "launcher.log")):
             return False
@@ -474,14 +383,10 @@ def _expired(expires_utc: str | None, now: float | None = None) -> bool:
     return (time.time() if now is None else now) >= exp
 
 
-# ---- the runner -------------------------------------------------------------------------------------------------------------------------
-
-#: A run bigger than this uploads without resume (a failed upload starts over), so custody warns (``size_warning``) before pushing it.
 SIZE_WARN_BYTES = 4 << 30
 
 
 def size_warning(run_dir: Path) -> str | None:
-    """A warning when the run's files exceed :data:`SIZE_WARN_BYTES`, or ``None``."""
     d = Path(run_dir)
     total = sum((d / r).stat().st_size for r in run_files(d))
     if total <= SIZE_WARN_BYTES:
@@ -492,9 +397,6 @@ def size_warning(run_dir: Path) -> str | None:
 
 def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, conditions: dict[str, Any] | None = None,
                    store_root: str | None = None, sleep: Callable[[float], None] = time.sleep, tries: int = PUSH_TRIES) -> dict[str, Any]:
-    """What `research run --custody-dir` does after the workload: publish the attempt with its run record, push and verify it (retrying),
-    delete the key, and leave the verdict in <run>/.custody.  Never raises.  Prints only on failure, and on the machine into
-    <custody dir>/publish.log (`divert_output`): once the record is taken nothing may touch the run dir, launcher.log included."""
     from . import attempt as A
     from .local import LocalStore
 
@@ -532,7 +434,7 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     if warn:
         rep["size_warning"] = warn
     if rep.get("preserved"):
-        write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
+        write_json_atomic(d / MARKER, rep)
     else:
         mark_failed(d, rep)
         print(f"research: custody NOT on the remote: {rep['error']}  (`research data custody {d.name} --publish` with credentials, or "
@@ -540,10 +442,7 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     return rep
 
 
-# ---- triage (F2) ------------------------------------------------------------------------------------------------------------------------
-
 def _label_verdict(st: Any, run_id: str) -> str | None:
-    """The run's latest `custody` label when it is a verdict (waived, never-ran); `needed` withdraws an earlier one."""
     from .vocab import CUSTODY
 
     try:
@@ -553,15 +452,10 @@ def _label_verdict(st: Any, run_id: str) -> str | None:
     return str(labs[-1].value) if labs and str(labs[-1].value) in ("waived", "never-ran") else None
 
 
-#: What `tele run` writes only once it starts the workload: `started`, then the workload's pid in status.json, the sampler
-#: (`sampler_start`, then resources.jsonl's readings of the workload's processes) and `span_start`.
 _RAN_EVENTS = ("started", "span_start", "sampler_start")
 
 
 def ran_evidence(run_dir: Path) -> str | None:
-    """The first record in the run dir showing that its workload started, or None: a pid in status.json, a started, span_start or
-    sampler_start event, a sampler reading, output in stdout.log or stderr.log.  A `custody never-ran` label holds only while
-    there is none (the vocabulary's rule)."""
     d = Path(run_dir)
     pid, _ = _runner_pid(_read(d / "status.json") or {})
     if pid is not None:
@@ -580,14 +474,11 @@ def ran_evidence(run_dir: Path) -> str | None:
 
 TRIAGE_SCHEMA = "research/custody-triage/v1"
 NEEDS_ACTION = ("no-custody", "attempt-unpreserved", "attempt-no-record", "forced-unverified", "conflict")
-#: A run whose runner this machine can't see (it ran in another pid namespace: a Kubernetes pod on node 1) has ended once none of
-#: its records changed for this long: a pod preempted or killed before its runner recorded an end leaves its status `running`.
 STALE_S = 24 * 3600
 _RECORDS = ("status.json", "job.json", "stdout.log", "stderr.log", "launcher.log", "sampler.log", "events.jsonl", "resources.jsonl")
 
 
 def this_host() -> tuple[str, str | None]:
-    """(hostname, boot id): a runner's pid means something here only when its job.json names both."""
     import socket
 
     try:
@@ -598,7 +489,6 @@ def this_host() -> tuple[str, str | None]:
 
 
 def _changed(d: Path) -> float | None:
-    """When the run's own records last changed (its end, for an ended run); markers about the dir don't count."""
     ts = []
     for name in _RECORDS:
         with contextlib.suppress(OSError):
@@ -607,8 +497,6 @@ def _changed(d: Path) -> float | None:
 
 
 def _runner_pid(status: dict[str, Any]) -> tuple[Any, Any]:
-    """(pid, starttime_ticks) of the run's runner: status.json's own, which `set_status` keeps when a later `running` transition
-    carries none (`tele set-timeout`'s), else the last transition that has one."""
     for t in (status, *reversed(status.get("transitions") or [])):
         if isinstance(t, dict) and t.get("pid") is not None:
             return t.get("pid"), t.get("starttime_ticks")
@@ -616,7 +504,6 @@ def _runner_pid(status: dict[str, Any]) -> tuple[Any, Any]:
 
 
 def _alive(pid: Any, ticks: Any) -> bool | None:
-    """Whether process `pid` with that start time runs here; None when `pid` doesn't read as one, which is never taken for dead."""
     try:
         if int(pid) <= 0:
             return None
@@ -632,10 +519,6 @@ def _alive(pid: Any, ticks: Any) -> bool | None:
 
 
 def _runner(d: Path, status: dict[str, Any], now: float, host: tuple[str, str | None]) -> tuple[bool, str, bool | None]:
-    """(ended, how, alive) for a run dir without a launcher's remote.json, i.e. on the machine that ran it, whose status isn't
-    terminal: its runner's pid with the same start time when job.json says it ran on this host since this boot, dead when it ran on
-    this host before a reboot; else STALE_S. `alive` is what this host saw of the runner: False gone, True running here, None it
-    can't see it (a Kubernetes pod's runner, in another pid namespace, or another machine's)."""
     env = (_read(d / "job.json") or {}).get("environment") or {}
     if status and env.get("hostname") == host[0] and host[1] and env.get("boot_id") and env["boot_id"] != host[1]:
         return True, f"dead: this host rebooted since its runner started (boot {env['boot_id']}, now {host[1]})", False
@@ -657,11 +540,6 @@ def _runner(d: Path, status: dict[str, Any], now: float, host: tuple[str, str | 
 
 def force_refusal(run_dir: Path, *, runner_gone: bool = False, now: float | None = None,
                   host: tuple[str, str | None] | None = None) -> str | None:
-    """Why `research data custody RUN --publish --force` must not publish the run as its runner last left it, or None. A status
-    that isn't terminal is the runner's last word only once the runner is gone. This host can see that of a runner that ran here
-    (its pid, its boot); of any other (a Kubernetes pod, another machine) only the run's own host can, and the caller says it did
-    with `runner_gone` (n1_custody.sh: `kubectl get pod` says NotFound; n2_custody.sh: the pid is gone on node 2). Records quiet
-    for STALE_S never are: a pod whose workload prints nothing for a day may still run."""
     d = Path(run_dir)
     status = _read(d / "status.json") or {}
     if status.get("state") in TERMINAL_STATES:
@@ -680,14 +558,6 @@ def force_refusal(run_dir: Path, *, runner_gone: bool = False, now: float | None
 
 def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: float | None = None,
                host: tuple[str, str | None] | None = None) -> dict[str, Any]:
-    """One run dir's custody state (TRIAGE_STATES) with the reason, the next step and when its records last changed (`ended_utc`).
-
-    A `custody` label waived|never-ran decides, the latest one winning (`needed` withdraws either), but a never-ran is ignored while
-    `ran_evidence` shows the workload started.  On the machine that ran it, a run still marked running has ended when its runner's
-    pid is gone (same host and boot), or, when the runner isn't visible there (a Kubernetes pod), when none of its records changed
-    for 24 h.  A valid `.custody` counts as `r2` where the catalog can't say (node 2's runs are published on node 1).  An attempt
-    published `--force` is `r2` only while a valid `.custody` shows nothing in the run dir changed after its run record was taken,
-    else `forced-unverified`: its write-once attempt can't take the run's real end."""
     from . import preserved
 
     d = Path(run_dir)
@@ -737,8 +607,6 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
         rr = (doc.get("outputs") or {}).get("run_record")
         chk = preserved.check(st, [rid], mode="head" if verify_remote else "recorded", head_fallback=verify_remote)
         why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
-        # an attempt published --force froze the run as its runner last left it; it is the run's end only while nothing in the run
-        # dir changed after its run record was taken (a pod forced while it still ran ends later, and its write-once attempt can't)
         forced = (doc.get("status") or {}).get("state") not in TERMINAL_STATES
         unvouched = marker_problem(d) if forced and rr else None
         if not chk["preserved"]:
@@ -757,15 +625,12 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
         else:
             row.update(state="r2", why="attempt and run record preserved on the remote" + (
                 " (published --force, and .custody shows nothing in the run dir changed since)" if forced else ""))
-        # only a head-mode check sees the attempt document itself: --verify's own, else the last `custody --publish`'s verdict in .custody
         m = {} if verify_remote else _read(d / MARKER) or {}
         seen = why if verify_remote else [str(m.get("error") or "")] if m.get("preserved") is False else []
         if differs := next((e for e in seen if preserved.DIFFERS in e), None):
             row.update(state="conflict", why=differs if verify_remote else f"{differs} (.custody, {m.get('verified_utc') or '?'})",
                        next=f"research data reconcile-attempts {rid} --apply (the remote's attempt is the first one ever pushed, and "
                             f"canonical), then research data custody {rid} --publish; or label custody waived")
-    # the marker is written only after a head-mode check of the remote, on whichever machine published the run (node 2's runs are
-    # published on node 1); --verify trusts only what it asks the remote itself
     if row["state"] in ("no-custody", "attempt-unpreserved") and not (verify_remote and doc is not None) and marker_problem(d) is None:
         m = _read(d / MARKER) or {}
         row.update(state="r2", why=f"on the remote (.custody, verified {m.get('verified_utc') or '?'} on {m.get('host') or '?'})", next=None)
@@ -801,9 +666,6 @@ def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False, now: float |
 
 def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None, verify_remote: bool = False, now: float | None = None,
                   host: tuple[str, str | None] | None = None) -> dict[str, Any]:
-    """`research data custody --triage` (TRIAGE_SCHEMA): every run under `roots`; a run needing action whose records last changed
-    under `older_min` minutes ago is `settling` and doesn't count, so `needs_action` is the invariant "ended runs not on the remote
-    after N minutes"."""
     now = time.time() if now is None else now
     rows = []
     for root in roots:

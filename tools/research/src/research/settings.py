@@ -1,14 +1,3 @@
-"""research's settings registry: every environment variable research, and the infra code built on it, reads outside the
-files `tests/lint/allowlists/repo_env_reads.json` still lists, declared once in `DECLARED`, and the one reader of them.
-
-`get`, `need` and `has` are ``os.environ.get``, ``os.environ[...]`` and ``in os.environ`` for a declared name, read at the
-call: a default, an empty string and an unset variable behave exactly as they do there (`need` raises KeyError). A name
-`DECLARED` lacks raises `Undeclared`, which no ``except KeyError`` catches, and `undeclared` finds such a name in a module's
-source, which each suite holds its readers to. A variable whose name the caller takes from data (a config's ``*_env`` field,
-a ``--profile-key``, the secrets a VM injects) can't be declared: `named` reads it.
-
-Stdlib only: research has no dependencies, and runs on machines that have nothing else.
-"""
 from __future__ import annotations
 
 import os
@@ -17,7 +6,6 @@ from typing import TypeVar
 T = TypeVar("T")
 
 DECLARED: dict[str, str] = {
-    # the process and the tools around it
     "PATH": "the directories a program is looked up in",
     "PYTHONPATH": "Python's import roots",
     "USER": "the login name, where no lane is named",
@@ -28,7 +16,6 @@ DECLARED: dict[str, str] = {
     "GIT_CONFIG_COUNT": "how many GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pairs git takes from the environment",
     "CUDA_VISIBLE_DEVICES": "the GPUs CUDA shows the process",
     "TRAIN_TREES": "where a lander's worktrees go instead of TMPDIR (`train_trees`)",
-    # who runs it
     "RESEARCH_LANE": "the lane a command acts for",
     "RESEARCH_CAMPAIGN": "the campaign a run belongs to",
     "RESEARCH_PROJECT": "the project a machine is bound to",
@@ -38,7 +25,6 @@ DECLARED: dict[str, str] = {
     "CLOUD_AGENT_INJECTED_SECRET_NAMES": "the secrets Cursor injects into this VM, by name, comma-separated",
     "CURSOR_AGENT_SOCKET": "the Cursor agent's identity socket, which answers for its OIDC tokens (default /run/cursor/api.sock); "
                            "a machine without it is no Cursor agent",
-    # credentials, read by name and never printed
     "SLACK_BOT_TOKEN": "the Slack bot's token",
     "CURSOR_API_KEY": "the Cursor API key the agent watch reads agents with",
     "RUNPOD_API_KEY": "RunPod's API key",
@@ -54,7 +40,6 @@ DECLARED: dict[str, str] = {
     "AGENT_WATCH_PG_URL": "the Postgres URL the agent watch records its passes in",
     "VY_MONITORS_SLACK_WEBHOOK": "the Slack webhook node monitors post to",
     "JOBS_URL": "the jobs service's URL",
-    # the notes
     "RESEARCH_NOTES": "the notes clone (default ~/.research/notes)",
     "RESEARCH_NOTES_SYNC": "1/true/yes/on: commands that write a note sync it; 0/false/no/off: registry writes don't",
     "RESEARCH_NOTES_TOKEN": "the token the notes are pushed with",
@@ -63,7 +48,6 @@ DECLARED: dict[str, str] = {
     "RESEARCH_NOTES_CITE_CHECK": "0/off/no/false: a note's citations aren't checked",
     "RESEARCH_RELAUNCH": "where relaunch briefs are kept (default ~/.research/relaunch)",
     "RESEARCH_MACHINES_D": "the machine registry's directory, in place of the notes' machines.d",
-    # runs and the machines they run on
     "RESEARCH_REPO": "the repository research acts on, in place of the working directory's",
     "RESEARCH_CHECKOUT": "the checkout `research` compares with origin/main before it runs main's copy (default .)",
     "RESEARCH_AT_CHECKOUT": "set: `research` runs the checkout's own copy, never origin/main's",
@@ -88,14 +72,12 @@ DECLARED: dict[str, str] = {
     "DIRECT_CPUS_FILE": "the file naming the CPUs a direct run is pinned to",
     "GPU_LEASE_ALLOWED_FILE": "the file saying whether runs may lease GPUs here",
     "GPU_LEASE_HOST_FILE": "the file that marks a machine that hosts gpu-lease",
-    # the evidence store
     "RESEARCH_STORE": "the evidence store's local directory (default ~/.research/store)",
     "RESEARCH_STORE_CONFIG": "the store's remote config (default ~/.research/store.toml)",
     "RESEARCH_WRITE_THROUGH": "whether a store write goes to the remote too",
     "RESEARCH_PUBLIC_URL": "the store's public URL fixtures are fetched from",
     "RESEARCH_CATALOG_IGNORE_VERSION": "set: a catalog newer than this code is opened anyway",
     "VERITY_RESEARCH_POSTGRES": "set: the store tests that need Postgres run",
-    # telemetry
     "TELE_ATTEMPT_DIR": "the attempt directory the runner exports to its command",
     "TELE_PARENT_SPAN": "the span a command's events hang under",
     "TELEMETRY_PROC": "the process name a command's events carry (default shell)",
@@ -105,7 +87,6 @@ DECLARED: dict[str, str] = {
     "TELEMETRY_PROJECT": "the project a telemetry run records",
     "RUNPOD_POD_ID": "the RunPod pod this process runs on",
     "POD_ID": "the pod this process runs on, where RunPod doesn't say",
-    # pods, guards and leases
     "RESEARCH_GUARD_HOST": "the machine the budget guard runs on",
     "RESEARCH_GUARD_STATE": "the budget guard's state file",
     "RESEARCH_GUARD_DIR": "the pod guard's directory (default ~/.research/pods)",
@@ -118,10 +99,8 @@ DECLARED: dict[str, str] = {
     "WAKE_GUARD_STATE": "the budget guard's state a wake reads",
     "WAKE_MACHINES_D": "the machine registry a wake reads",
     "NEBIUS_BIN": "the Nebius CLI a wake runs",
-    # read by the node scripts that run alone, and by their tests
     "VY_BUNDLE_SIZES": "the pacer's learned bundle sizes",
     "VY_PROVER_CPUS": "the CPUs node 1's prover runs on",
-    # infra's control pod
     "AGENT_WATCH_OFFSET": "the agent watch relay's offset file (default ~/agent-watch/offset)",
     "AGENT_WATCH_ON_POD": "set: the relay runs on the guard host itself, so it reads without ssh",
     "CONTROL_DISK_SEEN": "the control disk alert's state file (default ~/control-disk/seen.json)",
@@ -133,7 +112,7 @@ DECLARED: dict[str, str] = {
 
 
 class Undeclared(Exception):
-    """A read of a variable `DECLARED` lacks."""
+    pass
 
 
 def _declared(name: str) -> str:
@@ -144,28 +123,22 @@ def _declared(name: str) -> str:
 
 
 def get(name: str, default: T = None) -> str | T:
-    """``os.environ.get(name, default)`` of a declared variable: an empty string is returned as it is."""
     return os.environ.get(_declared(name), default)
 
 
 def need(name: str) -> str:
-    """``os.environ[name]`` of a declared variable: KeyError when it is unset."""
     return os.environ[_declared(name)]
 
 
 def has(name: str) -> bool:
-    """``name in os.environ`` of a declared variable: set, even to an empty string."""
     return _declared(name) in os.environ
 
 
 def named(name: str, default: T = None) -> str | T:
-    """``os.environ.get(name, default)`` of a variable the caller's data names, which no declaration can list."""
     return os.environ.get(name, default)
 
 
 def undeclared(source: str) -> list[tuple[int, str]]:
-    """(line, name) of each read in ``source`` through this module (imported as ``settings``, or by another name) whose
-    name, a literal or a module-level constant, `DECLARED` lacks."""
     import ast
 
     tree = ast.parse(source)
@@ -190,8 +163,4 @@ def undeclared(source: str) -> list[tuple[int, str]]:
 
 
 def train_trees() -> str | None:
-    """TRAIN_TREES: where a lander's worktrees go instead of TMPDIR (train.sh's, drive's auto plans', the after-landing
-    command's); the control pod's `infra/control/drive.sh` and the Nebius loop's
-    `tools/research/src/research/pods/nebius/vqueue/loop.sh` always set it, to a directory on a local disk whose old trees
-    they sweep.  Unset or empty, None."""
     return get("TRAIN_TREES") or None

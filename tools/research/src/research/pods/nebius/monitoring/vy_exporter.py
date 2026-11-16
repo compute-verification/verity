@@ -44,7 +44,6 @@ def _esc(v: Any) -> str:
 
 
 def render(clusterqueues: dict, pods: dict, ready: dict[str, int], ok: bool = True) -> str:
-    """The exposition text for ClusterQueue and Pod lists (kubectl -o json) and ready-file counts per lane."""
     rows: dict[str, list[str]] = {}
 
     def add(name: str, labels: dict[str, Any], value: float) -> None:

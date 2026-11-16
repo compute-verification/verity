@@ -30,12 +30,11 @@ import tomllib
 from pathlib import Path
 
 NODE = "rtx-pro-6000-server-x8"
-_UP = Path(__file__).resolve().parents   # laid out as in the repository: its root is six directories above this one
+_UP = Path(__file__).resolve().parents
 HARDWARE = _UP[min(6, len(_UP) - 1)] / "hardware"
 
 
 def figures(hardware: Path = HARDWARE) -> dict:
-    """The node file's GPUs and memory and its card's compute capability (`arch`, sm_XY as X.Y) and SMs."""
     def read(path: Path) -> dict:
         if not path.is_file():
             raise SystemExit(f"check: no {path}: the check reads the node's figures from it; ship the tree (research run "
@@ -117,7 +116,7 @@ def disk_read() -> None:
         return
     if not shutil.which("fio"):
         return check("disk_read", False, "no fio", f">= {WANT['read_mib_s']}", "MiB/s")
-    f = Path("/workspace/cache/.vy-check-fio")   # /workspace itself is root's; runs are the research user
+    f = Path("/workspace/cache/.vy-check-fio")
     try:
         r = run(["fio", "--name=seqread", f"--filename={f}", "--size=32G", "--rw=read", "--bs=1M", "--direct=1", "--ioengine=libaio",
                  "--iodepth=32", "--numjobs=1", "--runtime=30", "--time_based", "--output-format=json"], timeout=1800)

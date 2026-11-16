@@ -24,10 +24,7 @@ from .events import Emitter, stream_id, utc_now_ms
 from .job import write_json_atomic
 from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
 
-#: The clock (seconds) that decides which readings are due within a round and times the smaps_rollup reads; a test replaces it.
-#: The loop's sleeps, gaps and linger, and the records' t_mono, stay on time.monotonic.
 clock = time.monotonic
-#: The RSS breakdown that /proc/<pid>/status gave the process snapshot: what a process whose smaps_rollup is not read records instead.
 STATUS_RSS = ("rss_bytes", "rss_anon_bytes", "rss_file_bytes", "rss_shmem_bytes")
 #: A process's smaps_rollup is read again no sooner than this many times its last read took, so that the reads hold its mmap lock
 #: at most 1/PSS_HOLD_FACTOR of its time.
@@ -58,11 +55,11 @@ class Sampler:
         wl_cg = Cgroup(a.root_pid) if a.root_pid else None
         self.scope, self.scope_reason = scope_for(self.cg, wl_cg)
         self.gpu_state: str = "unknown"
-        self.known_pids: dict[int, int] = {}      # pid -> starttime
+        self.known_pids: dict[int, int] = {}
         self.known_outsiders: dict[int, tuple[int, str]] = {}
         self.topology_changed_at = 0.0
         self.last_pss = 0.0
-        self.pss_hold: dict[tuple[int, int | None], tuple[float, float]] = {}   # (pid, starttime) -> (no read before, last read's s)
+        self.pss_hold: dict[tuple[int, int | None], tuple[float, float]] = {}
         self.last_gpu = 0.0
         self.last_storage = 0.0
         self.last_self = 0.0
@@ -70,7 +67,6 @@ class Sampler:
         self.t0 = time.monotonic()
         self.cpu0 = resource.getrusage(resource.RUSAGE_SELF)
 
-    # ---- writing --------------------------------------------------------------------------------------------------------------------
     def write(self, kind: str, scope: str, body: dict[str, Any]) -> None:
         self.seq += 1
         rec = {"schema": RESOURCES_SCHEMA, "kind": kind, "scope": scope, "t_utc": utc_now_ms(), "t_mono": time.monotonic(),
@@ -89,24 +85,20 @@ class Sampler:
             self.cadence = min(60.0, self.cadence * 2)
             self.emitter.emit("sampler_degraded", cadence_s=self.cadence, bytes_written=self.bytes_written, max_bytes=self.a.max_bytes,
                               reason="output limit reached: cadence doubled")
-            self.a.max_bytes *= 2   # next doubling at the next limit
+            self.a.max_bytes *= 2
 
     def err(self, kind: str, msg: str) -> None:
         self.errors[kind] = self.errors.get(kind, 0) + 1
         if len(self.error_samples) < 10:
             self.error_samples.append(f"{kind}: {msg}")
 
-    # ---- one round ------------------------------------------------------------------------------------------------------------------
     def round(self, final: bool = False) -> bool:
-        """Take one round of readings.  Returns False when the workload root has gone."""
         now = clock()
         alive = True
-        # cgroup
         try:
             self.write("cgroup", self.scope, {"cgroup": self.cg.sample(), "scope_reason": self.scope_reason if self.seq < 3 else None})
         except Exception as e:  # noqa: BLE001 -- the sampler must not die on a reading
             self.err("cgroup", repr(e))
-        # process tree
         snapped = True
         try:
             rows, truncated, total, outsiders = snapshot_tree(self.a.root_pid, self.a.pgid, self.a.max_pids)
@@ -128,12 +120,11 @@ class Sampler:
         except Exception as e:  # noqa: BLE001
             self.err("process", repr(e))
             rows, snapped = [], False
-        # PSS every pss_every s, plus a bounded extra round on topology change (at most one per 5 s); pss_every 0 turns it off
         if self.a.pss_every > 0 and (final or now - self.last_pss >= self.a.pss_every
                                      or (self.topology_changed_at and now - self.topology_changed_at < self.cadence and now - self.last_pss >= 5.0)):
             try:
                 out = [self._pss(r) for r in rows[: self.a.max_pids]]
-                if snapped:                       # a failed snapshot says nothing about which processes are gone
+                if snapped:
                     live = {(r["pid"], r.get("starttime_ticks")) for r in rows}
                     self.pss_hold = {k: v for k, v in self.pss_hold.items() if k in live}
                 tot = sum(x["pss_bytes"] for x in out if x.get("pss_bytes") is not None)
@@ -146,7 +137,6 @@ class Sampler:
             except Exception as e:  # noqa: BLE001
                 self.err("pss", repr(e))
             self.last_pss = now
-        # GPU
         if self.gpu_state != "absent" and (final or now - self.last_gpu >= self.a.gpu_every):
             try:
                 g = gpu_sample(self.a.gpu_timeout)
@@ -160,7 +150,6 @@ class Sampler:
             except Exception as e:  # noqa: BLE001
                 self.err("gpu", repr(e))
             self.last_gpu = now
-        # storage
         if final or now - self.last_storage >= self.a.storage_every:
             try:
                 self.write("storage", "host", {"mounts": [statvfs(m) for m in self.mounts], "diskstats": diskstats(),
@@ -168,7 +157,6 @@ class Sampler:
             except Exception as e:  # noqa: BLE001
                 self.err("storage", repr(e))
             self.last_storage = now
-        # own overhead
         if final or now - self.last_self >= 30.0:
             self.write_self()
             self.last_self = now
@@ -176,9 +164,6 @@ class Sampler:
         return alive
 
     def _pss(self, row: dict[str, Any]) -> dict[str, Any]:
-        """The process's smaps_rollup, unless its RSS is over --pss-max-rss-gb or its last read was less than PSS_HOLD_FACTOR times
-        that read's length ago: the read walks the whole address space under the process's mmap lock, which stalls a large process
-        for seconds."""
         rss = row.get("rss_bytes", row.get("rss_bytes_stat"))
         skipped = {"pid": row["pid"], "pss_bytes": None, "skipped": True, **{k: row.get(k) for k in STATUS_RSS},
                    **({} if "rss_bytes" in row else {"rss_bytes_stat": row.get("rss_bytes_stat")})}
@@ -212,7 +197,6 @@ class Sampler:
         except OSError as e:
             self.err("heartbeat", str(e))
 
-    # ---- loop -----------------------------------------------------------------------------------------------------------------------
     def run(self) -> int:
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         for s in (signal.SIGTERM, signal.SIGINT):

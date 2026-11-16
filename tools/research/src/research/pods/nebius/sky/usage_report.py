@@ -26,7 +26,6 @@ _SUFFIX = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "k": 1e3, "M": 1e
 
 
 def quantity(q: str | int | float) -> float:
-    """A Kubernetes quantity as a number: cpu in cores, memory in bytes."""
     s = str(q)
     for suf in sorted(_SUFFIX, key=len, reverse=True):
         if s.endswith(suf):
@@ -80,7 +79,6 @@ def queues(cqs: dict, workloads: dict, pods: dict, gpu_util: dict[tuple[str, str
 
 
 def parse_dcgm(text: str) -> dict[tuple[str, str], float]:
-    """{(namespace, pod): mean DCGM_FI_DEV_GPU_UTIL over that pod's GPUs} from the exporter's Prometheus text."""
     per: dict[tuple[str, str], list[float]] = {}
     for line in text.splitlines():
         if not line.startswith("DCGM_FI_DEV_GPU_UTIL{"):

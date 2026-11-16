@@ -1,16 +1,4 @@
-"""`python3 treelock.py LOCK WAIT_S TREE -- CMD...`: CMD holding an exclusive flock on LOCK, after waiting up to WAIT_S seconds for it.
-
-`research run --cwd source` runs a workload in the source root, which on a machine is <root>/src/<sha>/, shared by every run of
-the commit; two Lean builds there write one `.lake` at once, truncating each other's generated .c files under clang (SIGBUS,
-INF-641).  The runner puts a workload that builds Lean there (`builds_lean`) behind this, one lock per tree, so such runs take the
-tree in turn.  The wait is the workload's own time, so the run's --timeout bounds it too.  CMD inherits the lock (exec), and so
-do the processes it starts.  Stdlib only: it runs by path, without the research package on its path.
-
-The tree's lock is the last thing a run waits for.  A workload whose argv begins with wrappers that wait for a machine's
-resource (a GPU lease, then a check slot: slot.py) gets this after them (`cli._past_waits`), so a run in a slot's line or a
-lease's holds no tree, and the run a tree waits on is one that is building in it.  Every run takes them in that one order, so
-no two wait on each other; a waiter here that gives up exits, which lets go of the slot and the lease its process held.
-"""
+"""`python3 treelock.py LOCK WAIT_S TREE -- CMD...`: CMD holding an exclusive flock on LOCK."""
 from __future__ import annotations
 
 import fcntl
@@ -24,8 +12,6 @@ from pathlib import Path
 WAIT_S = 4 * 3600
 POLL_S = 5.0
 EX_NOT_STARTED = 75
-#: a command word that builds Lean in its tree: lake itself, the Lean steps' drivers, and what runs them (check.py's Lean steps,
-#: suites.py's AFTER_LEAN suites, `verity check|lean`)
 LEAN_BUILD = re.compile(r"(?:^|[\s/'\"(;&|])(?:lake|lean_changed\.py|lean_audit\.py|check\.py|suites\.py)(?=$|[\s'\";&|)])"
                         r"|(?:^|[\s/'\"(;&|])verity\s+(?:check|lean)(?=$|[\s'\";&|)])")
 
@@ -35,18 +21,14 @@ def builds_lean(command: list[str]) -> bool:
 
 
 def lock_path(runs_root: Path, tree: Path) -> Path:
-    """The tree's lock, beside the runs (`.exclusive.lock`'s directory): the tree itself is the shipped commit's, and a checkout's
-    parent may not be writable."""
     return runs_root / f".lean-tree-{hashlib.sha256(os.fsencode(os.path.realpath(tree))).hexdigest()[:16]}.lock"
 
 
 def wrap(lock: Path, tree: Path, wait_s: float | None = None) -> list[str]:
-    # -P: this file's directory, the research package, would shadow the standard library's modules (its queue.py)
     return [sys.executable, "-P", str(Path(__file__).resolve()), str(lock), f"{WAIT_S if wait_s is None else wait_s:g}", str(tree), "--"]
 
 
 def acquire(lock: str, wait_s: float, tree: str, *, clock=time.monotonic, sleep=time.sleep) -> int | None:
-    """An fd holding LOCK exclusively, or None once WAIT_S has passed without it; says on stderr that it waits, and why."""
     fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o666)
     t0, said = clock(), False
     while True:

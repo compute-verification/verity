@@ -39,7 +39,6 @@ SCHEMA = "verity/status/v0"
 LOCK = "lean-audit.json"
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-#: a table renderer's path -> {the call naming a row's runs of record: how its `what` reads, from the call's first argument}
 RENDERERS = {"benchmarks/harness/verity_bench/served_table.py": {"Protocol": "{}", "Breakdown": "{}, where its time goes by span"}}
 
 
@@ -60,7 +59,6 @@ def canonical(doc: dict) -> bytes:
 
 
 def lock_paths(files: list[str]) -> list[str]:
-    """The locks among ``files``, a test fixture's aside."""
     return sorted(p for p in files if p.rsplit("/", 1)[-1] == LOCK and "/tests/" not in f"/{p}")
 
 
@@ -69,8 +67,6 @@ def package_of(lock: str) -> str:
 
 
 def facts_sources(facts: Path, package: str) -> list[dict]:
-    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's,
-    each its `facts.json.gz`, else an older audit's `facts.json`."""
     work = facts / f"audit-{re.sub(r'[^A-Za-z0-9]+', '_', package)}"
     found = [next((p for p in (d / "facts.json.gz", d / "facts.json") if p.is_file()), None)
              for d in [work, *sorted(work.glob("proved-in-*"))]]
@@ -78,7 +74,6 @@ def facts_sources(facts: Path, package: str) -> list[dict]:
 
 
 def own_modules(f: dict) -> set[str]:
-    """The modules a package of the repository builds, as the audit counts them (check.py's `own_modules`)."""
     if "own_modules" in f:
         return set(f["own_modules"])
     return {m for m, g in (f.get("graph") or {}).items()
@@ -86,8 +81,7 @@ def own_modules(f: dict) -> set[str]:
 
 
 def unfolding(d: str, unfolds: dict, listed: set[str]) -> tuple[list[str], list[str]] | None:
-    """(the ``listed`` assumptions the premise ``d`` comes to, the parts that are none), or None when it doesn't unfold
-    (check.py's `unfolding`)."""
+    """None when the premise doesn't unfold."""
     def walk(c: str, path: frozenset) -> tuple[list[str], list[str]] | None:
         parts = unfolds.get(c)
         if not isinstance(parts, list) or c in path:
@@ -108,9 +102,6 @@ def unfolding(d: str, unfolds: dict, listed: set[str]) -> tuple[list[str], list[
 
 
 def premised(lock: dict, sources: list[dict]) -> dict[str, list[str] | None]:
-    """{guarantee: the named assumptions its statement takes through its definitions, or None where ``sources`` don't read
-    it}: each premise headed by a constant of an `Assumptions` module or of a module the repository builds, and one that is
-    an alias of listed assumptions as those (check.py's `judge` and `assumption_records`)."""
     own = set().union(*map(own_modules, sources)) if sources else set()
     listed = set(lock.get("assumptions") or {}) | set(lock.get("open") or {}) | set(lock.get("domain") or {})
     heads: dict[str, set[str] | None] = {}
@@ -144,7 +135,6 @@ def status_of(assumptions: list[str], premises_read: bool) -> str:
 
 
 def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict], list[dict], list[dict]]:
-    """(packages, guarantees, assumptions) of ``locks`` ({lock path: its document}), the premises from ``facts``."""
     packages, guarantees, assumptions = [], [], []
     for path, lock in sorted(locks.items()):
         pkg = package_of(path)
@@ -175,8 +165,6 @@ def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict],
 
 
 def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, str | None]]:
-    """(id, what, table) for each run of record a renderer's source names in one of ``calls`` (first argument the row's
-    name), the table its `# ` heading, read from literals alone."""
     tree = ast.parse(text)
     table = next((n.value[2:] for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
                   and n.value.startswith("# ")), None)
@@ -193,7 +181,6 @@ def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, s
 
 
 def results(root: Path, rev: str, files: list[str]) -> tuple[list[dict], int]:
-    """(each result of record by `art:` id, the run ids named beside them)."""
     found = []
     for path, calls in sorted(RENDERERS.items()):
         if path in files:
@@ -204,7 +191,6 @@ def results(root: Path, rev: str, files: list[str]) -> tuple[list[dict], int]:
 
 
 def export(root: Path, rev: str = "HEAD", facts: Path | None = None) -> tuple[dict, int]:
-    """(the status document of ``root`` at ``rev``, the run ids of record it leaves out)."""
     commit = git(root, "rev-parse", f"{rev}^{{commit}}").decode().strip()
     files = tracked(root, commit)
     locks = {p: json.loads(show(root, commit, p)) for p in lock_paths(files)}

@@ -212,7 +212,7 @@ def _parse_expect(items: list[str]) -> dict | None:
 
 
 def cmd_run(argv: list[str]) -> int:
-    clones: list[Path] = []          # the run's `--cwd clone` home once made; removed however `_cmd_run` ends
+    clones: list[Path] = []
     try:
         return _cmd_run(argv, clones)
     finally:
@@ -220,7 +220,7 @@ def cmd_run(argv: list[str]) -> int:
 
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
-    started = time.monotonic()                   # --wait's limit counts the launch too: it bounds the whole tool call
+    started = time.monotonic()
     asks_help = "--" not in argv and not {"-h", "--help"}.isdisjoint(argv)
     if "--" not in argv and not asks_help:
         print("research run: the workload command goes after `--`", file=sys.stderr)
@@ -334,12 +334,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
-    ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
+    ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
-    ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)   # machine side: the minted key + store.toml (store.custody)
-    ap.add_argument("--store-read-dir", default=None, help=argparse.SUPPRESS)   # machine side: --store-read's key, deleted when the workload ends
+    ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--store-read-dir", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--store-read", action="store_true",
                     help="with --on: the workload gets a read-only key to the store's remote (RESEARCH_STORE_CONFIG and AWS_* in its "
                          "environment, minted here like custody's and deleted when it ends), so its `research data fetch` works on a "
@@ -370,7 +370,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="a local run whose store has no usable remote refuses (exit 3): its records would stay on this disk and nothing "
                          "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
-    ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
+    ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--allow-pipe", action="store_true",
                     help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
                          "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
@@ -514,7 +514,7 @@ def _take_run_dir(ns: argparse.Namespace, root: Path) -> Path:
 def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
     if ns.claimed:
         _survive_stray_signals()
-    mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None
     if ns.run_record and (ns.on or ns.queue):
         print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
               "(--custody-r2, the default there)", file=sys.stderr)
@@ -538,12 +538,11 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             if asks := getattr(ns, "asks", None) or _named_asks(ns, command):
-                # a run that may move carries a pair, its own id, so its late twin can take it from this line (research.asker)
                 _take_run_dir(ns, R.runs_root(ns.runs_dir))
                 ns.asks = asks
                 asks["wait_s"] = wait_s
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
-            if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
+            if budget := getattr(ns, "budget_gb", None):
                 from . import suite_size  # noqa: PLC0415
 
                 command[(at := command.index("--")):at] = [suite_size.BUDGET_OPT, f"{budget:g}"]
@@ -559,9 +558,6 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
                 print(f"research run: --pool {ns.pool}: its custody key lives {ttl}, past the wait for a slot and the run after it "
                       "(--custody-ttl gives another)", file=sys.stderr)
         if ns.mem_gb is not None:
-            # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
-            # beside the slot's once it ran, so a few waiting runs drove admission below zero; the slot takes the larger of its
-            # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
                   "its own mem= and that" + (f", and gives the run {budget:g} GB to plan its processes on" if budget else ""),
@@ -625,7 +621,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         return 3
     if ns.on:
         return _run_remote(ns, root, harness_opts, command)
-    run_dir = root / ns.id if ns.claimed else _take_run_dir(ns, root)     # a claimed run's dir is its launch request's
+    run_dir = root / ns.id if ns.claimed else _take_run_dir(ns, root)
     run_id = run_dir.name
     job_pw = job_dir = None
     if ns.job_user:
@@ -637,7 +633,6 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         except jobuser.Refused as e:
             print(f"research run: refused: {e}", file=sys.stderr)
             return 3
-    # a claimed run's custody was settled by its launcher (--custody-r2, or --no-custody-r2 and `research fetch --all`)
     no_remote = None if ns.claimed else _no_usable_remote()
     if no_remote and not ns.local_only:
         print(f"research run: refused: this store has no usable remote ({no_remote}), so the run's records would stay on this disk "
@@ -652,7 +647,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         return 2
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
-    workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
+    workload_env = {**result.env_defaults(os.environ), **env_map}
     if ns.claimed and (run_dir / "job.json").exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -662,7 +657,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     except SystemExit:
         return 2
     if ns.claimed and not os.environ.get("RESEARCH_STORE"):
-        os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
+        os.environ["RESEARCH_STORE"] = str(root.parent / "store")
     cwd_basis = _resolve_cwd(a)
     remote_info = json.loads(ns.remote_json) if ns.remote_json else None
     clone_rec = None
@@ -680,8 +675,6 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     if no_remote:
         prep["section"]["local_only"] = {"reason": ns.local_only, "no_remote": no_remote}
     if a.cwd is None:
-        # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
-        # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
     source_root = Path.cwd()
     tree_lock = treelock.lock_path(root, source_root) if cwd_basis == "source" and treelock.builds_lean(command) else None
@@ -703,7 +696,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         job["run"]["cwd_clone"] = clone_rec
     if tree_lock:
         job["run"]["lean_tree_lock"] = str(tree_lock)
-    try:                                                          # which build each installed binary is (binprov.py); never stops a run
+    try:  # never stops a run
         from .binprov import snapshot
 
         if bins := snapshot():
@@ -718,34 +711,29 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         remote.ack_launch(Path(remote_info["request"]).parent / remote.LAUNCH_ACK, remote.FIRST_RECORD)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
     os.environ.update(prep["env"])
-    # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
-    # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
-    apply_env = {k: v for k, v in workload_env.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    # --env is the workload's: set for the harness, then restored so the store publish below runs with the caller's environment.
+    apply_env = {k: v for k, v in workload_env.items() if not (ns.claimed and k == "PYTHONPATH")}
     if ns.claimed and (remote_info or {}).get("gpus"):
-        apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
+        apply_env.pop("CUDA_VISIBLE_DEVICES", None)
     apply_env = {**clone_env, **apply_env}
     store_toml, key_env = None, ()
     if ns.job_user and ns.store_read_dir:
-        # --store-read's key, for a unit that sees no launch request: its store.toml is copied into the run's control/
-        # (jobuser.prepare) and named there, and its variables pass like the run's own --env
         from .store import custody as CU
 
         store_toml, key_env = Path(ns.store_read_dir) / CU.STORE_TOML, CU.KEY_ENV
         apply_env = {"RESEARCH_STORE_CONFIG": os.path.join(job_dir, jobuser.STORE_CONFIG), **apply_env}
     preserver = None
     if ns.custody_dir:
-        # the workload's `research run-preserve PATH`: this runner puts the file with its custody key, which stays its own
         from .store.run_preserve import Preserver
 
         try:
             preserver = Preserver(run_dir, ns.custody_dir, shared=bool(ns.job_user))
-        except OSError as e:            # the workload runs all the same, and its `research run-preserve` finds nothing offered
+        except OSError as e:
             print(f"research: run-preserve is not offered to this run's workload: {e}", file=sys.stderr)
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     spawn, mode, unsafe = command, None, []
     if ns.job_user:
-        # inside a queued GPU phase's lease (the request's workload wrap), so gpu-lease and its bookkeeping stay the runner's
         wrap = list(_request(ns.remote_json).get(remote.QUEUE_WORKLOAD_WRAP) or []) if ns.claimed else []
         n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
         spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id),
@@ -759,12 +747,12 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
             mode = jobuser.prepare(job_dir, store_toml)
         rc = harness_run(a, spawn, preserver.poll if preserver else None, _memory_mark(ns, run_id, run_dir, job))
     finally:
-        if mode is not None:            # before anything reads the run dir
+        if mode is not None:
             removed, unsafe = jobuser.finish(job_dir, jobuser.unit_name(run_id), ns.job_user, job_pw.pw_uid, mode)
             if removed:
                 print(f"research: --job-user: deleted {len(removed)} entr{'y' if len(removed) == 1 else 'ies'} the job left that "
                       f"{'is' if len(removed) == 1 else 'are'} neither a file nor a directory: {', '.join(removed[:10])}", file=sys.stderr)
-        if preserver is not None:       # no request is taken once the workload has ended, and none is answered after the record
+        if preserver is not None:
             preserver.close()
         for k, v in saved_env.items():
             if v is None:
@@ -783,7 +771,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
               f"belong to {ns.job_user} ({', '.join(unsafe[:10])}), so nothing here reads the run dir; its records "
               f"stay on this machine", file=sys.stderr)
         return rc or 3
-    if ns.store_read_dir:               # the workload is done with its read-only key
+    if ns.store_read_dir:
         from .store.custody import CRED_FILE
 
         (Path(ns.store_read_dir) / CRED_FILE).unlink(missing_ok=True)
@@ -800,7 +788,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     if ns.require_result and rc == 0 and not s["result_valid"]:
         print(f"research: --require-result: the workload exited 0 but result.json is {s['result']}; exiting {EX_DATAERR}", file=sys.stderr)
         out = EX_DATAERR
-    if ns.custody_dir:                  # last: once .custody is written nothing more goes into the run dir (launcher.log included)
+    if ns.custody_dir:
         from .store import custody as CU
 
         conds = prep.get("conditions")
@@ -814,7 +802,6 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     return out
 
 
-#: The longest custody key ``research run`` mints on request; the default stays 6 h.
 CUSTODY_TTL_LIMIT_S = 24 * 3600
 
 
@@ -857,7 +844,6 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     return out
 
 
-#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_LIMIT_S`
 CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh one after it ends: "
                   "`research data custody RUN --publish` (store README, custody)")
 
@@ -1009,7 +995,6 @@ def _clone_imports(of: Path, tree: Path, home: Path, remote_info: dict | None) -
     return {"PYTHONPATH": os.pathsep.join(entries), "PYTHONPYCACHEPREFIX": str(home / "pycache")}
 
 
-#: how many times `_end_group` looks for the group's members after its SIGKILL, GROUP_END_POLL_S apart, before removing the clone anyway
 GROUP_END_POLLS = 100
 GROUP_END_POLL_S = 0.05
 
@@ -1192,11 +1177,11 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
-    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir holds nothing yet
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
         shipped = getattr(a, "tree_sha", None)
-        if hint and shipped and hint.get("commit") != shipped:   # a launcher that read its checkout before shipping: only the sha is known
+        if hint and shipped and hint.get("commit") != shipped:
             hint = {"commit": shipped}
         conds = E.conditions(run_dir=run_dir, project=ns.project, campaign=ns.campaign, exclusive=bool(ns.exclusive_lock), source_root=source_root,
                              source_hint=hint, dirty_capture=capture)
@@ -1210,20 +1195,18 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
             ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
             key_params, key_conditions = list(tool.key_params), list(tool.key_conditions)
         else:
-            # undeclared: the whole (redacted) command line is the request, and nothing is reusable (reuse_key None below):
-            # argv cannot name the files, environment or data the command reads
             params, key, closure = {"argv": argv_red}, {"argv": argv_red}, {}
             ident = {"name": Path(command[0]).name, "version": None, "spec": None}
             key_params, key_conditions = ["argv"], []
         if env_map:
             params["env"] = {k: ("<redacted>" if SECRET_KEY.search(k) else v) for k, v in env_map.items()}
         inputs = {}
-        for spec in a.input:                         # harness --input name=path: a fetched artifact is an input; anything else enters the derivation
+        for spec in a.input:
             name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
-            if path.startswith("art:"):              # a store id names the input directly (no fetched copy needed on this machine)
+            if path.startswith("art:"):
                 inputs[name] = path
                 continue
-            cid = content_identity(path, source_root)   # by content, as the key param `input.<name>` (inputs hold art: ids only)
+            cid = content_identity(path, source_root)
             if isinstance(cid, str) and cid.startswith("art:"):
                 inputs[name] = cid
             else:
@@ -1315,19 +1298,10 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
 
 
 GPU_WAIT_MIN = 120
-# a queued job's thread pools take its --cpus, as a pod's take its quota (pod_bootstrap.sh): left alone, BLAS and OpenMP start one
-# thread per host core inside a scope of a few CPUs. The job's own --env still decides.
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
-#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
-#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
-#: never a slot a candidate waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
-#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs candidates' checks and lanes' direct runs
-#: already oversubscribe (top, 02:53Z).
 AUTO_KIND = "agent-test"
-#: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
-#: pool slot must give for the run to spill there
 AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_MIN = 4, 16, 60
 
 
@@ -1346,11 +1320,11 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
-    ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
+    ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True
     ns.auto = True
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
-        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests, not its run dir
+        harness_opts += ["--cwd", "source"]
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
     return None
@@ -1403,7 +1377,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     docs = {} if docs is None else docs
     cpus = ns.cpus or AUTO_CPUS
     budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
-    mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
+    mem = getattr(ns, "reserve_gb", None) or budget
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if gpu and not docs:
@@ -1411,7 +1385,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if gpu and (closed := auto.closed(docs.get(auto.AUTO_NODE))):
         print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
         return None
-    told = None                                                # when it should start; a GPU job's wait is the queue's to say
+    told = None
     if why is None:
         lean = auto.lean_pool(command, ns.env)
         try:
@@ -1442,12 +1416,12 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if remote.flag_value(harness_opts, "--timeout") is None:
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
-    ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
-    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
-    ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
+    ns.cpus = ns.max_min = ns.question = ns.disk_gb = None
+    ns.mem_gb = mem
+    ns.budget_gb = budget if budget > mem else None
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
-    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
+    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)
     return harness_opts
@@ -1490,7 +1464,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from .pods.lease import RUN_MARGIN_S
 
     root = R.runs_root(ns.runs_dir)
-    run_id = _take_run_dir(ns, root).name           # before the queue books the job under it
+    run_id = _take_run_dir(ns, root).name
     given_max = ns.max_min * 60 if ns.max_min is not None else timeout
     spec = {"project": ns.project, "submitter": os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-",
             "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
@@ -1527,8 +1501,6 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     return _run_remote(ns, root, harness_opts, command, queue=placed)
 
 
-#: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
-#: from, presigned by the shipped tree's `LEAN_AUDIT` (`url_file`), as `tools/check/check.py --record` sends a check them
 LEAN_RECORDS = re.compile(r"lean_changed\.py\b.*\s--records\b")
 LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
 
@@ -1586,7 +1558,6 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
         harness_args += ["--expect", e]
     if ns.require_result:
         harness_args.append("--require-result")
-    # the store flags travel as `research run` flags: the machine-side runner computes derivation/reuse_key in the shipped source tree
     if ns.tool:
         # the machine runs the shipped tree's research package when --source carries one, else THIS launcher's: that one must know the tool
         from .store import tools_registry
@@ -1609,7 +1580,6 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
     source = Path(ns.source).expanduser() if ns.source else None
     urls = lean_records_urls(source, command)
     sends = [Path(s).expanduser() for s in ns.send]
-    # the request as any machine would take it: what a late twin of the run is launched with too (research.asker)
     what = dict(project=ns.project, command=command, harness_args=harness_args, cwd=None, env=env, exclusive=ns.exclusive,
                 mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait, custody_ttl=(ns.custody_ttl or "6h") if custody else None,
                 preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
@@ -1746,7 +1716,7 @@ def cmd_fetch(argv: list[str]) -> int:
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
-    if ns.all and (why := R.disk_floor_refusal(root)):          # the records alone are small: observing a run stays possible
+    if ns.all and (why := R.disk_floor_refusal(root)):
         print(f"research fetch --all: refused: {why}", file=sys.stderr)
         return 3
     try:
@@ -1800,7 +1770,6 @@ def cmd_cancel(argv: list[str]) -> int:
 
     dirs = [run_dir]
     if tw := asker.twin(run_dir):
-        # a run that moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
         try:
             dirs.append(_run_dir(root, tw["run"], tw["machine"], unique=True))
         except (FileNotFoundError, LookupError, remote.Refused) as e:
@@ -2072,7 +2041,7 @@ def cmd_status(argv: list[str]) -> int:
         from . import asker
 
         rows[0]["auto"] = asker.told(rows[0], time.time())
-        if twin := _moved_to(one):                              # the run is followed to its late twin: its row comes next
+        if twin := _moved_to(one):
             with contextlib.suppress(remote.Refused):
                 remote.fetch(twin)
             rows.append({**(s := R.summarize(twin)), "auto": asker.told(s, time.time())})
@@ -2300,7 +2269,6 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
     if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
         from .at_main import reexec
 

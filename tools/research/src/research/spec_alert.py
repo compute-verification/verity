@@ -1,33 +1,3 @@
-"""The DM a spec change sends the person who reads the spec (the Slack registry's `daniel` entry) when it lands on main, by
-`research merge --push` or drive's landing: a change to what a guarantee says waits on nobody, and he is shown it.
-
-The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its
-guarantee changed; and the premises it rests on, its `premises`: a premise it gains or drops is shown), every definition
-the statements read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions`, `domain`
-or `open`, of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions
-(`assumptions`: one added or removed is shown, and so is a premise that becomes one), the domain hypotheses (`domain`:
-one listed, with its `why`, one no longer listed, and a new `why` are shown) and the open premises (`open`: one listed,
-one discharged, a new issue or due date, and a `why` gained or lost, by which the guarantees that read the premise
-without taking it rest on it, are shown; an assumption that becomes open is tallied), what
-the shape rule exempts (`shape.frozen`:
-an entry added there is shown with its reason), the compiled code allowed on a verifier's path (`verifier.allow`: an
-entry added there is shown), and the trust (`deployed`, the guarantees that state the deployed system; `trust`, the
-premises they may rest on; `trust_gap`, those outside it each still rests on, which an update only shrinks: a gap grown,
-which only a hand edit does, is shown first, ahead of everything else, and a guarantee deployed or no longer, a premise
-trusted or no longer, and a gap shrunk are shown too). Between the main the push replaced and the one it
-pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
-across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
-to another's under its name is no change, nor is a guarantee renamed with the same type hash (the premises it gains or
-drops under its new name are shown all the same), one that only prints
-differently, or a record that moved with its package, and a push of only these sends nothing. Nor is a definition whose
-hash changed in a push that changed no Lean input (a `.lean` file, a lakefile, a manifest or a toolchain, outside the
-audit's own `tools/verity/lean/`, or a dependency bundle newly pinned in its `lean-deps.json`): what a definition says
-comes from those alone, so its record was only rehashed or regrouped by the audit, and it is tallied as `rehashed`. The DM opens with each
-package's tally (with the guarantees that moved into it), then lists what existing guarantees and definitions now say
-before the new guarantees. A DM that fails is
-printed and posted to #agent-alerts, so a spec change never lands unseen.
-"""
 from __future__ import annotations
 
 import json
@@ -39,16 +9,11 @@ from pathlib import Path
 from . import settings
 
 RECORD = "lean-audit.json"
-#: characters of one DM; past it the message ends with the compare link, which holds the rest
 LIMIT = 12000
-#: lines of one signature shown; a longer one ends with a line saying how many more there are
 SIGNATURE_LINES = 40
-#: the files a definition's meaning is elaborated from, by suffix or name; the audit's own directory writes records, says nothing
 LEAN_INPUTS = (".lean", "lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain")
 AUDIT_DIR = "tools/verity/lean/"
-#: the dependency bundles every package with fetched dependencies is built against, pinned by content (`sha256`)
 DEPS_PINS = AUDIT_DIR + "lean-deps.json"
-#: who an open premise whose entry gives a `why` counts for besides the statements that take it
 READERS = "the guarantees that read it without taking it"
 
 
@@ -65,13 +30,10 @@ def _record(repo: Path, rev: str, path: str) -> dict:
 
 
 def _guarantees(doc: dict) -> dict:
-    """The record's guarantees; one written before they were called that (a push's old side, at the rename) has `pins`."""
     return doc.get("guarantees") or doc.get("pins") or {}
 
 
 def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:
-    """{definition: (hash, its module)} over every module under `reads`. Which guarantees read one is the build's, and the
-    record doesn't list it: the review `check.py --update` prints does."""
     out: dict[str, tuple[str | None, str]] = {}
     for m, group in (doc.get("reads") or {}).items():
         defs = group.get("definitions", {})
@@ -82,7 +44,6 @@ def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:
 
 
 def _listed(doc: dict) -> dict[str, tuple[str, dict]]:
-    """{premise: (its section, `assumptions`, `domain` or `open`, its entry)} over the record's listed premises."""
     out: dict[str, tuple[str, dict]] = {}
     for k in ("open", "domain", "assumptions"):
         section = doc.get(k) or {}
@@ -92,16 +53,11 @@ def _listed(doc: dict) -> dict[str, tuple[str, dict]]:
 
 
 def _assumptions(doc: dict) -> dict[str, str | None]:
-    """{listed premise: its record's `digest`, None without one} for the entries no `reads` record holds as a definition:
-    a premise whose statement and what it reads only its own digest records (one under `reads` shows as a definition)."""
     held = _definitions(doc)
     return {n: r.get("digest") for n, (_, r) in _listed(doc).items() if n not in held}
 
 
 def _premises(rec: dict) -> list[str] | None:
-    """The premises a guarantee's record says its statement rests on, named assumptions, domain hypotheses and open
-    premises alike (one that moves between them is no change to what the statement takes); None in a record written
-    before records held them."""
     p = rec.get("premises")
     p = {"assumptions": p} if isinstance(p, list) else p
     if not isinstance(p, dict):
@@ -118,8 +74,6 @@ def _scope(r: dict) -> str:
 
 
 def _on_read(entry: tuple[str, dict]) -> bool:
-    """Whether a listed premise's entry is an open one that gives a `why`: `READERS` rest on it, and each one's record
-    lists it under `premises.open`."""
     return entry[0] == "open" and "why" in entry[1]
 
 
@@ -130,27 +84,21 @@ def _was(entry: tuple[str, dict]) -> str:
 
 
 def _frozen(doc: dict) -> dict[str, str]:
-    """{name: why}: the record's `shape.frozen`, what the shape rule exempts until it fits."""
     f = (doc.get("shape") or {}).get("frozen") or {}
     return f if isinstance(f, dict) else {}
 
 
 def _conjectures(doc: dict) -> dict[str, dict]:
-    """{name: {status, test, why}}: the record's `shape.conjectures`, the named conjectures properties may rest on."""
     c = (doc.get("shape") or {}).get("conjectures") or {}
     return {n: e for n, e in c.items() if isinstance(e, dict)} if isinstance(c, dict) else {}
 
 
 def _allowed(doc: dict) -> list[str]:
-    """The record's `verifier.allow`: the compiled code no proof sees that its verifier's path may reach."""
     a = (doc.get("verifier") or {}).get("allow") or []
     return [x for x in a if isinstance(x, str)] if isinstance(a, list) else []
 
 
 def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, str]], dict[str, list[str]]] | None:
-    """The record's trust: (`deployed`, the guarantees that state the deployed system; `trust.base`, {premise: the trust
-    assumption it states}; `trust.extra`, {deployed guarantee: {premise it also trusts: the ruling's reason}}; `trust_gap`,
-    {deployed guarantee: the premises outside its trust it rests on}), or None for a record written before it held them."""
     if not any(k in doc for k in ("deployed", "trust", "trust_gap")):
         return None
     t = doc.get("trust") if isinstance(doc.get("trust"), dict) else {}
@@ -163,8 +111,6 @@ def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, st
 
 
 def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str, str]) -> dict[str, str]:
-    """{old name: new name} of a rename: ``guarantees``' (those gone and come with one type hash), and each premise or
-    definition gone under one name and come under another with the one digest or hash only it has."""
     def hashes(docs: dict[str, dict]) -> dict[str, str]:
         out: dict[str, str] = {}
         for d in docs.values():
@@ -180,9 +126,6 @@ def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str,
 
 
 def _trusted(docs: dict[str, dict], ren: dict[str, str]) -> tuple[dict, dict, dict, dict] | None:
-    """Every record's trust (`_trust`) across ``docs``, each name through ``ren`` (an old name's new one), each entry with
-    its package: ({deployed guarantee: package}, {base premise: (package, what it states)}, {(guarantee, premise): (package,
-    reason)}, {guarantee: (package, gap premises)}); None when no record holds a trust."""
     got = [(_package(p), t) for p, d in docs.items() if (t := _trust(d)) is not None]
     if not got:
         return None
@@ -196,26 +139,15 @@ def _trusted(docs: dict[str, dict], ren: dict[str, str]) -> tuple[dict, dict, di
 
 
 def _known(docs: dict[str, dict], ren: dict[str, str]) -> set[str]:
-    """Every name ``docs`` hold, through ``ren``: their guarantees, listed premises and the definitions they read."""
     return {ren.get(n, n) for d in docs.values() for n in (*_guarantees(d), *_listed(d), *_definitions(d))}
 
 
 def _unpaired(added: list[str], dropped: list[str], fresh: set[str], gone: set[str]) -> tuple[list[str], list[str]]:
-    """``added`` and ``dropped`` less the renames among them: as many added names the old records never held (``fresh``)
-    as dropped ones the new records no longer hold (``gone``), a name changed under a rename whose text changed with it
-    (one whose hash or digest stayed is matched by `_renames` already)."""
     k = min(len(new := [p for p in added if p in fresh]), len(old := [p for p in dropped if p in gone]))
     return [p for p in added if p not in new[:k]], [p for p in dropped if p not in old[:k]]
 
 
 def _trust_changes(olds: dict[str, dict], news: dict[str, dict], ren: dict[str, str]) -> list[tuple[str, str, str]]:
-    """(package, kind, text) of what changed in the records' trust (`_trust`), a rename none (``ren``, else a premise
-    replaced by one no old record held, or listed in the trust under another name with the same text): `grown` (a
-    deployed guarantee rests outside its trust on a premise its `trust_gap` didn't list: an update only shrinks the gap,
-    so it was grown by hand), `deployed` and `undeployed` (a guarantee listed in `deployed`, or no longer), `trusted` and
-    `untrusted` (a premise listed in the trust base or a deployed guarantee's extra trust, or with what it states or its
-    reason changed; or no longer listed) and `shrunk` (a premise the gap no longer lists), in that order; `trust` (text "")
-    for a package whose record holds a trust for the first time."""
     a, b = _trusted(olds, ren), _trusted(news, {})
     if b is None:
         return []
@@ -262,11 +194,8 @@ def _signature(rec: dict) -> str:
 
 
 def _restated(a: dict, b: dict, sources: bool = True) -> bool:
-    """Whether a guarantee's record says something else: its type hash or, where both records hold one and a Lean input
-    changed, the hash of its statement with its definition unfolded once (`unfolded_hash`), which a restated definition
-    moves under the same signature."""
     ha, hb = a.get("type_hash") or "", b.get("type_hash") or ""
-    if len(ha) != len(hb):                      # one record rehashed (32-bit to SHA-256): only the printed statement compares
+    if len(ha) != len(hb):
         return a.get("signature") != b.get("signature")
     ua, ub = a.get("unfolded_hash"), b.get("unfolded_hash")
     return ha != hb or (sources and bool(ua and ub) and ua != ub)
@@ -284,31 +213,6 @@ def _package(path: str) -> str:
 
 
 def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
-    """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
-    and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
-    A trust gap grown by hand (`_trust_changes`' `grown`) comes first, before anything else, and the rest of what changed
-    in the records' trust (`deployed`, `undeployed`, `trusted`, `untrusted`, `shrunk`, and `trust` for one held for the
-    first time) right after `changed` and `removed`, through any rename (`_renames`).
-    The other kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed,
-    under its name or through the same renames, its own and a premise's;
-    `premised`, text "", for a record that lists them for the first time), `assumed` (a named assumption
-    added, or another premise now one), `unassumed` (a named assumption no longer listed, saying so when statements still read
-    it), `domain` (a domain hypothesis
-    listed, or another premise now one, with its `why`), `undomained` (a domain hypothesis no longer listed), `scope` (a
-    domain hypothesis's `why` or `cites` changed), `open` (an open premise listed, or a domain hypothesis now one),
-    `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed), `ticket` (an open
-    premise's issue or due date changed), `on_read` and `off_read` (an open premise's entry gains or loses its `why`, by
-    which `READERS` rest on it; one listed or discharged with a `why` says so in its own line), `definition`,
-    `assumption` (a listed premise's digest changed under its name),
-    `recorded` (a premise listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
-    statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
-    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first, and
-    the premises it rests on before the hashes of what it reads, which a rehash moves by the thousand; so a DM cut at
-    `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
-    another package's record under its name, counted in that package's tally. A guarantee under another name with its type
-    hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's or an
-    assumption's changed hash is `rehashed` (text ""), counted in its package's tally; a digest an assumption gains is
-    shown all the same, since it records what nothing recorded before."""
     a = {n: (_package(p), r) for p, d in olds.items() for n, r in _guarantees(d).items()}
     b = {n: (_package(p), r) for p, d in news.items() for n, r in _guarantees(d).items()}
     gone = {n: r for n, (_, r) in a.items() if n not in b}
@@ -416,18 +320,14 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
 
 
 def _entries(old: dict, new: dict) -> list[tuple[str, str]]:
-    """``changes``' entries for one record, with their kinds."""
     return [(kind, text) for _, kind, text in _across({RECORD: old}, {RECORD: new}) if text]
 
 
 def changes(old: dict, new: dict) -> list[str]:
-    """What changed in one package's spec, from its record ``old`` to ``new``, as Slack text: one entry per guarantee or
-    definition, empty when every change is a move or a reprint."""
     return [text for _, text in _entries(old, new)]
 
 
 def _tally(kinds: list[str]) -> str:
-    """`guarantees: 1 changed, 19 new, 1691 moved here; definitions: 2 changed` for one package's entries."""
     g = ", ".join([f"{kinds.count(k)} {k}" for k in ("changed", "removed", "new") if k in kinds]
                   + [f"{kinds.count(k)} {w}" for k, w in (("premises", "with new premises"), ("premised", "premises recorded"))
                      if k in kinds])
@@ -456,22 +356,16 @@ def _tally(kinds: list[str]) -> str:
 
 
 def web(repo: Path, remote: str) -> str | None:
-    """The remote's GitHub URL (`https://github.com/OWNER/REPO`), or None when it isn't on GitHub."""
     r = subprocess.run(["git", "-C", str(repo), "remote", "get-url", remote], capture_output=True, text=True)
     m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", r.stdout.strip()) if not r.returncode else None
     return f"https://github.com/{m[1]}/{m[2]}" if m else None
 
 
 def _is_record(path: str) -> bool:
-    """Whether ``path`` is a package's record. The audit's own directory and the tests (the root's `tests/`) hold none: a
-    `lean-audit.json` there is a fixture of a test, in whatever form the test needs, and a layout move that renames one says
-    nothing about the spec."""
     return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith((AUDIT_DIR, "tests/"))
 
 
 def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
-    """Each record that differs between ``old`` and ``new`` as (its path in ``old``, its path in ``new``): a record git
-    sees renamed (`-M`), such as one that moved with its package, is read from its old path, so a move says nothing new."""
     out = []
     for line in _git(repo, "diff", "--name-status", "-M", old, new).splitlines():
         status, *paths = line.split("\t")
@@ -483,8 +377,6 @@ def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
 
 
 def _sources(repo: Path, old: str, new: str) -> bool:
-    """Whether the push from ``old`` to ``new`` changed a Lean input: a file under `LEAN_INPUTS` outside the audit's own
-    directory, or a dependency bundle pinned that ``old`` didn't pin (re-keying or dropping a pin builds against no new tree)."""
     if any(p.endswith(LEAN_INPUTS) and not p.startswith(AUDIT_DIR) for p in _git(repo, "diff", "--name-only", old, new).splitlines()):
         return True
     bundles = [{d.get("sha256") for d in (_record(repo, rev, DEPS_PINS).get("deps") or {}).values()} for rev in (old, new)]
@@ -492,8 +384,6 @@ def _sources(repo: Path, old: str, new: str) -> bool:
 
 
 def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[int] | None = None) -> str | None:
-    """The DM for main moving from ``old`` to ``new``, or None when no guarantee says anything new.  ``prs``, the pull requests
-    it landed, default to the numbers in its first-parent subjects (`Merge #12 #34 (…)`)."""
     pairs = _records_changed(repo, old, new)
     entries = _across({b: _record(repo, old, b) for b, _ in pairs}, {p: _record(repo, new, p) for _, p in pairs},
                      _sources(repo, old, new))
@@ -520,9 +410,6 @@ def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[in
 
 def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[int] | None = None, api=None,
           reg: dict | None = None, log=print) -> bool:
-    """DM the spec's reader (`human_entry(reg, "daniel")`) what the push from ``old`` to ``new`` changed in the spec; True when
-    it was sent or there was nothing to send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
-    and the caller still has its own steps after a landing to run."""
     from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 
     try:
@@ -555,8 +442,6 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
 
 
 def remote_head(repo: Path, remote: str, branch: str, auth: tuple[str, ...] = ()) -> str:
-    """``branch`` as ``remote`` has it now (`git ls-remote`), so a stale tracking ref can't make a DM repeat what an earlier
-    landing sent; the tracking ref when the remote can't be asked, and "" when there is neither."""
     r = subprocess.run(["git", "-C", str(repo), *auth, "ls-remote", remote, f"refs/heads/{branch}"],
                        capture_output=True, text=True)
     if r.returncode == 0:

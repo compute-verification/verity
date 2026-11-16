@@ -1,35 +1,4 @@
-"""Labels on the remote (README §7/§8): every assertion file is pushed under a CONTENT key and pulled back by union.
-
-    labels/<target dirname>/<sha256 of the canonical assertion>.json
-
-An assertion is immutable, so its canonical bytes name it: two laptops (or a laptop and a pod) that assert the same thing at the
-same second produce the same key and the second `put` is a no-op (`skipped`); two different assertions never share a key, so
-nothing is ever overwritten -- there is no per-target index file to race on.  Locally the file keeps the store's own layout
-(`labels/<target>/<ts>-<by>[~N].json`, O_EXCL), so `LocalStore.labels()` history order is unchanged and a pulled assertion looks
-exactly like one written here.
-
-`sync()` lists the remote once (one paginated listing, ~10^3 keys per page), hashes the local files, and pushes the difference
-one way and pulls it the other; it is idempotent and needs no state in the disposable catalog.  `import_dir()` unions any
-directory of assertion files (e.g. an unpacked `labels-backup/v1` tarball, or another store's `labels/`); `import_backup()` does
-that straight from a `labels-backup/v1` artifact, so the interim backups stay readable.
-
-The pack is every assertion of `labels/` as one object at a fixed key, so a machine that lacks most of them needs no request per
-assertion: `PACK_KEY`, a tarball of `labels/` as the remote lays it out (one member per assertion, named by its key), beside
-`PACK_INFO_KEY`, its sha256, size, count and build time.  `publish_pack()` rebuilds and replaces both, the only keys here a writer
-overwrites, and a `sync()` that would pull more than `PACK_MIN_MISSING` assertions takes the pack first (`pull_pack()`) and pulls
-only what it still lacks.  The pack is a cache of `labels/`, never its source: a member lands only when the remote lists its
-name and its content hashes to it, the check a pulled assertion passes, and a pack that is absent, fails its sha256 or cannot be
-read costs only the time it would have saved.
-
-Per target (the r20 lesson: labels asserted on pods lived only in the pod's store; `push` / `publish` moved manifests and blobs and
-nothing under `labels/`, and teardown had to tar `labels/` by hand): a preserved Attempt is not preserved until its assertions are
-durable too.  `attempt_targets(doc)` is the closure an attempt's durability covers -- the attempt itself, its Derivation and every
-artifact it names -- and `push_targets()` pushes exactly those targets' assertions (called by `research data push RUN|ART`,
-`attempt publish`, and `LocalStore.push_labels`); `verify_targets()` is the labels part of the durability gate
-(`preserved.check`): every local assertion of every target must be listed on the remote with its canonical size; `compare()` is
-the local-vs-remote view behind `research data labels --remote`.  Conflicting assertions coexist on both sides (they are
-assertions, not fields); the catalog shows the latest per (key, by) and `--history` everything.
-"""
+"""Labels on the remote: every assertion is pushed under a content key and pulled back by union."""
 from __future__ import annotations
 
 import gzip
@@ -58,11 +27,10 @@ LABELS_BACKUP_KIND = "labels-backup/v1"
 PACK_KEY = "packs/labels/latest.tar.gz"
 PACK_INFO_KEY = "packs/labels/latest.json"
 PACK_SCHEMA = "research/labels-pack/v1"
-PACK_MIN_MISSING = 5000         # a sync that lacks more of the remote's assertions than this takes the pack before it pulls
+PACK_MIN_MISSING = 5000
 
 
 def label_hash(label: Label) -> str:
-    """The content name of an assertion: sha256 of its canonical document."""
     return canon.sha256(label.to_doc())
 
 
@@ -71,12 +39,10 @@ def label_key(label: Label, hex_: str | None = None) -> str:
 
 
 def parse_label_bytes(data: bytes) -> Label:
-    """A validated Label from an assertion file's bytes (ValueError / KeyError / JSONDecodeError on a bad file)."""
     return Label.from_doc(json.loads(data)).validate()
 
 
 def named_label(data: bytes, hex_: str) -> Label:
-    """`parse_label_bytes` of what the remote holds under the content name `hex_`: ValueError when it hashes to another."""
     lab = parse_label_bytes(data)
     if label_hash(lab) != hex_:
         raise ValueError(f"content hashes to {label_hash(lab)}, not its name")
@@ -97,13 +63,10 @@ def _read_label_files(paths: list[Path], warn: Callable[[str], None] | None) -> 
 
 
 def local_labels(store: LocalStore, warn: Callable[[str], None] | None = None) -> dict[str, tuple[Path, Label]]:
-    """`{content hash: (path, label)}` for every readable file under labels/.  A duplicate (same assertion in two files, e.g. after an
-    old-style copy) is reported once and kept once."""
     return _read_label_files(sorted((store.root / "labels").glob("*/*.json")), warn)
 
 
 def local_labels_for(store: LocalStore, target: str, warn: Callable[[str], None] | None = None) -> dict[str, tuple[Path, Label]]:
-    """`{content hash: (path, label)}` for one target's local assertions."""
     d = store.labels_dir(target)
     return _read_label_files(sorted(d.glob("*.json")) if d.is_dir() else [], warn)
 
@@ -118,17 +81,14 @@ def _remote_listing(r: Remote, prefix: str) -> dict[str, str]:
 
 
 def remote_labels(r: Remote) -> dict[str, str]:
-    """`{content hash: key}` for every well-formed label key on the remote (one listing)."""
     return _remote_listing(r, PREFIX)
 
 
 def remote_labels_for(r: Remote, target: str) -> dict[str, str]:
-    """`{content hash: key}` for one target's assertions on the remote (one listing of its prefix)."""
     return _remote_listing(r, f"{PREFIX}{ids.target_dirname(target)}/")
 
 
 def attempt_targets(doc: dict) -> list[str]:
-    """The label targets an attempt's durability covers: the attempt, its derivation, every artifact it names (outputs + telemetry)."""
     out: list[str] = [doc["id"]]
     if ids.is_drv(doc.get("derivation")):
         out.append(doc["derivation"])
@@ -140,9 +100,7 @@ def attempt_targets(doc: dict) -> list[str]:
 
 
 def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
-    """Push every local assertion of `targets` the remote lacks, under its content key.  Never raises for one assertion: the report
-    carries `failed` (`"<key>: <error>"`) per target and overall; `pushed` lists content hashes, `already` counts those the remote had.
-        {"targets": {t: {"local", "pushed", "already", "failed"}}, "pushed": [...], "already": n, "failed": [...], "local": n}"""
+    """Never raises for one assertion: the report carries `failed` per target."""
     r = store._require_remote()
     warn = log or (lambda s: None)
     rep: dict = {"targets": {}, "pushed": [], "already": 0, "failed": [], "local": 0}
@@ -154,7 +112,7 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
         data = canon.dumps(lab.to_doc())
         src, tmp = p, None
         try:
-            if p.read_bytes() != data:                              # a hand-formatted file goes up as the canonical bytes its name hashes
+            if p.read_bytes() != data:
                 tmp = scratch / f".label-{h}-{os.getpid()}-{threading.get_ident()}"
                 tmp.write_bytes(data)
                 src = tmp
@@ -169,7 +127,7 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
     todo: list[tuple[str, str, Label, Path]] = []
     for t in dict.fromkeys(targets):
         mine = local_labels_for(store, t, warn)
-        if not mine:                                                # nothing asserted here: no round trip
+        if not mine:
             rep["targets"][t] = {"local": 0, "pushed": [], "already": 0, "failed": []}
             continue
         try:
@@ -198,10 +156,6 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
 
 
 def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dict:
-    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target, and the GETs, `jobs`
-    at once), the reverse of `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left
-    alone and reported in `bad`.
-        {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
     r = store._require_remote()
     todo = list(dict.fromkeys(targets))
     if jobs > 1 and len(todo) > 1:
@@ -211,14 +165,10 @@ def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dic
 
 
 def pull_prefix(store: LocalStore, prefix: str) -> dict:
-    """`pull_prefixes` of one prefix."""
     return pull_prefixes(store, [prefix])
 
 
 def pull_prefixes(store: LocalStore, prefixes: list[str], *, jobs: int = 1) -> dict:
-    """`pull_targets` for every target whose id starts with one of `prefixes` and has assertions on the remote, from one listing of
-    each prefix's common key prefix (`pr:12@`: each head of pull request 12), and the GETs, `jobs` at once.
-        {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...], "targets": [target, ...]}"""
     r = store._require_remote()
 
     def listed(prefix: str) -> dict[str, dict[str, str]]:
@@ -237,8 +187,6 @@ def pull_prefixes(store: LocalStore, prefixes: list[str], *, jobs: int = 1) -> d
 
 
 def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, str]]], jobs: int = 1) -> dict:
-    """Fetch each assertion of `listings` ((target, {content hash: key}) pairs from the remote) that this store lacks, `jobs`
-    GETs at once; the calling thread checks and writes each."""
     rep: dict = {"pulled": [], "bad": []}
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -275,10 +223,6 @@ def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, 
 
 
 def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], None], strict: bool = False) -> dict | None:
-    """Before an answer from the local labels of `targets` (`research data labels`, the merge queue's grants): `pull_targets` from
-    the remote.  The report, or None with a warning when the pull failed or the configured remote is unusable here, and None with
-    no remote configured.  `strict` (the merge queue): no pull raises `StoreError` saying why, since the local labels alone may
-    be stale."""
     from .local import StoreError
 
     r = store.remote
@@ -290,7 +234,7 @@ def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], No
         return None
     try:
         rep = pull_targets(store, targets)
-    except Exception as e:  # an unreachable remote: the local labels still answer
+    except Exception as e:
         if strict:
             raise StoreError(f"pulling from {r.describe()} failed ({type(e).__name__}: {e})") from e
         warn(f"labels of {', '.join(targets)}: pulling from {r.describe()} failed ({type(e).__name__}: {e}); answering from the local labels")
@@ -301,10 +245,7 @@ def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], No
 
 
 def verify_targets(store: LocalStore, targets: list[str]) -> dict:
-    """The labels part of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
-    its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another
-    machine asserted them).
-        {"durable": bool, "targets": {t: {"local", "remote", "missing": [key...], "remote_only": n, "errors": [...]}}, "missing": n}"""
+    """Nothing is uploaded."""
     r = store._require_remote()
     rep: dict = {"durable": True, "targets": {}, "missing": 0}
     for t in dict.fromkeys(targets):
@@ -337,8 +278,6 @@ def verify_targets(store: LocalStore, targets: list[str]) -> dict:
 
 
 def compare(store: LocalStore, target: str) -> list[dict]:
-    """Every assertion about `target` on either side, oldest first: `{"where": "both"|"local"|"remote", "hash", "label": doc}`.  Remote-only
-    assertions are downloaded to be shown (and refused when their content does not hash to their name); nothing is written locally."""
     r = store._require_remote()
     mine = local_labels_for(store, target)
     theirs = remote_labels_for(r, target)
@@ -364,8 +303,6 @@ def compare(store: LocalStore, target: str) -> list[dict]:
 
 
 def write_label_file(store: LocalStore, label: Label) -> Path:
-    """Land an assertion that already exists elsewhere (remote, backup, another store) in this store's own layout, and index it.
-    The bytes written are the canonical document, so the file re-hashes to the same content name."""
     d = store.labels_dir(label.target)
     d.mkdir(parents=True, exist_ok=True)
     stem = f"{re.sub(r'[^0-9TZ]', '', label.ts)}-{re.sub(r'[^A-Za-z0-9._-]', '_', label.by)}"
@@ -388,9 +325,6 @@ class PackUnusable(Exception):
 
 
 def write_pack(labels: dict[str, Label], dst: Path) -> dict:
-    """Write the pack of `labels` (`{content hash: assertion}`) at `dst` and return its info document: a gzipped tarball with one
-    member per assertion, named by its remote key and holding its canonical bytes, in key order.  The same assertions give the
-    same bytes."""
     members = sorted((label_key(lab, h), h) for h, lab in labels.items())
     with open(dst, "wb") as f, gzip.GzipFile(filename="", mode="wb", fileobj=f, mtime=0) as gz, tarfile.open(fileobj=gz, mode="w") as tf:
         for key, h in members:
@@ -404,9 +338,6 @@ def write_pack(labels: dict[str, Label], dst: Path) -> dict:
 
 
 def publish_pack(store: LocalStore, *, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
-    """Rebuild the labels pack and replace the remote's: pull what the remote lists and this store lacks, pack every assertion
-    the remote lists, and upload the tarball and then its info, so the info never names a tarball that isn't there yet.  Nothing
-    under `labels/` is written.  Returns the info document with `pulled` and `bad`, the pull's counts."""
     r = store._require_remote()
     replace = getattr(r, "replace", None)
     if replace is None:
@@ -427,10 +358,6 @@ def publish_pack(store: LocalStore, *, jobs: int = SYNC_JOBS, log: Callable[[str
 
 
 def pack_labels(r: Remote, tmp: Path, want: dict[str, str], warn: Callable[[str], None]) -> Iterator[tuple[str, Label]]:
-    """Each (content hash, assertion) of the remote's labels pack that `want` (`{content hash: key}`) names, downloaded to `tmp`.
-    A member counts only under a key `want` holds and with content that hashes to its name, the check a pulled assertion passes
-    (`named_label`); the others are skipped, and those whose content is not their name are counted in one line to `warn`.
-    Nothing with no pack on the remote; `PackUnusable` for one that fails its sha256 or can't be read."""
     try:
         if r.head(PACK_INFO_KEY) is None:
             return
@@ -458,14 +385,11 @@ def pack_labels(r: Remote, tmp: Path, want: dict[str, str], warn: Callable[[str]
                 yield m.group(2), lab
         if bad:
             warn(f"labels-sync: {bad} member(s) of the labels pack {PACK_KEY} hold content that is not their name: not written")
-    except Exception as e:                                          # the pack is a cache: whatever is wrong with it, the pull still brings every assertion
+    except Exception as e:
         raise PackUnusable(f"{type(e).__name__}: {e}") from e
 
 
 def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], None] | None = None) -> list[str]:
-    """Land the assertions of `want` (`{content hash: key}`: what the remote lists and this store lacks) that the remote's labels
-    pack holds (`pack_labels`), and return their content hashes.  A pack that can't be used is ignored with one line to `log`;
-    what it gave before failing stays."""
     warn = log or (lambda s: None)
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -484,11 +408,6 @@ def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], N
 
 def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None,
          theirs: dict[str, str] | None = None) -> dict:
-    """Union the local labels/ and the remote `labels/` prefix (`theirs`: its listing, `remote_labels`, when the caller has it).
-    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "bad": [...]}` where `pushed` / `pulled`
-    list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
-    `PACK_MIN_MISSING` takes it first, `pull_pack`) and `bad` lists the remote keys whose content did not hash to their name or
-    did not validate (left alone, never written locally)."""
     r = store._require_remote()
     warn = log or (lambda s: None)
     mine = local_labels(store, warn)
@@ -504,7 +423,7 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
         data = canon.dumps(lab.to_doc())
         src = p
         tmp = None
-        if p.read_bytes() != data:                                  # a hand-formatted file: what goes up is the canonical bytes its name hashes
+        if p.read_bytes() != data:
             tmp = scratch / f".label-{h}-{os.getpid()}"
             tmp.write_bytes(data)
             src = tmp
@@ -516,7 +435,6 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
         return h
 
     def pull_one(h: str) -> tuple[str, Label | None, str | None]:
-        """Download + parse only (threads); the file write and the catalog row happen on the calling thread (sqlite is per-thread)."""
         key = theirs[h]
         tmp = scratch / f".label-pull-{h}-{os.getpid()}"
         try:
@@ -537,7 +455,7 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
                 rep["pulled"] = pull_pack(store, {h: theirs[h] for h in todo}, log=log)
                 rep["pack"] = len(rep["pulled"])
                 todo = sorted(set(todo) - set(rep["pulled"]))
-            for h, lab, err in ex.map(pull_one, todo):                  # written as they arrive: a sync cut short keeps what it pulled
+            for h, lab, err in ex.map(pull_one, todo):
                 if err:
                     rep["bad"].append(err)
                     warn(f"labels-sync: {err}")
@@ -548,8 +466,6 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
 
 
 def import_dir(store: LocalStore, src: Path, *, warn: Callable[[str], None] | None = None) -> dict:
-    """Union every assertion file under `src` (any depth) into this store: files whose content is already here are skipped, the rest
-    land in the store's layout.  Returns {"seen", "added", "already", "bad"}."""
     mine = set(local_labels(store, warn))
     rep = {"seen": 0, "added": 0, "already": 0, "bad": 0}
     for p in sorted(Path(src).rglob("*.json")):
@@ -572,7 +488,6 @@ def import_dir(store: LocalStore, src: Path, *, warn: Callable[[str], None] | No
 
 
 def import_backup(store: LocalStore, art_id: str, *, warn: Callable[[str], None] | None = None) -> dict:
-    """Union the assertions of a `labels-backup/v1` artifact (a tarball of a labels/ directory) into this store."""
     m = store.get_manifest(art_id)
     if m.kind != LABELS_BACKUP_KIND:
         raise ValueError(f"{art_id} is {m.kind}, not {LABELS_BACKUP_KIND}")

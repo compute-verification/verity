@@ -1,16 +1,4 @@
-"""Reference-part gate: is the provisioned board the datasheet part of its family, or a same-named variant?
-
-A provider "RTX 4090" reporting 48 GiB is a re-memoried AD102 board, not the part Table 2's native peak names
-(`tables.device_variant` rejects its results).  `~/.research/machines.toml` carries the expected VRAM per `hw.family`:
-
-    [families.rtx4090]
-    vram_mb = 24564          # what nvidia-smi memory.total reports on the reference board (hw.vram_mb of the store's attempts)
-
-    research pods check-part <machine|pod-id>     # name, VRAM, host CPU, load, verdict `reference` / `variant (+N %)`
-    research pods create ... [--require-reference-part]   # the same verdict once sshd answers; non-zero on a variant
-
-The tolerance (12 %) is `tables.device_variant`'s: driver-reported totals differ from the datasheet by a few percent, never by half.
-"""
+"""Reference-part gate: is the provisioned board the datasheet part of its family, or a same-named variant?"""
 from __future__ import annotations
 
 import json
@@ -65,12 +53,12 @@ def parse_probe(text: str) -> dict[str, Any]:
 
 
 def check_pod(pod_id: str, families: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Probe a RUNNING pod over ssh (read-only) and judge it.  Raises `remote.Refused` when the pod is not reachable."""
+    """Read-only; raises `remote.Refused` when the pod is not reachable."""
     from . import runpod
 
     try:
         pod = runpod.get(pod_id)
-    except runpod.PodError as e:                     # an HTTP error (404: terminated), no API config, no network
+    except runpod.PodError as e:
         raise remote.Refused(f"pod {pod_id}: {e}") from None
     tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
     if tgt is None:
@@ -85,7 +73,6 @@ def check_pod(pod_id: str, families: dict[str, dict[str, Any]] | None = None) ->
 
 
 def check_machine(name: str) -> dict[str, Any]:
-    """`name` is a machines.toml entry or a raw pod id."""
     m = remote.load_machines().get(name)
     return {"machine": name if m else None, **check_pod(m["pod_id"] if m else name)}
 
@@ -101,7 +88,6 @@ EXIT_EXISTS, EXIT_NO_STOCK, EXIT_FAILED, EXIT_UNBUDGETED = 4, 5, 2, 6
 
 
 def _named(name: str) -> list[dict]:
-    """Live (not terminated) pods whose RunPod name is ``<name>-veritor-campaign`` (`runpod.create`'s naming)."""
     from . import runpod
 
     full = f"{name}-veritor-campaign"
@@ -109,9 +95,7 @@ def _named(name: str) -> list[dict]:
 
 
 def create_once(ns: Any) -> tuple[dict | None, int]:
-    """At most one pod per --name, whatever the create call says (a retry loop around a create makes duplicates): refuse when a live pod of the name exists (exit 4, its id printed; ``--allow-duplicate`` overrides);
-    after a failed create, a pod that appeared under the name anyway is the pod; only an explicit no-stock reply is exit 5 (try
-    another spec), any other failure exit 2 (do not retry blindly).  Returns (pod, 0) or (None, exit code)."""
+    """At most one pod per --name: a retry loop around a create makes duplicates."""
     import sys
 
     from . import runpod
@@ -139,9 +123,6 @@ def create_once(ns: Any) -> tuple[dict | None, int]:
 def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str | None]] | None = None,
                   wait_ssh: Callable[[str], tuple[str, int]] | None = None, arm: Callable[..., dict] | None = None,
                   terminate: Callable[[str], None] | None = None, clock: Callable[[], float] | None = None) -> tuple[dict | None, int]:
-    """`research pods create`'s lifecycle: the budget gate, the create call with the lease in the pod's boot (research.pods.lease),
-    then, once sshd answers, the lease and the idle guard armed over ssh.  A pod that cannot be armed is terminated: no pod leaves
-    here unbounded.  Returns (pod with its `lease` report, 0) or (None, exit code)."""
     import sys
     import time
 
@@ -181,10 +162,6 @@ def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str
 
 
 def main(argv: list[str]) -> int:
-    """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> --max-hours H [...]`
-    | `research pods extend|lease TARGET` | `research pods ssh|sync|procs ...` (connect.py) | any other
-    verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create);
-    create's exit 6 = no budget line lets it (research.pods.budgets.gate)."""
     import argparse
     import sys
 
@@ -215,7 +192,7 @@ def main(argv: list[str]) -> int:
         print(json.dumps(rep, indent=2, sort_keys=True) if ns.json else render(rep))
         return 0 if rep.get("reference") else 3
     if argv[:1] in (["register"], ["unregister"], ["registry"], ["env"]):
-        from .registry import main as registry_main           # one file per machine (registry.py)
+        from .registry import main as registry_main
 
         return registry_main(argv)
     if argv[:1] in (["extend"], ["lease"]):
@@ -284,11 +261,11 @@ def main(argv: list[str]) -> int:
             return 3
         return 0
     if argv[:1] in (["unpreserved"], ["drain"]) or (argv[:1] == ["terminate"] and "--require-preserved" in argv):
-        from .drain import main as drain_main                 # teardown gated on `preserved` (drain.py)
+        from .drain import main as drain_main
 
         return drain_main(argv)
     if argv[:1] == ["guard"]:
-        from .guard import main as guard_main                 # the fleet budget guard (guard.py)
+        from .guard import main as guard_main
 
         return guard_main(argv[1:])
     sys.argv = ["research pods", *argv]

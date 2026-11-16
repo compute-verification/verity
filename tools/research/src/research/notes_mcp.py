@@ -62,7 +62,6 @@ class Server:
         self.index = index
 
     def handle(self, msg: Any) -> dict | None:
-        """The response to one JSON-RPC message; None for a notification or a response (this server sends no requests)."""
         if not isinstance(msg, dict) or not isinstance(msg.get("method"), str):
             if isinstance(msg, dict) and ("result" in msg or "error" in msg):
                 return None
@@ -106,7 +105,6 @@ class Server:
 
 
 def serve(server: Server, stdin: BinaryIO, stdout: BinaryIO) -> int:
-    """Answer each line of `stdin` on `stdout` until end of input."""
     for raw in iter(stdin.readline, b""):
         if not raw.strip():
             continue

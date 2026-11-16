@@ -1,37 +1,3 @@
-"""`research queue stats` with no `--log`: the merge queue's core numbers as one table, read live in under two minutes.
-
-Each row is one number with its unit, over three windows: now, the last hour, and the last 24 hours. What is read:
-
-  the loop's decision log   `decisions.jsonl` beside the verified queue's loop on the control pod (`vqueue_loop`): each
-                            candidate's build, its verdict as the loop judged it, its drop and why, each move of `main`, each
-                            head it left out of a build for a conflict, and each marked head it left out of every candidate
-                            and why (`leave`); and the loop's own log for the time each tick ended
-  the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
-  the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
-                            slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
-                            ended), and for a check's shard `check-live.json`, `steps.jsonl`, `spans.jsonl`'s `memory.peak`,
-                            `suites.failed.json` and three lines of `lean-audit.log`; for a run of the task graph's executor,
-                            the result files under `out/results`
-  GitHub                    the open PRs and their heads, and each counted head's subject and nearest first parents, which
-                            say whether a restack made it and from which head
-  the nodes                 `/proc/stat` twice, a few seconds apart, and `slot.py --status --json` for each slots file, which
-                            the table adds up by whose runs take its slots (`slot_groups`): the check slots, the executor's,
-                            the shared pool `research run --on auto` places a run in, and each lane's own pool
-
-A mark is the first `ready = true` label after the last `ready = false` among the labels the head that landed stands on: its
-own, and those of each head a restack across a move made it from (`carried`), since the queue carries a mark and a land verdict
-across a restack and the owner's wait began at the first. A head with the same change made another way (a merge of `main`) is
-not followed. A landing is the loop's `advance` of `main` to a candidate holding the PR. A candidate's verdict is the loop's
-first `judged pass` or `judged fail` of the run beside its check. A red's first failure is the earliest failed suite's result
-file, or failed step's end, among the candidate's shards.
-
-`--until TIME` ends the windows at a past time (`cut`): the loop's lines, the labels and the runs after it are left out, and
-what can only be read from the machines as they are is not shown. `--rounds` prints one row for each candidate of the long
-window instead of the table (`rounds`), and `--reds` each candidate being checked, its members above `main`, its shards and
-only the reds on the merge gate (`reds`).
-
-`collect` does the reading and returns plain data; everything below it is a pure function of that data, so the table can be
-rebuilt from a saved `--json` document. Stdlib only."""
 from __future__ import annotations
 
 import json
@@ -48,40 +14,23 @@ from .auto import SPILL_POOL
 from .reds import CIRCUIT_STEP, RATCHET_STEP
 
 CONTROL = "vy-control-verity"
-#: the live loop's directory on the control pod: its decision log, its log, and the flags it runs with (`--on`: the check nodes)
 LIVE = "/data/vqueue/live"
-#: the CPU nodes: every one is read, since a shard in flight stays where it started when the loop's `--on` changes; the check
-#: nodes are those of them the loop's `--on` names now
 CPU_NODES = tuple(f"vy-nebius-cpu-{i}" for i in range(1, 14))
 REPO = "compute-verification/verity"
-#: the target: nine in ten PRs on `main` within two hours of the mark
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
-#: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
 OFF_GATE = (CIRCUIT_STEP, RATCHET_STEP)
-#: a file whose change is a Lean change: a module, a lakefile, a Lake manifest, a toolchain, a lock, or the Lean check's own
-#: code less its tests and docs, most of which every package's audit is keyed on (`lean_audit.tool_files`)
 LEAN_FILE = re.compile(r"\.lean$|(^|/)lakefile\.|(^|/)lake-manifest\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\.json$"
                        r"|^tools/verity/lean/(?!tests/)(?!.*\.md$)|^tools/check/common\.py$"
                        r"|^tools/verity/graph/verity_graph/contract\.py$")
-#: the most files GitHub's compare lists: a candidate with this many and no Lean file among them is not known to change none
 COMPARE_FILES = 300
-#: the target for a round whose candidate changes no Lean, in minutes
 PLAIN_ROUND_MIN = 30
-#: a layout of shards (so many a candidate) has its rows while one of its shards runs or took its slot in the last so many hours
 SHARD_LAYOUT_H = 3
-#: the long window, in hours back from the read
 WINDOW_H = 24
-#: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
-#: this checkout, whose policy.toml and drive.toml say what is off the gate and what the low-risk rule admits
 CHECKOUT = Path(__file__).resolve().parents[4]
-#: the subject of a restack's last commit (`tools/move/restack.py`), naming the head it restacked, in full or abbreviated
 RESTACK = re.compile(r"Merge [0-9a-f]{7,40} \(the layout move\) into ([0-9a-f]{7,40}), restacked$")
-#: how many commits one query asks GitHub for
 COMMITS_A_QUERY = 100
-#: a cell of a window that ended in the past (`--until`) whose number is only read from the machines as they are
 PAST = "not read: the window ended in the past"
-#: the lanes' own pools are each named up to this many; more are added up, with their names listed (`slot_groups`)
 OWN_POOLS_NAMED = 4
 
 CONTROL_SCRIPT = r'''
@@ -421,10 +370,7 @@ print(json.dumps({"now": time.time(), "cores": os.cpu_count(), "load": open("/pr
 '''
 
 
-# ---- reading ----------------------------------------------------------------------------------------------------------------
-
 def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tuple[dict | None, str]:
-    """``script`` under the machine's python3, its last JSON line parsed; here when this is that machine (the control pod)."""
     local = machine == CONTROL and Path(LIVE).is_dir()
     cmd = ["python3", "-", *args] if local else [sys.executable, "-m", "research", "pods", "ssh", machine, "--", "python3", "-", *args]
     env = dict(os.environ)
@@ -443,14 +389,11 @@ def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tupl
 
 
 def check_nodes(args: str) -> list[str]:
-    """The nodes the loop sends a candidate's shards to: the last `--on` of its arguments file, as its parser reads them (a
-    deploy appends a line, and a line starting with `#` is a comment)."""
     found = re.findall(r"(?:^|\s)--on[ =](\S+)", "\n".join(ln for ln in args.splitlines() if not ln.lstrip().startswith("#")))
     return found[-1].split(",") if found else []
 
 
 def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
-    """Each target's `ready` and `reviewed` labels, pulled from the store's remote first."""
     from .store import labels_sync
     from .store.local import LocalStore
 
@@ -464,8 +407,6 @@ def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
 
 
 def lean_files(base: str, sha: str) -> list[int] | None:
-    """[the files a candidate changes from its base, those of them that are Lean's], from GitHub's compare of the two commits, which
-    lists at most `COMPARE_FILES`; None when it gave no answer."""
     try:
         p = subprocess.run(["gh", "api", f"repos/{REPO}/compare/{base}...{sha}", "--jq", "[.files[].filename]"],
                            capture_output=True, text=True, timeout=90)
@@ -479,7 +420,6 @@ def lean_files(base: str, sha: str) -> list[int] | None:
 
 
 def pr_files(pr: str) -> list[str] | None:
-    """The files an open PR changes from its base, as GitHub lists them (at most 3,000); None when it gave no answer."""
     try:
         p = subprocess.run(["gh", "api", "--paginate", f"repos/{REPO}/pulls/{pr}/files", "--jq", ".[].filename"],
                            capture_output=True, text=True, timeout=90)
@@ -490,9 +430,6 @@ def pr_files(pr: str) -> list[str] | None:
 
 
 def _commits(shas: list[str]) -> tuple[dict[str, tuple[str, list[str]]], list[str]]:
-    """({commit: (its subject, its three nearest first-parent ancestors, nearest first)}, what was not read) from GitHub,
-    `COMMITS_A_QUERY` a query.  What was not read is one line for each query that failed, with what it raised, one for the
-    commits GitHub has none for, and one for the names that are no commit's: each says how many heads it leaves out."""
     owner, name = REPO.split("/")
     up = "parents(first: 1) { nodes { oid %s } }"
     fields = "... on Commit { message " + up % (up % (up % "")) + " }"
@@ -525,16 +462,11 @@ def _commits(shas: list[str]) -> tuple[dict[str, tuple[str, list[str]]], list[st
 
 
 def restack_of(subject: str, above: list[str]) -> str | None:
-    """The head a restack's last commit was made from: the one its subject names (`RESTACK`), when that is one of the commit's
-    nearest first-parent ancestors ``above``; None for any other commit."""
     m = RESTACK.match(subject)
     return next((a for a in above if a.startswith(m.group(1))), None) if m else None
 
 
 def restacks(heads: list[str], commits=_commits) -> tuple[dict[str, str], list[str]]:
-    """({head: the head a restack across a move made it from}, what ``commits`` did not read), for each of ``heads`` that is
-    a restack's last commit, and for each head so found in turn (a restack across two moves is two). A head whose restack
-    ended with a commit of its own (its regenerated pins) is not one, and neither is one whose commit was not read."""
     found: dict[str, str] = {}
     unread: list[str] = []
     ask, seen = list(dict.fromkeys(heads)), set()
@@ -549,9 +481,6 @@ def restacks(heads: list[str], commits=_commits) -> tuple[dict[str, str], list[s
 
 
 def lowrisk_heads(open_prs: dict[str, str], labels: dict[str, list[dict]], now: float) -> dict[str, bool | None]:
-    """{PR@head: whether the low-risk rule admits it on its ready mark alone}, for each open head marked ready that has no land
-    verdict and no reviewer's hold: the loop takes such a head when its files match nothing the checkout's drive.toml excludes
-    (`queue.lowrisk`).  None for a head GitHub listed no files for; nothing when the lane is off or drive.toml can't be read."""
     from .queue import DRIVE_FLAGS, DriveFlags, QueueError, lowrisk
 
     try:
@@ -570,16 +499,12 @@ def lowrisk_heads(open_prs: dict[str, str], labels: dict[str, list[dict]], now: 
 
 def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = None, now: float | None = None,
             lean: dict[str, list[int]] | None = None, until: float | None = None) -> dict:
-    """Everything the table reads, as one JSON-able document.  ``lean`` is what earlier runs learned of `lean_files`, by a
-    candidate's first 12 hex digits, so only a candidate not in it is asked for.  With ``until``, a past time, the windows
-    end there and the document is cut to it (`cut`)."""
     from .queue import label_target
 
     read = datetime.now(UTC).timestamp()
     now = until or now or read
     y = datetime.fromtimestamp(now - WINDOW_H * 3600, UTC)
     day = f"{y:%Y-%m-%dT%H:%M:%SZ}"
-    # the loop's lines from a day before the window: a PR that landed in the window was first built before it
     lead = datetime.fromtimestamp(now - (WINDOW_H + 24) * 3600, UTC)
     control, err = _remote(CONTROL, CONTROL_SCRIPT, LIVE, f"{lead:%Y-%m-%d}T00:00:00Z")
     doc: dict = {"now": now, "read": read, "day": day, "errors": [f"{CONTROL}: {err}"] if control is None else [],
@@ -606,7 +531,6 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
              for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
-    # the heads whose mark is counted: those landed in the window (and, under `until`, since it) and the open ones
     counted = set(doc["open"].items()) | {(str(pr), head) for r in doc["control"].get("decisions", [])
                                           if r["action"] == "advance" and not r.get("shadow") and r["at"] >= day
                                           for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
@@ -629,24 +553,19 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     return doc
 
 
-# ---- pure -------------------------------------------------------------------------------------------------------------------
-
 def ts(s: str) -> float:
     return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
 
 
 def window_start(doc: dict) -> float:
-    """When the long window starts: ``doc["day"]``, a UTC timestamp or a date (its 00:00Z)."""
     return ts(doc["day"] if "T" in doc["day"] else doc["day"] + "T00:00:00Z")
 
 
 def rid_time(rid: str) -> float:
-    """When a run's id was made: the moment its owner asked for the run."""
     return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=UTC).timestamp()
 
 
 def pct(vals: list[float], q: float) -> float | None:
-    """The q-quantile by linear interpolation between the two nearest values; None of nothing."""
     vals = sorted(vals)
     if not vals:
         return None
@@ -657,8 +576,6 @@ def pct(vals: list[float], q: float) -> float | None:
 
 
 def mark_at(labels: list[dict], before: float) -> float | None:
-    """The ready mark in force at ``before``: the first `ready = true` after the last `ready = false`, None when the newest is
-    false or there is none."""
     mark = None
     for lab in sorted((x for x in labels if x["key"] == "ready"), key=lambda x: x["ts"]):
         at = ts(lab["ts"])
@@ -669,14 +586,12 @@ def mark_at(labels: list[dict], before: float) -> float | None:
 
 
 def verdict_at(labels: list[dict]) -> tuple[float | None, bool]:
-    """When the head first got a land verdict, and whether its newest verdict is a hold."""
     revs = sorted((x for x in labels if x["key"] == "reviewed"), key=lambda x: x["ts"])
     lands = [ts(x["ts"]) for x in revs if x["value"] == "land"]
     return (lands[0] if lands else None), bool(revs) and revs[-1]["value"] == "hold"
 
 
 def chain(restacks: dict[str, str], head: str) -> list[str]:
-    """``head``, then each head a restack made it from, newest first."""
     out = [head]
     while (head := restacks.get(head)) and head not in out:
         out.append(head)
@@ -684,14 +599,10 @@ def chain(restacks: dict[str, str], head: str) -> list[str]:
 
 
 def carried(labels: dict[str, list[dict]], restacks: dict[str, str], pr: str, head: str) -> list[dict]:
-    """The labels a PR's head stands on: its own, and those of each head a restack made it from."""
     return [lab for h in chain(restacks, head) for lab in labels.get(f"{pr}@{h}") or []]
 
 
 def left_out(decisions: list[dict], open_prs: dict[str, str]) -> dict[str, dict]:
-    """{PR: the loop's newest line leaving its open head out}, for each open head the loop has not built since: a `conflict`
-    line (the head doesn't merge onto `main`, and no build takes it until its owner pushes one that does) or a `skip` line (it
-    doesn't merge onto the candidate being built)."""
     last: dict[tuple[str, str], dict] = {}
     for r in decisions:
         if r.get("shadow"):
@@ -705,17 +616,10 @@ def left_out(decisions: list[dict], open_prs: dict[str, str]) -> dict[str, dict]
 
 
 def with_main(line: dict) -> bool:
-    """Whether a line of `left_out` is a conflict with `main`, which only the head's owner ends, and not one with a PR the
-    candidate holds, which ends when that PR lands or is dropped."""
     return line["action"] == "conflict" or (line.get("why") or "").startswith("conflicts with `main`")
 
 
 def cut(doc: dict, end: float) -> dict:
-    """``doc`` as a window that ended at ``end``, a past time, in place: without the loop's lines, the labels and the runs
-    after it; a run or a step that ended after it is still running, and a run that took its slot after it is in line.  The
-    PRs open then are those open now and those landed since; one closed since without landing, or marked then at a head it
-    has left without a restack, is not known.  What the machines only say of now (cores, slots, cgroups, the executor's list)
-    stays in the document, and the table leaves it out (`PAST`)."""
     control = doc["control"]
     for r in control.get("decisions") or []:
         if ts(r["at"]) > end and r["action"] == "advance" and r.get("done") and not r.get("shadow"):
@@ -748,9 +652,6 @@ def cut(doc: dict, end: float) -> dict:
 
 
 def drop_cause(why: str) -> str:
-    """Why the loop dropped a candidate, from its reason: `on main`, `by hand`, `dropped base` (the candidate below it was
-    dropped or failed), `withdrawn mark`, `infrastructure` (no run registered, a killed run), `hold` (a reviewer or lead held
-    a member), `red` (a failed step, or a member ejected for one), else `other`."""
     if why.startswith("on main"):
         return "on main"
     if why.startswith("ci dropped it by hand"):
@@ -769,8 +670,6 @@ def drop_cause(why: str) -> str:
 
 
 def red_kind(why: str, failed: list[str]) -> str:
-    """A red candidate's kind from the loop's reason and failed tasks: `test` where it names the pytest step or a test,
-    whatever else its text mentions; else `infrastructure`, `preflight`, `Lean audit` (any Lean step), else `test`."""
     text = (why + " " + " ".join(failed)).lower()
     if "pytest" in text or re.search(r"\btests/\S+\.py::", text):
         return "test"
@@ -782,11 +681,6 @@ def red_kind(why: str, failed: list[str]) -> str:
 
 
 def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, off_gate: tuple[str, ...] = OFF_GATE) -> list[dict]:
-    """Each candidate built since ``day_start``: its build, verdict (the loop's first `judged pass` or `judged fail`), outcome
-    (`green`: `main` moved to it; `red`: dropped for a failure, a member held over one, or infrastructure, with its kind;
-    `dropped`: for another cause; `running`), its shards' runs (those the loop names, else the shard runs of its commit), and
-    for a red the first failure among them, the drop, and the next build after it. A failure is a suite's failed report or a
-    failed step on the gate: a step in ``off_gate`` fails without making its candidate red."""
     out: dict[str, dict] = {}
     builds = sorted(ts(r["at"]) for r in decisions if r["action"] == "build" and not r.get("shadow"))
     for r in decisions:
@@ -801,7 +695,6 @@ def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, o
             continue
         if r["action"] == "slim":
             c["ids"] = r.get("ids") or c["ids"]
-            # a fail the loop judges early, from one failed step, is in its reason and not in its record's verdict
             state = r.get("verdict") or next((v for v in ("pass", "fail") if (r.get("why") or "").startswith(f"judged {v}")), None)
             if state in ("pass", "fail") and "verdict" not in c:
                 c["verdict"], c["verdict_state"] = at, state
@@ -816,7 +709,6 @@ def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, o
                 c["kind"] = red_kind(why, r.get("failed") or [])
                 c["rebuilt"] = next((b for b in builds if b > at), None)
     for c in out.values():
-        # a check the loop judged before it named a run still launched shards: they say which candidate they check
         mine = [runs[i] for i in c["ids"] if i in runs] or [r for r in runs.values() if r.get("kind") == "shard" and r.get("sha") == c["sha"]]
         c["shards"] = sorted(mine, key=lambda x: x.get("shard") or "")
         fails = [f[1] for s in c["shards"] for f in s.get("failed") or [] if f[1]]
@@ -828,21 +720,17 @@ def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, o
 
 
 def window_runs(doc: dict) -> dict[str, dict]:
-    """{id: the run, with its node} of the nodes' runs still going or asked for in the long window."""
     day = window_start(doc)
     return {r["id"]: dict(r, node=n) for n, d in doc["nodes"].items() for r in d["runs"]
             if r.get("end") is None or rid_time(r["id"]) >= day}
 
 
 def lean_count(lean: dict[str, list[int]], sha: str) -> int | None:
-    """How many of the files a candidate changes from its base are Lean inputs (`LEAN_FILE`); None when that is not known:
-    nobody asked, or GitHub's compare listed its most files and none of them is one."""
     got = lean.get(sha[:12])
     return None if not got or (got[1] == 0 and got[0] >= COMPARE_FILES) else got[1]
 
 
 def gate_end(shard: dict, off_gate: tuple[str, ...]) -> float | None:
-    """When the last of a shard's steps on the merge gate ended, or None while one hasn't (or was stopped)."""
     steps = [st for st in shard.get("steps") or [] if st.get("step") not in off_gate]
     if not steps or any(not st.get("end") or st.get("state") == "stopped" for st in steps):
         return None
@@ -850,9 +738,6 @@ def gate_end(shard: dict, off_gate: tuple[str, ...]) -> float | None:
 
 
 def parts(doc: dict) -> list[dict]:
-    """Where each PR landed in the long window spent its time, in minutes: `review` (mark to land verdict), `to_build` (that to the first
-    candidate holding it, at that head or one a restack made it from), `rework` (that build to the build of the candidate it
-    landed in), `check` (that build to the candidate's verdict) and `to_main` (the verdict to the move of `main`)."""
     decisions, labels, restacked = doc["control"].get("decisions") or [], doc["labels"], doc.get("restacks") or {}
     day = window_start(doc)
     built: dict[tuple[str, str], list[float]] = {}
@@ -887,14 +772,10 @@ def parts(doc: dict) -> list[dict]:
     return out
 
 
-#: the cause of a ready PR's minutes before the loop logged any line leaving its head out (`ready_causes`)
 UNLOGGED = "none logged"
 
 
 def ready_causes(decisions: list[dict], ps: list[dict]) -> Counter:
-    """The minutes of ``ps`` (`parts`) from ready to built by the cause of the loop's newest line leaving the PR's head, or a
-    head a restack made it from, out since its mark: a `leave` line's cause, or a build's `conflict` or `skip`, each held until
-    the next such line or the first candidate; `UNLOGGED` before the first."""
     said: dict[tuple[str, str], list[tuple[float, str]]] = defaultdict(list)
     for r in decisions:
         if r.get("shadow") or r["action"] not in ("leave", "conflict", "skip"):
@@ -921,7 +802,6 @@ def _m(seconds: float | None) -> float | None:
 
 
 def _dist(vals: list[float | None], unit: str = "min", digits: int = 0) -> str:
-    """`p50 A, p90 B unit (n=N)` of the values that exist."""
     vals = [v for v in vals if v is not None]
     if not vals:
         return "none"
@@ -929,17 +809,11 @@ def _dist(vals: list[float | None], unit: str = "min", digits: int = 0) -> str:
 
 
 def earlier(readings: list[dict], now: float, want: float = 3600.0) -> dict | None:
-    """Of the saved readings of the nodes' CPU counters, the one taken nearest ``want`` seconds before ``now``, among those 30
-    minutes to 2 hours old; None without one."""
     ok = [r for r in readings if want / 2 <= now - r["now"] <= want * 2]
     return min(ok, key=lambda r: abs(now - r["now"] - want), default=None)
 
 
 def worker_memory(shards: list[dict]) -> list[dict]:
-    """The parallel suites running in ``shards``, one row for each suite and declaration (two candidates can declare
-    differently): its workers and the shards they run in, a worker's anonymous memory in GiB (``p50``, ``most``; ``tree``
-    is the most with the processes a worker started), and what a worker is declared to reach (``declared``; the runner's
-    default where ``by_default``, None where neither was read)."""
     found: dict[tuple, dict] = {}
     for r in shards:
         for s in r.get("parallel") or []:
@@ -954,7 +828,6 @@ def worker_memory(shards: list[dict]) -> list[dict]:
 
 
 def declares(m: dict) -> str:
-    """What a suite's worker is declared to reach, and whether the most one held is more."""
     if m["declared"] is None:
         return "its declaration was not read"
     says = f"declares none, so the runner counts {m['declared']:g} GiB" if m["by_default"] else f"declares {m['declared']:g} GiB"
@@ -962,22 +835,6 @@ def declares(m: dict) -> str:
 
 
 def slot_groups(doc: dict) -> list[dict]:
-    """The nodes' slots added up by whose runs take them, in the order the table prints them: the check slots and the
-    executor's, on the check nodes; the shared pool, on every CPU node read; then the lanes' own pools, on the check nodes,
-    each alone while there are at most `OWN_POOLS_NAMED`, else as one sum.  The shared pool is `auto.SPILL_POOL`, the one
-    `research run --on auto` places a run in: a launch asks every CPU node for it (`auto.spill`) and sends the run where it
-    finds a place.  Every other pool but the check slots and the executor's is a lane's own: a run takes its slots only when
-    sent to it by name (`research run --pool`), so its free slots start no run that waits in the shared pool's line.
-
-    Each is `{group, pools, nodes, slots, busy, blocked, waiting, distinct, free, free_no_line, longest, unread}`: `group` is
-    `check`, `executor`, `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it;
-    `waiting` counts the runs in its lines and `distinct` the runs they are, a check's twins counted once (a check's shard
-    waits in the line of every machine it twins on, and the first slot free runs it); `free` are
-    the slots nothing holds and nothing blocks, and `free_no_line` those of them with no run in line on their node;
-    `longest` is the node with the longest line and the runs in it, None with no run in line; `unread` are its slots files
-    that gave no answer, each `{node, pool, why}`, whose slots none of its numbers count.  A run waits in the line it
-    joined, one node's and one pool's, so a slot free on another node starts none of them either, and a slot free beside
-    a line goes to that line first."""
     checks = set(doc["check_nodes"])
     found: dict[tuple[str, str], list[tuple[str, dict]]] = {}
     unread: dict[tuple[str, str], list[dict]] = {}
@@ -1004,7 +861,6 @@ def slot_groups(doc: dict) -> list[dict]:
         for n, s in entries:
             line[n] = line.get(n, 0) + s["waiting"]
         total = {k: sum(s[k] for _, s in entries) for k in ("slots", "busy", "blocked", "waiting")}
-        # a node read before the keys were (`shards`) counts each of its runs in line as one
         total["distinct"] = (len({k for _, s in entries for k in s.get("shards") or []})
                              + sum(s["waiting"] for _, s in entries if "shards" not in s))
         node = max(sorted(line), key=line.get, default=None)
@@ -1016,7 +872,6 @@ def slot_groups(doc: dict) -> list[dict]:
     add("check", ["check"])
     add("executor", ["executor"])
     add("shared", [SPILL_POOL])
-    # a slots file that lists no slot and has no line is no pool to name
     own = sorted({p for (g, p), entries in found.items() if g == "own" and any(s["slots"] or s["waiting"] for _, s in entries)}
                  | {p for g, p in unread if g == "own"})
     for pools in [own] if len(own) > OWN_POOLS_NAMED else [[p] for p in own]:
@@ -1025,10 +880,6 @@ def slot_groups(doc: dict) -> list[dict]:
 
 
 def slots_text(g: dict) -> str:
-    """One of `slot_groups` in the table's words.  The shared pool's free slots are counted out, with how many of them have
-    no line on their node, being the places a run launched with `--on auto` can take now; the shared pool's line and the
-    check slots' name the node that holds over half of it; and a slots file that gave no answer is named, since its slots
-    are in none of the numbers."""
     pools, longest = g["pools"], g["longest"]
     name = {"check": "check slots", "executor": "executor slots",
             "shared": f"{pools[0]} slots, the shared pool `--on auto` places runs in, on every CPU node with one ({g['nodes']})"
@@ -1049,8 +900,6 @@ def slots_text(g: dict) -> str:
 
 
 def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()) -> list[dict]:
-    """The rows: each `{row, name, now, hour, day, target, how}`; a cell that could not be read says what it needs.
-    ``readings`` are this machine's saved ones, for the rows that only see what is running when the command reads."""
     now = doc["now"]
     hour, day = now - 3600, window_start(doc)
     hours = max(1e-9, (now - day) / 3600)
@@ -1068,7 +917,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     def win(xs: list[tuple[float, float | None]], since: float) -> list[float | None]:
         return [v for at, v in xs if at >= since]
 
-    # 1. mark to main
     landings = [(ts(r["at"]), str(pr), head) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")
                 for pr, head in zip(r.get("members") or [], r.get("heads") or [])]
     moves = [ts(r["at"]) for r in decisions if r["action"] == "advance" and r.get("done") and not r.get("shadow")]
@@ -1084,14 +932,12 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     refused = {pr for pr, line in out.items() if with_main(line)}
 
     def moved(since: float) -> str:
-        """How many of the heads landed since ``since`` a restack made, and how many of those were marked before it."""
         made = [(at, pr, head) for at, pr, head in landings if at >= since and head in restacked]
         early = sum(1 for at, pr, head in made if (first := mark_at(carried(labels, restacked, pr, head), at))
                     and first < (mark_at(labels.get(f"{pr}@{head}") or [], at) or at + 1))
         return f"; {len(made)} of the heads a restack's, {early} marked before it" if made else ""
 
     def refusals(since: float) -> str:
-        """The heads the loop's lines since ``since`` left out, by reason: each (PR, head) once, under its newest line."""
         last = {(str(r.get("number")), head): r for r in decisions if r["action"] in ("conflict", "skip") and not r.get("shadow")
                 and ts(r["at"]) >= since for head in r.get("heads") or []}
         main_ = sum(map(with_main, last.values()))
@@ -1125,7 +971,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "", "the loop's `conflict` line (a head that doesn't merge onto `main`, written once a head) and `skip` line (a head that "
         "doesn't merge onto the candidate being built), the newest for each open marked head not built since; by the line's time")
 
-    # 2. mark to land verdict
     review: list[tuple[float, float | None]] = []
     for labs in labels.values():
         mark, v = mark_at(labs, now), verdict_at(labs)[0]
@@ -1146,7 +991,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "refuses it for a conflict with `main` (row 1), and when the low-risk rule admits it on its mark alone: "
         "not held, and no file its PR changes (GitHub) is one the checkout's drive.toml excludes (`lowrisk_excludes`)")
 
-    # 3. the quick tier before a mark
     tiers = [r for r in runs.values() if r["kind"] == "tier"]
     wait = [(r["took"], _m(r["took"] - rid_time(r["id"]))) for r in tiers if r.get("took")]
     ran = [(r["end"], _m(r["end"] - r["took"])) for r in tiers if r.get("took") and r.get("end")]
@@ -1165,7 +1009,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
                            + (f", {q} in line" if q else ""))
     add("3", "Quick tier: wait by node, p50/p90 min", "", "", "; ".join(by_node) or "none", "", "the runs of the last 24 hours that took a slot")
 
-    # 4. a candidate's check
     b2v = [(c["verdict"], _m(c["verdict"] - c["build"])) for c in cands if c.get("verdict")]
     b2l = [(c["landed"], _m(c["landed"] - c["build"])) for c in cands if c.get("landed")]
 
@@ -1180,19 +1023,16 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     lean = doc.get("lean") or {}
 
     def plain(c: dict) -> bool | None:
-        """Whether the candidate changes no Lean file from its base; None when that is not known."""
         n = lean_count(lean, c["sha"])
         return None if n is None else n == 0
 
     def slowest(c: dict) -> tuple[dict | None, list | None, list | None]:
-        """A round's slowest step on the gate, its slowest suite that ran and its slowest passed test, among its shards."""
         return (max((st for sh in c["shards"] for st in sh.get("steps") or [] if st.get("seconds") and st["step"] not in off_gate),
                     key=lambda st: st["seconds"], default=None),
                 max((su for sh in c["shards"] for su in sh.get("suites") or [] if su[1]), key=lambda su: su[1], default=None),
                 max((sh["slow_test"] for sh in c["shards"] if sh.get("slow_test")), key=lambda t: t[2], default=None))
 
     def named(what: str, found: list, key, seconds, show=str) -> str:
-        """The ``what`` that was the slowest in the most rounds: its name, its p50 minutes there, and in how many rounds."""
         keys = [key(f) for f in found if f]
         if not keys:
             return ""
@@ -1219,7 +1059,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         return _dist([_m(c["verdict"] - c["build"]) for c in rs]) + f", of {len(judged)} with a verdict{unknown}" + a_step(steps) + a_test(tests)
 
     def newest() -> str:
-        """The newest candidate with a verdict, as one clause: the first candidate after a change of the loop is read here."""
         c = max((c for c in cands if c.get("verdict")), key=lambda c: c["verdict"], default=None)
         if c is None:
             return ""
@@ -1260,7 +1099,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             + (f"; then it holds the slot p50 {pct(after, .5):.0f}, p90 {pct(after, .9):.0f} min more for steps off the gate" if after and pct(after, .9) >= 1 else ""),
             "", "shards whose every step on the gate ended (a cancelled shard is left out); `steps.jsonl`")
 
-    # 5. a red, and the rounds lost
     reds = [c for c in cands if c["outcome"] == "red"]
     f2d = [(c["dropped"], _m(c["dropped"] - c["first_failure"])) for c in reds if c.get("first_failure")]
     d2b = [(c["rebuilt"], _m(c["rebuilt"] - c["dropped"])) for c in reds if c.get("rebuilt")]
@@ -1277,7 +1115,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     add("5", "PR-rounds lost, by cause", "", "", f"{sum(lost.values())}: " + ", ".join(f"{v} {k}" for k, v in sorted(lost.items(), key=lambda kv: -kv[1]))
         if lost else "0", "", "one PR in one candidate that was dropped before `main` moved to it, by the loop's reason for the drop")
 
-    # 6. the executor
     workers = [r for r in runs.values() if r["kind"] == "worker"]
     done = sorted(m for r in workers for m in r.get("results") or [])
     over = [(m, r["results"][0] - rid_time(r["id"]) - r["first_own_s"]) for r in workers
@@ -1328,7 +1165,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         f"{len(compares)} compared with the shards, {sum(r.get('check') == r.get('graph2') for r in compares.values())} agreed; "
         f"{cancelled} cancelled with their candidate", "", "the loop's `compare` lines, and its `drop` lines whose cancel of the executor's check went through")
 
-    # 7. cores and slots
     def cores_row(name: str, names: list[str]) -> None:
         total = sum(doc["nodes"][n]["cores"] for n in names)
         busy = sum(doc["nodes"][n]["busy"] * doc["nodes"][n]["cores"] for n in names)
@@ -1422,7 +1258,6 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
             + (f" of {pct(res, .5):.0f} GiB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
             "the window's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
 
-    # 8. what else explains waiting
     ps = parts(doc)
     for key, name, how in (("to_build", "Ready to built", "the later of a PR's mark and land verdict to the first candidate built with it"),
                            ("rework", "First candidate to the one it landed in", "the build of the first candidate holding the PR to "
@@ -1466,12 +1301,10 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
 
 
 def window(doc: dict) -> str:
-    """The long window in words."""
     return f"the {WINDOW_H} hours to {datetime.fromtimestamp(doc['until'], UTC):%Y-%m-%d %H:%MZ}" if doc.get("until") else f"the last {WINDOW_H} hours"
 
 
 def largest(doc: dict) -> str:
-    """The part of mark-to-`main` that took the most PR-minutes among the PRs landed in the long window, as one sentence."""
     ps = parts(doc)
     if not ps:
         return f"No PR landed in {window(doc)}, so no part of mark-to-`main` can be ranked."
@@ -1486,10 +1319,6 @@ def largest(doc: dict) -> str:
 
 
 def reuse(audit: dict) -> dict:
-    """What a shard's Lean audit log says (the lines `NODE_SCRIPT`'s `audit` keeps): `staged`, [modules of `security/Proofs`
-    restored from the artifact cache, its keyed modules]; `reused`, [packages whose earlier pass was reused, packages];
-    `passed`; `audit_s`, the audit's own seconds, without its wait for a Lean slot; and `unread`, why the node did not read
-    the log to its end. None for a line the log lacks."""
     staged = re.search(r"(\d+) of (\d+) keyed modules restored", audit.get("staged") or "")
     verdict = re.search(r"lean-audit: (PASS|FAIL)(?: \([^)]*\))?: (\d+) of (\d+) packages reused", audit.get("verdict") or "")
     ran = re.search(r" audited in (\d+) s", audit.get("audited") or "")
@@ -1500,15 +1329,6 @@ def reuse(audit: dict) -> dict:
 
 
 def rounds(doc: dict) -> list[dict]:
-    """One row for each candidate built in the long window, oldest first: what it changed in Lean and what it was checked on
-    top of, and how its check went.  `lean` counts its changed files that are Lean inputs (`lean_count`); `below` names the
-    candidates under it, by the loop's bases, whose own Lean audit had not passed when this one's first shard was asked for
-    (when it was built, without one), down to the first that `main` had moved to, and `below_lean` adds up theirs: the Lean
-    this round audits though it changed none of it.  The first shard is the one that ran `pytest`, which runs the audit of
-    the `security` packages; `steps` gives `pytest` and `lean-audit` there and `lean-changed` and `lean-suites` in the shard
-    that ran `lean-changed`, each its state and seconds (so far, while it runs); `staged`, `reused`, `passed`, `audit_s`
-    and `unread` are the first shard's audit log (`reuse`).  The pole is the step on the gate that ended last among its shards, or the
-    first that failed."""
     now, off_gate, lean = doc["now"], tuple(doc.get("off_gate") or OFF_GATE), doc.get("lean") or {}
     cands = {c["sha"]: c for c in candidates(doc["control"].get("decisions") or [], window_runs(doc), window_start(doc), off_gate)}
 
@@ -1524,7 +1344,7 @@ def rounds(doc: dict) -> list[dict]:
 
     def cell(shard: dict | None, name: str) -> dict | None:
         st = step(shard, name)
-        if st and not st.get("end") and st.get("state") == "running" and st.get("start"):     # so far, by its node's clock
+        if st and not st.get("end") and st.get("state") == "running" and st.get("start"):
             read = now if doc.get("until") else doc["nodes"][shard["node"]]["now"]
             return {"state": "running", "seconds": max(0.0, read - st["start"])}
         return st and {"state": st.get("state"), "seconds": st.get("seconds")}
@@ -1555,7 +1375,6 @@ def rounds(doc: dict) -> list[dict]:
 
 
 def render_rounds(rows: list[dict], doc: dict) -> str:
-    """The rounds as Markdown, one row a candidate."""
     def secs(st: dict | None) -> str:
         if not st or st.get("seconds") is None:
             return "not run" if not st else st.get("state") or "not read"
@@ -1601,10 +1420,6 @@ def render_rounds(rows: list[dict], doc: dict) -> str:
 
 
 def reds(doc: dict) -> list[dict]:
-    """Each candidate being checked now (`candidates`' `running`), oldest build first: its members above `main` (those of each
-    candidate under it still being checked, lowest first, then its own) and each of its shards: node, run, state, the steps on
-    the merge gate that have started, and its gating reds, each failed step on the gate and each suite its reports say failed.
-    A step off the gate (``doc["off_gate"]``, policy.toml's) is neither a step nor a red here."""
     off_gate = tuple(doc.get("off_gate") or OFF_GATE)
     cands = {c["sha"]: c for c in candidates(doc["control"].get("decisions") or [], window_runs(doc), window_start(doc), off_gate)}
     out = []
@@ -1628,7 +1443,6 @@ def reds(doc: dict) -> list[dict]:
 
 
 def render_reds(rows: list[dict], doc: dict) -> str:
-    """The candidates being checked, each with its members and a line a shard, and a `RED:` line under a shard with a gating red."""
     off = ", ".join(doc.get("off_gate") or OFF_GATE)
     lines = [f"The candidates being checked at {datetime.fromtimestamp(doc['now'], UTC):%Y-%m-%d %H:%MZ}: {len(rows)}. Only the "
              f"steps and reds on the merge gate are shown; those off it ({off}) are left out."]
@@ -1651,7 +1465,6 @@ def render_reds(rows: list[dict], doc: dict) -> str:
 
 
 def render(rows: list[dict], doc: dict, short: bool = False) -> str:
-    """The table as Markdown; ``short`` leaves out the column saying how each number is measured."""
     at = datetime.fromtimestamp(doc["now"], UTC)
     cols = {"row": "#", "name": "Number", "now": "Now", "hour": "Last hour", "day": f"Last {WINDOW_H} h", "target": "Target", "how": "How it is measured"}
     head = f"The merge queue's numbers at {at:%Y-%m-%d %H:%MZ}. Windows: now; the last hour; the last {WINDOW_H} hours."
@@ -1672,13 +1485,10 @@ def render(rows: list[dict], doc: dict, short: bool = False) -> str:
 
 
 def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
-    """What earlier runs saved in ``path``: the readings (the nodes' CPU counters, and the parallel suites' workers seen running),
-    and each candidate's `lean_files`; nothing without the file, or with one that doesn't parse (said on stderr)."""
     if not path.is_file():
         return [], {}
     try:
         doc = json.loads(path.read_text())
-        # a count made under another rule for what a Lean file is says nothing under this one
         lean = dict(doc.get("lean") or {}) if doc.get("lean_rule") == LEAN_FILE.pattern else {}
         return [r for r in doc["readings"] if "now" in r and "nodes" in r], lean
     except (OSError, ValueError, KeyError, TypeError) as e:
@@ -1687,7 +1497,6 @@ def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
 
 
 def window_end(until: str, now: float) -> float:
-    """``until`` as a timestamp: a time written with its UTC offset, before ``now``. A ValueError says what else it is."""
     at = datetime.fromisoformat(until.replace("Z", "+00:00"))
     if at.tzinfo is None:
         raise ValueError("it has no UTC offset")
@@ -1698,8 +1507,6 @@ def window_end(until: str, now: float) -> float:
 
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False, until: str | None = None,
          by_round: bool = False, by_red: bool = False) -> int:
-    """Print the table, or with ``by_round`` the rounds, or with ``by_red`` the candidates being checked and their gating reds
-    (`reds`); ``until`` ends the windows at a past time, written with its offset."""
     end = None
     if until is not None:
         try:
@@ -1716,7 +1523,7 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: b
         readings.append({"now": doc["now"], "nodes": {n: {"stat": d["stat"]} for n, d in doc["nodes"].items()},
                          "workers": worker_memory([r for d in doc["nodes"].values() for r in d["runs"]
                                                    if r["kind"] == "shard" and r.get("parallel") is not None])})
-    else:       # a past window says nothing of the machines as they are, so it leaves no reading behind
+    else:
         rows = table(doc, None, [r for r in readings if r["now"] <= end])
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -1724,7 +1531,6 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: b
     except OSError as e:
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)
-    # `pools`: the slots as the table adds them up, which the machines only say of now, so none for a window that ended
     print(json.dumps({"at": doc["now"], "rows": rows, "rounds": rounds(doc), "reds": reds(doc),
                       "pools": None if end is not None else slot_groups(doc), "errors": doc["errors"], "data": doc}, default=str)
           if as_json else render_rounds(rounds(doc), doc) if by_round else render_reds(reds(doc), doc) if by_red

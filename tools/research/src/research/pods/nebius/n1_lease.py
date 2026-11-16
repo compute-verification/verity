@@ -69,7 +69,7 @@ from pathlib import Path
 
 DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 QUEUE = os.environ.get("VY_POOL_QUEUE", "provers")
-LOCAL_QUEUE = os.environ.get("VY_POOL_LOCAL_QUEUE", QUEUE)   # the LocalQueue its holders are submitted to, on ClusterQueue QUEUE
+LOCAL_QUEUE = os.environ.get("VY_POOL_LOCAL_QUEUE", QUEUE)
 PRIORITY = os.environ.get("VY_POOL_PRIORITY", "dev")
 POOL_MAX = int(os.environ.get("VY_POOL_MAX", "3"))
 IDLE_S = int(os.environ.get("VY_POOL_IDLE_S", "120"))
@@ -105,8 +105,6 @@ def epoch(s: str | None) -> float | None:
 
 
 def gpu_count(field: str, v, most: int) -> int:
-    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `most`, as an int or a string of digits; ValueError for
-    anything else (-1, 1.5, Infinity, "8x")."""
     if isinstance(v, str) and v.isascii() and v.isdigit():
         v = int(v)
     if type(v) is not int or not 0 <= v <= most:
@@ -119,8 +117,6 @@ def communicate(p: subprocess.Popen, timeout: float) -> tuple[str, str]:
 
 
 def policy_output(cmd: str) -> str:
-    """`cmd`'s stdout, run by a shell in a session of its own whose whole process group is killed after `POLICY_TIMEOUT_S`, so
-    nothing it started (an ssh, a python3 under `cd ... &&`) outlives it; CalledProcessError on a nonzero exit."""
     with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                           start_new_session=True) as p:
         try:
@@ -138,7 +134,6 @@ def kubectl(*args: str, stdin: str | None = None) -> str:
 
 
 def gpu_table() -> dict[str, int]:
-    """UUID -> nvidia-smi index."""
     out = subprocess.run(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"], capture_output=True, text=True,
                          check=True).stdout
     return {u.strip(): int(i) for i, u in (line.split(",") for line in out.splitlines() if line.strip())}
@@ -153,7 +148,6 @@ def owner_fields(line: str) -> dict[str, str]:
 
 
 def foreign_on(i: int) -> list[dict[str, str]]:
-    """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
     if not (DIR / f"{i}.foreign").exists():
         return []
     try:
@@ -166,7 +160,6 @@ def foreign_on(i: int) -> list[dict[str, str]]:
 
 
 def write(path: Path, text: str) -> None:
-    """Atomically, mode 666: the pods' gpu-lease (uid 1000) and this controller (research) both rewrite these files."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
     tmp.write_text(text)
     os.chmod(tmp, 0o666)
@@ -183,11 +176,6 @@ def lock_path(i: int) -> Path:
 
 
 def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
-    """inode -> the pids `path`, /proc/locks or a text in its form, names for its flocks: the process that took each lock,
-    which for gpu-lease is a `flock` helper long gone (the lock lives on in the lease's descriptors), so a lease is
-    attributed by its owner line's pid instead.
-    The kernel hands /proc/locks out a page per read, so with locks coming and going one read can miss a lock held throughout
-    (node 1: 182 lines, 3 pages): use it only where missing a lock costs a tick, and `locked` where it must not."""
     out: dict[int, list[int]] = {}
     for line in path.read_text().splitlines():
         f = line.split()
@@ -197,8 +185,6 @@ def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
 
 
 def locked(path: Path) -> bool:
-    """Whether a process holds a flock on `path`: a non-blocking exclusive flock fails exactly then.  The file is opened without
-    following a link or waiting on a FIFO (the lease dir is 0777); one this can't open counts as not locked."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
@@ -210,7 +196,6 @@ def locked(path: Path) -> bool:
 
 
 def granted(fd: int) -> bool:
-    """Whether an exclusive flock on `fd` is granted at once: False exactly while another descriptor holds the file."""
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
@@ -219,7 +204,6 @@ def granted(fd: int) -> bool:
 
 
 def signalled(pgid: int, sig: int) -> bool:
-    """Whether `sig` reached process group `pgid`: False once the group is gone, or when it isn't this user's to signal."""
     try:
         os.killpg(pgid, sig)
         return True
@@ -231,7 +215,6 @@ def signalled(pgid: int, sig: int) -> bool:
 
 
 def reaped(pid: int) -> bool:
-    """Whether `pid` was this process's child, now reaped: False for another process's (an earlier n1_lease's fence)."""
     try:
         os.waitpid(pid, 0)
         return True
@@ -260,7 +243,6 @@ def pod_uid_of(pid: int) -> str | None:
 
 
 def fence(i: int, t: float) -> int | None:
-    """Hold GPU i's lock from a detached process, its pid; None (holding nothing) when a lease has it."""
     lock = lock_path(i)
     p = subprocess.Popen(["flock", "-n", "-x", str(lock), "sh", "-c", "echo locked; exec sleep 2147483647", FENCE_CMD],
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -275,7 +257,6 @@ def fence(i: int, t: float) -> int | None:
 
 
 def unfence(pids: list[int]) -> None:
-    """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
         signalled(pid, signal.SIGTERM)
     for pid in pids:
@@ -309,8 +290,6 @@ def _true(w: dict, kind: str) -> bool:
 
 
 def unborrowed(obs: dict, holders: set[str]) -> int | None:
-    """GPUs the pool queue can give holders without borrowing: its nominal quota less the GPUs its other admitted Workloads
-    reserve. None when the ClusterQueue or the Workloads weren't read."""
     cq, workloads = obs.get("cq"), obs.get("workloads")
     if cq is None or workloads is None:
         return None
@@ -330,7 +309,6 @@ def unborrowed(obs: dict, holders: set[str]) -> int | None:
 
 
 def waiters() -> list[dict]:
-    """gpu-lease's live wait files (a waiter locks its file before naming it `wait.*`, and holds it while it waits), oldest first."""
     out = []
     for f in sorted(DIR.glob("wait.*")):
         try:
@@ -350,19 +328,16 @@ class Controller:
         self.uuid_of_pod: dict[str, str] = {}
         self.free_since: dict[int, float] = {}
         self.outside: dict[int, int] = {}
-        self.stopping: dict[int, float] = {}           # host pid -> when it was first signalled
+        self.stopping: dict[int, float] = {}
         self.brain_misses = BRAIN_MISSES
         self.agent_fd: int | None = None
         self.events: list[dict] = []
         self.limits: dict = {"max": POOL_MAX, "borrow": BORROW, "borrow-until": BORROW_UNTIL}
         self.policy_at: float | None = None
         self.policy_error: str | None = None
-        self.policy_last: dict | None = None           # the limits $VY_POOL_POLICY last answered
+        self.policy_last: dict | None = None
 
     def pool_limits(self, t: float, dry: bool = False) -> dict:
-        """The pool's max, borrow and borrow-until: `$VY_POOL_POLICY`'s while it answers with whole numbers of the node's GPUs
-        and a UTC borrow-until, else those it last answered, else the environment's. Nothing the command prints raises out of
-        here."""
         if not POLICY or (self.policy_at is not None and t - self.policy_at < POLICY_EVERY_S):
             return self.limits
         self.policy_at = t
@@ -416,7 +391,6 @@ class Controller:
         return {"jobs": jobs, "pods": pods, "cq": cq, "workloads": workloads}
 
     def stop(self, t: float, lease: dict, why: str) -> None:
-        """End a lease: delete its pod, or signal a host process's scope (else its owner pid), SIGKILL after `KILL_AFTER_S`."""
         if lease.get("pod") or not (lease.get("pid") and lease.get("owner_alive")):
             self.log(t, why, lease=lease)
             if lease.get("pod"):
@@ -444,9 +418,9 @@ class Controller:
         pods_by_job: dict[str, list[dict]] = {}
         for p in obs["pods"]:
             pods_by_job.setdefault((p["metadata"].get("labels") or {}).get("job-name", ""), []).append(p)
-        pool: dict[int, str] = {}                      # index -> holder Job
-        pending: list[str] = []                        # holders without a GPU in the pool yet
-        unmapped = 0                                   # of those, running but with no UUID read yet
+        pool: dict[int, str] = {}
+        pending: list[str] = []
+        unmapped = 0
         for j in obs["jobs"]:
             name = j["metadata"]["name"]
             if (j.get("status") or {}).get("failed") or (j.get("status") or {}).get("succeeded"):
@@ -609,8 +583,6 @@ class Controller:
         return ans
 
 
-#: what `setup` runs as root on one file of DIR: DIR is 0777, so any local user can plant a symlink or a hard link there, or swap a
-#: file for one after it was listed; only the regular file it opens without following a link, with no other name, is made 0666
 FIX_MODE = """import os, stat, sys
 fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
 st = os.fstat(fd)

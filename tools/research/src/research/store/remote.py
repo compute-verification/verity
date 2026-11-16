@@ -1,29 +1,4 @@
-"""Remotes (README §7): where a second replica of every immutable key lives.  Keys are the store's relative paths.
-
-    class Remote(Protocol):
-        put(key, path)     create under an immutable key; refuse (RemoteConflict) to overwrite a key whose content differs.  Returns
-                           {"action": "created"|"skipped"|"exists", "bytes", "etag", "md5", ...}: `skipped` = HEAD found it already,
-                           `exists` = the conditional create lost a race; `etag` is an MD5 hex when the remote can say so
-        get(key, path)     download to `path` (temp + rename by the caller's convention); KeyError when absent
-        head(key)          {"bytes": n, "etag": md5 hex | None} or None
-        list(prefix)       every key under `prefix`
-
-`FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None)`, `[(key, last modified)]`, which the derived index
-(`bucket_index.py`) lists with, and `create(key, path)`, a conditional create that never reads the remote (`created`|`exists`):
-the public export writes with it, since its key may write but not read.  `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
-public export (`fetchset.py`): `get` and `head` over anonymous HTTPS at `<base_url>/<key>`, no `put`, no `list`.  `load_remote()` reads
-`~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
-only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
-When the default `~/.research/store.toml` is absent and `$RESEARCH_STORE_CONFIG` is unset, the environment stands in (a cloud VM
-with only the Cursor secrets): `R2_ENDPOINT` + `R2_BUCKET` (whose sha256 must be the `bucket_sha256` `tools/research/store.pod.toml`
-pins) + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` [+ `AWS_SESSION_TOKEN`].  A file that exists always wins; an explicit
-`$RESEARCH_STORE_CONFIG` naming a missing file still means no remote.
-For `type = "s3"`, `bucket` and `endpoint` may instead be named by env var (`bucket_env`, `endpoint_env`), so a tracked config such
-as `store.pod.toml` holds neither, and `bucket_sha256` pins which bucket is acceptable without naming it.
-For `type = "s3"` the optional `session_token_env` (default `AWS_SESSION_TOKEN`) names the env var of a temporary credential's
-session token; when that variable is set the token is sent (and signed) with every request, when unset the key pair is a
-long-lived one and nothing changes.
-"""
+"""Remotes: where a second replica of every immutable key lives."""
 from __future__ import annotations
 
 import hashlib
@@ -72,10 +47,6 @@ def md5_file(path: Path) -> str:
 
 
 class FsRemote:
-    """A directory used as a remote: `<root>/<key>`.  Writes go temp + hard-link (the first writer wins, so a concurrent
-    `put` of the same key reports `exists`); an existing key with a different size or MD5 conflicts.  `head` reports the file's
-    MD5 as its `etag`, the way a single-part S3 object does, so the test double exercises the same verification path."""
-
     def __init__(self, root: Path | str):
         self.root = Path(root).expanduser()
 
@@ -100,7 +71,6 @@ class FsRemote:
         return self.create(key, path)
 
     def create(self, key: str, path: Path) -> dict:
-        """`S3Remote.create`'s double: create `key` without reading what is there (`exists` when the key is taken)."""
         dst = self._p(key)
         size, md5 = Path(path).stat().st_size, md5_file(Path(path))
         res = {"action": "created", "bytes": size, "etag": md5, "md5": md5, "conditional": True, "fallback": None}
@@ -116,7 +86,6 @@ class FsRemote:
         return res
 
     def replace(self, key: str, path: Path) -> None:
-        """`S3Remote.replace`'s double: write `key` whatever it holds, by rename, so a reader gets the old file or the new one whole."""
         dst = self._p(key)
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
@@ -135,7 +104,6 @@ class FsRemote:
         return {"bytes": p.stat().st_size, "etag": md5_file(p)} if p.is_file() else None
 
     def delete(self, key: str) -> bool:
-        """`S3Remote.delete`'s double: remove `key` (True) or find it absent (False)."""
         try:
             self._p(key).unlink()
             return True
@@ -143,14 +111,12 @@ class FsRemote:
             return False
 
     def list_meta(self, prefix: str, progress: Callable[[int], None] | None = None, keep: Callable[[str], bool] | None = None) -> dict[str, tuple]:
-        """`{key: (bytes, etag)}` under `prefix` that `keep` accepts (the S3 listing's shape; etag = MD5 hex)."""
         out = {k: (self._p(k).stat().st_size, md5_file(self._p(k))) for k in self.list(prefix) if keep is None or keep(k)}
         if progress:
             progress(len(out))
         return out
 
     def list_times(self, prefix: str, start_after: str | None = None) -> list[tuple[str, str]]:
-        """`[(key, last modified as ISO UTC)]` under `prefix`, after `start_after` when given (the S3 listing's `start-after`)."""
         return [(k, datetime.fromtimestamp(self._p(k).stat().st_mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
                 for k in self.list(prefix) if start_after is None or k > start_after]
 
@@ -168,18 +134,11 @@ class FsRemote:
 
 
 def _retry_after(value: str | None) -> float | None:
-    """A `Retry-After` header's seconds, or None for none or an HTTP date (the backoff stands in)."""
     v = (value or "").strip()
     return float(v) if v.isdigit() else None
 
 
 class HttpRemote:
-    """The public export read over anonymous HTTP(S): `<base_url>/<key>` for `manifests/<hex>.json` and `objects/sha256/<hex>`.
-    Redirects are followed (a front end may answer with a presigned URL). 404 and 403 read as absent, since a read-only front end
-    that refuses unknown keys may answer either; 5xx, 429 and network errors are retried. A 429 waits its `Retry-After` (at most
-    `RETRY_AFTER_MAX_S`) or the backoff, with jitter, so a fetch's parallel threads don't all come back at once. Nothing here is
-    trusted: every caller checks the bytes against the sha256 it asked for."""
-
     RETRIES = 5
     RETRY_AFTER_MAX_S = 60.0
     TIMEOUT_S = 60.0
@@ -250,7 +209,7 @@ def bucket_digest(bucket: str) -> str:
 
 
 def expected_bucket_digest() -> str:
-    """The sha256 of the store's bucket name, as `store.pod.toml` pins it (the tracked tree never names the bucket)."""
+    """The tracked tree never names the bucket."""
     try:
         h = tomllib.loads(POD_CONFIG.read_text(encoding="utf-8"))["remote"]["bucket_sha256"]
     except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
@@ -259,8 +218,6 @@ def expected_bucket_digest() -> str:
 
 
 def env_remote_config(environ: dict | None = None) -> dict | None:
-    """The `[remote]` table the Cursor secrets stand for, or None when `R2_ENDPOINT` and `R2_BUCKET` are both unset.  ConfigError
-    when only one is set or the bucket is not the store's."""
     env = os.environ if environ is None else environ
     endpoint, bucket = env.get("R2_ENDPOINT"), env.get("R2_BUCKET")
     if not endpoint and not bucket:
@@ -276,8 +233,6 @@ def env_remote_config(environ: dict | None = None) -> dict | None:
 
 
 def load_remote(path: Path | str | None = None) -> Remote | None:
-    """The configured remote, or None when `store.toml` is absent or has no `[remote]` table (module docstring: the environment
-    fallback)."""
     p = config_path(path)
     if not p.is_file():
         if path is None and "RESEARCH_STORE_CONFIG" not in os.environ:
@@ -293,10 +248,6 @@ def load_remote(path: Path | str | None = None) -> Remote | None:
 
 
 def load_export(path: Path | str | None = None, environ: dict | None = None) -> Remote | None:
-    """Where `research data export` writes the public export: the `[export]` table of `store.toml` (the `[remote]` schema), else
-    `$RESEARCH_EXPORT_DIR` (a directory), else `$RESEARCH_EXPORT_BUCKET` on `$RESEARCH_EXPORT_ENDPOINT` (default `R2_ENDPOINT`) with
-    the key pair in `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY` (default the store's `AWS_*` pair).  None
-    when none is set.  Never the store's own bucket: the export is a second bucket, the only one a public reader can reach."""
     env = os.environ if environ is None else environ
     p = config_path(path)
     r, where, own = None, "", None
@@ -351,10 +302,9 @@ def _remote_from(r: dict, p: Path | str) -> Remote:
             hint = lost(r["access_key_id_env"], r["secret_access_key_env"])
             raise ConfigError(f"{p}: credentials env vars {r['access_key_id_env']} / {r['secret_access_key_env']} are not set"
                               + (f" ({hint})" if hint else ""))
-        # a temporary credential (README §7) has a third part; its env var is optional in the config and optional in the environment
         token = os.environ.get(r.get("session_token_env") or "AWS_SESSION_TOKEN") or None
         extra = {}
-        for k in ("jobs", "max_pool_connections", "timeout"):        # optional tuning (remote_s3 module docstring); the defaults suit R2
+        for k in ("jobs", "max_pool_connections", "timeout"):
             if r.get(k) is not None:
                 extra[k] = r[k]
         return S3Remote(endpoint=r["endpoint"], bucket=r["bucket"], access_key=ak, secret_key=sk, region=r.get("region", "auto"), session_token=token, **extra)

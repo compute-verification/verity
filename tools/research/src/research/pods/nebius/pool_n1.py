@@ -44,7 +44,7 @@ from pathlib import Path
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 DCGM = 'service="nvidia-dcgm-exporter"'
 OUT = Path(os.environ.get("POOL_N1_OUT", "/workspace/usage/infra-pool-n1.json"))
-MERGED = Path(os.environ.get("POOL_MERGED", "/workspace/usage/infra-pool.json"))   # node 2's publisher writes it, by scp
+MERGED = Path(os.environ.get("POOL_MERGED", "/workspace/usage/infra-pool.json"))
 PAUSE_COVER_S = (600, 3 * 3600)
 GIT = os.environ.get("POOL_N1_GIT", "/workspace/research/git/verity.git")
 REF = "refs/kueue-fold/infra-nebius"
@@ -55,7 +55,7 @@ IDLE_UTIL, IDLE_S, UNLEASED_FB_MIB = 10.0, 300, 1024
 CLASS_OF_QUEUE = {"pous-overflow": "pous"}
 LEASE_STATE = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease")) / "n1-lease.json"
 STORE_DB = Path(os.environ.get("POOL_N1_STORE_DB", "/workspace/jobs/store/catalog.sqlite"))
-HOURS = 4                                                   # Jobs are deleted 6 h after they finish (ttlSecondsAfterFinished)
+HOURS = 4
 
 
 def iso(t: float) -> str:
@@ -85,7 +85,7 @@ def kubectl(*args: str) -> dict:
 
 
 def observe() -> dict:
-    util = f"max by (gpu) (DCGM_FI_DEV_GPU_UTIL{{{DCGM}}})"      # a GPU has one series per pod it has held
+    util = f"max by (gpu) (DCGM_FI_DEV_GPU_UTIL{{{DCGM}}})"
     busy = f"({util} >= bool 1)"
     obs = {
         "t": time.time(),
@@ -110,7 +110,6 @@ def observe() -> dict:
 
 
 def attempts_by_job(since: str) -> dict[str, list[tuple]]:
-    """Job name -> (state, rc, validation, outputs) of each Attempt its pods launched since `since`, from node 1's store."""
     try:
         with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
             rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
@@ -121,7 +120,7 @@ def attempts_by_job(since: str) -> dict[str, list[tuple]]:
     out: dict[str, list[tuple]] = {}
     for host, *rest in rows:
         if host:
-            out.setdefault(host.rsplit("-", 1)[0], []).append(tuple(rest))   # a Job's pod is <job>-<5 chars>
+            out.setdefault(host.rsplit("-", 1)[0], []).append(tuple(rest))
     return out
 
 
@@ -138,7 +137,6 @@ def _at(w: dict, kind: str) -> float | None:
 
 
 def delivery(obs: dict) -> list[dict]:
-    """`delivered_by_hour` (see the module docstring) from the Workloads, the Jobs' labels and the store's Attempts."""
     t = obs["t"]
     now_h = int(t // 3600) * 3600
     hours = {now_h - 3600 * k: [0.0, 0.0] for k in range(HOURS)}
@@ -161,7 +159,6 @@ def delivery(obs: dict) -> list[dict]:
 
 
 def lease_pool() -> dict[int, dict]:
-    """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
     if not LEASE_STATE.exists():
         return {}
     try:
@@ -187,10 +184,8 @@ def _gpu_request(w: dict) -> int:
 
 
 def build(obs: dict, drift: dict | None = None) -> dict:
-    """The `nodes.n1` entry from one observation (see observe()); `drift` is template_drift()'s monitor, if any.  A GPU in
-    n1_lease.py's pool is attributed to its lease (the lease files), not to the holder pod DCGM names."""
     t = obs["t"]
-    admitted: dict[str, dict] = {}                           # Job or Pod name -> its admitted, unfinished Workload
+    admitted: dict[str, dict] = {}
     waiting_gpu = waiting_cpu = 0
     for w in obs["workloads"]:
         if _cond(w, "Finished"):
@@ -239,7 +234,7 @@ def build(obs: dict, drift: dict | None = None) -> dict:
                                  "mean_util_5m": round(util5, 1), "lease_since": since, "key": f"n1:{name}:gpu{i}",
                                  "msg": f"{name} ({kind}, queue {wl['spec'].get('queueName')}) holds GPU {i} at {util5:.1f}% over 5 min"})
         elif (pod or {}).get("status", {}).get("phase") in ("Succeeded", "Failed"):
-            pass                                         # DCGM still names the pod that just finished: a handover
+            pass
         elif fb > UNLEASED_FB_MIB or util5 >= 1:
             holder, cls = pod_name, "direct"
             monitors.append({"kind": "gpu-unleased", "gpu": i, "pid": None, "cmd": pod_name, "lease": None,
@@ -268,7 +263,6 @@ def git(*args: str) -> str:
 
 
 def template_drift() -> dict:
-    """Compare the dispatcher's sky/ with infra/nebius's (as pushed into node 1's bare repo): a `template-drift` monitor, or {}."""
     try:
         ref = json.loads(REF_JSON.read_text())
         want = {}
@@ -301,7 +295,6 @@ def write(out: Path, n1: dict) -> None:
 
 
 def cover_pause(merged: Path, n1: dict, now: float) -> bool:
-    """Rewrite the merged file while node 2's publisher is paused (the module docstring); True when it did."""
     try:
         doc = json.loads(merged.read_text())
         last = doc.get("n2_generated_at") or doc["generated_at"]

@@ -50,7 +50,6 @@ from .dispatch import POD_KINDS, RUN_KIND, RUN_SLOTS
 
 REPO = "compute-verification/verity"
 LEAN_TOOL = "tools/verity/lean/"
-#: the Lean check, whose `FIXTURES` (the controls' packages, which every run of it builds) the key reads wherever they are
 LEAN_CHECK = f"{LEAN_TOOL}check.py"
 LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 
@@ -79,7 +78,6 @@ def _git(*args: str, cwd: Path | None = None) -> str:
 
 
 def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> dict[str, str]:
-    """{path: blob sha} of every tracked file `check.py --build --update PACKAGE...` reads at `commit` (module docstring)."""
     files = {}
     for entry in _git("ls-tree", "-r", "-z", "--full-tree", commit, cwd=cwd).split("\0"):
         if entry:
@@ -114,9 +112,6 @@ def lean_inputs(commit: str, packages: list[str], cwd: Path | None = None) -> di
 
 
 def lean_fixtures(commit: str, cwd: Path | None = None) -> str:
-    """`check.FIXTURES` at ``commit``, as a path in the tree, read without running check.py: its module-level assignments are
-    evaluated in order where they are a path built from `Path(__file__)`, `.resolve()`, `.parent`, `.parents[i]`, `/` and
-    string literals."""
     def ev(n: ast.expr, names: dict[str, PurePosixPath]) -> PurePosixPath | str | None:
         match n:
             case ast.Constant(value=str(s)):
@@ -154,7 +149,6 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
     return h.hexdigest()
 
 
-#: preflight.py's AVX512, for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
 UPSTREAM = "verity/protocols/proofs/flock/prover/agreement/upstream.json"
 
@@ -165,11 +159,10 @@ def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
 
 
 def _literal(source: str | None, name: str):
-    """The literal a module assigns to ``name`` (or passes as keyword ``name`` in a call), read without running the module."""
     for node in ast.walk(ast.parse(source or "")):
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
             value = node.value
-            if isinstance(value, ast.Call) and value.args:                 # AVX512 = re.compile(r"...")
+            if isinstance(value, ast.Call) and value.args:
                 value = value.args[0]
             return ast.literal_eval(value)
         if isinstance(node, ast.keyword) and node.arg == name:
@@ -178,7 +171,6 @@ def _literal(source: str | None, name: str):
 
 
 def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
-    """Whether a check of `commit` against `base` runs the Lean agreement with an upstream build that needs AVX-512."""
     pin = _show(commit, UPSTREAM, cwd)
     if pin is None:
         return False
@@ -189,7 +181,7 @@ def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
     from ..merge import rule_touches
 
-    changed = [p for p in _git("diff", "--no-renames", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]   # a rename's source too
+    changed = [p for p in _git("diff", "--no-renames", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]
     return bool(rule and rule_touches(rule, changed))
 
 

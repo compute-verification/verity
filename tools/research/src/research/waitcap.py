@@ -1,7 +1,4 @@
-"""The limit on a wait an agent's tool call makes: no tool call may block more than 20 minutes, since an agent that
-blocks in one long call looks silent and misses its wake-ups.  A wait that reaches the limit stops waiting, leaves what it waited
-on going (nothing is cancelled), says on stderr how to check back, and exits STILL_GOING: `research run --wait`, `research msg
-ask-daniel ... --wait` and `research queue ready --on`."""
+"""The limit on a wait an agent's tool call makes: no tool call blocks more than 20 minutes."""
 from __future__ import annotations
 
 WAIT_LIMIT_S = 1200
@@ -16,7 +13,7 @@ class OverLimit(ValueError):
 
 
 def max_s(given: float | None, flag: str = "--wait-max") -> float:
-    """The wait's bound in seconds: `given` (a `--wait-max S`), which may lower the limit and never raise it, else the limit."""
+    """``given`` may lower the limit, never raise it."""
     if given is None:
         return WAIT_LIMIT_S
     if not 0 < given <= WAIT_LIMIT_S:
@@ -26,6 +23,5 @@ def max_s(given: float | None, flag: str = "--wait-max") -> float:
 
 
 def still_going(what: str, check: str, waited_s: float, end: str = RUN_END) -> str:
-    """The line a wait prints when it stops at its bound: what is still going, the command that reads it later, and `end`."""
     return (f"research: {what} is still going; stopped waiting after {waited_s:g} s (the limit is {WAIT_LIMIT_S} s: no tool call may "
             f"block more than 20 minutes). Nothing was cancelled. Check back with `{check}`. {end}")

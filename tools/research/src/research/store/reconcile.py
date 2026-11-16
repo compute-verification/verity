@@ -1,21 +1,4 @@
-"""Attempt documents that differ between this store and the remote: find them, and replace the local copy with the remote's, with
-an audit trail.
-
-    research data reconcile-attempts [RUN ...] [--all] [--apply] [--json]
-
-An attempt's key (`attempts/<run id>.json`) is write-once on the remote: `S3Remote.put` refuses to overwrite different content
-(RemoteConflict), so the remote's copy is the first one ever pushed for that run id and is canonical.  A local copy can still
-differ when the run was published twice: once on the machine that ran it (complete run dir: telemetry resources, load times),
-and again from a partial copy of the run dir on a machine that could not see the remote (no credentials in its environment),
-so `publish` could not adopt the remote's copy and built its own.  That second copy can never reach the remote (the push is a
-RemoteConflict) and the catalog then disagrees with every other machine.
-
-`--all` (or the given run ids) compares every local attempt the remote also holds: HEAD size + ETag against the local bytes,
-then a read-back where they differ.  Dry run by default: each divergent run is listed with the fields that differ.  `--apply`
-moves the local copy aside to `attempts/.superseded/<run>.<local sha256 prefix>.json` (kept verbatim, never deleted), writes the
-remote's bytes in its place, re-indexes the attempt, and appends one JSON line per run to `<store>/reconcile.log`: time, host,
-user, run id, both sha256s, the remote's Last-Modified, the fields that differ, the artifacts only the local copy named, and why.
-"""
+"""Attempt documents that differ between this store and the remote: find them and replace the local copy with the remote's, with an audit trail."""
 from __future__ import annotations
 
 import datetime as dt
@@ -44,15 +27,13 @@ def _named(doc: dict) -> set[str]:
 
 def _last_modified(r: Any, key: str) -> str | None:
     try:
-        with r._request("HEAD", key) as resp:  # S3Remote only; an fs remote has no such header
+        with r._request("HEAD", key) as resp:
             return resp.headers.get("Last-Modified")
     except Exception:  # noqa: BLE001
         return None
 
 
 def diverged(st: LocalStore, run_ids: list[str] | None = None, *, jobs: int = 32) -> list[dict]:
-    """One entry per local attempt whose remote copy exists and differs: run, both sha256s, differing / local-only / remote-only
-    fields (dotted), artifacts only the local copy names, the remote's Last-Modified."""
     r = st._require_remote()
     todo = run_ids if run_ids else st.attempt_ids()
     tmpdir = st.root / "scratch"
@@ -91,7 +72,6 @@ def diverged(st: LocalStore, run_ids: list[str] | None = None, *, jobs: int = 32
 
 
 def apply(st: LocalStore, found: list[dict]) -> list[dict]:
-    """Supersede each divergent local copy by the remote's (module docstring); returns the log entries written."""
     out = []
     sup = st.root / "attempts" / SUPERSEDED
     sup.mkdir(parents=True, exist_ok=True)

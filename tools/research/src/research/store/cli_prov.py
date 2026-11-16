@@ -46,7 +46,6 @@ def _kv(items: list[str], what: str) -> dict[str, Any]:
 
 
 def _lockfiles_at(source_root: Path, tree: str) -> dict[str, str]:
-    """sha256 of each lockfile AS IT IS IN `tree` (git object), so --source-tree names exactly what a run at that tree recorded."""
     out = {}
     for name in E.LOCKFILES:
         try:
@@ -81,8 +80,6 @@ def _rows(rows: Any) -> list[dict[str, Any]]:
 
 
 def lookup(tool: Any, root: Path, *, argv=None, params=None, inputs=None, conditions=None, source_tree=None, any_source=False, store=None) -> dict[str, Any]:
-    """`research data lookup --json` as a call on a loaded `tool`: its attempts oldest first, `params` overriding what `argv` parses to and
-    missing key conditions from this machine.  ValueError when `root`'s tree is dirty and neither `source_tree` nor `any_source` is given."""
     parsed, key = tool.resolve_params(argv or [], root) if (argv or tool.parse) else ({}, {})
     if params:
         key = tool.resolve_key_params({**parsed, **params}, root)
@@ -90,7 +87,7 @@ def lookup(tool: Any, root: Path, *, argv=None, params=None, inputs=None, condit
     missing = [k for k in tool.key_conditions if k not in conds]
     if missing:
         here = E.conditions(source_root=root)
-        here.update(tool.tool_conditions(here))          # the Tool's own probe (`tool.<name>.*`), as the runner records it
+        here.update(tool.tool_conditions(here))
         conds.update({k: here.get(k) for k in missing})
     drv = D.derivation_id(tool.identity(), inputs or {}, key, conds, tool.key_conditions)
     if any_source:
@@ -152,8 +149,6 @@ def cmd_lookup(argv: list[str]) -> int:
     return 0
 
 
-# ---- pull -------------------------------------------------------------------------------------------------------------------------------------
-
 def _cat(ssh: list[str], path: str, *, timeout: float = 600) -> bytes:
     r = remote.ssh_run(ssh, ["cat", path], timeout=timeout)
     if r.returncode != 0:
@@ -161,8 +156,6 @@ def _cat(ssh: list[str], path: str, *, timeout: float = 600) -> bytes:
     return r.stdout
 
 
-#: One tar stream carries at most this many blobs / this many bytes (by the manifest's sizes): a run-files tree of 10^4 per-proof
-#: files is a handful of round trips instead of one ssh argv of 10^4 paths (which exceeds the remote shell's argument limit).
 PULL_BATCH_FILES = 4000
 PULL_BATCH_BYTES = 512 * 2**20
 
@@ -185,9 +178,6 @@ def _batches(hexes: list[str], sizes: dict[str, int] | None) -> list[list[str]]:
 
 def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, *, sizes: dict[str, int] | None = None,
                  have: Callable[[str], Path | None] | None = None) -> dict[str, int]:
-    """Blobs from the machine's store into `into/<hex>`, each verified by sha256 on arrival.  The paths travel on tar's stdin (`-T -`),
-    never in the ssh argv, and in batches of `PULL_BATCH_FILES` / `PULL_BATCH_BYTES` (`_batches`).  `have(hex)` -> a local path for a blob
-    this store already holds: those are linked/copied locally and not fetched.  Returns {"fetched", "reused", "batches"}."""
     stats = {"fetched": 0, "reused": 0, "batches": 0}
     todo = []
     for h in hexes:
@@ -211,7 +201,7 @@ def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, 
             for m in tf:
                 h = Path(m.name).name
                 if not m.isfile() or h not in wanted or not m.name.lstrip("./").startswith("objects/sha256/"):
-                    continue                               # (bsdtar's ._* AppleDouble entries and anything else unrequested)
+                    continue
                 f = tf.extractfile(m)
                 if f is None:
                     continue
@@ -227,18 +217,17 @@ def _fetch_blobs(ssh: list[str], store_root: str, hexes: list[str], into: Path, 
 
 
 def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict[str, Any]:
-    """manifests/<hex>.json + every blob it references -> the local store through put_artifact; the recomputed id must equal art_id."""
     hexid = art_id.removeprefix("art:")
     mbytes = _cat(ssh, f"{store_root}/manifests/{hexid}.json")
     if hashlib.sha256(mbytes).hexdigest() != hexid:
         raise remote.Refused(f"manifest {art_id} arrived with a different sha256")
     manifest = json.loads(mbytes)
     payload = manifest.get("payload")
-    obj = getattr(st, "object_path", None)                 # a blob this store already holds is not fetched again (FakeStore has no objects/)
+    obj = getattr(st, "object_path", None)
     have = (lambda h: obj(h)) if callable(obj) else None
     stats = {"fetched": 0, "reused": 0, "batches": 0}
     scratch = Path(st.root) / "scratch" if getattr(st, "root", None) and (Path(st.root) / "scratch").is_dir() else None
-    with tempfile.TemporaryDirectory(prefix="research-pull-", dir=scratch) as tmp:   # the store's scratch/: same filesystem as objects/, so links, not copies
+    with tempfile.TemporaryDirectory(prefix="research-pull-", dir=scratch) as tmp:
         blobs = Path(tmp) / "blobs"
         blobs.mkdir()
         stage = Path(tmp) / "stage"
@@ -262,7 +251,7 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
                 dst = stage / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 try:
-                    os.link(blobs / f["sha256"], dst)      # the staged tree is the artifact's own layout; a link per file, a copy only across filesystems
+                    os.link(blobs / f["sha256"], dst)
                 except OSError:
                     shutil.copyfile(blobs / f["sha256"], dst)
             kw["tree"] = stage
@@ -276,10 +265,6 @@ def pull_artifact(ssh: list[str], store_root: str, art_id: str, st: Any) -> dict
 
 
 def pull_labels(ssh: list[str], store_root: str, targets: list[str], st: Any) -> dict[str, Any]:
-    """The machine's `labels/<target>/` directories for `targets`, in one tar (the same `tar -cf - -C ROOT -T -` form as the blobs, paths on
-    stdin), unioned into this store (`labels_sync.import_dir`: content names, nothing overwritten).  A target the machine never labelled
-    is a directory tar cannot stat -- a warning and a non-zero rc with a complete archive on stdout, so the archive's parse, not the rc,
-    decides: an unparseable tar is a transport failure.  A store without a labels layout (a test double) is skipped."""
     from . import ids
     from . import labels_sync as LS
 
@@ -291,7 +276,7 @@ def pull_labels(ssh: list[str], store_root: str, targets: list[str], st: Any) ->
         if r.stdout.strip(b"\0"):
             try:
                 with tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r:") as tf:
-                    members = [m for m in tf.getmembers() if m.isfile() and m.name.endswith(".json") and not Path(m.name).name.startswith("._")   # (bsdtar AppleDouble)
+                    members = [m for m in tf.getmembers() if m.isfile() and m.name.endswith(".json") and not Path(m.name).name.startswith("._")
                                and ".." not in Path(m.name).parts and not Path(m.name).is_absolute()]
                     tf.extractall(tmp, members=members, filter="data")
             except tarfile.TarError as e:
@@ -325,7 +310,7 @@ def cmd_pull(argv: list[str]) -> int:
             st.put_attempt(doc)
         elif existing != doc:
             raise remote.Refused(f"attempt {doc['id']} already exists here with different content; not overwritten")
-        from . import labels_sync as LS                             # the assertions the pod made about the attempt, its derivation, its outputs
+        from . import labels_sync as LS
 
         labels = pull_labels(ssh, store_root, LS.attempt_targets(doc), st)
     except (remote.Refused, ValueError, KeyError, OSError) as e:
@@ -338,8 +323,6 @@ def cmd_pull(argv: list[str]) -> int:
               + f"; labels: {labels['added']} added, {labels['already']} already here" + (f", {labels['bad']} unreadable" if labels["bad"] else ""))
     return 0
 
-
-# ---- attempt ----------------------------------------------------------------------------------------------------------------------------------
 
 def _publish_line(out: dict[str, Any], where: str) -> str:
     if out.get("published"):
@@ -413,7 +396,6 @@ def cmd_attempt(argv: list[str]) -> int:
 
 
 def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """published / already present / refused (run not terminal) / errors, with the error text per class (run ids elided)."""
     c: dict[str, Any] = {"published": 0, "already": 0, "refused": 0, "errors": 0, "error_classes": {}}
     for r in results:
         if r.get("published"):
@@ -431,7 +413,6 @@ def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def cmd_custody(argv: list[str]) -> int:
-    """`research data custody RUN [--publish]` | `--triage` (store.custody)."""
     from . import custody as CU
 
     ap = argparse.ArgumentParser(prog="research data custody", description="a run's custody on the store's remote: the attempt and every run file "

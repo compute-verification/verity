@@ -50,31 +50,15 @@ CREATE INDEX IF NOT EXISTS labels_target ON labels(target, key);
 CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));
 CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT, PRIMARY KEY(id, location));
 """
-# Schema rule: the catalog is shared by every worktree on this machine, including ones running older `research` code, and older
-# code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
-# it breaks every older writer at once, every running lane's included.  Add a side
-# table keyed like the original instead; `replica_checks` is the first.
-#
-# Every row a write reads, replaces or deletes is found through an index.  A write holds the catalog's lock until it commits,
-# and every process on the machine shares the catalog, so a write statement that scans its table holds every other writer off
-# for a pass over it; a refresh indexes each attempt it lacks, one after another, and a scan in each starves the rest for all of it.
-#
-# Versioning: `PRAGMA user_version` holds the catalog's schema version.  0 = written by code from before versioning (may still
-# carry the `replicas.verified` column).  On open, an older catalog is migrated forward step by step (`MIGRATIONS[v]` takes v to
-# v+1, inside one IMMEDIATE transaction, so two processes opening the same old catalog cannot both migrate); a NEWER catalog than
-# this code knows is refused with `CatalogVersionError` (the worktree is behind main -- update it, or set
-# `RESEARCH_CATALOG_IGNORE_VERSION=1` to open anyway: the file is disposable and `research data reindex` rebuilds it).
 SCHEMA_VERSION = 1
 IGNORE_VERSION_ENV = "RESEARCH_CATALOG_IGNORE_VERSION"
 
 
 class CatalogVersionError(RuntimeError):
-    """The catalog was written by newer code than this (its schema version is above `SCHEMA_VERSION`)."""
+    pass
 
 
 def _v0_to_v1(db: sqlite3.Connection) -> None:
-    """Undo the one column-add that shipped: move `replicas.verified` into `replica_checks` and restore the 4-column table.
-    A v0 catalog without the column needs nothing."""
     if "verified" in {r[1] for r in db.execute("PRAGMA table_info(replicas)")}:
         db.execute("INSERT OR REPLACE INTO replica_checks(id, location, verified) SELECT id, location, verified FROM replicas WHERE verified IS NOT NULL")
         db.execute("CREATE TABLE replicas_v4(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location))")
@@ -91,8 +75,6 @@ def catalog_version(db: sqlite3.Connection) -> int:
 
 
 def _check_version(db: sqlite3.Connection, path: Path) -> int:
-    """The catalog's version, or CatalogVersionError when it is from the future (unless `RESEARCH_CATALOG_IGNORE_VERSION` is set).
-    Runs BEFORE anything is created in the file, so an older worktree never half-touches a newer catalog."""
     v0 = catalog_version(db)
     if v0 > SCHEMA_VERSION and not os.environ.get(IGNORE_VERSION_ENV):
         raise CatalogVersionError(
@@ -103,14 +85,12 @@ def _check_version(db: sqlite3.Connection, path: Path) -> int:
 
 
 def _migrate(db: sqlite3.Connection, path: Path) -> dict:
-    """Bring the catalog to `SCHEMA_VERSION`.  Returns {"from", "to", "steps"} (from == to when nothing was needed; `ignored` when
-    a newer catalog was opened under the escape hatch)."""
     v0 = _check_version(db, path)
     if v0 > SCHEMA_VERSION:
         return {"from": v0, "to": v0, "steps": [], "ignored": True}
     if v0 == SCHEMA_VERSION:
         return {"from": v0, "to": v0, "steps": []}
-    db.execute("BEGIN IMMEDIATE")                                   # one writer migrates; the others wait on the lock and then see the new version
+    db.execute("BEGIN IMMEDIATE")
     try:
         v = catalog_version(db)
         steps = []
@@ -127,7 +107,6 @@ def _migrate(db: sqlite3.Connection, path: Path) -> dict:
 
 
 def flatten(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
-    """Dotted (key, text) pairs for every scalar leaf.  Empty containers produce nothing."""
     if isinstance(obj, dict):
         out: list[tuple[str, str]] = []
         for k, v in obj.items():
@@ -153,8 +132,6 @@ def _g(d: Any, *keys: str) -> Any:
     return d
 
 
-#: how long a connection waits on another process's lock before "database is locked": a refresh's write transaction can hold
-#: the catalog for minutes while every check shard on the same node reads it
 BUSY_TIMEOUT_S = 300
 
 
@@ -169,15 +146,14 @@ class Index:
         self._dbs: list[sqlite3.Connection] = []
         self._dbs_lock = threading.Lock()
         db = self.db
-        _check_version(db, self.path)                                          # a catalog from the future is refused before anything is created
+        _check_version(db, self.path)
         db.executescript(SCHEMA)
-        self.migration = _migrate(db, self.path)                               # what this open did to the schema version (see `info()`)
+        self.migration = _migrate(db, self.path)
 
     @property
     def db(self) -> sqlite3.Connection:
         db = getattr(self._local, "db", None)
         if db is None:
-            # autocommit; explicit BEGIN where several writes must land together.  check_same_thread off only so `close()` may close it.
             db = self._local.db = sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_S, isolation_level=None, check_same_thread=False)
             with self._dbs_lock:
                 self._dbs.append(db)
@@ -195,20 +171,14 @@ class Index:
         return catalog_version(self.db)
 
     def info(self) -> dict:
-        """Schema version (file vs code), what this open migrated, and row counts per table."""
         tables = [r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
         return {"path": str(self.path), "schema_version": self.version, "code_version": SCHEMA_VERSION, "migration": self.migration,
                 "tables": {t: self.db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables},
                 "bytes": self.path.stat().st_size if self.path.exists() else 0}
 
-    # ---- writes -------------------------------------------------------------------------------------------------------------------------
-
     def index_artifact(self, manifest_doc: dict, art_id: str, local: bool | None = None, remote: bool | None = None, repo_path: str | None = None) -> None:
-        """Upsert one artifact.  `local`/`remote`/`repo_path` left None keep the current value (so a push can flip `remote` alone)."""
         p = manifest_doc.get("payload") or {}
         with self.db:
-            # IMMEDIATE: a transaction that has read cannot wait to write (SQLite skips the busy timeout, as waiting could deadlock),
-            # so a deferred BEGIN failed "database is locked" at once whenever another writer was mid-transaction.
             self.db.execute("BEGIN IMMEDIATE")
             row = self.db.execute("SELECT local, remote, repo_path FROM artifacts WHERE id=?", (art_id,)).fetchone()
             cur = row or (0, 0, None)
@@ -249,7 +219,6 @@ class Index:
                             (d["target"], d["key"], scalar_text(d.get("value")), d["by"], d["ts"], d.get("ref"), str(path)))
 
     def set_replica(self, art_id: str, location: str, verified_utc: str | None, detail: str | None = None, verified: str | None = None) -> None:
-        """`verified` names the check behind `verified_utc` (README §7): `sha256-readback`, `etag-md5`, or both comma-joined."""
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO replicas(id, location, verified_utc, detail) VALUES (?,?,?,?)",
                             (art_id, location, verified_utc, detail))
@@ -267,7 +236,6 @@ class Index:
                 self.db.execute(f"UPDATE artifacts SET {', '.join(sets)} WHERE id=?", (*vals, art_id))
 
     def rebuild(self, artifacts: Iterable[tuple[dict, str, bool, bool, str | None]], attempts: Iterable[dict], labels: Iterable[tuple[Label | dict, Path | str]]) -> dict:
-        """Wipe every table and reload.  `replicas` is kept (it records verifications, which are not re-derivable locally)."""
         n = {"artifacts": 0, "attempts": 0, "labels": 0}
         with self.db:
             self.db.execute("BEGIN")
@@ -284,8 +252,6 @@ class Index:
             n["labels"] += 1
         return n
 
-    # ---- reads --------------------------------------------------------------------------------------------------------------------------
-
     @staticmethod
     def _art_row(r: tuple) -> dict:
         return {"id": r[0], "kind": r[1], "bytes": r[2], "payload_type": r[3], "manifest": json.loads(r[4]), "local": bool(r[5]), "remote": bool(r[6]),
@@ -299,8 +265,6 @@ class Index:
         return [self._art_row(r) for r in self.db.execute("SELECT * FROM artifacts ORDER BY id")]
 
     def resolve_art_prefix(self, prefix: str, limit: int = 2) -> list[str]:
-        """Catalogued artifact ids starting with `prefix` (`art:<hex>`), at most `limit`: a primary-key range scan (hex digits sort
-        below 'g', so [prefix, prefix + 'g') is exactly the ids with that prefix)."""
         return [r[0] for r in self.db.execute("SELECT id FROM artifacts WHERE id >= ? AND id < ? ORDER BY id LIMIT ?", (prefix, prefix + "g", limit))]
 
     def attempt(self, run_id: str) -> dict | None:
@@ -318,9 +282,6 @@ class Index:
 
     def select_artifacts(self, kind: str | None = None, where: dict[str, str] | None = None, label: tuple[str, str] | list[tuple[str, str]] | None = None,
                          attempt: str | None = None, tool: str | None = None, derivation: str | None = None) -> list[dict]:
-        """Artifacts matching every given facet.  `where` keys are dotted meta keys (a leading `meta.` is accepted);
-        `label` = (key, value) asserted by anyone, or a list of them (all must hold: a conjunction);
-        `attempt`/`tool`/`derivation` select outputs of matching attempts."""
         sql, args = "SELECT a.* FROM artifacts a WHERE 1=1", []
         if kind:
             sql += " AND a.kind=?"
@@ -352,7 +313,6 @@ class Index:
                                          "LEFT JOIN replica_checks c ON c.id = r.id AND c.location = r.location WHERE r.id=?", (art_id,))}
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
-        """Power-user escape hatch on a read-only connection."""
         ro = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=BUSY_TIMEOUT_S)
         try:
             return ro.execute(query, params).fetchall()
@@ -372,9 +332,6 @@ CUSTODY_TABLES = ("replicas", "replica_checks")
 
 
 def compact(src: Path | str, dst: Path | str) -> dict:
-    """A copy of the catalog at `src` for readers that query it rather than fetch from it (`research notes mcp`): the same tables,
-    columns and indexes, with every `manifest_json` left NULL (most of the bytes) and without this machine's custody records
-    (`CUSTODY_TABLES`).  Built in a temp file renamed over `dst`, so a reader never opens half a copy.  {path, bytes, tables}."""
     dst = Path(dst)
     tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
     tmp.unlink(missing_ok=True)

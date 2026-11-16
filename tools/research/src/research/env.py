@@ -1,19 +1,4 @@
-"""`research.env.conditions()`: the one canonical baseline of an attempt's conditions (store README §6.3).
-
-Dotted keys, scalar values, `None` when unknown -- never omitted, never guessed.  Collected by the runner for every attempt;
-lanes never hand-write it.  `hw.family` comes from the ONE SKU->family table below (`SKU_FAMILY`); nobody else normalises.
-Every probe is a subprocess with a timeout or a stdlib call, and none of them raises: an unavailable fact is `None`.
-
-    source.commit  source.tree  source.dirty  source.dirty_digest  source.lockfiles.<name>   (git in `source_root`, default cwd)
-    rt.os  rt.kernel  rt.python  rt.rust  rt.cuda  rt.driver  rt.torch  rt.triton  rt.nvcc
-    hw.family  hw.sku  hw.count  hw.vram_mb  hw.cpu  hw.hostname
-    exec.exclusive  exec.load_start  exec.load_end  exec.project  exec.campaign  exec.runs_root
-
-`source.lockfiles.<name>` is one key per lockfile found at the source root (`uv.lock`, `Cargo.lock`); the nested form used by
-the attempt manifest and the reuse key is `source_identity(conds)`.  A shipped `git archive` has no `.git`: the control side
-passes the identity of the commit it shipped (`source_hint`, remote.shipped_identity), which is the whole identity where git
-knows no commit here and is not read where it does.
-"""
+"""`research.env.conditions()`: the one canonical baseline of an attempt's conditions."""
 from __future__ import annotations
 
 import contextlib
@@ -36,19 +21,12 @@ KEYS = (
     "hw.family", "hw.sku", "hw.count", "hw.vram_mb", "hw.cpu", "hw.hostname",
     "exec.exclusive", "exec.load_start", "exec.load_end", "exec.project", "exec.campaign", "exec.runs_root", "exec.machine",
 )
-# exec.machine: the machines.toml name a `research run --on <machine>` ran on (job.json run.remote.machine), indexed so that
-# `research pods unpreserved|drain <machine>` can find every Attempt recorded on a machine; hw.hostname is the container's hostname.
 LOCKFILES = ("uv.lock", "Cargo.lock")
 UNTRACKED_LIMIT_BYTES = 64 << 20
-#: The runner's capture of a dirty source in the run dir (`source_conditions(dirty_capture=...)`), which custody always uploads
-#: (store.custody.RUN_FILES): the tree on the machine is never a run's only copy of its source.  Inside: the diff against HEAD, and
-#: each untracked, unignored file under DIRTY_UNTRACKED/.
 DIRTY_CAPTURE = "source-dirty.tar"
 DIRTY_PATCH = "diff-HEAD.patch"
 DIRTY_UNTRACKED = "untracked"
 
-# The ONE SKU -> family table.  First match wins; `\b` keeps L40 off L40S and A10 off A100.  Strings as nvidia-smi prints them:
-# "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB", "NVIDIA A100 80GB PCIe", "NVIDIA L40S", "NVIDIA GeForce RTX 4090".
 SKU_FAMILY: list[tuple[str, str]] = [
     (r"\bH200\b", "h200"),
     (r"\bH100\b", "h100"),
@@ -76,7 +54,7 @@ def sku_family(sku: str | None, count: int | None) -> str | None:
     return "unknown"
 
 
-# ---- probes (never raise) -----------------------------------------------------------------------------------------------------------------
+# The probes below never raise.
 
 def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 10.0, binary: bool = False) -> bytes | str | None:
     if shutil.which(cmd[0]) is None:
@@ -109,11 +87,6 @@ class _Hashing:
 
 
 def _dirty_digest(root: Path, commit: str = "HEAD", capture: Path | None = None) -> str | None:
-    """sha256 over `git diff <commit> --binary`, then each untracked, unignored path as `rel NUL bytes NUL` in path order (a path
-    that is not a regular file, such as a nested repository's `sub/`, as `rel NUL NUL`).  With `capture`, the same bytes go there as
-    a tar in the same pass (DIRTY_PATCH, then DIRTY_UNTRACKED/<rel> per file), so the tar reproduces the digest; it is left only
-    when it holds every byte of the dirty source (removed for None, `too-large`, a path that is not a regular file, or any error).
-    Capturing never changes the digest.  EMPTY_DIGEST means nothing was hashed: the working tree is the commit's."""
     import tarfile
 
     diff = _git(["diff", commit, "--binary"], root, timeout=60, binary=True)
@@ -169,7 +142,7 @@ def _dirty_digest(root: Path, commit: str = "HEAD", capture: Path | None = None)
 
 
 def _drop(tar: Any, capture: Path | None) -> None:
-    """Abandon a capture: close it and remove the file, so a partial tar is never mistaken for the dirty state."""
+    """Close and remove the file, so a partial tar is never mistaken for the dirty state."""
     if tar is not None:
         with contextlib.suppress(OSError, ValueError):
             tar.close()
@@ -196,8 +169,7 @@ SOURCE_READS = 3
 
 
 def _git_source(root: Path, capture: Path | None) -> dict[str, Any] | None:
-    """One read of `source.*` against the commit HEAD named at its start; None when HEAD moved during it.  Dirty means the working
-    tree's bytes differ from that commit's: a status entry that changes no byte (an index-only change) is clean."""
+    """None when HEAD moved during the read."""
     out: dict[str, Any] = {"source.commit": None, "source.tree": None, "source.dirty": None, "source.dirty_digest": None}
     commit = _git(["rev-parse", "HEAD"], root)
     if not commit:
@@ -218,9 +190,6 @@ def _git_source(root: Path, capture: Path | None) -> dict[str, Any] | None:
 
 def source_conditions(source_root: Path | None = None, source_hint: dict[str, Any] | None = None, *,
                       dirty_capture: Path | None = None) -> dict[str, Any]:
-    """`source.*` from git in `source_root`, read again when a commit lands during the read (SOURCE_READS times, then unknown).  With
-    `dirty_capture` (a path in the run dir), a dirty source's bytes are written there (`_dirty_digest`); nothing is written for a
-    clean one.  Without git (a shipped `git archive`) the hint is the whole identity; with git it is not read."""
     root = Path(source_root or os.getcwd())
     out: dict[str, Any] = {"source.commit": None, "source.tree": None, "source.dirty": None, "source.dirty_digest": None}
     for _ in range(SOURCE_READS):
@@ -311,7 +280,7 @@ def load_now() -> float | None:
 def conditions(*, run_dir: Path | str | None = None, project: str | None = None, campaign: str | None = None, exclusive: bool | None = None,
                source_root: Path | str | None = None, source_hint: dict[str, Any] | None = None,
                dirty_capture: Path | None = None) -> dict[str, object]:
-    """Every key in KEYS present (plus `source.lockfiles.<name>` per lockfile found); None when unknown."""
+    """None marks an unknown value."""
     out: dict[str, Any] = {k: None for k in KEYS}
     out.update(source_conditions(Path(source_root) if source_root else None, source_hint, dirty_capture=dirty_capture))
     out["rt.os"] = platform.system() or None
@@ -337,8 +306,6 @@ def conditions(*, run_dir: Path | str | None = None, project: str | None = None,
 
 
 def conditions_from_job(job: dict[str, Any] | None) -> dict[str, object]:
-    """Conditions of an attempt reconstructed from what its job.json recorded (after-the-fact publish of a run that predates
-    `conditions()`).  Only recorded facts are copied; everything else stays None."""
     out: dict[str, Any] = {k: None for k in KEYS}
     if not job:
         return out
@@ -373,7 +340,6 @@ def conditions_from_job(job: dict[str, Any] | None) -> dict[str, object]:
 
 
 def source_identity(conds: dict[str, Any]) -> dict[str, Any]:
-    """The nested `source` block of the attempt manifest / reuse key from the flat conditions."""
     prefix = "source.lockfiles."
     return {"commit": conds.get("source.commit"), "tree": conds.get("source.tree"), "dirty": conds.get("source.dirty"),
             "dirty_digest": conds.get("source.dirty_digest"),

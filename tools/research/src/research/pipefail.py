@@ -1,15 +1,4 @@
-"""A workload's shell pipe without `pipefail`: such a script exits with its pipe's last command's status (often `tee`'s), so a
-run ends `done`, rc 0, whatever failed before it. `research run` refuses one (`refusal`) unless `--allow-pipe` says the pipe's
-own exit code is meant.
-
-The shell is found anywhere in the command, behind any wrapper (`env K=V`, `nice -n 19`, `timeout`, `uv run`, slot.py ... --):
-the first word named bash, sh, dash or zsh (by any path). Only one given a script with `-c` is judged. Its script is
-tokenized as a shell does (`shlex` with punctuation, quotes kept whole), so `||`, `>|` and a `|` inside quotes, a word, a
-`case` pattern, `[[ ]]`, `(( ))` or a here-document's body are no pipe, and `|&` is one. The script is safe when the shell is
-started with `-o pipefail`, or a `set` command turns it on (`set -o pipefail`, `set -euo pipefail`) before the first pipe.
-A script shlex can't parse (bash nests quotes inside `"$( )"`, shlex doesn't) is refused only if it holds a bare `|` with
-no `set ... -o pipefail` before it. Stdlib only.
-"""
+"""A workload's shell pipe without `pipefail`, which exits with its last command's status."""
 from __future__ import annotations
 
 import io
@@ -18,9 +7,7 @@ import re
 import shlex
 
 SHELLS = frozenset({"bash", "sh", "dash", "zsh"})
-#: a shell's long options that take an argument
 _LONG_WITH_ARG = frozenset({"--rcfile", "--init-file"})
-#: shell operators, longest first, to split a run of punctuation shlex returns as one token (`|(`, `;\n`)
 _OPS = (";;&", "<<<", "<<-", "&>>", "||", "|&", "&&", ";;", ";&", ">|", ">>", ">&", "<&", "<<", "<>", "&>", "((", "))")
 _SEPARATORS = frozenset({";", "&", "&&", "||", "\n", "(", ")", "((", "))", "|", "|&", ";;", ";&", ";;&"})
 _COMMAND_START = frozenset({"then", "do", "else", "elif", "{", "}", "!", "if", "while", "until", "time"})
@@ -33,7 +20,6 @@ CURE = ("start the script with `set -o pipefail;` (or invoke the shell with `-o 
 
 
 def refusal(command: list[str]) -> str | None:
-    """Why `research run` refuses ``command`` (a shell script that pipes without `pipefail`), or None."""
     found = shell_script(command)
     if found is None:
         return None
@@ -45,8 +31,6 @@ def refusal(command: list[str]) -> str | None:
 
 
 def shell_script(command: list[str]) -> tuple[str, str, bool] | None:
-    """The first shell in ``command`` with its `-c` script: (its name, the script, whether it was started with `-o pipefail`).
-    None when no shell is there, or the first one runs a file or reads stdin."""
     for at, word in enumerate(command):
         if os.path.basename(word) in SHELLS:
             return _invocation(os.path.basename(word), command[at + 1:])
@@ -79,14 +63,13 @@ def _invocation(shell: str, args: list[str]) -> tuple[str, str, bool] | None:
 
 
 def unsafe_pipe(script: str) -> bool:
-    """Whether ``script`` pipes before any `set` command turns `pipefail` on."""
     try:
         tokens = _tokens(_without_heredoc_bodies(script))
     except ValueError:
         pipe = _BARE_PIPE.search(script)
         return bool(pipe) and not _SET_PIPEFAIL.search(script, 0, pipe.start())
     prev: str | None = None
-    case: list[str] = []          # per open `case`: "word" (before its `in`), "pattern" or "body"
+    case: list[str] = []
     test = arith = 0
     in_set = False
     for k, (tok, op) in enumerate(tokens):
@@ -129,9 +112,6 @@ def unsafe_pipe(script: str) -> bool:
 
 
 class _Lexer(shlex.shlex):
-    """shlex that says whether its last token was an operator: a run of punctuation it met unquoted (its state `c`), where a
-    quoted `'|'` comes back as the same text."""
-
     operator = False
 
     @property
@@ -156,7 +136,6 @@ class _Lines(io.StringIO):
 
 
 def _tokens(script: str) -> list[tuple[str, bool]]:
-    """``script``'s words and operators, each (text, is an operator); a newline is an operator, as it separates commands."""
     lex = _Lexer(_Lines(script), posix=True, punctuation_chars="();<>|&\n")
     lex.whitespace = " \t\r"
     lex.whitespace_split = True
@@ -179,7 +158,6 @@ def _split_ops(run: str) -> list[str]:
 
 
 def _without_heredoc_bodies(script: str) -> str:
-    """``script`` with each here-document's body dropped, its operator and delimiter kept: a body is data, not shell."""
     out: list[str] = []
     ends: list[tuple[str, bool]] = []
     for line in script.split("\n"):

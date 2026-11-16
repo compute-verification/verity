@@ -1,31 +1,3 @@
-"""A live run's memory where it executes: the cgroups (systemd scopes and units) its workload runs in, read on its machine.
-
-    where      the cgroup v2 path of every process in the workload's process group (status.json `pgid`, `pid`; a pid whose
-               start time is not the recorded `starttime_ticks` was reused and is skipped), plus the `--job-user` unit
-               (/system.slice/research-job-<run id>.service), which runs outside that group.  One run can sit in several: a
-               queued GPU phase's runner in cluster-<run id>.scope and its workload in gpu-lease's gpu-lease-<pid>.scope.
-               The namespace root `/` is left out: it is the whole visible machine, not the run's.
-    current    memory.current; peak memory.peak (absent before Linux 5.19)
-    limit      the tightest finite memory.max on the cgroup and its ancestors (a scope inside a capped vy-lend.slice is bound
-               by the slice), with the cgroup that sets it; `max` everywhere is no limit
-    growth     bytes/s of memory.current over the last GROWTH_WINDOW_S of the run's own sampler records (resources.jsonl
-               `cgroup` records), only for the cgroup the sampler reads; none otherwise -- never two reads taken here
-    near_limit current within NEAR_LIMIT of the limit
-    cpuset     each cgroup's own cpuset.cpus (a scope's AllowedCPUs; none when unset) and cpuset.cpus.effective, and the
-               workload group's affinities (Cpus_allowed_list), which a `taskset` sets where no cgroup does
-
-`node` reads the same for several runs on one machine, and that machine's state they may hold or wait on: every GPU_LEASE_DIRS
-directory's live leases and live waiters as gpu-lease writes them (an `<i>.owner` line whose pid lives and whose `<i>.lock`
-someone flocks; a `wait.*` file someone flocks), with node 1's `n1-lease.json` pool record and `n1-lease.limits`, and the
-check and Lean slots (`tools/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
-gpu-lease's locks are read from /proc/locks, never probed; slot.py probes its line's tickets, as `check.py --slots` does.
-
-`procs` reads the other way, from a process to its run: for each live process of a given name or pid, the run it belongs to
-and what says so (`run_of`), that run's state and who sent it. `research pods procs MACHINE --comm lake` sends this file
-with `--procs`; it reads command lines for a runner's `--id` and never returns one, since a command line can carry a secret.
-
-Self-contained (stdlib, no package imports): `research status` and `research inspect` send this file to the run's machine
-(`remote.NODE_PROGRAM`) over the ssh the run's remote.json names, one ssh per machine, and it prints the reading as JSON."""
 from __future__ import annotations
 
 import json
@@ -39,7 +11,7 @@ from typing import Any
 NEAR_LIMIT = 0.10
 GROWTH_WINDOW_S = 60.0
 SAMPLES_TAIL = 1 << 20
-JOB_UNIT = "/system.slice/research-job-{run_id}.service"   # research.jobuser.unit_name, in the system slice systemd-run puts it
+JOB_UNIT = "/system.slice/research-job-{run_id}.service"
 GIB = 1 << 30
 GPU_LEASE_DIRS = ("/run/gpu-lease", "/run/gpu-lease-circuits")
 
@@ -56,7 +28,6 @@ def _bytes(raw: str | None) -> int | None:
 
 
 def _stat(proc: Path, pid: int) -> list[str] | None:
-    """/proc/<pid>/stat fields after `comm`: [state, ppid, pgrp, ...]; starttime is index 19."""
     raw = _text(proc / str(pid) / "stat")
     return raw.rsplit(")", 1)[1].split() if raw and ")" in raw else None
 
@@ -69,7 +40,6 @@ def _cgroup_of(proc: Path, pid: int) -> str | None:
 
 
 def workload(run_dir: Path, proc: Path) -> list[int]:
-    """The run's pid (unless reused) and every live member of its workload's process group."""
     try:
         st = json.loads((run_dir / "status.json").read_text()) if (run_dir / "status.json").exists() else {}
     except (OSError, ValueError) as e:
@@ -104,7 +74,6 @@ def locate(run_dir: Path, proc: Path, cg_root: Path, pids: list[int] | None = No
 
 
 def samples(run_dir: Path) -> list[dict[str, Any]]:
-    """The cgroup records in the last SAMPLES_TAIL bytes of the run's resources.jsonl, oldest first."""
     if not (run_dir / "resources.jsonl").exists():
         return []
     try:
@@ -120,8 +89,6 @@ def samples(run_dir: Path) -> list[dict[str, Any]]:
 
 
 def cgroup_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
-    """The sampler's cgroup records among the lines of a resources.jsonl, in the file's order. A line of another kind, and one
-    a write left unfinished, is passed over."""
     for line in lines:
         if '"kind":"cgroup"' not in line:
             continue
@@ -135,7 +102,6 @@ def cgroup_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
 
 
 def growth(recs: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
-    """{"bytes_per_s", "over_s"} from the samples of `path`: the newest against the oldest within GROWTH_WINDOW_S of it."""
     pts = [(float(r["t_mono"]), r["cgroup"]["memory_current_bytes"]) for r in recs
            if r["cgroup"].get("path") == path and isinstance(r["cgroup"].get("memory_current_bytes"), int)]
     if len(pts) < 2:
@@ -178,7 +144,6 @@ def reading(run_dir: Path, proc: Path | None = None, cg_root: Path | None = None
 
 
 def affinity(proc: Path, pids: list[int]) -> list[str]:
-    """The distinct Cpus_allowed_list of `pids`, in pid order."""
     out: list[str] = []
     for p in pids:
         for line in (_text(proc / str(p) / "status") or "").splitlines():
@@ -188,7 +153,6 @@ def affinity(proc: Path, pids: list[int]) -> list[str]:
 
 
 def fields(line: str) -> dict[str, str]:
-    """A gpu-lease owner or wait line's `key=value` fields; `cmd` is the rest of the line after `cmd=` (cluster.nebius2.fields)."""
     head, sep, cmd = line.strip().partition(" cmd=")
     if not sep and head.startswith("cmd="):
         head, cmd = "", head[4:]
@@ -199,7 +163,6 @@ def fields(line: str) -> dict[str, str]:
 
 
 def flocks(proc: Path) -> set[tuple[int, int, int]]:
-    """(major, minor, inode) of every file someone holds a flock on, from /proc/locks (a waiter's line has `->` and no pid)."""
     out = set()
     for line in (_text(proc / "locks") or "").splitlines():
         f = line.split()
@@ -218,8 +181,6 @@ def _locked(p: Path, held: set[tuple[int, int, int]]) -> bool:
 
 
 def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, Any] | None:
-    """gpu-lease's directory `d`: its GPUs, how many are locked (a lease, or on node 1 a fence), each live lease's owner line
-    and each live waiter's wait line, oldest first, and node 1's pool record; None when `d` doesn't exist."""
     if not os.path.isdir(d):
         return None
     try:
@@ -247,9 +208,6 @@ def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, An
 
 def node(run_dirs: list[str], proc: Path | None = None, cg_root: Path | None = None, slot_mods: tuple[Any, Any] | None = None,
          now: Any = None) -> dict[str, Any]:
-    """Each run's memory and CPUs (by run dir), this machine's gpu-lease directories (GPU_LEASE_DIRS, or $RESEARCH_GPU_LEASE_DIRS
-    colon-separated) and its check and Lean slots (`slot_mods`: slot.py and lean_slot.py, loaded; each document an
-    `{"error": ...}` when it can't be read)."""
     proc, cg_root = _roots(proc, cg_root)
     runs = {}
     for rd in run_dirs:
@@ -273,13 +231,11 @@ def node(run_dirs: list[str], proc: Path | None = None, cg_root: Path | None = N
 
 
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-RESEARCH_ROOT = "/workspace/research"                     # a node's runs/ and requests/ (monitors.RUNS, monitors.REQUESTS)
-UNREAD_SHOWN = 3                                          # how many of a process's unread files its line names
+RESEARCH_ROOT = "/workspace/research"
+UNREAD_SHOWN = 3
 
 
 def _runner_of(proc: Path, pid: int, unread: list[str]) -> str | None:
-    """The run whose runner ``pid`` is: the RUN of its `research run --id RUN` command.  A command line that can't be read (the
-    process is gone, or is another user's) is named in ``unread``, since nothing then says whether it was a runner."""
     try:
         argv = (proc / str(pid) / "cmdline").read_bytes().decode(errors="replace").split("\0")
     except OSError as e:
@@ -297,16 +253,6 @@ def _cwd(proc: Path, pid: int, unread: list[str]) -> str | None:
 
 
 def run_of(proc: Path, pid: int, scopes: dict[str, list[int]], unread: list[str]) -> dict[str, Any]:
-    """The run process ``pid`` belongs to, by the strongest thing that names one (`via`):
-
-        cgroup     its cgroup's name carries the run id: a check's `check-<slot>-RUN.scope`, a queued run's `cluster-RUN.scope`
-        ancestor   an ancestor is the run's runner (`research run --id RUN`); `runner` is that ancestor's pid
-        scope      its ancestors are gone (a process that outlived its parent hangs off pid 1), and its session scope
-                   (``scopes``: each `.scope` cgroup's pids) holds exactly one run's runner
-        cwd        only its working directory names a run, which a process started by hand inside a run's tree also does
-
-    `run` is None where nothing names one, and `runs` lists the candidates where its scope holds several runs' runners.  What it
-    couldn't read on the way goes in ``unread``: a run that only an unread command line names is missed, and the caller says so."""
     cg = _cgroup_of(proc, pid) or ""
     if m := RUN_ID.search(cg):
         return {"run": m[0], "via": "cgroup"}
@@ -335,10 +281,6 @@ def _json(p: Path, unread: list[str]) -> dict[str, Any]:
 
 def procs(comms: list[str], pids: list[int], proc: Path | None = None, root: Path | str = RESEARCH_ROOT,
           now: float | None = None) -> dict[str, Any]:
-    """Every live process named one of ``comms`` or numbered one of ``pids``: its run and what names it (`run_of`), the run's
-    state (``root``/runs/RUN/status.json) and who sent it (its request's `submitted_by`, else the `--by` of its command, as
-    `monitors.submitter`), when it started, its cgroup and its working directory, and under `unread` what of those it couldn't
-    read and why.  A /proc that can't be listed raises: it has nothing to say of the machine."""
     import time
 
     proc, root = _roots(proc, None)[0], Path(root)
@@ -368,7 +310,6 @@ def procs(comms: list[str], pids: list[int], proc: Path | None = None, root: Pat
 
 
 def render_procs(doc: dict[str, Any]) -> str:
-    """A line a process: its pid, name and age, then its run with its state, its sender and what names it, or that none does."""
     how = {"cgroup": "its cgroup names the run", "ancestor": "an ancestor is the run's runner",
            "scope": "its parent is gone; its session scope holds this run's runner",
            "cwd": "only its working directory names the run: not proof it belongs to it"}
@@ -395,8 +336,6 @@ def _gib(b: int | None) -> str:
 
 
 def render(r: dict[str, Any]) -> str:
-    """One line: `<cgroup>  current .. peak .. limit .. growth ..`, ending NEAR LIMIT when current is within NEAR_LIMIT of the
-    limit."""
     if r.get("error") == "gone":
         return f"{r['cgroup']}  gone"
     if r["limit_bytes"] is None:

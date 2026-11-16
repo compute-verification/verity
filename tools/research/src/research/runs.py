@@ -1,10 +1,3 @@
-"""Run ids and the local run registry.
-
-A run is one recorded execution attempt.  Its directory is the telemetry attempt dir (job.json, status.json, events.jsonl,
-resources.jsonl, failure.json, stdout.log, stderr.log, and the workload's result.json) and nothing else is needed to describe
-it.  The registry is the directory that holds run directories: an index, not a second source of truth.  Reading a run needs no
-service and no credentials.  Everything derived (result validity, cost estimate) is computed from the files at read time.
-"""
 from __future__ import annotations
 
 import json
@@ -20,13 +13,10 @@ from . import record, result
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
 ACTIVE = ("submitted", "admitted", "waiting", "running", "preserving")
-#: the states `summarize` gives a remote run that will not change again
 ENDED = (*TERMINAL, "refused", "launcher-exited", "runner-gone")
-#: a check's slot record in its run dir, kept by tools/check/slot.py (RUN_SLOT): `waiting` in a machine's check line, `held`
-#: (the slot and when it was taken) or `left`; while it waits, the run is `waiting`, since its check hasn't started
 SLOT_FILE = "slot.json"
 DISK_FLOOR_ENV = "RESEARCH_DISK_FLOOR_GB"
-DISK_FLOOR_GB = 1.5                 # `research run` and `research fetch` refuse below this much free space (0 turns the floor off)
+DISK_FLOOR_GB = 1.5
 
 
 def runs_root(explicit: str | os.PathLike[str] | None = None) -> Path:
@@ -41,9 +31,6 @@ def free_bytes(path: Path) -> int:
 
 
 def disk_floor_refusal(path: Path, environ: dict[str, str] | None = None) -> str | None:
-    """Why a run or a fetch into `path` must not start: the free space on its filesystem is under the floor (`$RESEARCH_DISK_FLOOR_GB`,
-    default DISK_FLOOR_GB).  A full disk on the control pod ends every spending guard there; new run files must not be
-    what fills it.  None when there is room, or the floor is 0."""
     env = os.environ if environ is None else environ
     try:
         floor_gb = float(env.get(DISK_FLOOR_ENV, DISK_FLOOR_GB))
@@ -63,23 +50,18 @@ def disk_floor_refusal(path: Path, environ: dict[str, str] | None = None) -> str
 
 
 def new_run_id(now: float | None = None) -> str:
-    """Sortable, human-typable: r20260921-171502-3f9a.  Identifies this attempt; two identical repetitions get two ids."""
     t = datetime.fromtimestamp(time.time() if now is None else now, tz=UTC)
     return f"r{t:%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
 
 
-#: how many fresh ids `take_run_dir` picks while each names a run dir that exists (two picked in one second share one in 65,536)
 FRESH_ID_TRIES = 8
 
 
 class RunDirTaken(Exception):
-    """The run dir `take_run_dir` would make exists already; the message is the refusal."""
+    pass
 
 
 def take_run_dir(root: Path, run_id: str | None = None, *, tries: int = FRESH_ID_TRIES) -> Path:
-    """The dir of a new run under `root`, made here by one `mkdir` (never a check, then a make), so no two runs, in one process
-    or two, get one id. A given `run_id` whose dir exists is refused; with none, a fresh id (`new_run_id`) is picked again while
-    its dir exists, `tries` times at most. RunDirTaken says which."""
     root.mkdir(parents=True, exist_ok=True)
     met: list[str] = []
     for _ in range(1 if run_id else tries):
@@ -98,7 +80,6 @@ def take_run_dir(root: Path, run_id: str | None = None, *, tries: int = FRESH_ID
 
 
 def drop_run_dir(run_dir: Path) -> None:
-    """Remove a dir `take_run_dir` made that no run wrote in (it is empty); one a run wrote in stays."""
     if run_dir.is_dir() and not any(run_dir.iterdir()):
         run_dir.rmdir()
 
@@ -112,8 +93,6 @@ def _read(path: Path) -> dict[str, Any] | None:
 
 
 def summarize(run_dir: Path) -> dict[str, Any]:
-    """One flat record per run for listings and inspect.  Missing files are reported, not raised: a run that died before
-    writing status.json is still a run.  Sections a v0.1 record lacks are None (unknown)."""
     job = record.read_job(run_dir)
     raw_job = job or (_read(run_dir / "job.json") or {})
     status = _read(run_dir / "status.json") or {}
@@ -130,21 +109,20 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     manifest = _read(run_dir / "preserved.json")
     remote_rec = _read(run_dir / "remote.json")
     if not status and (run_dir / "refused.json").exists():
-        state = "refused"                        # the machine refused it (launch-request, or the runner before the workload)
+        state = "refused"
     elif remote_rec and not status and remote_rec.get("launcher_exited"):
-        state = "launcher-exited"                # the machine's runner exited before writing status.json (launcher.log says why)
+        state = "launcher-exited"
     elif remote_rec and not status:
         phase = remote_rec.get("phase")
         state = {"launched": "submitted", "refused": "refused", "unknown": "unknown"}.get(phase, "submitted")
     elif remote_rec and status.get("state") not in TERMINAL and remote_rec.get("runner_gone"):
-        state = "runner-gone"                    # its status says active, but the machine has no runner for it (remote.json says why)
+        state = "runner-gone"
     else:
         state = status.get("state", "unknown" if not raw_job else "submitted")
     slot = _read(run_dir / SLOT_FILE)
     if state == "running" and (slot or {}).get("state") == "waiting":
         state = "waiting"
     if remote_rec and not raw_job:
-        # not fetched yet: what the control side knew at launch
         own = {"project": remote_rec.get("project")}
         stage = next((remote_rec["launch_args"][i + 1] for i in range(len(remote_rec.get("launch_args") or []) - 1)
                       if remote_rec["launch_args"][i] == "--stage"), None)
@@ -202,7 +180,6 @@ def list_runs(root: Path) -> list[dict[str, Any]]:
 
 
 def resolve(root: Path, ref: str) -> Path:
-    """Accept a full id, a unique prefix, or a path."""
     p = Path(ref).expanduser()
     if p.is_dir():
         return p

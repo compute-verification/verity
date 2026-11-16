@@ -61,33 +61,29 @@ from .store import remote as store_remote
 
 SCHEMA = "research/doctor/v1"
 ROLES = ("lane", "coordinator", "infra")
-#: The Cursor secrets each role needs, by name; a tuple is alternatives, any one of which will do, and a role needs the names of
-#: the roles before it too. GitHub, the notes and Slack need none: they go through Verity's brokers with the agent's Cursor
-#: identity (.git/verity-auth, `notes_sync.notes_token`, `research msg`). HF_TOKEN is optional (the Hub repos we fetch are
-#: public); Notion is an MCP server's.
 SECRETS: dict[str, tuple[str | tuple[str, ...], ...]] = {
-    "lane": ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",      # the store's remote (store/remote.py)
-             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64"),                                      # pods, and ssh to every machine (pods/runpod.py)
+    "lane": ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64"),
     "coordinator": (),
-    "infra": ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", ("NEBIUS_SA_PRIVATE_KEY_B64", "NEBIUS_SA_PRIVATE_KEY")),   # pods/nebius/common.sh
+    "infra": ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", ("NEBIUS_SA_PRIVATE_KEY_B64", "NEBIUS_SA_PRIVATE_KEY")),
 }
 SLACK_ROLES = ("coordinator", "infra")
 DEADLINE_S = 25.0
 PROBE_TIMEOUT_S = 15.0
-KILL_MARGIN_S = 3.0             # a probe's subprocesses are killed this long before the deadline leaves the probe behind
-LOCAL_TIMEOUT_S = 10.0          # a local git command (rev-parse, config)
+KILL_MARGIN_S = 3.0
+LOCAL_TIMEOUT_S = 10.0
 SSH_CONNECT_S = 8
-CLOCK_URL = "https://cloudflare.com/cdn-cgi/trace"      # uncached: github.com's CDN answers with Dates up to 10 s old
+CLOCK_URL = "https://cloudflare.com/cdn-cgi/trace"
 CLOCK_SKEW_MAX_S = 30.0         # R2 refuses a request 15 min off; notes refuse a stamp 5 min ahead; NTP keeps a VM within ms
 PROBE_REF = "refs/heads/research-doctor/dry-run"
 STORE_PROBE_KEY = "research-doctor/absent"
-UV_SYNC = ("uv", "sync", "--all-packages", "--extra", "torch-cpu")     # AGENTS.md's
+UV_SYNC = ("uv", "sync", "--all-packages", "--extra", "torch-cpu")
 REPO = Path(__file__).resolve().parents[4]
 DASHBOARD = "the Cursor Dashboard (Cloud Agents > Secrets)"
 OK, FINDING, SKIP = "ok", "finding", "skip"
 
 clock = time.time
-_probe = threading.local()      # .end: the monotonic time by which this probe thread's subprocesses are killed (`gather`)
+_probe = threading.local()
 
 
 @dataclass
@@ -99,14 +95,11 @@ class Check:
 
 
 def _left(timeout: float) -> float:
-    """`timeout`, cut to what is left of this probe thread's time."""
     return max(0.0, min(timeout, getattr(_probe, "end", math.inf) - time.monotonic()))
 
 
 def run(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> tuple[int | None, str]:
-    """(exit code, output) of `argv`, stdin closed, in a session of its own: None when it gave no answer within PROBE_TIMEOUT_S
-    (or what is left of its probe's time), its whole process group killed, git's remote helpers and ssh's with it; 127 when it
-    could not start. The output is for telling one failure from another, never for printing."""
+    """(exit code, output); None when it gave no answer within PROBE_TIMEOUT_S."""
     try:
         p = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, errors="replace", start_new_session=True)
@@ -116,7 +109,7 @@ def run(argv: list[str], *, cwd: Path | None = None, env: dict[str, str] | None 
         try:
             out, _ = p.communicate(timeout=_left(PROBE_TIMEOUT_S))
         except subprocess.TimeoutExpired:
-            os.killpg(p.pid, signal.SIGKILL)        # a session leader cannot leave its group, and is not reaped yet
+            os.killpg(p.pid, signal.SIGKILL)
             p.wait()
             return None, ""
     return p.returncode, out
@@ -131,13 +124,12 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 
 def check_secrets(role: str) -> Check:
-    # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
     injected = [n for n in settings.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
     missing = ["|".join(alts) for alts in want if not any(settings.named(n) for n in alts)]
-    held, kept = secret_hint.server() or (injected, True)       # nothing asked of a tmux server: nothing to say of one
+    held, kept = secret_hint.server() or (injected, True)
     lost = [m for m in missing if any(n in injected for n in m.split("|"))]
     unset = [m for m in missing if m not in lost]
     if missing:
@@ -184,7 +176,6 @@ def check_github() -> Check:
                  "(.git/verity-auth) or Cursor's App token, which a new agent VM renews")
 
 
-#: (what git says, what it means, whether the credential is the fix), the first that matches
 PUSH_FAILURES = (
     (re.compile(r"\b403\b|Permission to \S+ denied|denied to ", re.I), "GitHub refused the credential write access", True),
     (re.compile(r"Authentication failed|could not read (Username|Password)|terminal prompts disabled|Invalid username or password|\b401\b",
@@ -197,8 +188,6 @@ PUSH_FAILURES = (
 
 
 def push_probe(name: str, root: Path, opts: list[str], where: str, credential_fix: str) -> Check:
-    """`git push --dry-run` of HEAD to PROBE_REF: GitHub asks for the push credential before it answers, nothing is sent, and no
-    pre-push hook runs."""
     argv = ["git", "-C", str(root), *opts, "push", "--dry-run", "--no-verify", "--quiet", where, f"HEAD:{PROBE_REF}"]
     rc, out = run(argv, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if rc == 0:
@@ -222,7 +211,6 @@ def _git_root(where: Path) -> Path | None:
 
 
 def checkout() -> Path | None:
-    """The git checkout the caller works in (the working directory's), else the one this package runs from."""
     return _git_root(Path.cwd()) or _git_root(REPO)
 
 
@@ -281,7 +269,7 @@ def check_store() -> Check:
     try:
         got = r.head(STORE_PROBE_KEY)
     except urllib.error.HTTPError as e:
-        if e.code in (400, 401, 403):           # S3's refusals of a signature, a key or an expired session token
+        if e.code in (400, 401, 403):
             return Check("store", FINDING, f"the store's remote ({kind}) refused a HEAD: HTTP {e.code}",
                          "the key pair (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) was revoked or rotated, or a temporary credential "
                          f"(AWS_SESSION_TOKEN) expired: a new pair goes in {DASHBOARD}; `research data mint-credential` mints a "
@@ -306,8 +294,6 @@ def check_slack() -> Check:
     return Check("slack", OK, f"auth.test is ok ({api.via})")
 
 
-#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh to an ssh machine checks no
-#: host key (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
 SSH_FAILURES = (
     (re.compile(r"Permission denied|Too many authentication failures", re.I), "refused the key"),
     (re.compile(r"Could not resolve|timed out|Connection refused|No route to host|Network is unreachable|closed by remote|reset by peer",
@@ -316,19 +302,14 @@ SSH_FAILURES = (
 
 
 def registry_unread() -> bool:
-    """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
-    before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
     return not settings.has(registry.REGISTRY_ENV) and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:
-    """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host, the auditor devices (`remote.restricted`) aside."""
     return _ssh_machines()[0]
 
 
 def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
-    """(the machines to probe, the auditor devices left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
     ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = remote.restricted(ssh)
@@ -409,7 +390,7 @@ def check_disk(root: Path | None) -> Check:
 
 
 def server_date(url: str = CLOCK_URL) -> float:
-    """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
+    """Seconds since the epoch, at the Date header's one-second resolution."""
     req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
         with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
@@ -425,7 +406,7 @@ def check_clock() -> Check:
     host = urllib.parse.urlsplit(CLOCK_URL).netloc
     before = clock()
     try:
-        server = server_date() + 0.5            # a Date header truncates to the second
+        server = server_date() + 0.5
     except (OSError, ValueError, TypeError) as e:
         if isinstance(getattr(e, "reason", e), ssl.SSLCertVerificationError):
             return Check("clock", FINDING, f"no Date from {host} to compare with: its certificate did not verify",
@@ -457,7 +438,7 @@ def checks(role: str, root: Path | None) -> list[Probe]:
     else:
         if machines:
             with contextlib.suppress(runpod.PodError, OSError):
-                runpod.ssh_key()                # written here, once: the ssh probes run at once and only read it
+                runpod.ssh_key()
         where = "machines.toml (the registry is in the notes clone, which is not here)" if registry_unread() else \
             "machines.toml or the registry"
         out += [(f"ssh:{n}", lambda n=n, m=m: check_ssh(n, m)) for n, m in machines.items()] or \
@@ -470,8 +451,6 @@ def checks(role: str, root: Path | None) -> list[Probe]:
 
 
 def gather(probes: list[Probe], deadline_s: float = DEADLINE_S) -> list[Check]:
-    """Every probe at once, in daemon threads: what a probe runs (`run`) is killed KILL_MARGIN_S before the deadline, so the
-    command leaves no git or ssh behind, and a probe still running at the deadline is a finding, and is left behind."""
     done: dict[str, Check] = {}
     end = time.monotonic() + deadline_s
 

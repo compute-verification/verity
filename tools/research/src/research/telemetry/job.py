@@ -1,8 +1,4 @@
-"""job.json / status.json -- identity of the attempt and its state machine (brief §3).
-
-Integer bytes, explicit units in field names (`_bytes`, `_s`), `null` + `<field>_reason` for anything unavailable, unlimited != unknown
-(cgroup.py).  No environment dump: only the profile keys the caller names.  Command lines pass through `redact_argv`.
-"""
+"""job.json and status.json: the attempt's identity and its state machine; integer bytes, units in field names."""
 from __future__ import annotations
 
 import hashlib
@@ -21,15 +17,11 @@ from . import COLLECTOR_VERSION, CLASSIFIER_VERSION, JOB_SCHEMA, SCHEMA, STATES,
 from .cgroup import Cgroup
 from .events import stream_id, utc_now_ms
 
-#: a key whose value a record holds as `<redacted>`: a secret's, or a machine's address (`<NAME>_HOST`, `FLEET_JUMP`), since the
-#: records name machines and never their addresses
 SECRET_KEY = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|[-_]KEY\b|APIKEY|API[-_]KEY|_HOST$|^FLEET_JUMP$)", re.I)
 SECRET_VALUE = re.compile(r"^(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$")
 
 
 def redact_argv(argv: list[str]) -> tuple[list[str], list[str]]:
-    """KEY=VALUE tokens with a secret-looking KEY, `--flag VALUE` / `--flag=VALUE` with a secret-looking flag, and bare secret-shaped
-    values are replaced.  Returns (redacted argv, names of what was redacted)."""
     out: list[str] = []
     redacted: list[str] = []
     skip_next = False
@@ -142,7 +134,6 @@ def _read_text(path: str) -> tuple[str | None, str | None]:
 
 
 def sampler_instruments(pss_every_s: float) -> list[str]:
-    """What the sampler records; `--pss-every 0` turns PSS off."""
     return ["cgroup", "process", *(["pss"] if pss_every_s > 0 else []), "gpu", "storage"]
 
 
@@ -161,8 +152,6 @@ def build_job(*, project: str, task: str, job: str, attempt: int, lane: str, gen
             "computation": {"tree_sha": tree_sha, "tree_sha_reason": None if tree_sha else "not supplied", "release_tag": release_tag,
                             "workload_digest": workload_digest, "workload_digest_reason": None if workload_digest else "not supplied",
                             "stage": stage, "inputs": inputs, "profile": profile,
-                            # resolved_path / repo_root / git_sha per imported package + sys.path[0], as the
-                            # runner's precheck recorded them (research-infra/source-identity/v1); None = "not supplied" (an older runner)
                             "source_identity": source_identity, "source_identity_reason": None if source_identity else "not supplied"},
             "environment": env,
             "execution": {"command": argv, "command_redacted": redacted, "declared_outputs": declared_outputs, "timeout_s": timeout_s,
@@ -180,7 +169,6 @@ def write_json_atomic(path: str | Path, doc: dict[str, Any]) -> None:
 
 
 def input_ref(spec: str) -> dict[str, Any]:
-    """`name=path` or `path`; hashes files <= 256 MiB, else null + reason."""
     name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
     ref: dict[str, Any] = {"name": name, "path": path}
     if path.startswith("art:"):
@@ -190,10 +178,9 @@ def input_ref(spec: str) -> dict[str, Any]:
         st = Path(path).stat()
         ref["sha256"], ref["sha256_reason"] = sha256_file(path)
         ref["bytes"] = st.st_size
-        # identity at launch even when the hash is deferred: size + mtime_ns + inode + device
         ref["stat"] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns, "ino": st.st_ino, "dev": st.st_dev}
         if ref["sha256"] is None:
-            ref["sha256_deferred_to"] = "preserve.verify"   # the preserving step hashes it (hash_inputs below), so every preserved bundle ends fully hashed
+            ref["sha256_deferred_to"] = "preserve.verify"
     elif Path(path).is_dir():
         ref["sha256"], ref["sha256_reason"] = None, "directory (hash its manifest, not the tree)"
     else:
@@ -202,8 +189,6 @@ def input_ref(spec: str) -> dict[str, Any]:
 
 
 def hash_inputs(attempt_dir: str | Path, max_bytes: int | None = None) -> list[dict[str, Any]]:
-    """Complete deferred input hashes in job.json (`tele init --hash-inputs` / preserve.verify).  Re-stats first: a changed size/mtime/inode
-    since launch is recorded as `stat_changed_since_launch` and the hash then describes the CURRENT file, not the launched one."""
     d = Path(attempt_dir)
     p = d / "job.json"
     doc = json.loads(p.read_text())
@@ -224,8 +209,6 @@ def hash_inputs(attempt_dir: str | Path, max_bytes: int | None = None) -> list[d
         write_json_atomic(p, doc)
     return done
 
-
-# ---- status.json ------------------------------------------------------------------------------------------------------------------------
 
 def read_status(attempt_dir: str | Path) -> dict[str, Any]:
     p = Path(attempt_dir) / "status.json"

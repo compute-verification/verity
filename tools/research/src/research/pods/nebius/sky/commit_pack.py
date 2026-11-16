@@ -1,37 +1,4 @@
-"""commit-pack's pilot: up to PACK_SLOTS Commits at once on this pod's one GPU, as clients of an MPS daemon of the pod's own.
-
-    python3 commit_pack.py      (the commit-pack template's run; stdlib only)
-
-The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config-run's gpu task rendered for its item, as
-`$PACK_SPOOL/queue/<name>.json` ({"key", "item", "idx", "tries", "env", "script"}). This pod claims one by renaming it into
-`claimed/<pod>/` (a rename has one winner), runs its script as a subprocess with the MPS client environment, and writes
-`results/<name>.json` when it ends; the dispatcher reads that back into the item's chain. It takes the next entry as each one
-finishes, and stops claiming at PACK_CLAIM_UNTIL_S, from 12:10Z to the quiet hour's end (13:30Z; node 1's quota cutover holds its
-queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the queue has been empty (or held) for PACK_IDLE_S, or at
-PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
-`drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
-Storage: it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_LIMIT_GB (400): the bundles waiting,
-plus an estimate for each Commit running here and for the candidate: the pacer's own (sky/release.py's learned rate per model,
-which it mirrors to $VY_BUNDLE_SIZES, x1.25), else its model's in BUNDLE_EST_GB, else PACK_BUNDLE_EST_GB, 60, for
-B8 with 1,024 + 128 tokens, scaled by batch and tokens (phi3-mini's was 113 GB, the grid's B8 1k ones of smaller models 25-57 GB,
-SmolLM2's B16 256-token one 3 GB): one flat estimate for every model holds small Commits back with most of node 1's GPUs empty.
-
-**MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
-exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
-GPU_UTIL (vLLM's gpu_memory_utilization, 0.20) and REPLAY_DEFERRED=1. vLLM's budget is that fraction of the whole GPU (95 GiB),
-and the Commit stages about 6 GiB beyond it (its window ring alone is 2.3 GiB): both fit in the client's 28 GiB only below 0.22.
-
-**Faults.** A fatal GPU fault in one MPS client can take down every client on the GPU, so a fault is pod-wide: the control daemon or
-its server dying, an error in the MPS logs, or a client ending with a CUDA fault in its log. Every Commit still running is then
-stopped and reported `fault: true`, and the pod claims nothing more; the dispatcher requeues each once, unpacked (as it does any
-packed Commit that fails).
-
-**Record.** `stats/<pod>.jsonl` every PACK_STATS_S: running Commits, the GPU's utilization and memory used (nvidia-smi).
-`logs/<pod>/<name>.log` is each Commit's wrapper output; the Commit's own `research run` writes its Attempt, which this pod labels
-`ov.mps_packed true` when the Commit ends (`label_packed`, with the Commit's tree's `research data label` and this pod's store
-credentials; the result's `label` says what happened).
-"""
+"""Up to PACK_SLOTS Commits at once on this pod's one GPU, as clients of the pod's own MPS daemon."""
 from __future__ import annotations
 
 import json
@@ -65,28 +32,23 @@ DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/commit/replay_bundle_p*,"
                               "/workspace/cp/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*,"
-                              # the TP2 lane's sweeps: phi3-mini's B8 1k bundle (108 GB) waited here, uncounted, at 4:38 PM PDT
                               "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
 BUNDLE_LIMIT = float(os.environ.get("PACK_BUNDLE_LIMIT_GB", "400")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "60")) * 1e9
-# phi3-mini's measured 113 GB; the packable 3-4B models nobody has measured are taken to be as large
 BUNDLE_EST_GB = {"phi3-mini": 120, "qwen3-4b": 120, "qwen25-3b": 120, "llama32-3b": 120}
-# the pacer's learned rates (sky/release.py mirrors its bundle-sizes.json here, under /workspace, which this pod mounts):
-# GB per (batch x tokens) per model, from the largest bundle a succeeded Commit wrote, taken x LEARN_MARGIN as the pacer does
 SIZES = Path(os.environ.get("VY_BUNDLE_SIZES", "/workspace/jobs/dispatch/bundle-sizes.json"))
 LEARN_MARGIN = 1.25
 FAULT_EXIT = 87
-HOLD = ((12, 10), (13, 30))     # node 1's quota cutover (Kueue holds its queues at 12:10Z) and the quiet hour (12:30-13:30Z)
-DRAIN = (12, 28)                # pack pods must be gone by 12:35Z
+HOLD = ((12, 10), (13, 30))
+DRAIN = (12, 28)
 LABEL_KEY = "ov.mps_packed"
 LABEL_TIMEOUT_S = int(os.environ.get("PACK_LABEL_TIMEOUT_S", "30"))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
                           r"CUDA-capable device\(s\) is/are busy|uncorrectable ECC|GPU is lost|Xid", re.IGNORECASE)
 MPS_LOG_FAULT = re.compile(r"exited with status [1-9-]|\bfatal|\bfault|\bERROR\b|failed to", re.IGNORECASE)
-# the server logs this whenever a client exits, cleanly or not: the client's own exit status and output tell which
 MPS_LOG_CLIENT_EXIT = re.compile(r"assuming client \{[^}]*\} exit\s*$", re.IGNORECASE)
 
 
@@ -117,7 +79,6 @@ def batch(entry: dict) -> int:
 
 
 def learned() -> dict[str, float]:
-    """The pacer's learned GB per (batch x tokens) per model, or {} while SIZES is missing or unreadable."""
     if not SIZES.exists():
         return {}
     try:
@@ -128,8 +89,6 @@ def learned() -> dict[str, float]:
 
 
 def bundle_est(entry: dict) -> float:
-    """Bytes the Commit's sealed replay bundle may take, as the pacer estimates it once it has learned the model (one estimate on
-    node 1); else its model's BUNDLE_EST_GB (else BUNDLE_EST) for B8 with 1,024 + 128 tokens, scaled by batch and tokens."""
     parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
     tokens = sum(int(p[1:]) for p in parts if re.fullmatch(r"[io]\d+", p)) or 1152
     rate = learned().get(parts[0])
@@ -140,13 +99,10 @@ def bundle_est(entry: dict) -> float:
 
 
 def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
-    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the limit."""
     return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_LIMIT
 
 
 def bundle_bytes(globs: list[str]) -> int:
-    """Bytes of the sealed replay bundles waiting on the node (a Commit's replay deletes its own), each file once: a replay
-    of the TP2 lane's links the bundle it replays into its own sweep (research/runs/cfgtp2-cpu/P1, 4:50 PM PDT)."""
     total, seen = 0, set()
     for g in globs:
         for d in Path("/").glob(g.lstrip("/")):
@@ -173,7 +129,6 @@ def _accepts(f: Path, accept) -> bool:
 
 
 def claim(spool: Path, pod: str, accept=lambda entry: True) -> tuple[str, dict] | None:
-    """The oldest queued entry that `accept`s, renamed into claimed/<pod>/, or None when there is none."""
     mine = spool / "claimed" / pod
     mine.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -246,7 +201,6 @@ class Mps:
         raise RuntimeError("nvidia-cuda-mps-control -d started no daemon")
 
     def alive(self) -> bool:
-        """The control daemon of this pod's pipe directory is running (a /proc scan: the image need not have pgrep)."""
         for p in Path("/proc").glob("[0-9]*/cmdline"):
             try:
                 argv = p.read_bytes().split(b"\0")
@@ -259,7 +213,6 @@ class Mps:
         return False
 
     def log_fault(self) -> str | None:
-        """The first fault line written to the MPS logs since the last call."""
         for p in sorted(self.logs.glob("*.log")):
             try:
                 with open(p, "rb") as f:
@@ -290,8 +243,6 @@ def gpu_sample() -> dict:
 
 
 def label_packed(c: Client) -> str:
-    """`ov.mps_packed true` on the Commit's Attempt (the run id its script wrote to <row>/pipeline-commit-run after this client
-    started), by the Commit's tree's `research data label`; what happened, for the result."""
     env = {k: str(v) for k, v in (c.entry.get("env") or {}).items()}
     if not (env.get("SWEEP_DIR") and env.get("ROW") and env.get("SRC")):
         return "unlabelled: the entry names no SWEEP_DIR, ROW or SRC"
@@ -313,7 +264,6 @@ def label_packed(c: Client) -> str:
 
 
 def signalled(pgid: int, sig: int) -> bool:
-    """Whether `sig` reached process group `pgid`: False once the group is gone."""
     try:
         os.killpg(pgid, sig)
         return True
@@ -332,7 +282,6 @@ def stop_client(c: Client, grace_s: int) -> None:
 
 
 def stop_all(clients: list[Client], grace_s: int) -> None:
-    """stop_client for several at once: SIGTERM to every one, then SIGKILL to whatever outlives the shared grace."""
     for c in clients:
         signalled(c.proc.pid, signal.SIGTERM)
     deadline = time.time() + grace_s
@@ -349,8 +298,8 @@ def _terminate(signum, frame):
 
 
 def main() -> int:
-    signal.signal(signal.SIGTERM, _terminate)   # the pilot is the container's PID 1: without a handler it ignores SIGTERM
-    os.umask(0)   # the dispatcher (another uid) moves and deletes what the pilot writes in the spool; the Commits keep 022
+    signal.signal(signal.SIGTERM, _terminate)
+    os.umask(0)
     t0 = time.time()
     scratch = Path(os.environ.get("TMPDIR") or "/tmp") / f"commit-pack-{POD}"
     logs = SPOOL / "logs" / POD

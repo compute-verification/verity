@@ -47,25 +47,17 @@ from . import run_records
 from .queue_stats import pct, rid_time, ts
 
 HOURS, OVER_MIN = 12.0, 10.0
-#: the machines read by default: the registry's Nebius nodes
 NODE = re.compile(r"vy-nebius-(cpu-)?\d+$")
 PROJECT = "verity"
 READ_TIMEOUT_S, READ_JOBS = 180, 16
-#: a run no record gives a command for (a refused launch leaves `refused.json` alone): its kind and its pool
 UNKNOWN = "(not recorded)"
 KINDS = (*run_records.KINDS, UNKNOWN)
-#: how a launch came out. The first four asked to start, and their wait is a wait for a start: `waiting` is still in line,
-#: `left` is slot.py giving up at its --wait-max, `cancelled` ended in line (a cancel, the run's timeout). The rest are counted,
-#: not timed: the machine refused the launch, the run's twin on another machine took the slot, it ended without joining a line
-#: (`no slot`: the pool has no slots there), or it left no status
 ASKED = ("started", "waiting", "left", "cancelled")
 ELSE = ("twin", "no slot", "no record")
 OUTCOMES = (*ASKED, "refused", *ELSE)
-#: a machine's address in ssh's own message, which is printed under the machine's name instead
 ADDRESS = re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b")
 EVENTS = "events/v1/"
 ENDED = ("finished", "errored")
-#: what slot.py says of a slot it can't take (its `blocked` and `held_why`), each under the name it is counted by
 CAUSES = (("slots busy", re.compile(r": busy\b")), ("memory short", re.compile(r"GB of memory free")),
           ("disk short", re.compile(r" has \d+ (inodes|GB) free, under ")), ("a window", re.compile(r"\bwindow .* is open or starts")),
           ("slots kept for candidates' checks", re.compile(r": for train checks\b")), ("slots under the memory asked", re.compile(r": under \d+ GB")))
@@ -77,14 +69,12 @@ def clock() -> datetime:
 
 
 def slot_wait(slot: dict) -> float:
-    """A check slot's wait in seconds (`slot.json`: took less since), 0 without one."""
     if not (isinstance(slot, dict) and slot.get("took") and slot.get("since")):
         return 0.0
     return max((ts(slot["took"]) - ts(slot["since"])).total_seconds(), 0.0)
 
 
 def _t(s) -> datetime | None:
-    """A record's time, None where it has none. One that is no ISO time raises ValueError."""
     return ts(s) if isinstance(s, str) else None
 
 
@@ -93,7 +83,6 @@ def _s(a: datetime | None, b: datetime | None) -> float | None:
 
 
 def cause(why: str | None) -> str:
-    """What a wait's reason (slot.json's `why`) comes down to, for counting."""
     if not why:
         return "no record says"
     if "twin" in why:
@@ -104,10 +93,6 @@ def cause(why: str | None) -> str:
 
 
 def times(rec: dict, now: datetime) -> dict:
-    """The run of record ``rec`` (`run_records.record`) as a row: what it is, when each thing happened, how it came out, its
-    three times in seconds, what it waited behind and, cancelled in line, by what and why; and the record files that were
-    there and couldn't be read (`unread`), which the row is made without. A run still in line has waited until ``now``.
-    A time in the record that is no ISO time raises ValueError."""
     st, sl, rf = rec.get("status") or {}, rec.get("slot") or {}, rec.get("refused") or {}
     launched, started, ended = rid_time(rec["run"]), _t(st.get("started_utc")), _t(st.get("ended_utc"))
     since, took, job = _t(sl.get("since")), _t(sl.get("took")), _t(rec.get("job_started"))
@@ -153,7 +138,6 @@ def _group(rows: list[dict], over_s: float) -> dict:
 
 
 def _order(by: str, keys: Iterable[str]) -> list[str]:
-    """``keys`` in the order a table lists them: the runs' kinds as `KINDS` has them, anything else by name, cpu-2 before cpu-10."""
     if by == "kind" and set(keys) <= set(KINDS):
         return [k for k in KINDS if k in keys]
     num = lambda k: (re.sub(r"\d+$", "", k), int(m[0]) if (m := re.search(r"\d+$", k)) else 0)  # noqa: E731
@@ -161,11 +145,6 @@ def _order(by: str, keys: Iterable[str]) -> list[str]:
 
 
 def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
-    """{all, kind: {..}, machine: {..}, pool: {..}}: each group's count by outcome, its wait over the runs that asked to start
-    (how many waited over ``over`` minutes among them), its setup where recorded and its run time, as percentiles in minutes;
-    with the started runs' wait split in two (`ship`: launch to the machine's claim; `line`: joining the line to the slot), the
-    refusals by fault and how long each took to be told, what the runs over ``over`` waited behind, and the runs with a record
-    file that couldn't be read (`unread`: each one's files and why)."""
     over_s = over * 60
     out: dict = {"all": _group(rows, over_s)}
     for by in ("kind", "machine", "pool"):
@@ -185,7 +164,6 @@ def summary(rows: list[dict], over: float = OVER_MIN) -> dict:
 
 
 def rows_of(recs: Iterable[dict], now: datetime) -> tuple[list[dict], dict[str, str]]:
-    """Each record's row (`times`), by run id; and the runs left out of them, each with why: a time in its records is no time."""
     rows, out = [], {}
     for rec in recs:
         try:
@@ -196,14 +174,10 @@ def rows_of(recs: Iterable[dict], now: datetime) -> tuple[list[dict], dict[str, 
 
 
 def slow(rows: list[dict], over: float = OVER_MIN) -> list[dict]:
-    """The runs that asked to start and waited over ``over`` minutes, the longest first."""
     return sorted((r for r in rows if r["outcome"] in ASKED and (r["wait_s"] or 0) > over * 60), key=lambda r: (-r["wait_s"], r["run"]))
 
 
 def graph_tasks(events: Iterable[dict], start: datetime, end: datetime) -> dict:
-    """graph2's tasks as its ``events`` give them: {tasks: one row per `started` event in [start, end], with its wait when the
-    task's event before it is its `queued` (a start after an error or a lost worker is a retry, and has none) and, once it
-    ended, its seconds and status; silent: the tasks whose `queued` event in the window is their last by ``end``}."""
     last: dict[tuple, tuple[str, datetime]] = {}
     running: dict[tuple, dict] = {}
     tasks = []
@@ -222,9 +196,6 @@ def graph_tasks(events: Iterable[dict], start: datetime, end: datetime) -> dict:
 
 
 def graph_summary(g: dict, over: float = OVER_MIN) -> dict:
-    """{all, kind: {..}, machine: {..}}: the tasks started, how many are first starts (`timed`: with a wait), their wait and how
-    many waited over ``over`` minutes, and their run time; the submissions with such a task; and the tasks queued and silent
-    since, which the events don't tell apart: still waiting, or their submission dropped."""
     over_s = over * 60
 
     def row(ts_: list[dict]) -> dict:
@@ -248,9 +219,6 @@ def graph_summary(g: dict, over: float = OVER_MIN) -> dict:
 
 
 def graph_events(remote, start: datetime) -> list[dict]:
-    """Every event of the submissions that wrote one at or after ``start``: all the parts under `EVENTS` of each submission with
-    a part last written since, so a task that started in the window has its `queued` event however long before it was. A part
-    with a line that is not JSON raises ValueError naming it: its tasks' waits can't be told without it."""
     listed = remote.list_times(EVENTS)
     live = {k.split("/")[2] for k, at in listed if (t := _t(at)) is None or t >= start}
     keys = [k for k, _ in listed if k.split("/")[2] in live]
@@ -274,7 +242,6 @@ def nodes() -> list[str]:
 
 
 def _reach(name: str) -> tuple[list[str], str]:
-    """The ssh argv that reaches machine ``name`` and its runs directory there."""
     from . import remote
 
     m = remote.resolve_machine(name, PROJECT)
@@ -287,7 +254,6 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
 
 
 def parse(text: str) -> list[dict] | str:
-    """`run_records.py`'s answer as its records, or why it isn't one: a line that isn't JSON, or no closing count that matches."""
     recs, read = [], None
     for line in text.splitlines():
         try:
@@ -302,7 +268,6 @@ def parse(text: str) -> list[dict] | str:
 
 
 def read_nodes(names: list[str], first: str, last: str, *, reach: Callable | None = None, run: Callable | None = None) -> dict[str, list[dict] | str]:
-    """Each machine's records of the runs with ids in [first, last], read at once, or why they couldn't be."""
     reach, run = reach or _reach, run or _ssh
     script = Path(run_records.__file__).read_bytes()
 

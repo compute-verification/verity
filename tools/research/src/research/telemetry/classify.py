@@ -65,9 +65,6 @@ CUDA_RE = re.compile(r"CUDA out of memory|cudaErrorMemoryAllocation|CUBLAS_STATU
 ENOSPC_RE = re.compile(r"No space left on device|Disk quota exceeded|ENOSPC|EDQUOT")
 TRACEBACK_RE = re.compile(r"^Traceback \(most recent call last\):", re.M)
 MEMERR_RE = re.compile(r"MemoryError|std::bad_alloc|Cannot allocate memory")
-# the shell's job-control report of a SIGKILLed child (`bash: line 1: 4242 Killed    python ...`, `sh: 1: python: Killed`, a bare `Killed` line),
-# the kernel's own line when dmesg reaches the log, or Python's subprocess report of the kill.  Prose ("Killed by ...") does not match.  Rule 7b
-# needs a cgroup kill count (or, v1 without one, failcnt/under_oom) beside it; the string alone is evidence only.
 KILLED_RE = re.compile(r"\b\d+\s+Killed(?:\s|$)|^\s*Killed\s*$|:\s+Killed\s*$|Out of memory: Killed process|Memory cgroup out of memory|oom-kill:"
                        r"|died with <Signals\.SIGKILL|returned non-zero exit status -9\b", re.M)
 ACTOR_CLASS = {"timeout": "STAGE_TIMEOUT", "deadman": "CANCELLED_DEADMAN", "guardian": "CANCELLED_GUARDIAN", "manual": "CANCELLED_MANUAL"}
@@ -132,7 +129,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     def ref(kind: str, **kv: Any) -> None:
         evidence.append({"kind": kind, **kv})
 
-    # ---- inputs ------------------------------------------------------------------------------------------------------------------------
     ev_rep = read_all(d, "events")
     res_rep = read_all(d, "resources")
     for p in ev_rep.files + res_rep.files:
@@ -156,7 +152,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     if gaps:
         limitations.append(f"{len(gaps)} sampling gap(s) > 2x cadence; transients in them were not observed")
 
-    # ---- termination -------------------------------------------------------------------------------------------------------------------
     term_rc = rc if rc is not None else status.get("rc")
     term_sig = sig if sig is not None else status.get("signal")
     if term_sig is None and isinstance(term_rc, int) and term_rc > 128 and status.get("rc_is_shell_status", True) and term_rc - 128 in SIGNAMES:
@@ -169,7 +164,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     if term_rc is None and term_sig is None:
         limitations.append("no termination status recorded (status.json has neither rc nor signal)")
 
-    # ---- location ----------------------------------------------------------------------------------------------------------------------
     sp = spans(recs)
     open_spans = [s for s in sp["spans"] if s["outcome"] == "interrupted"]
     last_span = open_spans[-1] if open_spans else (sp["spans"][-1] if sp["spans"] else None)
@@ -185,7 +179,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     job_end = status.get("ended_mono") or next((t["t_mono"] for t in reversed(status.get("transitions", [])) if t.get("state") in ("done", "failed", "cancelled")), None)
     host = str(status.get("updated_stream", "")).split(":")[0]
 
-    # ---- incidents: cgroup OOM deltas over the job interval -------------------------------------------------------------------------------
     cg_samples = [s for s in samples if s.get("kind") == "cgroup" and isinstance(s.get("cgroup"), dict)]
     cg_scope = cg_samples[0]["scope"] if cg_samples else None
     run_id = (jobdoc.get("ownership") or {}).get("job") or d.name
@@ -242,14 +235,10 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             peak_between_samples_possible=(peak is not None and cur_max is not None and peak > cur_max),
             peak_note="memory.peak is the cgroup's high-water mark and may predate the job (shared/long-lived cgroup); not differenced")
 
-    # ---- process disappearance windows (for attribution) -----------------------------------------------------------------------------------
     proc_samples = [s for s in samples if s.get("kind") == "process"]
 
     def vanish_in(w: dict[str, Any]) -> dict[str, Any]:
-        """who vanished in (window_start, window_end]: tree pids (gone) and outsiders; largest anon+shmem at the last sample before the window end."""
         a, b = float(w["window_start_mono"]), float(w["window_end_mono"])
-        # one sampler round writes cgroup THEN process a few ms later: the process record of round j (which carries `gone`) sits just
-        # after the cgroup record whose counter moved, so the window is extended by half a round on both ends
         half = 0.5 * max(b - a, 1e-3)
         tree_gone: list[int] = []
         out_gone: list[dict[str, Any]] = []
@@ -261,8 +250,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
                 out_gone += list(s.get("outsiders_gone") or [])
             if t <= a + half:
                 before = s
-        largest = None          # largest anon+shmem (kept as evidence)
-        highest = None          # highest sampled /proc/<pid>/oom_score (the kernel's victim rule)
+        largest = None
+        highest = None
         gone_detail: list[dict[str, Any]] = []
         scores_sampled = False
         if before is not None:
@@ -298,7 +287,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             if inc.get("kind") == "cgroup_oom":
                 inc["windows"] = [{**w, **vanish_in(w)} for w in inc["windows"]]
 
-    # ---- logs ----------------------------------------------------------------------------------------------------------------------------
     log_paths = [Path(p) for p in (logs or [])]
     for cand in ("stdout.log", "stderr.log", "job.log"):
         if (d / cand).exists() and (d / cand) not in log_paths:
@@ -331,9 +319,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     if killed_hit:
         ref("log.killed", **killed_hit, note="a SIGKILLed process reported in the job's log; a class only beside a cgroup kill count (rule 7b)")
 
-    # ---- storage --------------------------------------------------------------------------------------------------------------------------
-    storage_zero = []          # low mounts that hold the attempt dir or a declared output (rule 4 material)
-    storage_zero_other = []    # low mounts elsewhere (incident only)
+    storage_zero = []
+    storage_zero_other = []
     relevant_paths = [str(d.resolve())] + declared_outputs
     def holds_relevant(mount_path: str | None) -> bool:
         if not mount_path:
@@ -351,7 +338,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         incidents.append({"kind": "storage_low", "samples": (storage_zero + storage_zero_other)[:5],
                           "holds_attempt_or_declared_output": bool(storage_zero)})
 
-    # ---- cancel markers ---------------------------------------------------------------------------------------------------------------------
     intents = _events_of("cancel_intent", recs)
     results = _events_of("cancel_result", recs)
     my_pid, my_pgid = status.get("pid"), status.get("pgid")
@@ -360,7 +346,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         tgt = it.get("target") or {}
         hit = (tgt.get("pid") is not None and tgt.get("pid") == my_pid) or (tgt.get("pgid") is not None and tgt.get("pgid") == my_pgid)
         if not hit and my_pid is None and my_pgid is None:
-            hit = True   # runner did not record its pid: any marker in the attempt dir is about this attempt
+            hit = True
             limitations.append("status.json lacks pid/pgid: cancel marker matched to the attempt by location only")
         if not hit:
             continue
@@ -376,7 +362,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             incidents.append({"kind": "cancel_intent_unconfirmed", "actor": it.get("actor"), "signal": it.get("signal"), "reason": it.get("reason"),
                               "note": "intent recorded but neither delivery nor a matching exit signal was observed"})
 
-    # ---- checker record -------------------------------------------------------------------------------------------------------------------
     check = None
     if check_record and Path(check_record).exists():
         try:
@@ -386,9 +371,7 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         except ValueError:
             limitations.append(f"check record {check_record} is not JSON")
 
-    # ---- OOM attribution (rule 6 body; also consulted by rule 5 when a marker and an increment compete) --------------------------------------
     def oom_attribution() -> dict[str, Any]:
-        """-> {class, why, certainty, limitations, detail}; class is CGROUP_OOM_ATTRIBUTED or OOM_UNRESOLVED_ORIGIN."""
         if own_scope:
             return {"class": "CGROUP_OOM_ATTRIBUTED", "why": "SIGKILL exit and an oom_kill increment in the job's own cgroup during the job",
                     "certainty": "established", "limitations": [], "detail": {"scope": cg_scope}}
@@ -423,7 +406,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
                 "why": "SIGKILL exit and an oom_kill increment in the shared pod cgroup, but the victim could not be attributed to this job's tree",
                 "limitations": ["shared cgroup OOM: victim identity unresolved (an outsider vanished in the same window, or no tree process did)"]}
 
-    # ---- rules -------------------------------------------------------------------------------------------------------------------------------
     cls, certainty, why = None, "established", ""
     competing: list[dict[str, Any]] = []
     open_root = any(s["outcome"] == "interrupted" and s["parent"] not in {x["id"] for x in sp["spans"]} for s in sp["spans"])
@@ -459,7 +441,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         verified = bool(matched_intent["intent"].get("verified"))
         marker_established = matched_intent["delivered"] and verified
         if term_sig == 9 and oom_delta and not marker_established:
-            # rev c1: a SIGKILL marker that is not both delivered and identity-verified, beside an oom_kill delta: retain both, certainty ambiguous
             oa = oom_attribution()
             ref("oom.attribution", **oa["detail"])
             certainty = "ambiguous"
@@ -475,7 +456,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         limitations += oa["limitations"]
         ref("oom.attribution", **oa["detail"])
     elif term_sig == 15 and queue_scope and any(k.endswith("oom_kill") or k.endswith("oom_group_kill") for k in oom_delta):
-        # rule 6b (0.1.4): systemd stops a scope (OOMPolicy=stop) with SIGTERM once the kernel OOM-kills a process in it
         cls, certainty = "CGROUP_OOM_ATTRIBUTED", "established"
         why = (f"exit by SIGTERM after an oom_kill increment in the run's own queue scope {cg_path.rsplit('/', 1)[-1]}: the kernel OOM-killed a process "
                "at the scope's memory limit and systemd then stopped the scope")
@@ -491,8 +471,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             if oom_delta:
                 limitations.append("an oom_kill incident coexists in the shared scope but is not attributed to this job (listed under incidents)")
     elif term_rc is not None and killed_hit and (oom_delta or (not kill_counter_seen and (bool(failcnt_delta) or under_oom_seen))):
-        # rule 7b (0.1.3): the workload's wrapper exited rc != 0 and reported a SIGKILLed descendant while the cgroup counted a kill
-        # (or, cgroup v1 with no oom_kill counter at all, hit its limit: failcnt grew / under_oom was raised)
         shared = not own_scope
         gone = [{"window": {k: w[k] for k in ("counter", "from", "to", "window_start_mono", "window_end_mono")}, **vanish_in(w)}
                 for w in delta_windows if w["counter"].endswith("oom_kill") or w["counter"].endswith("oom_group_kill")]
@@ -527,7 +505,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     else:
         cls, why, certainty = "UNKNOWN_EXIT", "no termination status recorded", "ambiguous"
 
-    # ---- coexistence post-pass (rev c1): CUDA string / low mount chosen while the job died by SIGKILL with an oom_kill delta ------------------------
     if cls in ("CUDA_ALLOC_FAIL", "STORAGE_EXHAUSTED") and term_sig == 9 and oom_delta:
         oa = oom_attribution()
         ref("oom.attribution", **oa["detail"])

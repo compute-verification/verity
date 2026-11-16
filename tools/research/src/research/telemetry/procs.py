@@ -1,4 +1,4 @@
-"""Process tree, PSS, GPU and storage readings for the Level-0 sidecar (brief §4).  Fixed-size /proc reads, no recursive scans."""
+"""Process tree, PSS, GPU and storage readings for the sidecar: fixed-size /proc reads, no recursive scans."""
 from __future__ import annotations
 
 import os
@@ -89,9 +89,6 @@ def oom_score_adj(pid: int) -> int | None:
 
 
 def oom_score(pid: int) -> int | None:
-    """/proc/<pid>/oom_score: the kernel's badness (RSS+swap+pagetables scaled to the allowed memory, oom_score_adj folded in).  The OOM
-    killer's victim is the process with the HIGHEST badness at kill time; a sampled value is evidence about the victim, not the kernel's
-    decision itself (it may have moved between the sample and the kill)."""
     raw, _ = _read(f"/proc/{pid}/oom_score", 64)
     try:
         return int(raw) if raw is not None else None
@@ -100,19 +97,15 @@ def oom_score(pid: int) -> int | None:
 
 
 def running(pid: int, proc: str | os.PathLike[str] = "/proc") -> bool:
-    """`pid` exists and has not exited (a zombie has)."""
     st = stat_fields(pid, proc)
     return st is not None and st["state"] not in ("Z", "X")
 
 
 def live_group(pgid: int, proc: str | os.PathLike[str] = "/proc") -> list[dict[str, Any]]:
-    """The members of process group `pgid` that have not exited."""
     return [st for pid in list_pids(proc) if (st := stat_fields(pid, proc)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
 
 
 def unit_pids(unit: str, proc: str | os.PathLike[str] = "/proc") -> list[int]:
-    """The processes in the systemd unit `unit` (its full name), by the cgroup each one's /proc entry names: a unit's processes
-    are in neither the process group nor the descendants of whoever started it."""
     def inside(pid: int) -> bool:
         text, _ = _read(f"{os.fspath(proc)}/{pid}/cgroup", 4096)
         return any(unit in line.split(":", 2)[-1].split("/") for line in (text or "").splitlines())
@@ -121,8 +114,6 @@ def unit_pids(unit: str, proc: str | os.PathLike[str] = "/proc") -> list[int]:
 
 
 def gone(pid: Any, ticks: Any, proc: str | os.PathLike[str] = "/proc") -> bool:
-    """Whether a recorded process is known not to run: its pid has no /proc entry, or one started at another time (the pid was
-    reused).  No pid, or a stat without a start time, is not known gone: a pid alone never says its process exited."""
     if not isinstance(pid, int) or isinstance(pid, bool):
         return False
     text, why = _read(f"{os.fspath(proc)}/{pid}/stat", 4096)
@@ -148,9 +139,6 @@ def descendants(root_pid: int, all_stats: dict[int, dict[str, Any]]) -> set[int]
 
 
 def snapshot_tree(root_pid: int | None, pgid: int | None, max_pids: int, with_outsiders: bool = True) -> tuple[list[dict[str, Any]], bool, int, list[dict[str, Any]]]:
-    """All processes selected by root (descendants incl. root), pgid, or every visible pid.  -> (rows, truncated, total_selected, outsiders).
-    `outsiders` = every other visible process (same pod cgroup on RunPod) with pid/comm/starttime/anon+shmem -- what the shared-scope OOM
-    attribution needs (who else was there, who else vanished, who was largest); bounded to max_pids by anon+shmem descending."""
     stats: dict[int, dict[str, Any]] = {}
     for pid in list_pids():
         st = stat_fields(pid)
@@ -215,8 +203,6 @@ def pss(pid: int) -> dict[str, Any]:
     return out
 
 
-# ---- GPU ------------------------------------------------------------------------------------------------------------------------------
-
 GPU_QUERY = "uuid,index,memory.used,memory.total,utilization.gpu,utilization.memory,temperature.gpu,ecc.errors.uncorrected.volatile.total,clocks_throttle_reasons.active"
 APP_QUERY = "gpu_uuid,pid,used_gpu_memory"
 
@@ -264,8 +250,6 @@ def gpu_sample(timeout: float = 3.0) -> dict[str, Any]:
         out["apps"], out["apps_reason"] = None, f"--query-compute-apps timed out after {timeout}s"
     return out
 
-
-# ---- storage ----------------------------------------------------------------------------------------------------------------------
 
 def statvfs(path: str) -> dict[str, Any]:
     try:

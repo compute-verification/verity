@@ -1,15 +1,3 @@
-"""The one fetcher (README §7.3): make a set of artifacts, or bare blobs, local in parallel, checking every byte.
-
-`fetch_manifests(store, ids)` makes each id's manifest local: from `manifests/`, else from the first source that holds it, whose
-bytes must hash to the id.  `fetch_blobs(store, blobs)` makes each `(sha256, bytes)` local in `objects/`, `jobs` at a time, from
-the first source that holds it; a copy whose sha256 or size differs is refused and the next source tried.  `fetch_set` is both,
-for every payload blob of the ids.  Sources (`sources(store)`, in order): the store's private remote when this machine can reach
-it, then the public export (`public_url()`).  Nothing a source returns is trusted, so a public mirror is transport only.  Each
-key is fetched under its own `lock`, so concurrent fetches of one key download it once and every one of them gets it.
-
-Callers: `research data fetch-fixtures` (the registry, `fixtures.py`), `research data export --verify-url`, and anything else
-holding a set of ids, such as a snapshot's members.
-"""
 from __future__ import annotations
 
 import fcntl
@@ -27,22 +15,18 @@ from .local import IntegrityError, LocalStore, manifest_key, object_key, sha256_
 from .model import ArtifactManifest
 from .remote import HttpRemote, Remote
 
-#: The store's public half, read-only, at the store's own keys: `<PUBLIC_URL>/manifests/<hex>.json` and `<PUBLIC_URL>/objects/sha256/<hex>`
-#: (the site's `/store` base, which redirects to the `verity-public` bucket).
 PUBLIC_URL = "https://website-docs-sage.vercel.app/store"
 PUBLIC_URL_ENV = "RESEARCH_PUBLIC_URL"
 JOBS = 32
 
 
 def public_url(explicit: str | None = None) -> str:
-    """`explicit`, else `$RESEARCH_PUBLIC_URL`, else `PUBLIC_URL`; an empty string means no public source."""
     if explicit is not None:
         return explicit
     return os.environ.get(PUBLIC_URL_ENV, PUBLIC_URL)
 
 
 def sources(store: LocalStore, *, public: str | None = None, private: bool = True) -> list[Remote]:
-    """Where missing bytes come from, in order: the private remote (when configured and usable here), then the public export."""
     out: list[Remote] = []
     if private and store.remote is not None:
         out.append(store.remote)
@@ -56,18 +40,11 @@ def _tmp(dst: Path) -> Path:
     return dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
 
 
-#: the names `lock` is taken under: a manifest's or a blob's hex, and the digest of an entry's path in a tree (`fixtures._entry_lock`)
 LOCK_NAME = re.compile(r"(?:manifest|blob|entry)-[0-9a-f]{64}")
 
 
 @contextmanager
 def lock(store: LocalStore, name: str) -> Iterator[None]:
-    """An exclusive flock on `<store>/locks/<name>.lock`, held for the block: concurrent fetches of one key (threads or processes)
-    take turns, and the later one finds the first one's result in place.  The lock file holds no data, and a node's eviction
-    unlinks one it holds the lock of (`leftovers.evict_locks`), so the lock counts only while the path still names the file it
-    is on: a taker that waited on a file unlinked meanwhile would hold it beside one that made a new file of that name.  The
-    lock is therefore taken again, on whatever the path names now, until the two are one file (`_names`).  Whoever unlinks a
-    lock file must hold its lock, or this check does not cover it."""
     d = store.root / "locks"
     d.mkdir(exist_ok=True)
     path = d / f"{name}.lock"
@@ -80,7 +57,6 @@ def lock(store: LocalStore, name: str) -> Iterator[None]:
 
 
 def _names(path: Path, fd: int) -> bool:
-    """Whether `path` still names the open file `fd`: same device and inode."""
     try:
         at = os.stat(path)
     except FileNotFoundError:
@@ -90,8 +66,6 @@ def _names(path: Path, fd: int) -> bool:
 
 
 def _first(srcs: Sequence[Remote], key: str, dst: Path, check) -> tuple[str | None, list[str]]:
-    """Download `key` from the first source whose copy passes `check(tmp)`, into `dst` (write-once).  Returns (the source's
-    description or None, the reasons earlier sources were passed over)."""
     why: list[str] = []
     tmp = _tmp(dst)
     for src in srcs:
@@ -128,7 +102,6 @@ def _count(rep: dict[str, Any], src: str) -> None:
 
 def fetch_manifests(store: LocalStore, art_ids: Iterable[str], srcs: Sequence[Remote], *, jobs: int = JOBS,
                     report: dict[str, Any] | None = None) -> dict[str, ArtifactManifest]:
-    """{id: manifest} for every id some source holds; the rest are listed under the report's `missing`."""
     rep = report if report is not None else _report()
     want = list(dict.fromkeys(art_ids))
     for a in want:
@@ -166,7 +139,6 @@ def fetch_manifests(store: LocalStore, art_ids: Iterable[str], srcs: Sequence[Re
 
 def fetch_blobs(store: LocalStore, blobs: Iterable[tuple[str, int]], srcs: Sequence[Remote], *, jobs: int = JOBS,
                 report: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Make every `(sha256, bytes)` local in `objects/`; returns the report (`missing` lists what no source held intact)."""
     rep = report if report is not None else _report()
     want = list(dict.fromkeys((h, int(n)) for h, n in blobs))
     todo = [(h, n) for h, n in want if not store.object_path(h).exists()]
@@ -198,7 +170,6 @@ def fetch_blobs(store: LocalStore, blobs: Iterable[tuple[str, int]], srcs: Seque
 
 
 def fetch_set(store: LocalStore, art_ids: Iterable[str], srcs: Sequence[Remote], *, jobs: int = JOBS) -> tuple[dict[str, ArtifactManifest], dict[str, Any]]:
-    """Every id's manifest and every payload blob, local and checked.  Returns ({id: manifest}, report)."""
     rep = _report()
     ms = fetch_manifests(store, art_ids, srcs, jobs=jobs, report=rep)
     fetch_blobs(store, (b for m in ms.values() for b in m.blobs()), srcs, jobs=jobs, report=rep)

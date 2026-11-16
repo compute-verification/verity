@@ -1,8 +1,4 @@
-"""Known artifact kinds (README §11).  The store validates the envelope only; `put` warns on an unknown kind, never refuses.
-
-Kinds are strings `<name>/v<int>`, the name one or more `/`-separated segments (`verity/subcircuit-catalog/v1`); kind-specific
-validation is the producer's.
-"""
+"""Known artifact kinds: `put` warns on an unknown kind, never refuses."""
 from __future__ import annotations
 
 import re
@@ -93,7 +89,6 @@ KINDS: dict[str, str] = {
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",
-    # vLLM integration (adapters/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the input set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "

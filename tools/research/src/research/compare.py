@@ -1,35 +1,4 @@
-"""`research compare`: two ways to set runs side by side.
-
-`verdict(originals, replay, expect)` judges a replay against the attempts it replays, read from the evidence store by run id
-(`load`: the attempt manifest, its result's meta and its outputs' manifests, local first, else the remote the store fetches from;
-no payload bytes are downloaded, since manifests carry every file's sha256).  One of:
-
-    same             every check below is equal
-    within-band      nothing differs, but something only matched within the originals' own variation
-    differs          something changed (each reason says what), or a metric moved and the band is unknown (one original)
-    expected-change  `expect` (a `replay_expect` label value: `refused: FORM` or `blocked: GATE`) names the refusal the replay shows
-
-The checks, each against every original:
-
-    derivation   the replay is the same computation (the store's drv: id, which holds no source revision)
-    status       state, rc and validation as the attempt records them
-    outputs      every named output (all but result, run_files, run_record) equal by art id, or by content net of the run's own id:
-                 the publisher stamps `meta.run_id` on typed outputs, so the same bytes from two runs never share an art id
-    run files    per file by sha256: the run record's files (with the ones custody trimmed, listed by sha256) and the result's run
-                 files, minus the runner's own logs and records (RUNNER_FILES).  When an attempt has no run record, only the result's
-                 listed files are compared.
-    metrics      the result's measurements.  Numbers: with two or more originals, inside [min - spread, max + spread], spread =
-                 max - min; with one, equal.  Anything else: equal.
-
-An item on which the originals disagree among themselves (a file, an output, a status field) cannot be checked bit for bit: it is
-within-band.  `expect` given: a replay refused (not done, rc != 0 or validation failed) whose failure, class, result summary or
-validation detail contains FORM (GATE) is expected-change; one refused otherwise, or not refused at all, differs.
-
-`compare(base_dir, cand_dir)` is the older descriptive diff of two run directories.  It shows source, tool, machine, fingerprint
-(expected and observed, key by key), environment, execution, instrumentation, outcome, and measurement differences; it does not
-decide which differences invalidate the comparison.  Ratios are labeled candidate / baseline.  One pair of runs is one measured
-ratio, not a confidence interval.
-"""
+"""`research compare`: two ways to set runs side by side."""
 from __future__ import annotations
 
 import re
@@ -44,16 +13,13 @@ SAME, WITHIN_BAND, DIFFERS, EXPECTED_CHANGE = "same", "within-band", "differs", 
 VERDICTS = (SAME, WITHIN_BAND, DIFFERS, EXPECTED_CHANGE)
 EXPECT_KEY = "replay_expect"
 EXPECT_RE = re.compile(r"(refused|blocked): (\S.*)")
-#: outputs that are not compared by art id: the result (its meta holds the run id and the measurements, checked as metrics), and
-#: the two trees whose files are compared one by one
 NOT_NAMED = frozenset({"result", "run_files", "run_record"})
-#: how many examples a reason line names
 EXAMPLES = 5
 
 
 @dataclass(frozen=True)
 class Attempt:
-    """What `verdict` reads of one attempt.  `files` maps a run-dir path to its sha256; `files_scope` says what they cover."""
+    """`files` maps a run-dir path to its sha256; `files_scope` says what they cover."""
     id: str
     doc: dict[str, Any]
     result: dict[str, Any] | None
@@ -79,14 +45,12 @@ class Verdict:
 
 
 def runner_files() -> frozenset[str]:
-    """The runner's own logs and records in a run dir (custody's always-kept files, the sampler's stream, the publisher's error)."""
     from .store import custody
 
     return custody.RUN_FILES | {"resources.jsonl", "store_publish_error.json", custody.TRIMMED_LISTING}
 
 
 def load(store: Any, run_id: str) -> Attempt:
-    """The attempt `run_id` from `store` (a `LocalStore`); LookupError when neither the store nor its remote has it."""
     from .store import canon, custody
 
     doc = store.get_attempt(run_id)
@@ -147,7 +111,6 @@ class _Tally:
         self.same: dict[str, int] = {}
 
     def categorical(self, what: str, name: str, orig: list[Any], rep: Any, show: Any = None) -> None:
-        """One item: equal across the originals and in the replay (same), the originals disagree (within), else differs."""
         show = show or (lambda v: repr(v))
         label = f"{what} {name}" if name else what
         distinct = {repr(v) for v in orig}
@@ -164,7 +127,6 @@ def _short_sha(v: Any) -> str:
 
 
 def verdict(originals: list[Attempt], replay: Attempt, expect: str | None = None) -> Verdict:
-    """Judge `replay` against `originals` (module docstring).  ValueError when there is no original or `expect` is malformed."""
     if not originals:
         raise ValueError("verdict needs at least one original")
     m = None

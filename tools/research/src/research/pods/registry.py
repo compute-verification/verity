@@ -56,12 +56,12 @@ NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
               "nebius_instance_id", "lane", "deadline", "unreachable_since")
-KEPT_KEYS = ("lane", "deadline")   # a re-registration of the same binding that doesn't set them keeps the old file's
-OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
+KEPT_KEYS = ("lane", "deadline")
+OWNER_DEFAULT = "infra"
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
 
-problems: dict[str, str] = {}   # name -> why the last merge dropped it (read by remote.resolve_machine's refusal)
+problems: dict[str, str] = {}
 
 
 def notes_root(environ: dict | None = None) -> Path:
@@ -70,7 +70,6 @@ def notes_root(environ: dict | None = None) -> Path:
 
 
 def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | None:
-    """The registry directory, or None when it is off (module docstring)."""
     env = os.environ if environ is None else environ
     if REGISTRY_ENV in env:
         v = env[REGISTRY_ENV].strip()
@@ -79,8 +78,6 @@ def registry_dir(machines_toml: Path, environ: dict | None = None) -> Path | Non
 
 
 def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
-    """Where `register`, `unregister` and `import` write: the directory `research run --on` reads.  Refused when the registry is
-    off, since nothing would read the file."""
     from .. import remote
 
     d = registry_dir(machines_toml, environ)
@@ -91,7 +88,6 @@ def write_dir(machines_toml: Path, environ: dict | None = None) -> Path:
 
 
 def validate(name: str, entry: Any) -> str | None:
-    """Why `entry` cannot be machine `name`, or None."""
     if not NAME_RE.fullmatch(name) or name.startswith("_"):
         return f"{name!r} is not a machine name ({NAME_RE.pattern}, not starting with _)"
     if not isinstance(entry, dict):
@@ -116,7 +112,6 @@ def validate(name: str, entry: Any) -> str | None:
 
 
 def binding(entry: dict) -> str | None:
-    """What a name is bound to: a runpod pod id, or an ssh machine's host."""
     return entry.get("pod_id") or entry.get("host")
 
 
@@ -125,15 +120,10 @@ def _bound(entry: dict) -> str:
 
 
 def host_var(name: str) -> str:
-    """The variable a script reads machine `name`'s host from: the name in capitals, `-` as `_`, then `_HOST`
-    (vy-challenger-1 -> VY_CHALLENGER_1_HOST)."""
     return re.sub(r"[^A-Z0-9]", "_", name.upper()) + "_HOST"
 
 
 def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[str, str]:
-    """{host_var(name): host} for each named ssh machine, read as `research pods ssh NAME` reads it (`remote.load_machines`,
-    `remote.ssh_host_target`).  Refused, naming the file it looked for, when a name is not a registered ssh machine; nothing is
-    returned for the others then.  The refusal never holds an address."""
     from .. import remote
 
     ms = remote.load_machines() if machines is None else machines
@@ -151,7 +141,6 @@ def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[
 
 
 def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
-    """(name -> entry, name -> why dropped) for every `<name>.toml` in the directory."""
     entries: dict[str, dict] = {}
     bad: dict[str, str] = {}
     if not d.is_dir():
@@ -172,9 +161,6 @@ def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
 
 
 def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
-    """machines.toml's machines plus the registry's; a name the two bind to different pods, or a broken registry file, is dropped
-    (reason in `problems`).  Unchanged (and `problems` empty) when no registry directory is read.  Under a `$RESEARCH_MACHINES_D`
-    override, a name neither it nor machines.toml defines comes from the notes clone's machines.d, if there is one."""
     problems.clear()
     d = registry_dir(machines_toml, environ)
     if d is None:
@@ -205,7 +191,6 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
 
 
 def families(machines_toml: Path, environ: dict | None = None) -> dict[str, dict]:
-    """`[families.*]` from machines.toml, then the registry's `_families.toml` for families machines.toml does not define."""
     out: dict[str, dict] = {}
     if machines_toml.exists():
         out.update(tomllib.loads(machines_toml.read_text()).get("families", {}))
@@ -221,8 +206,6 @@ def families(machines_toml: Path, environ: dict | None = None) -> dict[str, dict
     return out
 
 
-# ---- writing ------------------------------------------------------------------------------------------------------------------------------
-
 def _toml_value(v: Any) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
@@ -230,7 +213,7 @@ def _toml_value(v: Any) -> str:
         return repr(v)
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
-    return json.dumps(str(v), ensure_ascii=True)       # a JSON string with ASCII escapes is a valid TOML basic string
+    return json.dumps(str(v), ensure_ascii=True)
 
 
 def render_entry(name: str, entry: dict) -> str:
@@ -270,8 +253,7 @@ def _guard(v: str | None) -> bool | float | None:
 def register(name: str, pod_id: str, project: str, *, root: str | None = None, python: str | None = None, guard: str | None = None,
              replace: bool = False, any_name: bool = False, machines_toml: Path | None = None, environ: dict | None = None,
              get_pod: Callable[[str], dict] = _pod, now: dt.datetime | None = None, lane: str | None = None) -> tuple[Path, str]:
-    """Check, then write `<dir>/<name>.toml` (module docstring).  -> (path, 'registered' | 'updated' | 'unchanged').
-    Raises remote.Refused with the reason; nothing is written then."""
+    """Raises remote.Refused with the reason; nothing is written then."""
     from .. import remote
     from . import runpod
 
@@ -319,7 +301,6 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
 
 
 def _probe_ssh(entry: dict[str, Any]) -> str | None:
-    """Why `entry`'s host cannot be reached over the research key (`hostname` over ssh), or None."""
     from .. import remote
 
     tgt = remote.ssh_host_target(entry)
@@ -334,9 +315,6 @@ def register_ssh(name: str, host: str, project: str, *, port: int | None = None,
                  root: str | None = None, python: str | None = None, replace: bool = False, machines_toml: Path | None = None,
                  environ: dict | None = None, probe: Callable[[dict], str | None] = _probe_ssh,
                  now: dt.datetime | None = None, nebius_instance_id: str | None = None, lane: str | None = None) -> tuple[Path, str]:
-    """`register` for a `provider = "ssh"` machine: refused unless `hostname` answers over ssh with the research key. A Nebius VM's
-    `nebius_instance_id` lets `research run --on` start it when it is stopped (remote.wake). `lane` is the lane whose budget line
-    pays for the machine, which stops it when its work there ends (fleet.py's daily report rings it with the machine's idle hours)."""
     from .. import remote
 
     mt = machines_toml or remote.machines_path()
@@ -363,8 +341,6 @@ def unregister(name: str, machines_toml: Path | None = None, environ: dict | Non
 
 
 def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[dict]:
-    """machines.toml entries to copy into the registry: every valid one not there yet whose pod is running (`running` = pod ids;
-    None = all).  Each row: name, action (`write` | `skip`), why."""
     rows = []
     toml_machines = tomllib.loads(machines_toml.read_text()).get("machines", {}) if machines_toml.exists() else {}
     have = load_dir(d)[0]

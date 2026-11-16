@@ -1,32 +1,4 @@
-"""A run's memory mark: what it asked, the limit that would stop it, the most it held, and whether it passed that limit.
-
-A mark stops nothing and sets no limit anywhere. It is the `memory` object of the run's status.json, written with the
-run's end (`of_run`, which `research run` hands the harness), and one line of `research status RUN` (`line`): the figure a
-lane sizes `--mem-gb` from.
-
-    ask      what the run asked, in bytes: the booking of the check slot it holds (its slot.json's `reserves_gib`, what
-             slot.py reserved for it), else, in no slot or one that reserves nothing, its queue job's memory, else its
-             `--mem-gb`, else none
-    limit    the ask and HEADROOM_BYTES more; HEADROOM_BYTES for a run with no ask; or what its launch stated
-             (`--mem-limit-gb`, and who stated it: `limit_by`). Never more than `bound`, the least memory.max over the
-             cgroup the runner started in and its ancestors, as job.json recorded it
-    held     memory.current less the page cache, `file - shmem` of memory.stat, in one of the sampler's cgroup records
-             (resources.jsonl, about one a second): what is left once the kernel has reclaimed what it can. The kernel counts
-             shared memory in `file`, and without swap it can't be reclaimed, so it stays in
-    peak     the most a sample held from when the run took its check slot (every sample, for a run in no slot), with that
-             sample's time and the number of samples it is the most of
-    over     whether a sample held more than the limit, and the first such sample's time
-
-The samples are of the cgroup the runner and its sampler run in. That is the workload's too, unless the run moved its
-workload out: a check slot with `scope=1` (its slot.json's `scope`), `--job-user`'s unit, a GPU lease. Then no sample is
-of the workload, and the mark holds no peak and says where the workload ran (`reason`). For a check in its own scope it
-holds the scope's memory.peak as the check's spans recorded it (`scope_peak_bytes`, to 0.1 GB): that counts the page
-cache, so it bounds what the check held from above and is not the held figure. A figure that can't be computed is null
-with its reason, never zero. A slot.py that writes no `reserves_gib` took the slot before it wrote either key: its run's
-mark is the reason alone (OLD_SLOT), since its ask and where its workload ran are both unknown.
-
-A GB is 10^9 bytes; a slot's booking and a queue job's memory are GiB, 2^30 bytes. The mark holds bytes.
-"""
+"""A run's memory mark: what it asked, the limit that would stop it, the most it held, and whether it passed that limit."""
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -39,20 +11,16 @@ from .runs import SLOT_FILE, _read
 GB = 10 ** 9
 GIB = 2 ** 30
 HEADROOM_BYTES = 128 * GB
-#: the mark's key in status.json
 KEY = "memory"
 SAMPLES = "resources.jsonl"
-#: what a pool run's `--mem-gb` reaches its slot as (tools/check/slot.py's RUN_MEM_ENV)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 FROM_ASK = f"ask+{HEADROOM_BYTES // GB}GB"
-#: a held slot record without `reserves_gib`: neither the ask nor where the workload ran is known, so nothing is marked
 OLD_SLOT = ("the slot.py that took the run's slot predates the mark: its record of the slot says neither what the slot reserved "
             "for the run nor whether the workload left the sampled cgroup (`research deploy install` places the current slot.py "
             "on a machine that keeps a copy of its own)")
 
 
 def ask(request: dict[str, Any], slot: dict[str, Any]) -> tuple[int | None, str]:
-    """What the run asked, in bytes, and where that is from: `slot`, `queue`, `--mem-gb` or `none`."""
     booked = slot.get("reserves_gib")
     if slot.get("state") == "held" and isinstance(booked, (int, float)) and booked > 0:
         return int(booked * GIB), "slot"
@@ -64,7 +32,6 @@ def ask(request: dict[str, Any], slot: dict[str, Any]) -> tuple[int | None, str]
 
 
 def bound(cgroup: dict[str, Any]) -> int | None:
-    """The least memory.max the runner's cgroup started under, from job.json's `environment.cgroup`; None when none is finite."""
     for key in ("effective_memory_max_bytes", "memory_max_bytes"):
         if isinstance(v := cgroup.get(key), int) and v > 0:
             return v
@@ -72,8 +39,6 @@ def bound(cgroup: dict[str, Any]) -> int | None:
 
 
 def limit(ask_bytes: int | None, stated: dict[str, Any] | None, bound_bytes: int | None) -> dict[str, Any]:
-    """`limit_bytes` and `limit_from`: FROM_ASK, `default` (no ask), `stated` (with `limit_by`), or `bound` where the machine's
-    bound is under what the rule or the statement gives."""
     if stated:
         want, how = int(float(stated["gb"]) * GB), "stated"
     elif ask_bytes is None:
@@ -86,7 +51,7 @@ def limit(ask_bytes: int | None, stated: dict[str, Any] | None, bound_bytes: int
 
 
 def held(cg: dict[str, Any]) -> int | None:
-    """What one cgroup record held: memory.current less `file - shmem`; None when the record lacks one of the three."""
+    """memory.current less `file - shmem`; None when the record lacks one of the three."""
     stat = cg.get("memory_stat") or {}
     cur, file, shmem = cg.get("memory_current_bytes"), stat.get("file"), stat.get("shmem")
     if not all(isinstance(v, int) for v in (cur, file, shmem)):
@@ -95,8 +60,6 @@ def held(cg: dict[str, Any]) -> int | None:
 
 
 def peak(records: Iterable[dict[str, Any]], limit_bytes: int, since: str | None = None) -> dict[str, Any]:
-    """The most the cgroup records held, when, over how many, in which cgroup, and whether and when first one held more than
-    `limit_bytes`. `since` (a UTC time to the second) leaves out the records before it."""
     top = top_utc = over_utc = path = None
     n = 0
     for rec in records:
@@ -117,10 +80,6 @@ def peak(records: Iterable[dict[str, Any]], limit_bytes: int, since: str | None 
 
 def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], records: Iterable[dict[str, Any]] | None, *,
          stated: dict[str, Any] | None = None, elsewhere: str | None = None, scope_peak: int | None = None) -> dict[str, Any]:
-    """The run's mark. `request` is its launch request ({} for a local run), `slot` its slot.json ({} without one), `cgroup`
-    job.json's `environment.cgroup`, `records` its cgroup records in order (None without a resources.jsonl), `stated` a
-    launch's `{"gb", "by"}`, `elsewhere` where the workload ran when not in the runner's cgroup, and `scope_peak` the bytes a
-    check's own scope peaked at."""
     if slot.get("state") == "held" and "reserves_gib" not in slot:
         return {"reason": OLD_SLOT}
     asked, ask_from = ask(request, slot)
@@ -149,16 +108,13 @@ def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], 
 
 
 def _scope_peak(run_dir: Path) -> int | None:
-    """The most memory.peak a check in its own scope recorded in its spans (`mem_peak_gb`), in bytes; None without one."""
     gbs = [gb for s in checkview.spans(run_dir) if isinstance(gb := (s.get("attributes") or {}).get("mem_peak_gb"), (int, float))]
     return round(max(gbs) * GB) if gbs else None
 
 
 def of_run(run_dir: Path, request: dict[str, Any], cgroup: dict[str, Any], *, stated: dict[str, Any] | None = None,
            elsewhere: str | None = None) -> dict[str, Any]:
-    """`{KEY: mark}` for the run's terminal status, from its run dir. With `elsewhere` nothing in the run dir is read: a
-    `--job-user` job can leave anything there, and no sample is of the workload. A mark that can't be made is its reason:
-    this never raises, since it runs between a workload's exit and the record of it."""
+    """With ``elsewhere`` nothing in the run dir is read: a `--job-user` job can leave anything there."""
     try:
         if elsewhere:
             return {KEY: mark(request, {}, cgroup, None, stated=stated, elsewhere=elsewhere)}
@@ -181,7 +137,6 @@ def _when(utc: object) -> str:
 
 
 def line(m: object) -> str:
-    """The mark as `research status RUN` prints it; for a record without one, that the peak was not recorded."""
     if not isinstance(m, dict):
         return ("peak not recorded: the run's record holds no memory mark (its runner predates the mark, or never wrote the "
                 "run's end)")

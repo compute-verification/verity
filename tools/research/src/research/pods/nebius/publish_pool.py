@@ -1,31 +1,5 @@
 #!/usr/bin/env python3
-"""Node 2's utilization and queue as `infra-pool/v1`, pushed to vy-nebius-1's `/workspace/usage/infra-pool.json` for the console.
-
-Run by `infra-pool-publish.timer` (every 5 min, as `research`, nice 19). Reads only files: the tail of the sampler's
-`util/*.jsonl` (the last hour), `fill/status.txt` and the `# fill:` headers of the fill folders; no NVML, no flock. While a
-timed window is on (`status.txt` says `timed True`) it neither computes nor pushes. The push is `scp` to a temp file on
-`vy-n1` (the `vy-cluster` key) then `mv`, so a reader sees the old file or the new one.
-
-Busy is the hourly report's rule: a GPU sample is busy when util >= 1% or SM active >= 1%. A busy sample is filler when the
-lease's fill job carries `filler=` in its header, else useful. `ready_gpu_h` is the queued GPU jobs' `max_min` summed (the
-most their next runs may take), against the 12 GPU-h watermark.
-
-Monitors, appended to node_ops' `alerts.jsonl` once per lease or process (again after 30 min while it lasts):
-- `gpu-idle-in-lease`: a lease held for the whole last 5 min whose GPU's mean util over them is under 10%.
-- `gpu-unleased`: a process on a GPU that no lease holds, or outside the holding lease's scope and process tree.
-`kinds` is each kind's leases that ended in the last 24 h (`gpu-lease/usage/v1`): leased and useful GPU-h (a filler job's busy
-time counts as leased only). A job's kind is its header's `kind=`, else `unlabeled:<first two words of its name>`, or
-`timed:<who>` or `direct:<who>` outside the fill queue (a timed lease idles the node's other GPUs by design, and is never flagged).
-
-Node 1's own file (`/workspace/usage/infra-pool-n1.json`, kueue-fold's) is merged in as `nodes.n1` while it is under 15 min old.
-
-`delivered_by_hour` (kueue-fold's names, node 1's shape): the last 4 UTC hours, oldest first, each lease's GPU-seconds split across
-the hours it spans. Leases still held count as leased up to now. A lease delivered when it ended with rc 0, or 99 (a fill chunk done,
-more to come), and isn't filler; a preempted or stopped lease (143, 137, 124) didn't. `guest_gpu_s` is the leased part held by Verity
-guests (`project=verity` fill jobs and `verity:` holders). `provisional` stays true until an hour after the hour ends.
-
-    publish_pool.py [--out FILE] [--no-push]
-"""
+"""Node 2's utilization and queue as `infra-pool/v1`, for the console."""
 from __future__ import annotations
 
 import argparse
@@ -66,7 +40,6 @@ def ts_or_none(s: str | None) -> datetime | None:
 
 
 def tail_records(files: list[Path], since: datetime) -> list[dict]:
-    """The records at or after `since`, reading each file backwards in blocks until one is older."""
     out: list[dict] = []
     for f in files:
         if not f.exists():
@@ -118,7 +91,6 @@ def jobs() -> dict[str, dict[str, dict]]:
 
 
 def fill_job(lease: str, known: dict[str, dict]) -> dict | None:
-    """The fill job a lease runs; the sampler truncates the lease's cmd, so its name matches as a prefix."""
     m = re.search(r"/fill/running/(\S+)", lease or "")
     if not m:
         return None
@@ -148,7 +120,6 @@ def owner_of(lease: str) -> str | None:
 
 
 def leased_pid(pid: int, lease: str) -> bool | None:
-    """Whether a GPU process belongs to the lease: in its scope or under its pid. None when the process is gone."""
     try:
         cg = (PROC / str(pid) / "cgroup").read_text()
     except OSError as e:
@@ -213,7 +184,6 @@ def alert(found: list[dict], now: datetime) -> None:
 
 
 def kinds(now: datetime, known: dict[str, dict]) -> list[dict]:
-    """Each kind's leases that ended in the last 24 h, the most idle first."""
     since, out = now - timedelta(days=1), {}
     if not USAGE.exists():
         return []
@@ -351,7 +321,6 @@ def build(now: datetime) -> dict:
 
 
 def merge(doc: dict, other: dict | None, now: datetime) -> dict:
-    """Node 1's own file (kueue-fold's `pool_n1.py`) joins `nodes` while it is under 15 min old; node 2's entry always wins."""
     t = ts_or_none((other or {}).get("generated_at"))
     if t and now - t <= timedelta(seconds=OTHER_MAX_AGE_S):
         for name, node in (other.get("nodes") or {}).items():

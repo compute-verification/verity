@@ -1,10 +1,3 @@
-"""Canonical JSON (README §1): the one serialisation every id is computed over.
-
-`dumps(obj)` = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)` as UTF-8, after
-rejecting what would make two equal documents serialise differently or two different documents serialise the same: NaN/Inf,
-`-0.0` (use `0.0`), non-`str` keys (json would coerce `1` and `"1"` onto the same key).  Floats render via Python `repr`
-(shortest round-trip), ints are unbounded, `bool` stays `true`/`false`.  Tuples serialise as lists.
-"""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +9,6 @@ SCALARS = (str, int, float, bool, type(None))
 
 
 def check(obj: Any, path: str = "$") -> None:
-    """Raise ValueError naming the offending path if `obj` is not canonicalisable."""
     if isinstance(obj, bool) or obj is None or isinstance(obj, (str, int)):
         return
     if isinstance(obj, float):
@@ -48,7 +40,6 @@ def loads(data: bytes | str) -> Any:
 
 
 def sha256(obj: Any) -> str:
-    """Hex sha256 of the canonical bytes."""
     return hashlib.sha256(dumps(obj)).hexdigest()
 
 

@@ -1,27 +1,3 @@
-"""The store's derived index (README §5.1): four generic tables built from the bucket's records by `index()`, their only writer.
-
-records(id, type, kind, time, doc)   type artifact | run | label; kind = an artifact's kind, a run's tool, a label's key;
-                                     time = when an artifact's manifest reached the bucket, a run's start, a label's ts;
-                                     doc = the record less `payload.files` and `closure`
-fields(id, path, value)              every scalar leaf of doc as `index.flatten` writes it (dotted path, text value); a value
-                                     longer than FIELD_MAX characters is left to doc (Postgres cannot index it)
-edges(src, name, dst)                refs.<name>, inputs.<name>, outputs.<name>, telemetry.<name>, and a label's `target`;
-                                     dst need not be a record (a drv: id, pr:<n>@<sha>)
-listings(prefix, listed_at, keys)    what the last listing of each prefix saw: the index is complete as of `listed_at`
-
-The index never names a field inside a record, so a new kind or field needs no migration: a schema change is a rebuild. It
-never lists `objects/` or opens a payload. A label's id is `label:` + the sha256 of its canonical assertion (its remote key);
-every record read is checked against its key, and one that fails is reported and left out.
-
-`index(remote, db)` lists the bucket, reads the records the index lacks and writes their rows (idempotent). Runs are listed from
-the newest indexed run id (`start-after`), and in full once `FULL_RUNS_EVERY` has passed, for a run whose custody published it
-late. `index(public_remote, db, policy=PUBLIC, private=private_db)` rebuilds the public tables from the private index: the
-artifacts whose manifests are in the public bucket, each run that produced one (its doc cut to `PUBLIC_RUN_FIELDS`) and the
-`PUBLIC_LABEL_KEYS` labels on those targets (cut to `PUBLIC_LABEL_FIELDS`). Both are whitelists.
-
-`db` is a SQLite file (`SqliteIndex`) or a schema of a Postgres database (`PostgresIndex`, written through `psql` with the URL
-in libpq's environment). The public rebuild reads the private index IN_BATCH ids per query, six psql calls whatever its size.
-"""
 from __future__ import annotations
 
 import json
@@ -46,11 +22,11 @@ from .model import Label
 
 PRIVATE, PUBLIC = "private", "public"
 MANIFESTS, ATTEMPTS, LABELS = "manifests/", "attempts/", "labels/"
-RUNS_TAIL = "attempts/>"                                # the listings row of the start-after listing of runs
+RUNS_TAIL = "attempts/>"
 FULL_RUNS_EVERY = timedelta(hours=1)
 FIELD_MAX = 1024
-IN_BATCH = 500                                          # ids per IN (...) list: under SQLite's 999 bound parameters
-ENVELOPE_ONLY = frozenset({"redteam-findings/v1"})     # meta (the findings' text) stays in the bucket
+IN_BATCH = 500
+ENVELOPE_ONLY = frozenset({"redteam-findings/v1"})
 EDGE_SECTIONS = {"artifact": ("refs",), "run": ("inputs", "outputs", "telemetry")}
 PUBLIC_LABEL_KEYS = ("verified", "verifier", "proof_class")
 PUBLIC_LABEL_FIELDS = ("schema", "target", "key", "value", "by", "ts")
@@ -58,7 +34,7 @@ PUBLIC_RUN_FIELDS = (("schema",), ("id",), ("tool", "name"), ("status", "state")
                      ("conditions", "hw.sku"), ("conditions", "hw.count"), ("conditions", "rt.driver"), ("conditions", "rt.cuda"),
                      ("source", "commit"))
 HEX_RE = re.compile(ids.HEX64)
-READER_ENV = "STORE_PRIVATE_READER_URL"              # store_private_reader's URL (README §5.1)
+READER_ENV = "STORE_PRIVATE_READER_URL"
 
 SQLITE_DDL = """
 CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY, type TEXT NOT NULL, kind TEXT, time TEXT, doc TEXT NOT NULL);
@@ -84,7 +60,6 @@ CREATE TABLE IF NOT EXISTS {schema}.listings(prefix text PRIMARY KEY, listed_at 
 
 
 def iso(text: Any) -> str | None:
-    """`YYYY-MM-DDTHH:MM:SSZ` in UTC, or None for anything that is not a time."""
     if not isinstance(text, str) or not text:
         return None
     try:
@@ -122,13 +97,10 @@ class Row:
 
 
 def record_key(key: str) -> bool:
-    """A key that holds a record: a `.json`, not the `<key>.parts.json` sidecar a multipart upload writes beside a large one
-    (remote_s3.parts_sidecar)."""
     return key.endswith(".json") and not key.endswith(".parts.json")
 
 
 def record_id(key: str) -> str | None:
-    """The id a key names, or None when only the content can say (a label under a non-content key, as a local store keeps them)."""
     name = key.rsplit("/", 1)[-1].removesuffix(".json")
     if key.startswith(MANIFESTS):
         return f"art:{name}"
@@ -138,7 +110,6 @@ def record_id(key: str) -> str | None:
 
 
 def parse(key: str, data: bytes, modified: str | None) -> Row:
-    """The row of one record read from `key`, checked against the key; ValueError when it does not match."""
     doc = json.loads(data)
     if not isinstance(doc, dict):
         raise ValueError(f"{key}: not a JSON object")
@@ -184,8 +155,6 @@ def public_label(row: Row) -> Row:
 
 
 class SqliteIndex:
-    """The four tables in one SQLite file (a schema of its own: the private and the public index are two files)."""
-
     def __init__(self, db: Path | str | sqlite3.Connection):
         if isinstance(db, sqlite3.Connection):
             self.db, self.path = db, None
@@ -203,7 +172,6 @@ class SqliteIndex:
         return str(self.path) if self.path is not None else "SQLite"
 
     def query(self, sql: str) -> tuple[list[str], list[tuple]]:
-        """One read-only query: its column names and rows."""
         db = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=30) if self.path is not None else self.db
         try:
             cur = db.execute(sql)
@@ -224,7 +192,6 @@ class SqliteIndex:
         return r[0] if r else None
 
     def _each(self, query: str, ids: Iterable[str], *extra) -> list[tuple]:
-        """`query`'s rows for `ids`, IN_BATCH at a time: `query` holds `{ids}` where the placeholders go, then `extra`'s."""
         ids, out = sorted(set(ids)), []
         for i in range(0, len(ids), IN_BATCH):
             part = ids[i:i + IN_BATCH]
@@ -239,14 +206,12 @@ class SqliteIndex:
         return self.rows([rid]).get(rid)
 
     def producers(self, arts: Iterable[str]) -> dict[str, list[str]]:
-        """Each artifact's producing runs (the runs with an `outputs.*` edge to it)."""
         out: dict[str, list[str]] = {}
         for dst, src in sorted(set(self._each("SELECT dst, src FROM edges WHERE dst IN ({ids}) AND name LIKE 'outputs.%'", arts))):
             out.setdefault(dst, []).append(src)
         return out
 
     def labels_on(self, targets: Iterable[str], keys: Iterable[str]) -> list[str]:
-        """The ids of the labels with one of `keys` on any of `targets`."""
         keys = list(keys)
         return sorted({r[0] for r in self._each(
             "SELECT e.src FROM edges e JOIN records r ON r.id = e.src WHERE e.dst IN ({ids}) AND e.name='target' "
@@ -262,7 +227,6 @@ class SqliteIndex:
         return self.edges_from([rid]).get(rid, [])
 
     def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
-        """Insert the rows not already present, in one transaction.  How many were new."""
         n = 0
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
@@ -274,7 +238,6 @@ class SqliteIndex:
         return n
 
     def replace(self, groups: list[tuple[list[Row], Callable[[Row], list[tuple]]]], listings: dict[str, tuple[str, int]]) -> None:
-        """Every row replaced by `groups` and `listings`, in one transaction (the public rebuild)."""
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             for t in ("records", "fields", "edges", "listings"):
@@ -291,7 +254,6 @@ class SqliteIndex:
             self.db.execute("INSERT OR REPLACE INTO listings VALUES (?,?,?)", (prefix, listed_at, keys))
 
     def size(self) -> dict:
-        """Rows per table and the bytes the rows hold (doc text, field and edge text), for the measurement step 1 asks for."""
         one = lambda q: self.db.execute(q).fetchone()  # noqa: E731
         rec = one("SELECT count(*), coalesce(sum(length(CAST(doc AS BLOB))), 0) FROM records")
         fld = one("SELECT count(*), coalesce(sum(length(CAST(id AS BLOB)) + length(CAST(path AS BLOB)) + length(CAST(value AS BLOB))), 0) FROM fields")
@@ -304,7 +266,6 @@ class SqliteIndex:
 
 
 def pg_env(url: str) -> dict[str, str]:
-    """libpq's environment for a `postgresql://user:password@host/db?sslmode=...` URL, so the URL never sits on a command line."""
     u = urllib.parse.urlsplit(url)
     query = urllib.parse.parse_qs(u.query)
     if u.scheme not in ("postgres", "postgresql") or not (u.hostname or query.get("host")):
@@ -323,7 +284,6 @@ def _lit(s: str) -> str:
 
 
 def _values(rows: Iterable[tuple]) -> str:
-    """Rows as SQL VALUES literals.  Postgres text and jsonb cannot hold NUL, so it becomes U+FFFD here only."""
     return ",\n".join("(" + ",".join("NULL" if v is None else _lit(str(v).replace("\x00", "\ufffd")) for v in r) + ")" for r in rows)
 
 
@@ -338,12 +298,7 @@ _UTC = "to_char({col} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"
 
 
 class PostgresIndex:
-    """The four tables in one schema of a Postgres database (Neon's `store`: `store_private`, `store_public`), written through
-    `psql` (stdlib only: no driver).  The schema is the database owner's; this creates the tables in it when they are missing and
-    otherwise only inserts and deletes rows, so the readers' grants on the schema survive a rebuild."""
-
     def __init__(self, url: str, schema: str, psql: str = "psql", *, create: bool = True):
-        """`create=False` for a reader: Postgres checks CREATE on the schema even when every table exists."""
         if not re.fullmatch(r"[a-z_][a-z0-9_]*", schema):
             raise ValueError(f"bad schema name {schema!r}")
         self.env, self.schema, self.psql, self.path = pg_env(url), schema, psql, None
@@ -358,7 +313,6 @@ class PostgresIndex:
         return [ln.split("\t") for ln in r.stdout.splitlines() if ln]
 
     def select(self, query: str) -> list[tuple]:
-        """The rows of one SELECT, read through COPY's text format, so values may hold tabs and newlines; NULL is None."""
         return [tuple(_uncopy(f) for f in row) for row in self.run(f"COPY ({query}) TO STDOUT;")]
 
     def close(self) -> None:
@@ -368,8 +322,6 @@ class PostgresIndex:
         return f"{self.schema} on {self.env.get('PGHOST', 'postgres')}"
 
     def query(self, sql: str) -> tuple[list[str], list[tuple]]:
-        """One query in a read-only transaction with this schema first on the search path: its column names and rows, every
-        value as Postgres's text output (a time in this session's zone, UTC)."""
         out = self.run(f"BEGIN READ ONLY;\nSET LOCAL search_path TO {self.schema};\nSET LOCAL TIME ZONE 'UTC';\n"
                        f"COPY ({sql.strip().rstrip(';')}) TO STDOUT WITH (HEADER);\nCOMMIT;")
         cols = [_uncopy(f) for f in out[0]] if out else []
@@ -387,7 +339,6 @@ class PostgresIndex:
         return r[0][0] if r else None
 
     def _each(self, query: str, ids: Iterable[str]) -> list[tuple]:
-        """`query`'s rows for `ids`, IN_BATCH ids per SELECT and every SELECT in one psql call: `query` holds `{ids}`."""
         ids = sorted(set(ids))
         if not ids:
             return []
@@ -403,7 +354,6 @@ class PostgresIndex:
         return self.rows([rid]).get(rid)
 
     def producers(self, arts: Iterable[str]) -> dict[str, list[str]]:
-        """Each artifact's producing runs (the runs with an `outputs.*` edge to it)."""
         out: dict[str, list[str]] = {}
         for dst, src in sorted(set(self._each(f"SELECT dst, src FROM {self.schema}.edges WHERE dst IN ({{ids}}) AND name LIKE 'outputs.%'",
                                               arts))):
@@ -411,7 +361,6 @@ class PostgresIndex:
         return out
 
     def labels_on(self, targets: Iterable[str], keys: Iterable[str]) -> list[str]:
-        """The ids of the labels with one of `keys` on any of `targets`."""
         return sorted({r[0] for r in self._each(
             f"SELECT e.src FROM {self.schema}.edges e JOIN {self.schema}.records r ON r.id = e.src WHERE e.dst IN ({{ids}}) "
             f"AND e.name='target' AND r.kind IN ({','.join(_lit(k) for k in keys)})", targets)})
@@ -426,8 +375,6 @@ class PostgresIndex:
         return self.edges_from([rid]).get(rid, [])
 
     def _insert(self, rows: list[Row], edges: Callable[[Row], list[tuple]]) -> str:
-        """One statement inserting the records not yet present and the fields and edges of those only; it returns how many were new.
-        Plain VALUES rather than COPY: COPY cannot skip a present key, and the indexer may not create temporary tables."""
         s = self.schema
         fields = [x for row in rows for x in row.fields()]
         links = [x for row in rows for x in edges(row)]
@@ -442,13 +389,11 @@ class PostgresIndex:
         return sql + "\nSELECT count(*) FROM new;\n"
 
     def add(self, rows: list[Row], edges: Callable[[Row], list[tuple]] = Row.edges) -> int:
-        """Insert the rows not already present, in one transaction.  How many were new."""
         if not rows:
             return 0
         return int(self.run(self._insert(rows, edges))[-1][0])
 
     def replace(self, groups: list[tuple[list[Row], Callable[[Row], list[tuple]]]], listings: dict[str, tuple[str, int]]) -> None:
-        """Every row replaced by `groups` and `listings`, in one transaction (the public rebuild); tables are kept, so grants are."""
         s = self.schema
         self.run("BEGIN;\n" + "".join(f"DELETE FROM {s}.{t};\n" for t in ("records", "fields", "edges", "listings"))
                  + "".join(self._insert(rows, edges) for rows, edges in groups if rows)
@@ -460,7 +405,6 @@ class PostgresIndex:
                  "ON CONFLICT (prefix) DO UPDATE SET listed_at = EXCLUDED.listed_at, keys = EXCLUDED.keys;")
 
     def size(self) -> dict:
-        """SqliteIndex.size's shape; `bytes` is each table's with its indexes and `file_bytes` their sum."""
         s = self.schema
         out = {t: {"rows": int(n), "bytes": int(b)} for t, n, b in self.run("".join(
             f"SELECT '{t}', (SELECT count(*) FROM {s}.{t}), pg_total_relation_size('{s}.{t}');\n"
@@ -478,7 +422,6 @@ def _stamp(t: datetime) -> str:
 
 
 def _read(remote, keys: list[tuple[str, str | None]], jobs: int) -> tuple[list[Row], list[str]]:
-    """Read and check each key, `jobs` at a time.  (rows in key order, errors)."""
     lock, rows, errors = threading.Lock(), {}, []
     with tempfile.TemporaryDirectory(prefix="bucket-index-") as tmp:
         def one(i_kv):
@@ -553,10 +496,6 @@ def index(remote, db: Path | str | sqlite3.Connection | SqliteIndex | PostgresIn
           private: Path | str | SqliteIndex | PostgresIndex | None = None,
           jobs: int = 32, full: bool = False, now: datetime | None = None, batch: int = 2000,
           log: Callable[[str], None] | None = None) -> dict:
-    """Bring the index at `db` up to what `remote` holds (module docstring).  `remote` needs `list_times` and `get`.  PRIVATE reads only
-    the records `db` lacks; PUBLIC rebuilds `db` from the private index `private` and the public bucket `remote`'s manifest listing.
-    {"policy", "listed": {prefix: keys}, "read", "added": {type: n}, "errors", "seconds"}; a record that fails its check is in
-    `errors` and is read again next pass."""
     t0 = time.monotonic()
     idx = db if isinstance(db, (SqliteIndex, PostgresIndex)) else SqliteIndex(db)
     try:
@@ -584,7 +523,6 @@ def default_path(store_root: Path | str, policy: str = PRIVATE) -> Path:
 
 
 def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]:
-    """Every row of the tables records, fields and edges, sorted: what two builds of one bucket must agree on (listings carry their time)."""
     if isinstance(db, PostgresIndex):
         s = db.schema
         recs = [(*r[:4], canon.dumps(json.loads(r[4])).decode())
@@ -600,8 +538,6 @@ def dump(db: Path | str | SqliteIndex | PostgresIndex) -> dict[str, list[tuple]]
 
 
 def reader(store_root: Path | str) -> SqliteIndex | PostgresIndex | None:
-    """The private index displays read: Neon's `store_private` when $READER_ENV holds its read-only role's URL, else this
-    machine's `research data index` build (`default_path`), else None (then a display reads the catalog, `catalog.sqlite`)."""
     if url := os.environ.get(READER_ENV, "").strip():
         return PostgresIndex(url, "store_private", create=False)
     p = default_path(store_root)
@@ -609,13 +545,11 @@ def reader(store_root: Path | str) -> SqliteIndex | PostgresIndex | None:
 
 
 def as_of(idx: SqliteIndex | PostgresIndex) -> str | None:
-    """What the index is complete as of: its oldest listing's time (each prefix is complete as of its own)."""
     rows = idx.query("SELECT min(listed_at) FROM listings")[1]
     return iso(str(rows[0][0]).replace(" ", "T")) if rows and rows[0][0] else None
 
 
 def not_indexed(idx: SqliteIndex | PostgresIndex, wanted: Iterable[str], batch: int = 2000) -> list[str]:
-    """The ids of ``wanted`` the index has no record of, in order."""
     want, out = list(dict.fromkeys(wanted)), []
     for i in range(0, len(want), batch):
         vals = ", ".join(f"({_lit(x)})" for x in want[i:i + batch])
@@ -626,24 +560,18 @@ def not_indexed(idx: SqliteIndex | PostgresIndex, wanted: Iterable[str], batch: 
 
 
 def local_records(store) -> list[str]:
-    """The index ids of every record this store holds: its artifacts, its runs and `label:<hash>` for each assertion."""
     from . import labels_sync as LS
 
     return [*store.artifact_ids(), *store.attempt_ids(), *(f"label:{h}" for h in LS.local_labels(store))]
 
 
 def pending(store, idx: SqliteIndex | PostgresIndex) -> list[str]:
-    """This store's records the index lacks: written here and not yet in the bucket (`research data pending`), or in it since
-    the index last listed it.  A display shows them beside what it read."""
     return not_indexed(idx, local_records(store))
 
 
 def select_artifacts(idx: SqliteIndex | PostgresIndex, *, kind: str | None = None, where: dict[str, str] | None = None,
                      labels: Iterable[tuple[str, Any]] = (), attempt: str | None = None, tool: str | None = None,
                      derivation: str | None = None) -> list[tuple[str, dict]]:
-    """(id, doc) of every indexed artifact matching every facet, as the catalog's `Index.select_artifacts` reads them: `where`
-    dotted meta keys (`meta.` optional), every (key, value) label asserted by anyone, and the outputs of the runs `attempt`, `tool`
-    and `derivation` name."""
     q = ["r.type = 'artifact'"] + ([f"r.kind = {_lit(kind)}"] if kind else [])
     for k, v in (where or {}).items():
         path = k if k.startswith("meta.") else f"meta.{k}"

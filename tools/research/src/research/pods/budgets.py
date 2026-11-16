@@ -1,41 +1,4 @@
-"""`budgets.toml`: every spending limit in one file at the notes repository's root, read by the one guard (`research pods guard`) and
-checked by `research pods create`.  A line is the approval: committing it replaces starting a guard process.
-
-    [guard]
-    project = ["vy"]                   # pod names starting with these are the project's; the guard sees no other pod
-    balance_floor = 25                 # USD: at or under it, every project pod is terminated (the account's backstop)
-    terminate_uncovered = true         # a project pod no line covers is terminated after uncovered_grace_min (false: reported only)
-    uncovered_grace_min = 15
-    exempt = ["vy-control-"]           # never counted, never terminated (the guard's own host is exempt without this)
-
-    [budgets]
-    "vy-circuit-checks-" = { limit_usd = 5, expires = "2026-09-30T06:00Z", max_pod_hours = 12, by = "daniel: circuit checks" }
-    "vy-coord-" = { limit_usd_per_day = 65, expires = "2026-10-31T00:00Z", max_pod_hours = 168, by = "daniel: the CI pool" }
-
-A line covers every pod whose RunPod name starts with its prefix; when several do, the longest prefix covers it.
-  limit_usd      the line's pods' integrated spend (costPerHr x time, from when the guard first sees the line) at or over it trips the
-                 line: its pods are terminated, and `pods create` refuses under it until limit_usd is raised above the spend
-  limit_usd_per_day  the same over any rolling 24 hours (not a calendar day, so no reset at midnight lets a day's spend double): its
-                 trip clears by itself once the window's spend falls back under it.  A line needs limit_usd, limit_usd_per_day, or both
-  expires        ISO 8601 with a zone: after it `pods create` refuses under the line; its pods are never terminated for the clock (their
-                 leases end them)
-  max_pod_hours  a pod under the line older than this (RunPod's createdAt) is terminated: the outer bound for a pod whose lease never
-                 got armed; `pods create --max-hours` may not exceed it
-  by             who approved it (free text)
-A file that does not parse, or any line that does not validate, is rejected whole: the guard keeps the last good one, and says so.
-A line that still names a key by its older name (OLD_KEYS: `cap_usd`, `cap_usd_per_day`) is read as the new key when the new one is
-absent; the guard says so once in its log.
-
-Where it is read (`load`): a file path as given, or a notes clone, from its origin (`git fetch` then `git show origin/<branch>:budgets.toml`):
-a line counts once it is pushed, whatever the clone's working tree holds.
-
-`research pods create NAME ... --max-hours H` passes `gate` against the guard's own state, read from its host with one ssh call
-through the host's door (pods/door.py; $RESEARCH_GUARD_HOST, default GUARD_HOST; `local` reads the file here; the file is
-$RESEARCH_GUARD_STATE, default GUARD_STATE, which the door's gate does not take: it reads the guard's own): it
-refuses when the guard has not completed a poll in STALE_S, when its last read of budgets.toml failed (it enforces the last good
-budgets, but nothing new starts on them), when the guard's budgets have no live, untripped line covering NAME, or when H is over the
-line's max_pod_hours.  The guard's view is the one that counts: a line the guard has not read yet is not a line.
-"""
+"""`budgets.toml`: every spending limit, in one file at the notes repository's root."""
 from __future__ import annotations
 
 import datetime as dt
@@ -194,7 +157,6 @@ def parse(text: str) -> Budgets:
 
 
 def limits(line: dict[str, Any]) -> tuple[Any, Any]:
-    """(limit_usd, limit_usd_per_day) of a line's view, read from a guard state that a guard before the keys' rename wrote too."""
     return (line.get("limit_usd", line.get("cap_usd")), line.get("limit_usd_per_day", line.get("cap_usd_per_day")))
 
 
@@ -206,7 +168,6 @@ def _git(root: Path, *args: str, timeout: float = 60, opts: list[str] | None = N
 
 
 def read(source: Path) -> tuple[str, str]:
-    """(text, provenance) of budgets.toml at `source`: a file, or a notes clone read from its origin after a fetch."""
     if not source.is_dir():
         return source.read_text(), str(source)
     branch = _git(source, "symbolic-ref", "--short", "HEAD").strip()
@@ -218,7 +179,6 @@ def read(source: Path) -> tuple[str, str]:
 
 
 def load(source: Path) -> tuple[Budgets, str]:
-    """Parsed budgets and where they came from; OSError / BudgetError when they cannot be had."""
     text, where = read(source)
     return parse(text), where
 
@@ -227,16 +187,11 @@ def default_source() -> Path:
     return Path(settings.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes").expanduser()
 
 
-# ---- the create gate ---------------------------------------------------------------------------------------------------------------------
-
 def guard_host() -> str:
-    """The budgets guard's host, the control pod: $RESEARCH_GUARD_HOST, else GUARD_HOST; `local` when this machine is it."""
     return settings.get("RESEARCH_GUARD_HOST") or GUARD_HOST
 
 
 def read_guard_state(host: str | None = None, path: str | None = None) -> tuple[dict[str, Any], float]:
-    """(the guard's state, the host's clock) from the guard's host: one ssh call, the gate's `budgets-state` there (pods/door.py;
-    `cat STATE; date +%s` to a pod that has no door yet).  `local` reads it here."""
     host = host or guard_host()
     path = path or settings.get("RESEARCH_GUARD_STATE") or GUARD_STATE
     if host == "local":
@@ -254,7 +209,6 @@ def read_guard_state(host: str | None = None, path: str | None = None) -> tuple[
 
 
 def gate(name: str, max_hours: float, state: dict[str, Any], now: float, *, host: str = GUARD_HOST) -> str | None:
-    """Why `pods create` must not create pod `name` with a `max_hours` lease, judged on the guard's state at `now`; None when it may."""
     last = state.get("last_ok_poll")
     if last is None or now - float(last) > STALE_S:
         ago = "never" if last is None else f"{(now - float(last)) / 60:.1f} min ago"
@@ -290,7 +244,6 @@ def gate(name: str, max_hours: float, state: dict[str, Any], now: float, *, host
 
 
 def check_create(name: str, max_hours: float, *, reader=read_guard_state) -> tuple[str | None, str | None]:
-    """(refusal, covering prefix) for `pods create`: the guard's state read from its host, judged by `gate`."""
     host = guard_host()
     try:
         state, now = reader()

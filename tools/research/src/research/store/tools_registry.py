@@ -1,7 +1,4 @@
-"""name -> `dotted.module:NAME` for `research run --tool NAME` (store README §6.1).  Keep it tiny; declarations live next to
-the tool they describe.  `load` also accepts the spec form directly and, when the module is not importable (a shipped `git
-archive` cwd, or a console-script sys.path without the repo root), loads `<source_root>/<module path>.py` by file, or, in a
-tree from before a layout move, the file at the path the move renamed (`moves.json`)."""
+"""name -> `dotted.module:NAME` for `research run --tool NAME`; declarations live next to the tool they describe."""
 from __future__ import annotations
 
 import hashlib
@@ -30,7 +27,6 @@ REGISTRY: dict[str, str] = {
     "check": "tools.check.tool:CHECK",
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
-    # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
     "vllm.plan": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
     "vllm.match": "adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
@@ -40,8 +36,6 @@ REGISTRY: dict[str, str] = {
 
 
 def _from_file(module: str, attr: str, source_root: Path):
-    """Execute `<source_root>/<module path>.py` under a name unique to that file and its content: no sys.path edits, no
-    cross-root module caching, and a declaration that changed on disk (the target branch gained a commit) is read anew."""
     rel = Path(*module.split("."))
     for cand in (source_root / rel.with_suffix(".py"), source_root / rel / "__init__.py"):
         if cand.is_file():
@@ -65,8 +59,6 @@ def _moves() -> list[dict[str, str]]:
 
 
 def former_modules(module: str, moves: list[dict[str, str]] | None = None) -> list[str]:
-    """``module`` as each earlier layout named it, newest first: its path mapped back through each move's renamed paths
-    (`moves.json`; a file maps as itself without `.py`, a directory as a prefix)."""
     path, out = "/".join(module.split(".")), []
     for paths in reversed(_moves() if moves is None else moves):
         for old, new in sorted(paths.items(), key=lambda kv: -len(kv[1])):
@@ -81,8 +73,6 @@ def former_modules(module: str, moves: list[dict[str, str]] | None = None) -> li
 
 
 def former_paths(path: str, moves: list[dict[str, str]] | None = None) -> list[str]:
-    """``path`` (a file, or a directory with or without its `/`) as each earlier layout named it, newest first: mapped back
-    through each move's renamed paths (`moves.json`; a directory maps as a prefix)."""
     path, out = path.rstrip("/"), []
     for paths in reversed(_moves() if moves is None else moves):
         for old, new in sorted(paths.items(), key=lambda kv: -len(kv[1])):
@@ -95,17 +85,12 @@ def former_paths(path: str, moves: list[dict[str, str]] | None = None) -> list[s
 
 
 def resolve(path: str, exists: Callable[[str], bool], moves: list[dict[str, str]] | None = None) -> str | None:
-    """``path`` if ``exists`` holds for it, else the newest name an earlier layout gave it that does (`former_paths`), else None:
-    how a reader of an older commit or tree finds a file the layout moved since."""
     if exists(path):
         return path
     return next((p for p in former_paths(path, moves) if exists(p)), None)
 
 
 def locate(spec_or_name: str, root: Path) -> tuple[str, str] | None:
-    """(module, attr) of the declaration ``root`` holds for a tool, under its module or one an earlier layout gave it; None
-    when it holds none.  The current module is looked for before `moves.json` is read, so an unreadable one can't hide a
-    declaration at its current path (`merge.required_steps` would then require no step)."""
     module, _, attr = REGISTRY.get(spec_or_name, spec_or_name).rpartition(":")
     if not module:
         return None
@@ -120,7 +105,6 @@ def locate(spec_or_name: str, root: Path) -> tuple[str, str] | None:
 
 
 def from_tree(spec_or_name: str, root: Path) -> Tool:
-    """The declaration of a tool that the tree at ``root`` holds (`locate`), executed from its file."""
     if (found := locate(spec_or_name, root)) is None:
         raise ImportError(f"{REGISTRY.get(spec_or_name, spec_or_name)}: {root} declares no such tool, under this layout or an "
                           "earlier one")
@@ -138,7 +122,7 @@ def load(spec_or_name: str, source_root: Path | str | None = None) -> Tool:
     except (ImportError, AttributeError) as e1:
         obj = None
         e2: Exception = e1
-        for cand in (root, *list(root.parents)[:6]):     # `--cwd adapters/vllm`: the declaration's file sits at the repo root above
+        for cand in (root, *list(root.parents)[:6]):
             try:
                 obj = from_tree(spec, cand)
                 break

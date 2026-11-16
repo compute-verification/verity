@@ -1,10 +1,4 @@
-"""A `research run` line's options, each checked against an allowlist: the control pod's `metrics-rerun` loop
-(infra/control/metrics_rerun.py) and the dispatcher's `research-run` jobs (`research.jobs.dispatch`) launch only what theirs
-holds.
-
-An allowlist maps each option to the form of its value: None for a flag, a frozenset of the values it may take, a compiled
-pattern its value must match, or a function that returns why a value is refused (None when it is not). An option outside it
-is refused, and so is a value that starts with `-`, which `research run` would read as an option."""
+"""A `research run` line's options, each checked against an allowlist."""
 from __future__ import annotations
 
 import re
@@ -29,9 +23,7 @@ def _why(form: Form, value: str) -> str | None:
 
 def options(tokens: list[str], allowed: dict[str, Form], *, unknown: Callable[[str], str],
             repeatable: frozenset[str] = frozenset()) -> list[tuple[str, str | None]]:
-    """``tokens``, the options between `research run` and `--`, as (option, value) pairs, a flag's value None. Raises Refused
-    for an option outside ``allowed`` (``unknown(option)`` says why), one given twice that isn't ``repeatable``, a flag given a
-    value, an option given none, or a value not of its option's form."""
+    """(option, value) pairs, a flag's value None; raises Refused for an option outside ``allowed``."""
     raw, out, seen = list(tokens), [], set()
     while raw:
         name, eq, value = raw.pop(0).partition("=")

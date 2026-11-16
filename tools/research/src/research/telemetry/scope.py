@@ -1,34 +1,4 @@
-"""Ending a run's processes by its cgroup scope: what `research cancel` and a stage timeout stop.
-
-A run's workload is its own process group, but its processes leave the group: vLLM's TP rank workers and suites.py's pytest-xdist
-workers start groups and sessions of their own, and a worker whose parent died is reparented out of the tree (eight rank workers can
-keep ~94 GB per GPU after `research cancel`).  What they cannot leave is their cgroup.  A run sits in
-systemd scopes:
-
-  cluster-<run id>.scope   a queued run (`research run --queue`): its runner and workload (infra/cluster submit.wrappers)
-  gpu-lease-<pid>.scope    the workload under `gpu-lease` (`--gpus N`, a queued GPU phase), or a lease the workload takes itself
-  session-<n>.scope        a direct run's ssh login (one per launch); a login of a person's holds a tmux and anything else
-
-The run's *own* scopes are its queue scope (named for its run id) and every gpu-lease scope whose gpu-lease process is the run's.
-A Sweep's targets are every process in those scopes and, wherever they are, the run's processes: the workload leader's descendants,
-its process group and session, and every process whose environment names the run dir (RESEARCH_RUN_DIR, which the runner exports to
-its workload).  Never a target: the runner and what it runs besides the workload (its sampler), and the ancestors of the runner and of
-this process.  A process is the runner's when its parent chain reaches, before the leader, this process, the leader's parent or a
-`research run ... --id <run>` process; an ancestor of theirs claims nothing (systemd --user, the subreaper the run's orphaned workers
-are reparented to, is one).  A session scope is not the run's own, so there only the run's processes are targets.
-
-`end`: SIGTERM to every target, a grace (GRACE_S) for them to exit, SIGKILL to the rest (re-read first, so a reused pid is never
-signalled), then the run's own scopes are confirmed empty (CONFIRM_S).  The record names the scopes, what each signal reached and what
-was left.  A run in no scope of its own (a direct run without gpu-lease) is ended by the same steps over its group, session and
-run-dir processes, and the record says so (`fallback`).
-
-Who ends a cancelled run is settled by CONTROL_CANCEL, which `claim` creates at most once: `research cancel` claims it with its
-request before it signals anything, and the runner, once the workload has exited, claims it as closed.  Whichever claims it first
-decides: the cancel's request makes the runner end the run after the grace; a closed one (the runner had recorded the exit
-already) or a runner that is gone makes the cancel end the run itself.  Without it a workload that dies of the SIGTERM before the
-request is written leaves the runner ending only its group (`timeout` stages are each their own process group, and their
-vllm.build children ignore SIGTERM and run on).
-"""
+"""Ending a run's processes by its cgroup scope, for `research cancel` and a stage timeout."""
 from __future__ import annotations
 
 import json
@@ -48,18 +18,15 @@ from .procs import list_pids, stat_fields
 GRACE_S = 20.0
 CONFIRM_S = 5.0
 POLL_S = 0.2
-KEPT = 16                     # pids a record lists per field (events.MAX_RECORD_BYTES)
+KEPT = 16
 CGROUP_ROOT = Path("/sys/fs/cgroup")
-CONTROL_CANCEL = Path("control") / "cancel"      # attempt-dir relative: the cancel's grace and the run's scopes, read by the runner
+CONTROL_CANCEL = Path("control") / "cancel"
 OWN_SCOPE_RE = re.compile(r"^(?:cluster-(?P<run>r\d{8}-\d{6}-[0-9a-f]{4})|gpu-lease-(?P<pid>\d+))\.scope$")
-#: The time a Sweep waits on; a test replaces both.
 clock = time.monotonic
 sleep = time.sleep
 
 
 def claim(path: Path, doc: dict[str, Any], mode: int | None = None) -> bool:
-    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it.
-    `mode`: the file's, for one another user reads (mkstemp's is the owner's alone)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
@@ -76,8 +43,6 @@ def claim(path: Path, doc: dict[str, Any], mode: int | None = None) -> bool:
 
 
 def cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
-    """`research cancel`'s request in CONTROL_CANCEL, once it is there and parses: {"grace_s", "actor", "reason", "scopes"}; None
-    for none, and for the runner's `closed`."""
     if not (attempt_dir / CONTROL_CANCEL).exists():
         return None
     try:
@@ -89,8 +54,6 @@ def cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
 
 
 def runner_alive(attempt_dir: Path, stat: Callable[[int], dict[str, Any] | None] = stat_fields) -> bool:
-    """Whether the runner that started the workload still runs: the writer of status.json's `running` transition that names the
-    group (its `stream`, host:pid:starttime)."""
     try:
         st = json.loads((attempt_dir / "status.json").read_text())
     except (OSError, ValueError):
@@ -107,7 +70,6 @@ def runner_alive(attempt_dir: Path, stat: Callable[[int], dict[str, Any] | None]
 
 
 def run_dir_of(pid: int) -> str | None:
-    """RESEARCH_RUN_DIR in the environment `pid` was exec'd with, or None (absent, gone, or not ours to read)."""
     try:
         env = Path(f"/proc/{pid}/environ").read_bytes()
     except OSError:
@@ -119,7 +81,6 @@ def run_dir_of(pid: int) -> str | None:
 
 
 def cgroup_of(pid: int) -> str | None:
-    """`pid`'s cgroup v2 path (`/user.slice/.../cluster-r1.scope`), or None."""
     try:
         text = Path(f"/proc/{pid}/cgroup").read_text()
     except OSError:
@@ -138,7 +99,6 @@ def cmdline_of(pid: int) -> list[str]:
 
 
 def cgroup_procs(root: Path, path: str) -> list[int]:
-    """Every pid in cgroup `path` and the cgroups below it."""
     out: list[int] = []
     base = root / path.lstrip("/")
     for d, _, files in os.walk(base):
@@ -155,9 +115,6 @@ def _brief(st: dict[str, Any]) -> str:
 
 
 class Sweep:
-    """The run whose workload leader is `leader` (start time `leader_start`) and whose run dir is `run_dir`.  `scopes`: cgroup paths
-    already known to be the run's own (a cancel names them for the runner), kept only when their name says so."""
-
     def __init__(self, leader: int, run_dir: str, *, leader_start: int | None = None, scopes: Iterable[str] = (),
                  stat: Callable[[int], dict[str, Any] | None] = stat_fields, pids: Callable[[], list[int]] = list_pids,
                  cgroup: Callable[[int], str | None] = cgroup_of, env_of: Callable[[int], str | None] = run_dir_of,
@@ -171,15 +128,14 @@ class Sweep:
         self.leader_start = leader_start
         self.own: dict[str, str] = {}
         self.name(scopes)
-        self.seen: set[str] = set()                      # every cgroup a run's process was found in
-        self.sent: dict[str, list[str]] = {}             # signal name -> the processes it reached
+        self.seen: set[str] = set()
+        self.sent: dict[str, list[str]] = {}
         self.denied: list[str] = []
         self.left: list[str] = []
         self.ended = False
         self._runner: dict[int, bool] = {}
 
     def name(self, scopes: Iterable[str]) -> None:
-        """Take `scopes` as the run's own, those whose name says so."""
         for s in scopes:
             if OWN_SCOPE_RE.match(s.rsplit("/", 1)[-1]):
                 self.own.setdefault(s, "named by the cancel")
@@ -191,12 +147,9 @@ class Sweep:
         return self._runner[pid]
 
     def plan(self) -> dict[int, dict[str, Any]]:
-        """The live targets now, pid -> /proc stat."""
         st = {p: s for p in self.pids() if (s := self.stat(p)) is not None and s["state"] not in ("Z", "X")}
         lead = self.stat(self.leader)
         leader = self.leader if lead is not None and lead["starttime_ticks"] == self.leader_start else None
-        # the runner (the leader's parent) and this process claim their descendants; their ancestors are only spared themselves, since
-        # one of them (systemd --user, a subreaper) is where the run's orphaned workers are reparented
         roots = {os.getpid(), *([lead["ppid"]] if leader is not None and lead else [])}
         spare: set[int] = set()
         for p in roots:
@@ -205,7 +158,6 @@ class Sweep:
                 p = (self.stat(p) or {}).get("ppid", 0)
 
         def side(p: int) -> str:
-            """`workload` (reaches the leader), `runner` (reaches the runner first) or `orphan` (neither)."""
             hops = 0
             while p > 1 and hops < 4096:
                 if p == leader:
@@ -246,7 +198,6 @@ class Sweep:
         return {p: st[p] for p in ours}
 
     def signal(self, sig: int, skip: Iterable[int] = ()) -> list[int]:
-        """Send `sig` to every target but `skip`; the pids it reached."""
         name, hit = signal.Signals(sig).name, []
         skip = set(skip)
         for p, s in self.plan().items():
@@ -264,7 +215,6 @@ class Sweep:
         return hit
 
     def wait(self, grace_s: float) -> list[int]:
-        """Until every target planned now has exited or `grace_s` has passed; those still alive."""
         targets = self.plan()
         t_end = clock() + grace_s
 
@@ -276,8 +226,6 @@ class Sweep:
         return left
 
     def end(self, grace_s: float = GRACE_S, *, termed: bool = False, scopes: Callable[[], Iterable[str]] = tuple) -> dict[str, Any]:
-        """SIGTERM (unless `termed`: it was sent already), the grace, SIGKILL to whatever is left then (planned again, so what was
-        started during the grace too, in the scopes `scopes()` names by then), and the confirmation that nothing is; the record."""
         if not termed:
             self.signal(signal.SIGTERM)
         self.wait(grace_s)

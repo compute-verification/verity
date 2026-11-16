@@ -1,24 +1,4 @@
-"""Authenticated ready marks and land verdicts: drive.toml's `signed_verdicts`.
-
-A label that lets drive land a PR, `ready = true` or `reviewed = land` on `pr:{n}@{head}`, counts with the flag on only beside a
-`label_auth` label on the same target that authenticates it (`Verifier`); with the flag "shadow" it counts either way, and the
-verified queue's loop logs each one that doesn't authenticate.  Its value is ``{"for": NONCE, "token": JWT}``,
-optionally with ``"delegation"``: a Cursor OIDC token (issuer `ISSUER`, audience `AUDIENCE`) whose `nonce` claim is the label's
-nonce (`label_nonce`, SHA-512 over `LABEL_TAG` and the label's canonical document, so it names one target, key, value, author,
-time and ref), minted within `SKEW_S` of the label's time by the agent that holds the label's `by` in `main`'s registry, or by
-an agent that name is delegated to.  A delegation (`delegation`) is a token over a statement naming the name, the agent and an
-end at most `DELEGATION_MAX_DAYS` after it was minted, minted by the holder of that handle, or, for a name that is no handle's
-(a PR reader's), by the holder of the handle whose `staffs` in the registry it matches (`speaks_for`): that is how a reader
-is registered, and its name counts under no token but a registered agent's; a delegation to the agent that minted it never
-counts, so a staffer is never its own reader.  `research queue delegate AGENT --by NAME`
-writes it on `delegation_target(AGENT)`, and `Signer` copies it into each companion that agent writes under that name, so a
-companion is checked from its own target alone.  Labels that withhold a landing (`ready = false`, `reviewed = hold`) count
-unsigned: they can only keep a PR out.
-
-The token's RS256 signature is the issuer's, not this repository's: this tooling check is the one place it is read, and the
-nonce it signs is SHA-512.  Tokens are verified against the issuer's published keys (`issuer_keys`), the last set fetched kept
-beside the queue's clone for an outage of the issuer, never merged with older ones, so a key the issuer retires stops counting.
-"""
+"""Authenticated ready marks and land verdicts (drive.toml's `signed_verdicts`)."""
 from __future__ import annotations
 
 import base64
@@ -43,12 +23,9 @@ LABEL_TAG = b"verity/label-auth/v1\0"
 DELEGATION_TAG = b"verity/label-delegation/v1\0"
 DELEGATION_TARGET_TAG = b"verity/label-delegation-target/v1\0"
 DELEGATION_SCHEMA = "verity/label-delegation/v1"
-#: the most seconds between a label's time and its token's `iat`: a token lives this long, and the label is written at once
 SKEW_S = 300
 DELEGATION_MAX_DAYS = 14
-#: the labels that let drive land a PR, by key: only these need a companion
 LANDING_VALUES = {vocab.READY: "true", vocab.REVIEWED: "land"}
-#: DER of SHA-256's DigestInfo, which an RS256 signature's padded block carries before the digest (RFC 8017, section 9.2)
 _SHA256_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -70,13 +47,11 @@ def label_nonce(label: Label) -> str:
 
 
 def landing(label: Label) -> bool:
-    """Whether ``label`` lets drive land a PR (`LANDING_VALUES`), so it counts only authenticated."""
     want = LANDING_VALUES.get(label.key)
     return want is not None and str(label.value).lower() == want
 
 
 def delegation_target(agent: str) -> str:
-    """The store target an agent's delegations are labels on: a `task:` id, SHA-512 of the agent id under its tag."""
     return "task:" + hashlib.sha512(DELEGATION_TARGET_TAG + agent.encode()).hexdigest()
 
 
@@ -92,7 +67,6 @@ def _b64(s: str) -> bytes:
 
 
 def unverified_claims(token: str) -> dict:
-    """``token``'s claims, unchecked: what an agent reads of its own token (its `cloud_agent_id`)."""
     try:
         body = json.loads(_b64(token.split(".")[1]))
     except (IndexError, ValueError, binascii.Error) as e:
@@ -103,7 +77,6 @@ def unverified_claims(token: str) -> dict:
 
 
 def jwks(doc: object) -> dict[str, tuple[int, int]]:
-    """{kid: (n, e)} of a JWKS document's RSA signing keys."""
     keys = doc.get("keys") if isinstance(doc, dict) else None
     out = {}
     for k in keys if isinstance(keys, list) else ():
@@ -117,9 +90,6 @@ def jwks(doc: object) -> dict[str, tuple[int, int]]:
 
 
 def claims(token: object, keys: dict[str, tuple[int, int]]) -> dict:
-    """The claims of ``token`` once its RS256 signature verifies under one of ``keys`` (by its `kid`) and its issuer and audience
-    are `ISSUER` and `AUDIENCE`; AuthError saying why not.  Its `exp` isn't read: a label is judged long after its token
-    expired, and its time is bound to the token's `iat` instead (`Verifier`)."""
     if not isinstance(token, str) or token.count(".") != 2:
         raise AuthError("no token, or not a JWT")
     h64, p64, s64 = token.split(".")
@@ -155,23 +125,15 @@ def delegation_statement(lane: str, agent: str, until: str) -> dict:
 
 
 def delegation(lane: str, agent: str, until: str, mint: Callable[[str], str]) -> dict:
-    """The delegation of the name ``lane`` to ``agent`` until ``until``: its statement and ``mint``'s token over its nonce,
-    minted by the agent that speaks for the name (`speaks_for`)."""
     st = delegation_statement(lane, agent, until)
     return {**st, "token": mint(_nonce(DELEGATION_TAG, st))}
 
 
 def speaks_for(handle: str | None, name: str, staffs: dict[str, tuple[str, ...]]) -> bool:
-    """Whether the holder of ``handle`` delegates ``name``: its own handle, or a name it staffs, one a glob of its ``staffs``
-    ({handle: globs}, the registry's) matches.  An agent that holds no handle (None) delegates nothing."""
     return bool(handle) and (handle == name or any(fnmatch.fnmatchcase(name, p) for p in staffs.get(handle, ())))
 
 
 class Verifier:
-    """Judges ready marks and land verdicts against their `label_auth` companions, with the issuer's ``keys``, ``holders``
-    ({agent id: handle}) and ``staffs`` ({handle: the globs of the names its holder delegates beside its own}), both from
-    `main`'s registry."""
-
     def __init__(self, keys: dict[str, tuple[int, int]], holders: dict[str, str],
                  staffs: dict[str, tuple[str, ...]] | None = None):
         self.keys, self.holders = keys, {a: _who(h) for a, h in holders.items()}
@@ -239,12 +201,6 @@ class Verifier:
 
 
 class Signer:
-    """``store`` writing labels as this agent: `add_label` writes each landing label (`landing`) with its `label_auth` companion,
-    ``mint`` (a nonce to a token) signing it, and this agent's delegation for the label's name when the store has one; every
-    other attribute is ``store``'s.  ``required`` (drive.toml's `signed_verdicts` on at `main`): a landing label it can't sign
-    is refused, AuthError and nothing written, as is one by a name this agent neither holds (``holders``, {agent id: handle},
-    when given) nor is delegated; otherwise the label is written unsigned, with a note to ``log``."""
-
     def __init__(self, store, mint: Callable[[str], str], required: bool = False, holders: dict[str, str] | None = None,
                  now: Callable[[], str] = utc_now, log: Callable[[str], None] = print):
         self.store, self.mint, self.required, self.now, self.log = store, mint, required, now, log
@@ -284,7 +240,6 @@ class Signer:
         return auth
 
     def delegation(self, agent: str, lane: str, ts: str) -> dict | None:
-        """The newest delegation of ``lane`` to ``agent`` in the store whose end is at or after ``ts``, after pulling its target."""
         target = delegation_target(agent)
         labels_sync.read_through(self.store, [target], self.log)
         for lab in reversed(self.store.labels(target, key=vocab.LABEL_DELEGATION)):
@@ -296,7 +251,6 @@ class Signer:
 
 
 def cursor_mint(nonce: str) -> str:
-    """This Cursor agent's OIDC token for `AUDIENCE` over ``nonce``, from its identity socket."""
     from .slack import SlackError, oidc_token
 
     try:
@@ -307,8 +261,6 @@ def cursor_mint(nonce: str) -> str:
 
 def issuer_keys(cache: Path, get: Callable[[str], bytes | None] | None = None,
                 log: Callable[[str], None] = print) -> dict[str, tuple[int, int]]:
-    """The issuer's signing keys from `JWKS_URL`, written to ``cache``; when the issuer can't be read, the set ``cache`` last
-    kept, with a note; AuthError when there is neither."""
     from .slack import SlackError, http_get
 
     try:

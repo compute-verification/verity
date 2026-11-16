@@ -1,6 +1,4 @@
-"""Times people read: Pacific first, then UTC (`1:41 PM PDT (20:41Z)`), so nobody converts by hand. Machine output (JSON, file
-names, ids, front matter, log lines) stays UTC. `slack_dates` rewrites the dated UTC times in a Slack post into Slack's date token,
-which shows each reader their own zone and falls back to `both`. Stdlib only."""
+"""Times people read: Pacific first, then UTC (`1:41 PM PDT (20:41Z)`)."""
 from __future__ import annotations
 
 import calendar
@@ -14,7 +12,6 @@ except ZoneInfoNotFoundError:  # a host with no tz database (the Nebius job imag
     PACIFIC = None
 UTC = dt.UTC
 
-#: left alone by `slack_dates`: code blocks and spans, Slack's <...> tokens (links, mentions, dates) and bare URLs
 _PROTECTED = re.compile(r"```.*?```|`[^`\n]*`|<[^<>\n]*>|\bhttps?://\S+", re.S)
 _MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 _MON = r"(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
@@ -24,14 +21,10 @@ _DATE = (rf"(?:(?P<wd>{_WEEKDAY}),?\s+)?(?:(?P<d1>\d{{1,2}})\s+(?P<m1>{_MON})|(?
 _PAC = r"(?P<ph>\d{1,2}):(?P<pm>\d{2})\s*(?P<ap>[AP]M)\s+P[DS]T\s+\("
 _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(?P<D>\d{{2}})T(?P<H>\d{{2}}):(?P<N>\d{{2}})(?::(?P<S>\d{{2}}))?Z)"
                        rf"|(?:{_DATE})?(?:{_PAC}(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})Z\)|(?P<bh>\d{{1,2}}):(?P<bm>\d{{2}})Z))(?![\w-])")
-#: a word just before a time that makes it a deadline (`by 20:00Z`, `ETA 4:00 AM PST`), not when the line was written
 DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}
-#: a header's name token: a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`, never a `:`
 _NAME = r"(?:<[^>\s]+>|[@*_\w().,'\u2019/-]+)"
-#: the header position (`stamp_ahead`): up to 5 name tokens, an optional date, then `2:28 AM PST`, `10:28Z` or `10:28 UTC`
 _HEADER = re.compile(rf"^\W{{0,4}}(?P<names>(?:{_NAME} ){{0,5}}?)(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*"
                      rf"(?P<ap>[AP]M)\s+P[DS]?T|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
-#: what follows a header time with no comma before it (`ci 13:07Z: ...`, `*infra 11:45Z* (quiet)`), as `HEADER_TIME_RE` reads
 _HEADER_END = re.compile(r"\*?(?:[:,)]| \(| [-\u2014])")
 
 
@@ -45,8 +38,6 @@ def _utc(t: dt.datetime | str | float) -> dt.datetime:
 
 
 def both(t: dt.datetime | str | float) -> str:
-    """`1:41 PM PDT (20:41Z)` for an aware datetime (naive is UTC), an ISO string, or a Unix time (a number, or a Slack ts);
-    `20:41Z` where there is no tz database."""
     u = _utc(t)
     if PACIFIC is None:
         return f"{u:%H:%M}Z"
@@ -60,12 +51,6 @@ def _day(u: dt.datetime, weekday: bool = False) -> str:
 
 
 def slack_dates(text: str, now: dt.datetime | None = None) -> str:
-    """Each dated UTC time outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>`:
-    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `DD Mon`,
-    `Mon DD` or `Mon DD, YYYY` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
-    A weekday written before the date goes into the token, and the fallback names the Pacific one: the writer's was the UTC
-    day's, which a time across Pacific midnight contradicts.
-    A time with no date stays as written: guessing its day can put another day's deadline on today."""
     t0 = _utc(now or dt.datetime.now(UTC))
 
     def token(m: re.Match) -> str:
@@ -100,19 +85,6 @@ def slack_dates(text: str, now: dt.datetime | None = None) -> str:
 
 
 def stamp_ahead(text: str, now: dt.datetime) -> str | None:
-    """The refusal of a post whose first line is stamped later than `now`'s minute, else None.
-
-    Only a time in the header position is a stamp. The header is the first line's start: at most 4 non-word characters,
-    then at most 5 name tokens, each a Slack token (`<!subteam^S1|@ci>`) or a word of letters, digits and `@*_().,'’/-`
-    (no `:`, so `ci: ...` ends a header), one space after each, then an optional date (`Sun 15 Nov`, `Nov 15, 2026`), then
-    the time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`, `10:28 UTC`). It is a header only when the last name token ends in a
-    comma (`lean (lead), Sun 15 Nov 2:28 AM PST`, `lean's worker AREAS, 11:19 PM PST`) or the time is followed by `:`,
-    `,`, `)`, ` (`, ` -` or ` —` (`ci 10:28Z: ...`), and not when that last token is a deadline word (`by 20:00Z:`). So a time
-    later in the line, as an alert quoting `before the 20:30Z row` or `check starts 20:00Z`, is no stamp.
-
-    The stamp is read on the date written before it, else on the day nearest `now` (so a stamp across midnight is read on
-    its own day). A line with no header time, or one it can't read (`10:5x PM PST`, an hour past 12), passes: a doubt
-    never blocks a post."""
     line = (text or "").lstrip().split("\n", 1)[0]
     m = _HEADER.match(line)
     names = m["names"].split() if m else []

@@ -1,34 +1,3 @@
-"""The steward off the laptop (cloud migration step e): times any machine agrees on, one steward anywhere, and a service definition.
-
-    research notes status|watch --liveness git [--fetch] ...     # (or RESEARCH_LIVENESS=git for every notes command)
-    research notes watch --lease [store|PATH] [--standby] [--steward-id ID] ...
-    research notes service systemd|launchd [--python P] [--workdir DIR] [--env-file F] [--log F] [-- WATCH ARGS...]
-
-TIMES (`GitTimes`).  A git clone sets every file's mtime to the checkout time, so liveness read from mtimes differs by machine.
-With `--liveness git`, a notes file's time is the author time of the newest notes commit that touched it (author, not committer:
-`notes sync` rebases, which rewrites committer times); a file with uncommitted changes on this machine, or one git does not track,
-keeps its mtime, since only this machine has that write.  Report age, which report is newest, the `--since-hours` window, the inbox
-("new since last seen") and the anchor of a binding's `final` all read it.  A lane branch's last commit is origin's `lane/*` tip
-(`--fetch`, and every watch pass, fetch them first); the local worktree signal (uncommitted edits, `dirty`) is not read, since the
-push rule and the 20-minute checkpoint replace it.  `relaunch` bases the successor on origin's tip when the dead lane's worktree is
-not on this machine.  The stale reaper's run-custody check fails closed here: the local run directories it reads only exist where the
-launcher ran; `watch --custody-r2` (step f) takes run custody from the store's remote and the pod guard instead, and the service
-definition sets it.
-
-LEASE (`Lease`).  At most one steward reaps, routes, renders, keeps steward-state.json and commits the notes (I5).  The lease is one
-JSON object, `steward/lease.json` in the store's bucket (`--lease` / `--lease store`; for an fs remote, the same key under its
-directory), or a file (`--lease PATH`, for one host).  It records the owner (`--steward-id`, default the host name), host, pid, a
-per-process token and an expiry (`ttl_s`, at least 15 min and 3 passes).  Every change is a compare-and-swap: create with
-`If-None-Match: *`, renew or take over with `If-Match: <etag>` (a 412 is a lost race), then read back and require the token to be
-ours, which also holds on a store that ignored the condition.  A lease is free when it is released, expired, or held by a dead pid
-on this same host (a reboot).  A second watcher with `--lease` refuses (exit 2) and names the holder; with `--standby` it keeps
-watching read-only and takes over when the lease frees.  A holder that fails to renew stops acting at once (standby, or exit 3).
-Exit releases it.  The lease is the one mutable object under the bucket's `steward/` prefix; the store's records stay immutable.
-
-SERVICE (`unit`).  The steward's service definition: a systemd user unit for an always-on Linux host, or a launchd agent (the laptop,
-made reboot-safe: today's watcher was loaded with `launchctl submit` and has no plist).  Both restart the watcher when it exits and
-after a reboot; both run `watch --lease --standby`, so a second host's copy waits instead of acting.
-"""
 from __future__ import annotations
 
 import datetime as dt
@@ -57,12 +26,7 @@ def git_liveness(environ: dict | None = None) -> bool:
     return env.get(LIVENESS_ENV, "").strip().lower() == "git"
 
 
-# ---- times from the notes history ------------------------------------------------------------------------------------------------------
-
 class GitTimes:
-    """File times from the notes repo's history (module docstring, TIMES).  `ok` is False when `root` is not in a git work tree:
-    every time is then the mtime."""
-
     def __init__(self, root: Path):
         self.root = Path(root)
         self.committed: dict[str, float] = {}
@@ -112,15 +76,11 @@ class GitTimes:
         return p.stat().st_mtime
 
 
-# ---- the lease ---------------------------------------------------------------------------------------------------------------------------
-
 class LeaseConflict(Exception):
-    """A conditional write lost: someone else changed the lease since it was read."""
+    pass
 
 
 class S3LeaseBackend:
-    """The lease as one object in an S3-compatible bucket, changed only by conditional PUT."""
-
     def __init__(self, remote: Any, key: str = LEASE_KEY):
         self.remote, self.key = remote, key
 
@@ -156,8 +116,6 @@ class S3LeaseBackend:
 
 
 class FileLeaseBackend:
-    """The lease as a file, changed under an exclusive lock on `<file>.lock`; the etag is the content's sha256."""
-
     def __init__(self, path: Path):
         self.path = Path(path).expanduser()
 
@@ -206,7 +164,6 @@ def _encode(doc: dict) -> bytes:
 
 
 def lease_backend(spec: str) -> S3LeaseBackend | FileLeaseBackend:
-    """`store` (the store's configured remote: S3 -> the bucket's `steward/lease.json`, fs -> that file under its directory) or a path."""
     if spec != "store":
         return FileLeaseBackend(Path(spec))
     from .store.remote import FsRemote, load_remote
@@ -230,8 +187,6 @@ def _pid_alive(pid: int) -> bool:
 
 
 class Lease:
-    """One steward (module docstring, LEASE).  `ensure()` acquires or renews; -> (held, the lease document as last read)."""
-
     def __init__(self, backend: S3LeaseBackend | FileLeaseBackend, owner: str | None = None, ttl_s: float = LEASE_TTL_MIN_S,
                  now: Callable[[], float] = time.time, host: str | None = None, pid: int | None = None,
                  alive: Callable[[int], bool] = _pid_alive):
@@ -243,7 +198,6 @@ class Lease:
         self.held = False
 
     def free(self, doc: dict) -> str | None:
-        """Why someone else's lease may be taken over, or None while it is live."""
         if doc.get("schema") != LEASE_SCHEMA:
             return "no valid lease document"
         if doc.get("released"):
@@ -290,15 +244,12 @@ class Lease:
 
 
 def holder(doc: dict | None, now: float | None = None) -> str:
-    """`<owner> (host H, pid P) until HH:MMZ` for a lease document."""
     if not doc:
         return "nobody (no lease document)"
     until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.UTC)
     left = (float(doc.get("expires_at") or 0) - (now or time.time())) / 60
     return f"{doc.get('owner')} (host {doc.get('host')}, pid {doc.get('pid')}) until {until:%H:%MZ} ({left:.0f} min)"
 
-
-# ---- the service definition ----------------------------------------------------------------------------------------------------------
 
 DEFAULT_WATCH = ["--every", "2", "--pods", "--reap", "--custody-r2", "--lease", "--standby", "--liveness", "git", "--fetch", "--sync",
                  "--stale-min", "12", "--since-hours", "8", "--idle-min", "5", "--exclude", "vllm*"]
@@ -308,8 +259,6 @@ LAUNCHD_LABEL = "com.research.steward"
 
 def unit(kind: str, python: str, workdir: Path, watch_args: list[str] | None = None, env_file: Path | None = None,
          log: Path | None = None, extra_env: dict[str, str] | None = None) -> str:
-    """The service definition text (module docstring, SERVICE).  `watch_args` default: DEFAULT_WATCH, plus `--guardian-log none`
-    for systemd (the guardian kill routing stays on the laptop)."""
     args = list(watch_args) if watch_args else DEFAULT_WATCH + (["--guardian-log", "none"] if kind == "systemd" else [])
     argv = [python, "-m", "research", "notes", "watch", *args]
     env = {"PYTHONUNBUFFERED": "1", **(extra_env or {})}

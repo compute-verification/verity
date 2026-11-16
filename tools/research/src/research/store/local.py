@@ -1,21 +1,4 @@
-"""The local store (README §3): content-addressed blobs, canonical manifests, write-once attempts, append-only labels, and the
-disposable catalog, under `~/.research/store` (or `$RESEARCH_STORE`).
-
-    objects/sha256/<hex>          blobs, temp + hard-link (never overwritten, mode 0444)
-    manifests/<hex>.json          canonical artifact manifests; hex == art id hex
-    attempts/<run id>.json        canonical attempt manifests; write-once, a different second content is AttemptExists
-    labels/<target>/<ts>-<by>.json one immutable assertion each (O_EXCL; a same-second collision gets a `~N` suffix)
-    trees/<hex>/                  LOCAL ONLY: default materialisation of tree payloads for `fetch(art, to=None)`
-    catalog.sqlite                LOCAL ONLY: index.Index; `reindex()` rebuilds it from the three directories above
-    scratch/                      LOCAL ONLY: tool caches keyed by reuse_key (owned by the run integration, §6.5)
-
-Replica resolution for a blob (`fetch`): local objects -> repo replica map `<repo>/artifacts.json` (`{art id: repo-relative
-path}`, every blob sha256-checked against the manifest before use, mismatch warns and falls through) -> remote (`remote.py`).  Bytes
-that arrive from a repo or the remote are checked against the manifest before they enter `objects/`.  `push` uploads an artifact's
-blobs concurrently (conditional create per object, verified by HEAD size + MD5 ETag or by read-back) and the manifest last; `verify`
-is the standalone PRESERVED check (§7): remote head size + full read-back sha256 for the manifest and every blob.  Nothing is called
-PRESERVED without a remote, and the replica record says which check was done (`verified`: `etag-md5` | `sha256-readback`).
-"""
+"""The local store: content-addressed blobs, canonical manifests, write-once attempts, append-only labels and the disposable catalog."""
 from __future__ import annotations
 
 import fnmatch
@@ -43,18 +26,14 @@ from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("artifacts.json")
-#: each place a tree or a commit may hold the registry, the first it holds taken: a `research run` puts the launcher's research
-#: ahead of the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name.
-#: The second stays because trees and commits from before the registry moved to the root live on nodes and branches; it is
-#: written as two parts, which a rerun of that move's rewrite of the registry's path leaves two places
 REPLICA_MAPS = (REPLICA_MAP, Path("fixtures", "artifacts.json"))
 SNAPSHOT_KIND = "dataset-snapshot/v1"
-VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
-VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
-VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
-WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
-REFRESH_JOBS = 32                                               # concurrent GETs in `refresh`
-REFRESH_PAYLOAD_MAX = 1 << 20                                   # `refresh(payload_kinds=...)` fetches file payloads up to this size
+VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"
+VERIFY_MULTIPART = "etag-multipart"
+VERIFY_MODES = ("head", "readback")
+WHERE_JOBS = 16
+REFRESH_JOBS = 32
+REFRESH_PAYLOAD_MAX = 1 << 20
 WRITE_THROUGH_ENV = "RESEARCH_WRITE_THROUGH"
 _UNSET = object()
 
@@ -82,13 +61,10 @@ def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
 
 
 def replica_map_file(repo: Path) -> Path:
-    """``repo``'s registry file: the first of `REPLICA_MAPS` it holds, else `REPLICA_MAP` under it."""
     return next((repo / p for p in REPLICA_MAPS if (repo / p).is_file()), repo / REPLICA_MAP)
 
 
 def find_repo(start: Path | None = None) -> Path | None:
-    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding the registry (`replica_map_file`); None when there is none,
-    or no cwd (a run's source tree removed under it)."""
     if os.environ.get("RESEARCH_REPO"):
         return Path(os.environ["RESEARCH_REPO"]).expanduser()
     try:
@@ -128,9 +104,7 @@ def _warn(msg: str) -> None:
 
 
 def write_once(dst: Path, data: bytes | Path, sha256: str | None = None) -> bool:
-    """Temp file beside `dst`, then hard-link into place: the first writer wins, nothing is ever overwritten.  Returns whether this
-    call created it.  Falls back to rename where the filesystem refuses links.  `sha256`: the copy must hash to it, else IntegrityError
-    and nothing is written."""
+    """Temp file, then hard-link into place: the first writer wins and nothing is overwritten; returns whether this call created it."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists():
         return False
@@ -141,7 +115,6 @@ def write_once(dst: Path, data: bytes | Path, sha256: str | None = None) -> bool
         shutil.copyfile(data, tmp)
     try:
         if sha256 is not None and (got := sha256_file(tmp))[0] != sha256:
-            # custody stages a run's files as hard links: a writer still appending to one (a check's orphaned suite) changed it here
             raise IntegrityError(f"{data} changed between hashing and storing ({sha256[:16]} hashed, {got[0][:16]} copied, "
                                  f"{got[1]} bytes): is something still writing it?")
     except BaseException:
@@ -163,9 +136,6 @@ def write_once(dst: Path, data: bytes | Path, sha256: str | None = None) -> bool
 
 
 def write_through_wanted(explicit: str | os.PathLike[str] | None = None) -> bool:
-    """Whether `label` / `put` upload in the same command (README §7.2).  `$RESEARCH_WRITE_THROUGH` (1/0) decides when set; else the
-    store.toml `[remote] write_through` flag; else, with no store.toml at the default path and `$RESEARCH_STORE_CONFIG` unset, whether
-    the environment names the R2 remote (`R2_ENDPOINT` + `R2_BUCKET`: a cloud machine).  Off on the laptop until its store.toml says so."""
     v = os.environ.get(WRITE_THROUGH_ENV, "").strip().lower()
     if v:
         return v not in ("0", "false", "no", "off")
@@ -179,7 +149,6 @@ def write_through_wanted(explicit: str | os.PathLike[str] | None = None) -> bool
 
 
 def _rel_files(tree: Path) -> list[Path]:
-    """Every file under `tree` (symlinks to files included by content), deterministic order."""
     out = []
     for dirpath, dirnames, filenames in os.walk(tree):
         dirnames.sort()
@@ -201,11 +170,8 @@ class LocalStore:
         self._index: Index | None = None
         self._map: dict[str, str] | None = None
 
-    # ---- properties and paths -----------------------------------------------------------------------------------------------------------
-
     @property
     def index(self) -> Index:
-        """The catalog; reopened when `reindex` (here or in another process) has renamed a rebuilt file over it."""
         path = self.root / "catalog.sqlite"
         if self._index is not None:
             try:
@@ -220,11 +186,6 @@ class LocalStore:
 
     @property
     def remote(self) -> Remote | None:
-        """The configured remote (README §7), or None: then the local store is the only replica.
-
-        A remote that is configured but unusable here (e.g. `store.toml` names an S3 bucket and the credential env vars are not set,
-        as on a pod or in a test) degrades to None so the local store keeps working; the reason is kept in `remote_error` and is
-        raised by `push`/`push_attempt`, the only operations that need the remote."""
         if self._remote is _UNSET:
             try:
                 self._remote = load_remote(self._config_path)
@@ -247,9 +208,6 @@ class LocalStore:
         return r
 
     def remote_lost(self) -> str:
-        """'' unless nothing here names a remote (no `$RESEARCH_WRITE_THROUGH`, store.toml, `$RESEARCH_STORE_CONFIG`, `R2_ENDPOINT` or
-        `R2_BUCKET`) yet the catalog holds artifacts pulled from or verified on one; then the hint.  A cloud shell can lose
-        $CLOUD_AGENT_INJECTED_SECRET_NAMES along with the secrets (so `lost` says nothing), and its writes would stay local unannounced."""
         if (self._config_path is not None or os.environ.get(WRITE_THROUGH_ENV, "").strip() or "RESEARCH_STORE_CONFIG" in os.environ
                 or os.environ.get("R2_ENDPOINT") or os.environ.get("R2_BUCKET") or config_path().is_file()):
             return ""
@@ -265,8 +223,6 @@ class LocalStore:
         return self._repo
 
     def replica_map(self) -> dict[str, str]:
-        """The repository's registry (`replica_map_file`): art id -> repo-relative path of the payload (a file, or a tree's
-        directory)."""
         if self._map is None:
             self._map = {}
             if self.repo and (p := replica_map_file(self.repo)).is_file():
@@ -295,11 +251,8 @@ class LocalStore:
     def attempt_ids(self) -> list[str]:
         return sorted(p.stem for p in (self.root / "attempts").glob("*.json") if ids.is_run_id(p.stem))
 
-    # ---- artifacts ----------------------------------------------------------------------------------------------------------------------
-
     def put_artifact(self, kind: str, meta: dict, refs: dict | None = None, *, file: Path | None = None, tree: Path | None = None) -> str:
-        """Hash the payload, store its blobs, write the canonical manifest, index; return the art id.  Idempotent: the same content
-        yields the same id and touches nothing that already exists."""
+        """Idempotent: the same content yields the same id and touches nothing that exists."""
         if file is not None and tree is not None:
             raise ValueError("put_artifact takes file= or tree=, not both")
         blobs: list[tuple[Path, str]] = []
@@ -328,7 +281,6 @@ class LocalStore:
         return self.put_manifest(m)
 
     def put_manifest(self, m: ArtifactManifest) -> str:
-        """Write a validated manifest whose blobs are already in `objects/` (or elsewhere: refs are syntax-checked only)."""
         m.validate()
         art = m.id
         write_once(self.manifest_path(ids.hex_of(art)), m.canonical())
@@ -351,7 +303,6 @@ class LocalStore:
         return ArtifactManifest.from_doc(json.loads(data))
 
     def get_manifest(self, art_id: str) -> ArtifactManifest:
-        """Local manifest, else the remote's copy (then cached locally); NotFound otherwise."""
         if not ids.is_art(art_id):
             raise ValueError(f"not an art: id: {art_id!r}")
         hex_ = ids.hex_of(art_id)
@@ -375,8 +326,6 @@ class LocalStore:
         raise NotFound(f"{art_id}: no manifest locally (no remote configured)")
 
     def resolve_art(self, ref: str, limit: int = 2) -> list[str]:
-        """Full ids an `art:` id or abbreviation (>= 8 hex digits) names, at most `limit`: the local catalog first, else the remote's
-        `manifests/` listing under that prefix (a pod's upload this machine never pulled).  Several = ambiguous; none = unknown."""
         if ids.is_art(ref):
             return [ref]
         if not ids.is_short_art(ref):
@@ -390,7 +339,6 @@ class LocalStore:
                       if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")]))[:limit]
 
     def has_local(self, art_id: str) -> bool:
-        """Manifest and every payload blob present in this store."""
         if not ids.is_art(art_id):
             raise ValueError(f"not an art: id: {art_id!r}")
         hex_ = ids.hex_of(art_id)
@@ -406,7 +354,6 @@ class LocalStore:
         return base / rel if rel else base
 
     def _repo_verified(self, m: ArtifactManifest, art_id: str) -> bool:
-        """Every payload blob of `m` is present at its mapped repo path with the manifest's sha256 (the 'verified on open' check)."""
         if m.payload is None:
             return False
         pairs = [(f.sha256, f.path) for f in m.payload.files or []] if m.payload.type == "tree" else [(m.payload.sha256, None)]
@@ -417,7 +364,6 @@ class LocalStore:
         return True
 
     def _resolve_blob(self, hex_: str, art_id: str, rel: str | None) -> Path:
-        """Make blob `hex_` local (objects -> repo replica -> remote) and return its object path."""
         dst = self.object_path(hex_)
         if dst.exists():
             return dst
@@ -446,8 +392,6 @@ class LocalStore:
 
     @staticmethod
     def select_files(files: list[TreeFile], paths: list[str] | None) -> list[TreeFile]:
-        """The tree files matching any of `paths` (fnmatch globs on the relative path; a bare directory name selects its subtree:
-        `rep1` == `rep1/*`).  None / empty selects everything."""
         if not paths:
             return list(files)
         pats = [p.rstrip("/") for p in paths if p]
@@ -458,8 +402,6 @@ class LocalStore:
         return out
 
     def listing(self, art_id: str, paths: list[str] | None = None) -> list[dict]:
-        """One row per payload file: `path`, `bytes`, `sha256`, `local` (blob in objects/), `remote` (the artifact's catalog flag:
-        pushed or listed, no HEAD per file).  A file payload lists as one row."""
         m = self.get_manifest(art_id)
         if m.payload is None:
             raise StoreError(f"{art_id} has no payload (kind {m.kind})")
@@ -470,10 +412,6 @@ class LocalStore:
                 for f in self.select_files(files or [], paths)]
 
     def fetch(self, art_id: str, to: Path | None = None, *, paths: list[str] | None = None) -> Path:
-        """Materialise the payload.  File: returns the immutable object path (or a copy at/under `to`).  Tree: `to` or
-        `<root>/trees/<hex>/`.  `to` is used as a directory when it is one (file lands as `to/<name>`).  `paths` (tree only)
-        materialises just the matching subtree (`select_files`): the layout under `to` is the same, only the selected files
-        land; the trees/ cache is then complete only when every file has been fetched."""
         m = self.get_manifest(art_id)
         if m.payload is None:
             raise StoreError(f"{art_id} has no payload (kind {m.kind})")
@@ -497,7 +435,7 @@ class LocalStore:
             final = self.root / "trees" / hex_
             if not (final.is_dir() and all((final / f.path).is_file() for f in wanted)):
                 self._land_tree(final, srcs, partial=bool(paths))
-            os.utime(final)   # eviction leaves a tree fetched within `evict.TREE_KEEP_S`: whoever fetched it may still read it
+            os.utime(final)
             return final
         self._materialise(srcs, Path(to))
         return Path(to)
@@ -529,8 +467,6 @@ class LocalStore:
             os.replace(tmp, p)
 
     def where(self, art_id: str, *, jobs: int = WHERE_JOBS) -> list[dict]:
-        """Replicas: local (manifest + blobs present?), repo (mapped path, verified?), remote (present? verified_utc).  The remote
-        check HEADs the manifest and every blob through a pool of `jobs` threads (a run-files tree can hold 10^4 blobs)."""
         m = self.get_manifest(art_id)
         hex_ = ids.hex_of(art_id)
         blobs = m.blobs()
@@ -556,7 +492,6 @@ class LocalStore:
 
     @staticmethod
     def _heads_missing(r: Remote, heads: list[tuple[str, int]], *, jobs: int = WHERE_JOBS) -> int:
-        """How many of `heads` (key, expected bytes) the remote lacks or holds at another size; HEADs run `jobs` at a time."""
         def check(item: tuple[str, int]) -> bool:
             hd = r.head(item[0])
             return hd is not None and hd["bytes"] == item[1]
@@ -565,10 +500,7 @@ class LocalStore:
         with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(heads)))) as ex:
             return sum(1 for ok in ex.map(check, heads) if not ok)
 
-    # ---- attempts -----------------------------------------------------------------------------------------------------------------------
-
     def put_attempt(self, doc: dict) -> None:
-        """Write `attempts/<id>.json` once.  Same content again is a no-op; different content is AttemptExists."""
         validate_attempt_doc(doc)
         data = canon.dumps(doc)
         p = self.attempt_path(doc["id"])
@@ -577,7 +509,6 @@ class LocalStore:
         self.index.index_attempt(doc)
 
     def get_attempt(self, run_id: str) -> dict | None:
-        """Local attempt manifest, else the remote's copy (cached locally), else None."""
         if not ids.is_run_id(run_id):
             raise ValueError(f"not a run id: {run_id!r}")
         p = self.attempt_path(run_id)
@@ -597,8 +528,6 @@ class LocalStore:
             self.index.index_attempt(json.loads(p.read_bytes()))
         return json.loads(p.read_bytes())
 
-    # ---- labels -------------------------------------------------------------------------------------------------------------------------
-
     def add_label(self, target: str, key: str, value: Any, by: str, ref: str | None = None, ts: str | None = None) -> Path:
         """Append one assertion as its own file; never read-modify-write."""
         label = Label(target=target, key=key, value=value, by=by, ts=ts or utc_now(), ref=ref).validate()
@@ -607,7 +536,7 @@ class LocalStore:
         stem = f"{re.sub(r'[^0-9TZ]', '', label.ts)}-{re.sub(r'[^A-Za-z0-9._-]', '_', by)}"
         data = canon.dumps(label.to_doc())
         for n in range(1, 1000):
-            p = d / (f"{stem}.json" if n == 1 else f"{stem}~{n}.json")   # '~' sorts after '.', so history order survives a same-second collision
+            p = d / (f"{stem}.json" if n == 1 else f"{stem}~{n}.json")
             try:
                 fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
             except FileExistsError:
@@ -620,7 +549,6 @@ class LocalStore:
 
     @staticmethod
     def _label_order(name: str) -> tuple[str, int]:
-        """`<stem>.json` -> (stem, 1); `<stem>~N.json` -> (stem, N): the same-second suffix sorts numerically (`~10` after `~9`)."""
         stem = name[:-5] if name.endswith(".json") else name
         base, sep, n = stem.rpartition("~")
         if sep and n.isdigit():
@@ -628,7 +556,6 @@ class LocalStore:
         return stem, 1
 
     def labels(self, target: str, key: str | None = None, by_glob: str | None = None) -> list[Label]:
-        """Every assertion about `target`, sorted by ts (then file name, `~N` numerically); `key` exact, `by_glob` fnmatch."""
         d = self.labels_dir(target)
         out = []
         for p in sorted(d.glob("*.json")) if d.is_dir() else []:
@@ -641,11 +568,7 @@ class LocalStore:
                 out.append((lab.ts, self._label_order(p.name), lab))
         return [lab for _, _, lab in sorted(out, key=lambda t: (t[0], t[1]))]
 
-    # ---- snapshots ----------------------------------------------------------------------------------------------------------------------
-
     def snapshot(self, name: str, members: list[str], note: str | None = None, query: dict | None = None) -> str:
-        """Freeze a member set as a `dataset-snapshot/v1` artifact.  Identity is content: the same (name, members, note, query)
-        yields the same id regardless of member order or who freezes it."""
         members = sorted(set(members))
         bad = [x for x in members if not ids.is_art(x)]
         if bad:
@@ -657,10 +580,8 @@ class LocalStore:
             meta["query"] = query
         return self.put_manifest(ArtifactManifest(kind=SNAPSHOT_KIND, meta=meta, refs={"members": members}))
 
-    # ---- remote: verify / push ----------------------------------------------------------------------------------------------------------
-
     def _readback(self, r: Remote, key: str, sha: str) -> str | None:
-        """Download `key` and sha256 it; None when it matches `sha`, else the reason.  Thread-safe (one temp file per thread)."""
+        """None when it matches ``sha``, else the reason; thread-safe."""
         tmp = self.root / f".verify-{os.getpid()}-{threading.get_ident()}"
         try:
             r.get(key, tmp)
@@ -672,9 +593,6 @@ class LocalStore:
         return None if got == sha else f"{key}: read-back sha256 {got} != {sha}"
 
     def verify(self, art_id: str) -> dict:
-        """PRESERVED check (§7) by read-back: for the manifest and every blob, remote head size matches and a full read-back sha256
-        matches.  Records `verified_utc` (+ `verified: "sha256-readback"`) for the remote replica.  Without a remote: preserved=False,
-        reason given, nothing raised."""
         m = self.get_manifest(art_id)
         hex_ = ids.hex_of(art_id)
         r = self.remote
@@ -691,7 +609,7 @@ class LocalStore:
             if head["bytes"] != size:
                 rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
                 continue
-            err = self._readback(r, key, sha)                            # streamed to a temp file: a > 5 GiB (multipart) object reads back the same way
+            err = self._readback(r, key, sha)
             if err:
                 rep["errors"].append(err)
             else:
@@ -703,9 +621,6 @@ class LocalStore:
         return rep
 
     def _push_object(self, r: Remote, key: str, path: Path, size: int, sha: str, verify: str | None) -> dict:
-        """Upload one object (the remote's conditional `put`: HEAD, skip when present, else create) and verify it.  `verify` is
-        `head` (size + single-part ETag == MD5, falling back to read-back when the remote gives no MD5 ETag), `readback` (download
-        + sha256), or None (upload only).  Never raises: the outcome is in the dict (`error` set = not preserved)."""
         out: dict[str, Any] = {"key": key, "bytes": size, "action": None, "verified": None, "fallback": None, "error": None}
         try:
             res = r.put(key, path)
@@ -713,10 +628,10 @@ class LocalStore:
             if verify is None:
                 return out
             if verify == "head":
-                if res["action"] == "skipped":                          # the HEAD `put` did is the check
+                if res["action"] == "skipped":
                     head = {"bytes": res["bytes"], "etag": res["etag"]}
                 elif res["action"] == "created" and res.get("bytes") == size and is_md5_etag(res.get("etag")) and not res.get("multipart"):
-                    head = {"bytes": size, "etag": res["etag"]}        # the PUT response's ETag is the service's word on what it stored: a HEAD would repeat it
+                    head = {"bytes": size, "etag": res["etag"]}
                 else:
                     head = r.head(key)
                 if head is None:
@@ -728,7 +643,7 @@ class LocalStore:
                         out["verified"] = VERIFY_HEAD
                     else:
                         out["error"] = f"{key}: remote ETag {head['etag']} != local MD5 {res['md5']}"
-                elif res.get("multipart") and head.get("etag") == res["multipart"]["etag"]:   # the multipart ETag the local parts yield
+                elif res.get("multipart") and head.get("etag") == res["multipart"]["etag"]:
                     out["verified"] = VERIFY_MULTIPART
                 else:                                                   # a multipart ETag we cannot reproduce, or a remote without one: content must be read
                     out["error"], out["verified"] = self._readback(r, key, sha), VERIFY_READBACK
@@ -741,12 +656,7 @@ class LocalStore:
         return out
 
     def push(self, art_id: str, preserve: bool = True, *, jobs: int = 32, verify: str = "head", progress: Callable[[dict], None] | None = None) -> dict:
-        """Upload every blob (`jobs` threads) and then the manifest under immutable keys; a manifest is never visible before its
-        blobs, so it goes up only when every blob is present and (with `preserve`) verified.  `verify`: `head` (default; size +
-        single-part ETag == MD5, recorded as `etag-md5`) or `readback` (download + sha256, `sha256-readback`); the manifest is
-        always read back.  The report is the `verify` shape (`preserved`, `checked`, `errors`, `verified_utc`) plus `verified`,
-        `objects`, `uploaded`, `skipped`, `bytes`, `seconds`, `notes` (e.g. the remote switching conditional PUT off).  Results are
-        reported in manifest order whatever the completion order.  `progress`, when given, is called with running counts."""
+        """A manifest is never visible before its blobs."""
         if verify not in VERIFY_MODES:
             raise ValueError(f"verify must be one of {VERIFY_MODES}, got {verify!r}")
         t0 = time.monotonic()
@@ -771,7 +681,7 @@ class LocalStore:
         objs = [x for x in results if x is not None]
         errors = [x["error"] for x in objs if x["error"]]
         notes = sorted({x["fallback"] for x in objs if x["fallback"]})
-        if not errors:                                                  # blobs first, manifest last, and only over a complete blob set
+        if not errors:
             man = self._push_object(r, manifest_key(hex_), self.manifest_path(hex_), len(m.canonical()), hex_, VERIFY_READBACK if preserve else None)
             objs.append(man)
             if man["error"]:
@@ -781,7 +691,7 @@ class LocalStore:
         else:
             notes.append(f"manifest not uploaded: {len(errors)} blob(s) failed")
         preserved = (not errors) if preserve else None
-        methods = sorted({x["verified"] for x in objs[:len(blobs)] if x["verified"]})   # the blobs' check(s); the manifest is always read back
+        methods = sorted({x["verified"] for x in objs[:len(blobs)] if x["verified"]})
         rep: dict[str, Any] = {"id": art_id, "remote": r.describe(), "preserved": preserved, "checked": [x["key"] for x in objs if x["verified"]],
                                "errors": errors, "verified_utc": None, "verified": (",".join(methods) or VERIFY_READBACK) if preserved else None,
                                "objects": len(blobs) + 1, "uploaded": sum(1 for x in objs if x["action"] == "created"),
@@ -797,8 +707,6 @@ class LocalStore:
         return rep
 
     def withdrawn(self, art_id: str) -> str | None:
-        """Why `art_id` was withdrawn (`research data withdraw`: its newest `withdrawn` label's value and who set it), or None, by
-        this store's labels: `research data push` pulls the remote's first, since a withdrawal is often made on another machine."""
         labs = self.labels(art_id, key=vocab.WITHDRAWN)
         return f"{labs[-1].value!r}, by {labs[-1].by}" if labs else None
 
@@ -810,17 +718,11 @@ class LocalStore:
         r.put(attempt_key(run_id), p)
 
     def push_labels(self, targets: list[str], *, jobs: int = 16) -> dict:
-        """Push the assertions about `targets` (art / drv / run ids) the remote lacks, each under `labels/<target>/<content sha256>.json`
-        (`labels_sync.push_targets`).  Per-assertion failures are in the report's `failed`, never raised; a missing remote is."""
         from . import labels_sync as LS
 
         return LS.push_targets(self, targets, jobs=jobs)
 
     def pending(self) -> dict:
-        """What this store holds that the remote does not (the queue `push --pending` drains), from one listing per prefix:
-        `artifacts` without a verified remote replica whose manifest the remote lacks, or whose blobs are all here to verify
-        cheaply (an artifact pulled from the remote without its blobs is the remote's already: `preserved` verifies it on demand);
-        `attempts` the remote lacks; `labels` (content hashes) the remote lacks."""
         from . import labels_sync as LS
 
         r = self._require_remote()
@@ -848,13 +750,7 @@ class LocalStore:
     def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
                 progress: Callable[[str, int, int], None] | None = None, payload_kinds: Sequence[str] = (),
                 payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False, since: str | None = None) -> dict:
-        """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
-        only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
-        and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
-        local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
-        here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
-        `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
-        attempts whose ids sort after it, listed from there (`research lean-times`)."""
+        """Never wipes anything; fetches only what is missing."""
         from . import labels_sync as LS
 
         t0 = time.monotonic()
@@ -869,7 +765,7 @@ class LocalStore:
         tmpdir = self.root / "scratch"
         tmpdir.mkdir(parents=True, exist_ok=True)
 
-        def get(key: str) -> tuple[str, bytes | None, str | None]:     # threads download; the calling thread writes and indexes
+        def get(key: str) -> tuple[str, bytes | None, str | None]:
             tmp = tmpdir / f".refresh-{os.getpid()}-{threading.get_ident()}"
             try:
                 r.get(key, tmp)
@@ -922,8 +818,6 @@ class LocalStore:
         return rep
 
     def fetch_payloads(self, kinds: Sequence[str], *, max_bytes: int = REFRESH_PAYLOAD_MAX, jobs: int = REFRESH_JOBS) -> tuple[int, list[str]]:
-        """Make local the file payloads (<= `max_bytes`) of every catalogued artifact of `kinds` whose blob is not here.
-        Returns (fetched, errors)."""
         want = []
         for kind in kinds:
             for row in self.index.select_artifacts(kind=kind):
@@ -932,7 +826,7 @@ class LocalStore:
                         and not self.object_path(pay["sha256"]).exists()):
                     want.append((row["id"], pay["sha256"]))
 
-        def one(item: tuple[str, str]) -> tuple[str, str | None]:     # threads download; the calling thread records presence
+        def one(item: tuple[str, str]) -> tuple[str, str | None]:
             art_id, hex_ = item
             try:
                 self._resolve_blob(hex_, art_id, None)
@@ -949,11 +843,7 @@ class LocalStore:
                     self.index.set_presence(art_id, local=True)
         return len(want) - len(errs), errs
 
-    # ---- index --------------------------------------------------------------------------------------------------------------------------
-
     def reindex(self, remote: bool = False) -> dict:
-        """Rebuild the catalog from manifests/, attempts/, labels/ (and, with `remote`, the remote listing: manifests and attempts not
-        held locally are fetched and cached first).  Replica verifications already recorded are kept."""
         remote_hexes: set[str] = set()
         if remote and self.remote is not None:
             r = self.remote
@@ -966,7 +856,7 @@ class LocalStore:
                 if ids.is_run_id(rid) and not self.attempt_path(rid).exists():
                     self._remote_copy(k, self.attempt_path(rid))
         rmap = self.replica_map()
-        pushed = {r[0] for r in self.index.db.execute("SELECT id FROM replicas WHERE location='remote'")}   # survives the rebuild
+        pushed = {r[0] for r in self.index.db.execute("SELECT id FROM replicas WHERE location='remote'")}
         arts = []
         for art in self.artifact_ids():
             h = ids.hex_of(art)
@@ -991,9 +881,6 @@ class LocalStore:
         return self._swap_in_rebuilt(arts, attempts, labels)
 
     def _swap_in_rebuilt(self, arts: list, attempts: list, labels: list) -> dict:
-        """Build the new catalog in a side file (the replica records carried over) and rename it over `catalog.sqlite` only once it
-        is complete: a rebuild killed partway leaves the previous catalog answering.  A replica verification recorded by another
-        process while this runs is lost with the old file (the next `preserved` re-verifies)."""
         path = self.root / "catalog.sqlite"
         tmp = self.root / f".catalog.sqlite.rebuild-{os.getpid()}"
         for q in (tmp, tmp.with_name(tmp.name + "-journal")):

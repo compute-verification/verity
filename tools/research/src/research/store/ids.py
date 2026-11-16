@@ -1,11 +1,3 @@
-"""Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), a
-pull request at one head, `pr:<number>@<40-hex commit>` (the merge queue's grants), a checkpoint at one revision,
-`ckpt:<HF repo id>@<40-hex revision>` (its weights' staging), a check's task by its key, `task:<sha512 hex>` (the executor's
-verdicts and results; a graph/v2 key without its `sha512:`), and a commit, `commit:<40-hex>` (the executor's graphs of it and
-drive's shadow record of a check of it), which only labels target.
-
-The store checks syntax, never existence: a ref may name an artifact that lives only remotely.
-"""
 from __future__ import annotations
 
 import re
@@ -27,7 +19,6 @@ COMMIT_RE = re.compile(r"^commit:[0-9a-f]{40}$")
 
 
 def art_id(manifest: Any) -> str:
-    """`art:` + sha256 of the canonical manifest document (a dict, or anything with `to_doc()`)."""
     doc = manifest.to_doc() if hasattr(manifest, "to_doc") else manifest
     return "art:" + canon.sha256(doc)
 
@@ -41,8 +32,6 @@ def is_art(s: Any) -> bool:
 
 
 def is_short_art(s: Any) -> bool:
-    """`art:` + 8..63 hex digits: the abbreviated form notes and reports print (`art:cc59294a`).  Only the CLI resolves it
-    (`Index.resolve_art_prefix`); the store API takes full ids."""
     return isinstance(s, str) and bool(SHORT_ART_RE.match(s))
 
 
@@ -75,18 +64,14 @@ def is_sha256(s: Any) -> bool:
 
 
 def hex_of(art_or_drv: str) -> str:
-    """The 64 hex digits after the prefix."""
     return art_or_drv.split(":", 1)[1]
 
 
 def target_dirname(target: str) -> str:
-    """Label directory name for a target id: ':' -> '_' (art:abc -> art_abc; run ids are unchanged), and a checkpoint's '/' -> '--',
-    the hub cache's spelling, which a repo id never contains (ckpt:org/m@rev -> ckpt_org--m@rev)."""
     return target.replace(":", "_").replace("/", "--")
 
 
 def kind_of_id(s: str) -> str:
-    """'art' | 'drv' | 'run' | 'pr' | 'ckpt' | 'task' | 'commit' | 'unknown'."""
     if is_art(s):
         return "art"
     if is_drv(s):

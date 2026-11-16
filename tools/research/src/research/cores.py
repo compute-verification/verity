@@ -1,23 +1,4 @@
-"""Whole cores of its own for a queued CPU run on a shared node (`research run --queue`), on the machine, ahead of the run's allocation.
-
-`research cpu-hold --cpus N --from LIST --wrap K --who NAME [--rank R] [--ack FIFO] -- CMD...` takes at least N CPUs of LIST in whole cores
-(every SMT sibling of a core, CPU_ROOT's topology) that no live claim holds, records them as the claim CLAIMS/NAME.cpus, and
-execs CMD with LIST replaced by them in its first K arguments (the queue's wrapper: its scope's AllowedCPUs=, its cpuset check
-and its taskset), so the run's pid is unchanged. Without claims node 2's queued Verity runs would all run on all of 48-95, dozens at
-once, leaving a suite under one core; claimed cores are the run's alone.
-
-A claim is live while its file is flock'ed: this process locks it and leaves the descriptor to CMD, which holds it while anything
-in the run's scope keeps it open (the runner does, through custody); a file nobody locks is a claim whose run ended, and the next
-taker removes it. Claims are taken under CLAIMS/.lock. Node 2's fill runner claims the cores of its Verity pool's jobs here too
-(fill_runner.py), so a fill job and a queued run never share one.
-
-While the cores aren't free it waits in a line, reading the claims again every POLL_S: each waiter holds a locked ticket
-CLAIMS/wait.<ns>.<NAME> (`ticket_name`), and only the first live one may take cores, so a run asking for many isn't passed for
-ever by smaller ones (and the fill runner starts no pool job while one waits). The line is by class, then oldest first: `--rank R`
-is the class's priority less the default class's (the queue's placement, `cores.rank`), so drive's gates aren't behind every lane
-job queued before them. With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
-acknowledges the launch as it starts, as disk-hold's does. A run asking for more cores than LIST has exits 2 at once.
-"""
+"""Whole cores for a queued CPU run on a shared node (`research run --queue`), claimed ahead of the run's allocation."""
 from __future__ import annotations
 
 import argparse
@@ -34,7 +15,6 @@ POLL_S = 15
 
 
 def parse(text: str) -> set[int]:
-    """`48-51,60` as {48, 49, 50, 51, 60}."""
     out: set[int] = set()
     for part in text.strip().split(","):
         lo, _, hi = part.partition("-")
@@ -54,7 +34,6 @@ def fmt(cpus: set[int]) -> str:
 
 
 def core(c: int, root: Path) -> frozenset[int]:
-    """CPU c's SMT siblings, c alone when its topology can't be read."""
     try:
         return frozenset(parse((root / f"cpu{c}" / "topology" / "thread_siblings_list").read_text())) or frozenset({c})
     except OSError:
@@ -62,7 +41,7 @@ def core(c: int, root: Path) -> frozenset[int]:
 
 
 def carve(free: set[int], n: int, root: Path) -> set[int] | None:
-    """At least n CPUs of `free` in whole cores, lowest first, or None when they don't fit."""
+    """Whole cores, lowest first; None when they don't fit."""
     got: set[int] = set()
     for c in sorted(free):
         sib = core(c, root)
@@ -72,7 +51,6 @@ def carve(free: set[int], n: int, root: Path) -> set[int] | None:
 
 
 def held(path: Path) -> bool:
-    """Whether someone holds `path` flock'ed."""
     try:
         fd = os.open(path, os.O_RDONLY)
     except OSError:
@@ -87,7 +65,6 @@ def held(path: Path) -> bool:
 
 
 def live(d: Path, pattern: str) -> list[Path]:
-    """The files of `d` matching `pattern` that someone holds; the rest are their holders' leftovers, removed."""
     out = []
     for f in sorted(d.glob(pattern)):
         if held(f):
@@ -98,7 +75,6 @@ def live(d: Path, pattern: str) -> list[Path]:
 
 
 def claimed(d: Path) -> dict[str, set[int]]:
-    """Each live claim's CPUs, by name."""
     out = {}
     for f in live(d, "*.cpus"):
         try:
@@ -109,8 +85,6 @@ def claimed(d: Path) -> dict[str, set[int]]:
 
 
 def locked(path: Path, text: str) -> int:
-    """`path` holding `text`, flock'ed by the descriptor returned: written and locked under a name no reader looks at, then
-    renamed into place, so no reader ever sees it unlocked and takes it for a leftover."""
     tmp = path.with_name(f".tmp-{os.getpid()}-{path.name}")
     fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o664)
     try:
@@ -125,7 +99,6 @@ def locked(path: Path, text: str) -> int:
 
 
 def take(n: int, share: set[int], who: str, d: Path, root: Path) -> tuple[set[int], int] | None:
-    """Claim n CPUs of `share` that no live claim holds: the CPUs and the descriptor that holds the claim, or None."""
     with open(d / ".lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         live_claims = claimed(d)
@@ -136,9 +109,6 @@ def take(n: int, share: set[int], who: str, d: Path, root: Path) -> tuple[set[in
 
 
 def ticket_name(rank: int, ns: int, who: str) -> str:
-    """The line's ticket: the line is these names in order, so a higher rank sorts first and the oldest of a rank goes first.  Rank 0
-    (the default class) keeps the unranked `wait.<ns>.<who>`, so a waiter whose cpu-hold predates ranks agrees with this one on
-    who is first: '!' sorts before its digits and '~' after them."""
     if rank > 0:
         return f"wait.!{9999 - min(rank, 9999):04d}.{ns:020d}.{who}"
     if rank < 0:
@@ -150,9 +120,6 @@ def hold(n: int, share: set[int], who: str, *, rank: int = 0, d: Path = CLAIMS, 
          sleep: Callable[[float], None] = time.sleep, clock_ns: Callable[[], int] = time.time_ns,
          log: Callable[[str], None] = lambda s: print(s, file=sys.stderr, flush=True),
          on_hold: Callable[[], None] = lambda: None) -> tuple[set[int], int]:
-    """Wait in the line until n CPUs of `share` are free in whole cores, and claim them (`take`): only when no live ticket sorts
-    ahead of its own (`ticket_name`, by `rank`, its class's priority above the default class's).  `on_hold` runs once, when the
-    wait starts.  ValueError when `share` can never hold them."""
     if carve(share, n, root) is None:
         raise ValueError(f"{n} CPUs in whole cores don't fit in {fmt(share)}")
     d.mkdir(parents=True, exist_ok=True)
@@ -180,7 +147,6 @@ def hold(n: int, share: set[int], who: str, *, rank: int = 0, d: Path = CLAIMS, 
 
 
 def pinned(cmd: list[str], k: int, share: str, got: str) -> list[str]:
-    """`cmd` with `share` replaced by `got` in its first k arguments, as a whole argument or after `=`."""
     head = [got if a == share else a[:-len(share)] + got if a.endswith(f"={share}") else a for a in cmd[:k]]
     return head + cmd[k:]
 

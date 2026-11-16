@@ -109,9 +109,6 @@ class Refused(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True, lazy: bool = True) -> subprocess.CompletedProcess:
-    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`).  A
-    fetch holds the clone's worktree lock shared (`worktrees_shared`), as the queue's do: the queue's clone, where drive's
-    steps after a landing fetch, has its worktrees added beside them."""
     env = git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1")
     with worktrees_shared(repo, env) if args[:1] == ("fetch",) else contextlib.nullcontext():
         r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=env)
@@ -120,26 +117,13 @@ def _git(repo: Path, *args: str, check: bool = True, lazy: bool = True) -> subpr
     return r
 
 
-#: result kinds that pass no merge gate, whatever `--tool` recorded them and whatever its declaration says it produces:
-#: `lean-fast/v1` is the Lean fast path's (`tools/verity/lean/lean_changed.py --records`), an audit without the kernel replay,
-#: which every merge check keeps
 REFUSED_KINDS = frozenset({"lean-fast/v1"})
-#: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
-#: slot.py's options (`SLOT_FLAGS`, `SLOT_OPTS`), each at most once and in any order, then `--`
 SLOT_WRAP = ("python3", "tools/check/slot.py")
-#: slot.py's options a recorded check may carry: which slot it waits for, and how long, never what it runs (not `--budget-gb`,
-#: which changes how much CMD starts at once)
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
-#: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
-#: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
 CHECK_FLAGS = ("--no-cache", "--circuit-cache", "--keep-going")
 
 
 def invocation(argv, command) -> tuple[str, object]:
-    """What an attempt's ``argv`` ran of the target's declared ``command``: ("check", None), ``command`` itself, in a check slot
-    (`SLOT_WRAP`) or not, followed by nothing but check.py's own flags (`CHECK_FLAGS`); ("shard", (K, N)), the same with
-    `--shard K/N` once (`tools/check/check.py`'s sharding); ("combine", [run ids]), ``command`` with `--combine RUN...` and
-    nothing else; or ("refused", why) for anything else."""
     if not command:
         return "refused", "the target's declaration of the tool names no command to hold it to"
     if not (isinstance(argv, list) and all(isinstance(x, str) for x in argv)):
@@ -173,9 +157,6 @@ def invocation(argv, command) -> tuple[str, object]:
 
 
 def post_landing(argv, command) -> str | None:
-    """The steps of an after-landing run (`check.py --record --deferred STEP,...`, which drive launches through `train.sh
-    --deferred` and records without `--tool check`) when ``argv`` is the declared ``command`` run whole (`invocation`) but for
-    `--deferred STEPS` once; else None.  No gate takes it as a check of its commit; `--verdicts` cites its packs part by part."""
     if not (isinstance(argv, list) and argv.count("--deferred") == 1) or (i := argv.index("--deferred")) + 1 >= len(argv):
         return None
     steps = argv[i + 1]
@@ -184,8 +165,6 @@ def post_landing(argv, command) -> str | None:
 
 
 def unlike(argv, command) -> str | None:
-    """Why an attempt's ``argv`` isn't a whole run of the target's declared ``command``, or None (`invocation`'s "check"): a
-    shard passes no gate alone, and a combine only through `refused`'s reading of its shards."""
     mode, arg = invocation(argv, command)
     if mode == "shard":
         return (f"it is shard {arg[0]}/{arg[1]} of a sharded check, which passes no gate alone: `check.py --record --combine` "
@@ -195,12 +174,10 @@ def unlike(argv, command) -> str | None:
     return arg if mode == "refused" else None
 
 
-#: a sharded check's shard result (`tools/check/check.py --shard`): never a kind the tool produces, read only by `shard_set`
 SHARD_KIND = "check-shard/v1"
 
 
 def _ci_toml(repo: Path, commit: str) -> dict | None:
-    """``commit``'s own `tools/check/ci.toml`, parsed, or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -215,8 +192,6 @@ def _ci_toml(repo: Path, commit: str) -> dict | None:
 
 
 def declared(repo: Path, commit: str) -> list[dict] | None:
-    """The `[[job]]` tables of ``commit``'s own `tools/check/ci.toml`, in its order (each a name, an owner, a group, and
-    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
     jobs = doc.get("job", []) if (doc := _ci_toml(repo, commit)) is not None else None
     if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
         return None
@@ -224,8 +199,6 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 
 
 def shard_plans(repo: Path, commit: str) -> dict[int, list[list[str]]] | None:
-    """The `[[plan]]` tables of ``commit``'s own `tools/check/ci.toml` by their number of shards, as check.py's
-    `--shard K/N` takes them: {N: each shard's parts}, or None when it can't be read."""
     plans = doc.get("plan", []) if (doc := _ci_toml(repo, commit)) is not None else None
     if not isinstance(plans, list):
         return None
@@ -239,10 +212,6 @@ def shard_plans(repo: Path, commit: str) -> dict[int, list[list[str]]] | None:
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The names of the jobs ``commit``'s own `tools/check/ci.toml` declares that are on the merge gate (every job but
-    those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
-    can't be read.  A job off the gate runs after landing, in drive's after-landing run, whose red names its culprit; no check
-    needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)
@@ -256,8 +225,6 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
 
 
 def _read(store, run_id: str, tool: str | None, commit: str | None):
-    """(record, result id, result manifest or None) of the attempt, or why it can't pass whatever it ran: its record can't be
-    read, or doesn't say it is a passing ``tool`` attempt of the clean ``commit``, or its result can't be read."""
     try:
         doc = store.get_attempt(run_id)
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
@@ -279,16 +246,6 @@ def _read(store, run_id: str, tool: str | None, commit: str | None):
 
 def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check",
               command: tuple[str, ...] = ()) -> tuple[list[dict] | None, str | None]:
-    """(the steps of the one check the shard attempts ``ids`` make, None) when together they are a passing check of the clean
-    ``commit``, else (None, why).  Each must be a passing ``tool`` attempt of ``commit`` whose command is the declared
-    ``command`` with `--shard K/N` or `--shard auto:K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that
-    shard, ``commit`` and its config (``commit``'s tree of `tools/check/`), with no step but passed or skipped and its
-    steps' parts its shard's parts; together, one N with K = 1..N once each, one list of every part and one auto plan's digest
-    (or none), whose parts they make exactly once and which covers every job ``commit``'s `ci.toml` puts on the gate
-    (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing), and the same steps outside their parts (the
-    preflight), passed in each, but for the builds a shard runs beside its parts (an auto plan's, a hand plan's lean-build
-    beside lean-suites' parts), whose verdict is their own shard's.  The steps: those once, then each part as its shard's step
-    ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/check", check=False).stdout.strip()
@@ -353,8 +310,6 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
         return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml puts on the gate"
     names = {p.partition(":")[0] for p in every}
-    # a shard runs the builds its parts need beside them when another shard holds them (`tools/check/shards.py`,
-    # `declaration.py`): a job's step outside its parts, passed or skipped like every step of a shard, whose part another holds
     common = [[s["step"] for s in shards[k][2] if not s.get("parts") and s["step"] not in names] for k in sorted(shards)]
     if any(sorted(c) != sorted(common[0]) for c in common):
         return None, "the shards ran different steps outside their parts"
@@ -366,8 +321,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
 
 
 def declaration(repo: Path, tool: str):
-    """The target's own declaration of ``tool``, read from the checkout (not from the commit being merged), or None when the
-    checkout has none."""
+    """Read from the checkout, not from the commit being merged; None when it has none."""
     from .store import tools_registry
 
     try:
@@ -377,26 +331,17 @@ def declaration(repo: Path, tool: str):
 
 
 def produced(repo: Path, tool: str) -> frozenset[str]:
-    """The result kinds the target's declaration of ``tool`` produces (`Tool.produces`); none when it has no declaration, so
-    that no attempt passes."""
+    """None without a declaration, so that no attempt passes."""
     return frozenset(getattr(declaration(repo, tool), "produces", None) or ())
 
 
 def declared_command(repo: Path, tool: str) -> tuple[str, ...]:
-    """The command the target's declaration of ``tool`` runs (`Tool.command`); none when it has no declaration, so that no
-    attempt passes."""
+    """None without a declaration, so that no attempt passes."""
     return tuple(getattr(declaration(repo, tool), "command", None) or ())
 
 
 def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, commit: str | None = None,
             command: tuple[str, ...] | None = None, repo: Path | None = None) -> str | None:
-    """Why the attempt can't pass the gate whatever the index says of it, or None: its record can't be read, or doesn't say
-    what the index row did (a passing ``tool`` attempt of the clean ``commit``), or ran something other than ``command`` (the
-    tool's `declared_command`, `unlike`; with none, nothing passes), or its result can't be read, is in `REFUSED_KINDS`, is not
-    of a kind in ``kinds`` (the tool's `produced`; an attempt that published no result has none), is another run's, has a
-    verdict other than passed, or lists a step twice (the gates would read it two ways).  A `--combine` of shards passes only
-    when, read in ``repo`` (the target's checkout), its shards are a passing check of ``commit`` (`shard_set`) and its steps are
-    the ones they make."""
     got = _read(store, run_id, tool, commit)
     if isinstance(got, str):
         return got
@@ -432,8 +377,6 @@ def refused(store, run_id: str, kinds: frozenset[str], tool: str | None = None, 
 
 
 def twice(steps) -> str | None:
-    """Why a result's ``steps`` can't be read one way, or None: each is an object naming its step, and no step is listed twice
-    (`step_status` would read the first and the train gate the last)."""
     if not (isinstance(steps, list) and all(isinstance(s, dict) and isinstance(s.get("step"), str) for s in steps)):
         return "its result has steps this gate can't read"
     names = [s["step"] for s in steps]
@@ -444,10 +387,6 @@ def twice(steps) -> str | None:
 
 def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], command: tuple[str, ...], tree: str | None = None,
             maps=None, repo: Path | None = None) -> list[str]:
-    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first, less those `refused` names
-    (``kinds`` and ``command``: the result kinds that may pass and the command that must have run, the target's `produced` and
-    `declared_command`).  After a history rewrite (`commitmap`), an attempt of an old commit counts for its image when the map
-    says the rewrite kept the tree and, where the attempt recorded its tree, that tree is ``tree``."""
     rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
                            "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
     found = [(r[0], commit) for r in rows]
@@ -462,14 +401,10 @@ def passing(store, commit: str, tool: str = "check", *, kinds: frozenset[str], c
 
 
 def tree_identical(repo: Path, commit: str) -> bool:
-    """Whether merging ``commit`` into the checkout's HEAD, which it does not contain, gives ``commit``'s own tree: HEAD's
-    changes are all in ``commit`` already (a train checked on the train ahead of it, which landed as a merge commit of the same
-    tree), so the tree that would land is the one that was checked."""
     r = _git(repo, "merge-tree", "--write-tree", "HEAD", commit, check=False)
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
-#: a Lake package's lock, which a train's check may regenerate (`check.py --regenerate`, the report's `regenerated`)
 LOCK = "lean-audit.json"
 
 
@@ -479,30 +414,20 @@ def _run_files(store, run_id: str) -> str | None:
 
 
 def _under_run(path: str) -> str:
-    """A path the Lean check's report names, as a path among the run's files (`lean-audit/...`)."""
     if "/lean-audit/" in path:
         return "lean-audit/" + path.split("/lean-audit/", 1)[1]
     return path if path.startswith("lean-audit/") else f"lean-audit/{path}"
 
 
-#: the Lean check's report among a check's run files (`lean_audit.py`): its `regenerated` names each package's regenerated lock
 AUDIT = "lean-audit/audit.json"
-#: the files beside the locks that drive's lock run repairs (`lean_audit.py --bookkeeping warn`: its `UNREAD_CAPS` and
-#: `CAPS_TEST`), which the report's `repaired` names by their repository paths and drive commits with the locks
 REPAIRED = frozenset({"tools/verity/lean/unread-caps.json", "tests/test_lean_packages.py"})
 
 
 class Unreadable(Exception):
-    """A check's Lean report says it regenerated lock records, or can't be read to say whether it did, and they can't be read:
-    whoever would land its tree holds it, or the tree would land without the locks its check regenerated."""
+    """A check regenerated lock records, or its Lean report can't say whether it did, and the records can't be read."""
 
 
 def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]] | None:
-    """{package: (sha256 of its regenerated lock, the fetched file under ``dest`` or None)} of a check that passed its Lean
-    check by regenerating records (the report's `regenerated`), and the same of each file of `REPAIRED` its lock run repaired
-    (`repaired`) under its repository path, from its files in the store; empty when it regenerated none,
-    None when the store holds no report of its Lean check (its files aren't there yet: a check still running).  `Unreadable`
-    when the report is listed but can't be read, or names a record its files lack."""
     if not (art := _run_files(store, run_id)):
         return None
     try:
@@ -524,8 +449,6 @@ def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[st
 
 
 def _regenerated_in(run_id: str, audit) -> dict[str, str]:
-    """{package: its regenerated lock's path among the run's files} of a Lean check's report, and {a file of `REPAIRED`: its
-    repaired copy's path there} of its `repaired`; `Unreadable` for a `repaired` naming any other file."""
     regen = audit.get("regenerated") if isinstance(audit, dict) else None
     fixed = audit.get("repaired") if isinstance(audit, dict) else None
     if not isinstance(regen or {}, dict) or not isinstance(fixed or {}, dict):
@@ -537,10 +460,6 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
-    """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`; `landing.read_run` reads one so in the loop's process), or None when it
-    can't be read.
-    ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
                        cwd=cwd, capture_output=True, text=True)
@@ -552,10 +471,6 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
 
 
 def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
-    """`regenerated_records` of a check whose files aren't in the store yet (a lock run drive commits the records of: `Driver._locks`),
-    read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
-    its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
-    record the run dir doesn't hold."""
     if (got := fetch(rid, [AUDIT])) is None:
         return None
     try:
@@ -574,8 +489,6 @@ def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]
 
 
 def lean_report(store, rid: str, fetch=fetch_run):
-    """Run ``rid``'s Lean report (`AUDIT`, parsed), read from its files in the store, else from its run dir on its node
-    (``fetch``); None when neither has it to read.  Raises when it is listed and can't be read or parsed."""
     if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
         with tempfile.TemporaryDirectory() as d:
             return json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
@@ -585,8 +498,6 @@ def lean_report(store, rid: str, fetch=fetch_run):
 
 
 def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
-    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`, `lean_report`); empty when it
-    has none or its report can't be read: drive tells them and puts them in the lock commit, and nothing waits on them."""
     try:
         audit = lean_report(store, rid, fetch)
         warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
@@ -603,7 +514,6 @@ def _blob_sha256(repo: Path, commit: str, path: str) -> str:
 
 
 def _ran_on(store, rid: str, commit: str, fetch) -> bool:
-    """Whether run ``rid`` checked ``commit``: its attempt's clean source in the store, else its run record's `tree_sha`."""
     rows = store.index.sql("SELECT source_commit, source_dirty FROM attempts WHERE id = ?", (rid,))
     if rows:
         return rows[0][0] == commit and not rows[0][1]
@@ -613,16 +523,6 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
                        maps=None, deferred: str | None = None, fetch=None) -> str | None:
-    """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
-    packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
-    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.  A file of
-    `REPAIRED` it changes is held the same way, to the copy the lock run repaired (`--bookkeeping warn`).
-
-    ``deferred`` is the lock run drive commits ``commit`` for on the parent (`Driver._unvouched`), a check of lean-audit
-    alone, so no passing attempt of the whole check: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the
-    parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed
-    here, never digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard
-    never do."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
@@ -652,9 +552,6 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
 
 
 def _admissible(repo: Path, ref: str, into: str, store, tool: str, log, remote: str):
-    """(commit, history maps) when ``ref`` passes what both gates hold it to before any verdict: the checkout is a clean
-    ``into``, which ``ref`` contains or whose changes it holds already (`tree_identical`), with no replaced history and no
-    pull request moved or stacked (`unstacked`); `Refused` otherwise."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into:
@@ -680,8 +577,6 @@ def _admissible(repo: Path, ref: str, into: str, store, tool: str, log, remote: 
 
 
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
-    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
-    merges whose head on ``remote`` moved, or that is stacked on one neither on ``into`` nor below it (`unstacked`)."""
     commit, maps = _admissible(repo, ref, into, store, tool, log, remote)
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
@@ -709,21 +604,13 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
                   f"`uv run python tools/check/check.py --record --on MACHINE` sends the agreement inputs)")
 
 
-#: `check.py --plan`'s document (`tools/check/plan.py`), which `--verdicts` reads
 PLAN_KIND = "check-plan/v1"
-#: the plan `--verdicts` runs in the target's checkout: the declared command's environment, passes from recorded checks' packs only
 PLAN = ("uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", "tools/check/check.py", "--plan")
-#: the states an attempt whose pack holds passes may end in: a pack holds only passes, so a failed or cancelled check's count
 PACK_STATES = ("done", "failed", "cancelled")
-#: a check's packs among its run files (`check.PACK_FILES`): the passes its steps stored, and those it reused, each entry
-#: naming the run that earned it; a reused pass is cited as the attempt that reused it, as `gate` cites a passing check
 PACKS = ("verdicts.tar.gz", "verdicts-reused.tar.xz")
 
 
 def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on: str | None = None) -> dict:
-    """The target's `check.py --plan COMMIT --json --packs-only --base BASE` (with `--from RUN` for each of ``also``; `--on
-    MACHINE` with ``on``: planned there, a short `research run`), run in the checkout ``repo``; `Refused` when it prints no
-    plan."""
     r = subprocess.run([*PLAN, commit, "--json", "--packs-only", "--base", base, *(x for rid in also for x in ("--from", rid)),
                         *(["--on", on] if on else [])], cwd=repo, capture_output=True, text=True)
     try:
@@ -737,10 +624,6 @@ def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on:
 
 
 def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ...]) -> str | None:
-    """Why the verdict pack of sha256 ``sha256`` can't be cited as attempt ``rid``'s, or None: the attempt's record says it is
-    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is an
-    after-landing run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
-    run files."""
     try:
         doc = store.get_attempt(rid)
     except Exception as e:  # noqa: BLE001  (a guard never fails open)
@@ -768,10 +651,6 @@ def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ..
 
 
 def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: tuple[str, ...], need: dict) -> tuple[list[str], str | None]:
-    """(the attempts cited, None) when the plan ``doc`` shows the clean ``commit`` (of ``tree``) with every part it requires
-    passed, each by a pass a recorded ``tool`` check's pack holds (`pack_refusal`), every Lake package's audit among them and
-    every step ``need`` names; else ([], why).  A pass found only in a machine's own cache, or in a pack no attempt published,
-    is cited by nothing and counts as none."""
     if doc.get("kind") != PLAN_KIND or doc.get("commit") != commit or doc.get("tree") != tree:
         return [], (f"the plan is a {doc.get('kind')} of {str(doc.get('commit'))[:12]} (tree {str(doc.get('tree'))[:12]}), not a "
                     f"{PLAN_KIND} of the clean {commit[:12]}")
@@ -788,7 +667,6 @@ def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: t
     cited, bad = set(), []
     for p in wanted:
         if p.get("state") == "implied":
-            # a build step: satisfied by the passes of the parts that read what it builds, each judged as a part of its own
             rests = p.get("implied_by")
             if not isinstance(rests, list) or not rests or not all(isinstance(n, str) and n in by for n in rests):
                 bad.append(f"{p['part']} implied (by no part this plan lists)")
@@ -820,11 +698,6 @@ def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: t
 
 def verdict_gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin",
                  plan=None, also: tuple[str, ...] = (), on: tuple[str, ...] = ()) -> tuple[str, list[str]]:
-    """`--verdicts`: (commit, the attempts cited) when ``ref`` passes what `gate` holds it to before any verdict (`_admissible`)
-    and the target's `check.py --plan` of it shows every part passed by a cited pass (`plan_refusal`), in place of one passing
-    attempt of that commit; `Refused` otherwise.  The steps the change requires (`required_steps`) and every Lake package's
-    audit need a pass under their key: a skip is none.  With ``on`` (`--plan-on`), the plan is made on each of those machines in
-    turn (`check.py --plan --on`), and the first whose plan is fully passed admits; else it is made here."""
     commit, _maps = _admissible(repo, ref, into, store, tool, log, remote)
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -857,10 +730,6 @@ printf '%s\\n' "$lines" | PYTHONPATH={src} exec {python} -m research merge --gua
 
 
 def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
-    """The tips a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would move ``into`` to without a
-    passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
-    `research merge` commit has, its merged parent's when the two trees are equal, or, for a commit of the locks a train's
-    check regenerated, that check (`regenerated_parent`)."""
     bad = []
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     for line in lines:
@@ -878,9 +747,6 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
 
 
 CANARY_SCHEMA = "research/merge-canary/v1"
-#: `--canary`'s attempts of one commit, each alone in a store: (case, what it is, whether the train gate judges it: that gate
-#: holds its job's own run to the record and the result's kind and steps, not to the command or the verdict); every gate that
-#: judges a case must refuse all but the control
 CANARY = (("no-result", "a passing check that published no result", True),
           ("wrong-kind", "a passing check whose result is a bench-result/v1", True),
           ("refused-kind", "a passing check whose result is the Lean fast path's lean-fast/v1", True),
@@ -893,11 +759,6 @@ CANARY = (("no-result", "a passing check that published no result", True),
 
 
 def canary(repo: Path, tool: str = "check") -> dict:
-    """The `research/merge-canary/v1` report of `--canary`: each CANARY attempt, alone in a scratch store with no remote, put to
-    the gate and the push guard for a commit of a scratch repository whose declaration of ``tool`` is ``repo``'s own, and, for
-    `check`, to the train gate (`jobs.trains.TrainService.gate`, on its fakes holding the same declaration, record and result);
-    ``ok`` when every gate that judges a case refuses every bad one and admits the control.  Nothing of ``repo``'s or the
-    evidence store's is read or written beyond that declaration."""
     from .jobs import trains
     from .runs import new_run_id
     from .store import tools_registry
@@ -977,7 +838,6 @@ def canary(repo: Path, tool: str = "check") -> dict:
 
 
 def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> Path | None:
-    """The pre-push hook (`--guard-push`) in ``repo``'s hooks directory, unless one is there already; its path when written."""
     hooks = Path(_git(repo, "rev-parse", "--git-path", "hooks").stdout.strip())
     hook = hooks if hooks.is_absolute() else repo / hooks
     hook = hook / "pre-push"
@@ -991,12 +851,10 @@ def install_push_guard(repo: Path, into: str = "main", tool: str = "check") -> P
 
 
 def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, list[str]]:
-    """The steps the target's own declaration of ``tool`` (`Tool.merge_requires`, read from the checkout, not from the commit being
-    merged) requires for the change ``base``..``commit``: {step: the prefixes it touches}."""
     rules = getattr(declaration(repo, tool), "merge_requires", None)
     if not rules:
         return {}
-    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", base, commit).stdout.split("\0") if p]   # a rename's source too
+    changed = [p for p in _git(repo, "diff", "--no-renames", "--name-only", "-z", base, commit).stdout.split("\0") if p]
     out = {}
     for step, rule in rules.items():
         if hit := rule_touches(rule, changed):
@@ -1005,10 +863,6 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 
 
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
-    """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
-    changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/verifier/", "!README.md"]` leaves out every
-    README.md under either."""
     import fnmatch
 
     prefixes = [r for r in rule if not r.startswith("!")]
@@ -1021,13 +875,9 @@ def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
 
 
 def step_status(store, run_id: str, step: str) -> str:
-    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none).  A job a shard plan splits
-    (lean-audit, by Lake package): in a `--combine` check, its parts' (`STEP:PART`), passed only when each is; in a shard
-    (`SHARD_KIND`, or a deferred run's shard: drive's after-landing shards), "partial" unless that shard ran every part of it,
-    since a shard alone checks only its own."""
     try:
         art = (store.get_attempt(run_id) or {}).get("outputs", {}).get("result")
-        doc = store.get_manifest(art).meta if art else {}       # a result artifact's document is its manifest's meta
+        doc = store.get_manifest(art).meta if art else {}
     except Exception as e:  # noqa: BLE001  (an unreadable result admits nothing)
         return f"unreadable ({type(e).__name__})"
     steps = [s for s in doc.get("steps", []) if isinstance(s, dict)]
@@ -1045,8 +895,6 @@ def step_status(store, run_id: str, step: str) -> str:
 
 def _record(tree: Path, tool: str, command: list[str], on: str | None, project: str | None, log=print,
             sends: list[str] = ()) -> str:
-    """Record ``tool`` on the commit checked out in ``tree`` (``research run --tool``; ``--on`` a machine: launched there and
-    polled until it ends); returns the run id."""
     from . import runs as R
 
     rid = R.new_run_id()
@@ -1075,13 +923,10 @@ def _record(tree: Path, tool: str, command: list[str], on: str | None, project: 
 POLL_S = 20
 
 
-#: a pinned train ref: pull request N or a branch of the remote, at the head that was reviewed
 PIN = re.compile(r"#?([\w./-]+)@([0-9a-f]{7,40})")
 
 
 def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
-    """(how the train's merge message names ``ref``, the commit it merges).  ``N@SHA`` (pull request N) and ``BRANCH@SHA`` are
-    fetched from ``remote`` and refused unless the head there is still SHA; any other ref is the commit it names here."""
     m = PIN.fullmatch(ref)
     if not m:
         return ref, _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
@@ -1094,14 +939,10 @@ def pinned(repo: Path, ref: str, remote: str) -> tuple[str, str]:
     return label, head
 
 
-#: a line a train's merge takes from both sides of a conflict: a Lean or Python import
 IMPORT_LINE = re.compile(r"\s*(import\s|from\s+\S+\s+import\s)")
 
 
 def keep_both_imports(text: str) -> str | None:
-    """``text``, a file git left with conflict markers (`merge` style), with each conflict resolved to both sides, ours and then
-    the lines of theirs ours lacks, when every line on either side of every conflict is an import or blank; None when one holds
-    anything else, or there is no conflict to resolve."""
     out: list[str] = []
     ours: list[str] = []
     theirs: list[str] = []
@@ -1129,7 +970,6 @@ def keep_both_imports(text: str) -> str | None:
 
 
 def _strict_json(text: str) -> bool:
-    """Whether ``text`` parses as JSON with no key twice in one object (a text merge of two added records can repeat a key)."""
     def pairs(kv: list) -> dict:
         if len({k for k, _ in kv}) != len(kv):
             raise ValueError("a key repeats")
@@ -1143,8 +983,6 @@ def _strict_json(text: str) -> bool:
 
 
 def broken_json(tree: Path, theirs: str) -> list[str]:
-    """The JSON files whose text the merge at ``tree``'s HEAD merged (both sides changed them, as two PRs' guarantees change one
-    `lean-audit.json`) and that don't parse (`_strict_json`) though both sides' did."""
     mb = _git(tree, "merge-base", "HEAD^1", theirs).stdout.strip()
     changed = [set(_git(tree, "diff", "--name-only", "-z", mb, rev).stdout.split("\0")) for rev in ("HEAD^1", theirs)]
 
@@ -1161,14 +999,10 @@ def broken_json(tree: Path, theirs: str) -> list[str]:
     return bad
 
 
-#: the tree's own list of generated files and how each is regenerated after a merge (`pins.py --merged`)
 PINS_SCRIPT = "tools/check/pins.py"
 
 
 def regenerate(tree: Path, ours: str, theirs: str, conflicted: list[str]) -> list[str]:
-    """Run the tree's `pins.py --merged OURS THEIRS` on the merge under way in ``tree`` and stage what it rewrote; the paths.
-    Refused when a conflict is in a file it doesn't generate or a regeneration failed. A tree without it (one that predates
-    it) resolves nothing."""
     script = tree / PINS_SCRIPT
     if not script.is_file() or "--merged" not in script.read_text():
         if conflicted:
@@ -1194,9 +1028,6 @@ def regenerate(tree: Path, ours: str, theirs: str, conflicted: list[str]) -> lis
 
 
 def _merge(tree: Path, label: str, sha: str, msg: str) -> None:
-    """Merge ``sha`` onto the worktree ``tree``'s HEAD (`--no-ff`).  A conflict made only of import lines keeps both sides
-    (`keep_both_imports`), named in the commit's `Imports:` trailer; any other refuses.  A merged JSON file must parse
-    (`broken_json`)."""
     ours = _git(tree, "rev-parse", "HEAD").stdout.strip()
     r = _git(tree, "-c", "merge.conflictStyle=merge", "merge", "--no-ff", "--no-commit", sha, check=False)
     conflicted = [p for p in _git(tree, "diff", "--name-only", "-z", "--diff-filter=U").stdout.split("\0") if p]
@@ -1232,8 +1063,6 @@ def _merge(tree: Path, label: str, sha: str, msg: str) -> None:
 
 
 def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
-    """Merge each (label, commit) in order onto the worktree ``tree``'s HEAD, one `--no-ff` merge each (`_merge`); the chain's
-    commits, which are the train's prefixes.  Refused at the first that doesn't merge."""
     chain = []
     for label, sha in pins:
         _merge(tree, label, sha, f"Merge {label} ({sha[:8]})\n\nTrain: {stamp}")
@@ -1241,24 +1070,15 @@ def _chain(tree: Path, pins: list[tuple[str, str]], stamp: str) -> list[str]:
     return chain
 
 
-#: the subject `_chain` gives a pinned pull request's merge onto a train
 MERGED_PR = re.compile(r"Merge #(\d+) \(([0-9a-f]{7,40})\)")
 
 
 def adds_nothing(repo: Path, commit: str, head: str, lazy: bool = True) -> bool:
-    """Whether merging ``head`` into ``commit`` leaves ``commit``'s own tree: what ``head`` has, ``commit`` has already (a merge of
-    `main` into a pull request the tip already holds); with ``lazy`` False, not when that needs an object the clone lacks."""
     r = _git(repo, "merge-tree", "--write-tree", commit, head, check=False, lazy=lazy)
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
 def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> list[str]:
-    """The structural part of the merge gate, which no label can fix: why ``commit`` can't land on ``base`` for a pull request it
-    merges above ``base`` (a first-parent `Merge #N (SHA)` commit `_chain` wrote, whose second parent is the pinned head).  The
-    merge names one head and merges another; N's head on ``remote`` is no longer that head, closed or not, and merging the new one
-    would change ``commit`` (`adds_nothing`; a head that only merged `main` in lands as the pinned one); or N is stacked on another
-    pull request whose head on ``remote`` is in what N adds, so neither on main nor pinned below N at that head.  What can't be
-    read refuses."""
     out, pins = [], []
     for line in _git(repo, "log", "--first-parent", "--format=%P%x00%s", f"{base}..{commit}").stdout.splitlines():
         parents, _, subject = line.partition("\0")
@@ -1291,22 +1111,17 @@ def unstacked(repo: Path, commit: str, base: str, remote: str, log=print) -> lis
                     f"can't be read ({(r.stderr or r.stdout).strip()[-200:]})"))
                 continue
         for h in _git(repo, "rev-list", f"{onto}..{sha}").stdout.split():
-            # a pull request whose head is N's own pinned head lands whole with N: it is no base left behind
             for m in prs.get(h, []) if h != sha else ():
-                # rev-list's walk can stop early on skewed commit dates and list a commit `onto` has
                 if m != n and _git(repo, "merge-base", "--is-ancestor", h, onto, check=False).returncode:
                     out.append(f"#{n} at {sha[:12]} is stacked on #{m} at {h[:12]}, which is neither on main nor pinned below "
                                f"it in the tip at that head: pin {m}@{h[:9]} before it, or rebase #{n} off it")
     return out
 
 
-#: what `prepare` runs on a train before pushing it: check's preflight (`uv.lock`, the repository's lints)
 PREFLIGHT = ["tools/check/check.py", "--preflight"]
 
 
 def preflight_argv() -> list[str]:
-    """`prepare`'s default lint: the preflight under this interpreter when it has pytest, which the lints need and a system
-    python3 lacks, else under `uv run --locked`, as check itself runs."""
     import importlib.util
     import shutil
 
@@ -1317,8 +1132,6 @@ def preflight_argv() -> list[str]:
 
 
 def _removals(text: str) -> dict[str, Counter]:
-    """The lines a `git diff -U0 --no-renames` (or `git log -p` of the same form) removes, by the path they're removed from;
-    blank lines left out."""
     out: dict[str, Counter] = {}
     path = None
     for line in text.splitlines():
@@ -1332,11 +1145,6 @@ def _removals(text: str) -> dict[str, Counter]:
 
 
 def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow: tuple[str, ...] = ()) -> list[str]:
-    """What the train ``tip`` removes from ``base`` that no ref of ``pins`` removes in a commit of its own (a non-merge commit
-    of ``base..SHA``; a layout move's restack commit, trailer `Restack-move`, counts as none): a line a merge in a ref's history
-    dropped (a merge of main that drops another PR's lines would otherwise silently undo that PR). Lines match by
-    content, wherever a ref's commit removed them, so a removal survives a move of its file. One line per path, none for a
-    path in ``allow`` or in a merge's `Regenerated:` trailer (a generated file, rewritten by its command: `regenerate`)."""
     own: Counter = Counter()
     for _label, sha in pins:
         log = _git(repo, "log", "--no-merges", "-p", "-U0", "--no-renames", "--no-color", "--format=%x00%(trailers:key=Restack-move,valueonly)",
@@ -1359,19 +1167,13 @@ def reverted(repo: Path, base: str, tip: str, pins: list[tuple[str, str]], allow
     return out
 
 
-#: how a train that `reverted` refuses goes in
 REVERTED_HINT = (". A merge in a ref's history dropped them: merge the target into it again, keeping both sides, or pass "
                  "--allow-removal PATH for a removal the train means")
 
 
 def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, lint: list[str], store,
             allow_removal: tuple[str, ...] = ()) -> tuple[str, str]:
-    """Build a train for its check without recording or landing anything: ``refs`` (`pinned`), merged in order onto ``onto`` as ``remote`` has it (the target, or the prep branch of a train ahead, to stack
-    on it) in a scratch worktree, refused at the first that doesn't merge, when the merge gate's structural checks (`unstacked`)
-    would refuse it whatever its labels, or when the result loses lines no ref removes itself (`reverted`, but for the paths of
-    ``allow_removal``); ``lint`` run on the result there; its tip pushed to
-    ``remote`` as ``branch``, never forced, and read back.  Every step names the scratch worktree or ``repo``'s object store,
-    never its checkout.  Returns (the tip, its tree)."""
+    """Builds a train for its check without recording or landing anything."""
     r = _git(repo, "fetch", "-q", remote, onto, check=False)
     base = _git(repo, "rev-parse", "--verify", f"{'FETCH_HEAD' if r.returncode == 0 else onto}^{{commit}}").stdout.strip()
     pins = [pinned(repo, ref, remote) for ref in refs]
@@ -1398,11 +1200,6 @@ def prepare(repo: Path, refs: list[str], branch: str, onto: str, remote: str, li
 def train(repo: Path, refs: list[str], into: str, store, tool: str, command: list[str], on: str | None = None,
           project: str | None = None, log=print, spec: str | None = None, sends: list[str] = (),
           remote: str = "origin", allow_removal: tuple[str, ...] = ()) -> tuple[str | None, str | None]:
-    """Merge ``refs`` in order onto ``into``'s tip as one candidate (a chain of `--no-ff` merges in a scratch worktree), record
-    `tool` on it once and fast-forward ``into`` to it when it passes: the tree that lands is the one checked.  When it fails,
-    bisect the chain's prefixes (each an exact commit, checked the same way) to the first ref whose merge makes it fail, and
-    fast-forward to the longest prefix that passed.  ``tool`` is the tool's name, ``spec`` how `research run --tool` loads it
-    (default the name).  Returns (the commit ``into`` now has, when it moved; the offending ref)."""
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into or _git(repo, "status", "--porcelain", "--untracked-files=no").stdout.strip():
         raise Refused(f"the checkout must be a clean {into}")
@@ -1451,7 +1248,6 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
-#: gh has no timeout of its own: a call on a dead connection can hold a drive tick for minutes
 GH_TIMEOUT_S = 120
 
 
@@ -1466,8 +1262,6 @@ def _gh_cli(repo: Path, *args: str) -> str:
 
 
 def landed_in(repo: Path, commit: str, tip: str) -> str:
-    """The commit on ``tip``'s first-parent line that brought ``commit`` in: ``commit`` itself when it is on that line, otherwise
-    the oldest commit of the line that contains it (the merge that landed it)."""
     after = set(_git(repo, "rev-list", "--ancestry-path", f"{commit}..{tip}").stdout.split())
     landed = commit
     for c in _git(repo, "rev-list", "--first-parent", "-n", str(len(after) + 1), tip).stdout.split():
@@ -1477,8 +1271,6 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
     return landed
 
 
-#: the merged and closed PRs most recently updated (a merge or a close updates one), which GitHub reads consistently, as a
-#: search doesn't
 ENDED_QUERY = ("query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: [MERGED, "
                "CLOSED], first: 100, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { number state headRefName headRefOid "
                "isCrossRepository } } } }")
@@ -1486,16 +1278,6 @@ ENDED_QUERY = ("query($owner: String!, $name: String!) { repository(owner: $owne
 
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print,
           keep: Iterable[str] = ()) -> tuple[list[int], list[int]]:
-    """Close every open pull request whose head is on ``remote``'s ``into``, or whose pinned head a train landed and whose head since
-    adds nothing to it (`adds_nothing`; its branch is kept), with a comment naming the commit it landed in, and
-    retarget onto ``into`` every open pull request whose base branch's tip is on it, deleting each closed one's head branch that no
-    open pull request uses.  Then the head branch of each pull request GitHub has as merged (its head on ``into``) or closed
-    unmerged goes too, while it is still at that PR's head: never a fork's, one of `KEEP_BRANCHES`, one an open pull request
-    uses as its head or base, a closed one's that is a lead's run branch (`RUN_BRANCH_RE`), or ``keep`` (the heads of PRs
-    drive closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`); GitHub
-    keeps each one's commits under
-    `refs/pull/N/head`.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
-    (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     _git(repo, "fetch", "-q", remote, f"+refs/heads/{into}:refs/remotes/{remote}/{into}")
     tip = _git(repo, "rev-parse", f"refs/remotes/{remote}/{into}").stdout.strip()
@@ -1518,7 +1300,6 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         out = _git(repo, "ls-remote", remote, *[f"refs/heads/{b}" for b in bases]).stdout
         tips = {ref.removeprefix("refs/heads/"): sha for sha, ref in (line.split() for line in out.splitlines())}
     moved = [p for p in rest if p["baseRefName"] in tips and on(tips[p["baseRefName"]])]
-    # a PR whose pinned head landed in a train and whose head since adds nothing to `into` (it merged `main` in)
     pinned = {int(m[1]): parents.split()[1] for parents, _, subject in (line.partition("\0") for line in _git(
         repo, "log", "-n", "5000", "--format=%P%x00%s", "--grep", r"^Merge #[0-9]", tip).stdout.splitlines())
         if (m := MERGED_PR.fullmatch(subject)) and len(parents.split()) == 2}
@@ -1529,7 +1310,6 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
         if not dry_run:
             gh("pr", "edit", str(p["number"]), "--base", into)
-    # a closed PR's head branch goes too, unless an open PR still uses it (as its head, or as a base the retargets left)
     used = {p["headRefName"] for p in rest} | {p["baseRefName"] for p in rest if p not in moved}
     for p in done:
         later = not on(p["headRefOid"])
@@ -1545,17 +1325,12 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
             continue
         log(f"research merge: {verb}delete {remote}'s branch {head} (#{p['number']}'s head, on {into})")
         if not dry_run:
-            # the lease keeps a branch that moved past the PR's landed head: a commit pushed after the landing isn't on `into`
             r = _git(repo, "push", "-q", f"--force-with-lease=refs/heads/{head}:{p['headRefOid']}", remote, f":refs/heads/{head}",
                      check=False)
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
-    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (most branches
-    # are already on main), and so does one closed unmerged; the most recently updated, not created, first (`gh pr list`'s
-    # newest 200 by number leave out PRs that waited in the queue, whose branches would stay)
     ended = json.loads(gh("api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", f"query={ENDED_QUERY}",
                           "--jq", ".data.repository.pullRequests.nodes"))
-    # only a branch still at the PR's head: a lease on a branch already gone fails as "stale info"
     heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
         line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
     keep = set(keep)
@@ -1576,29 +1351,15 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     return [p["number"] for p in done], [p["number"] for p in moved]
 
 
-#: the branch drive's review landing fast-forwards when drive.toml's `land_into` names it, and `main` follows to each commit whose
-#: after-landing run passed every step on the merge gate (`drive.Driver._promote`)
 CHECKED = "checked"
-#: branches no sweep touches: the trunk, drive's landing branch, its train branch and its shadow
 KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})
-#: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
-#: the most branches one sweep deletes, and the most it archives, the longest idle first: a caller sweeps again for the rest
 SWEEP_LIMIT = 200
 
 
 def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
                    gh=None, log=print, chunk: int = 100, keep: Iterable[str] = (), limit: int = SWEEP_LIMIT) -> tuple[int, int]:
-    """The branch sweep: delete each branch whose tip
-    is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
-    `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
-    run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
-    ``limit`` of each, the longest idle first, each logged by name.  Each push leases the tip it saw, so a branch pushed to
-    meanwhile is kept.  Drive sweeps with ``into`` its landing branch (`Queue.into`: `checked` under drive.toml's
-    `land_into`), since `main` lags it by hours; a revert on `checked` then leaves its PR's branch deleted, and the PR's head
-    ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
@@ -1641,8 +1402,6 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
 
 
 def _sweep_after(repo: Path, into: str, remote: str, keep: Iterable[str] = ()) -> None:
-    """The sweep after a merge landed (``keep``: `sweep`'s): skipped without the remote; a failure is reported and leaves the
-    merge's result alone."""
     if _git(repo, "remote", "get-url", remote, check=False).returncode:
         print(f"research merge: no remote {remote!r}; pull request sweep skipped")
         return
@@ -1662,7 +1421,6 @@ def mirror_name() -> str | None:
 
 
 def _mirror_target(name: str) -> tuple[list[str], str]:
-    """``name``'s ssh argv, as `research deploy` and `research run --on` reach it, and its bare repository."""
     from . import remote
 
     m = remote.resolve_machine(name, "verity")
@@ -1671,10 +1429,7 @@ def _mirror_target(name: str) -> tuple[list[str], str]:
 
 
 def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run) -> bool:
-    """``sha`` to the main of ``name``'s bare repository: a plain push, so only a fast-forward, past this checkout's own pre-push
-    guard, which judges pushes that move origin's main (a hand landing has no check attempt of its tree, so the guard would refuse
-    node 1's copy of it). False, after one line naming the failure and the command that reruns it,
-    when it doesn't land."""
+    """A plain push, so only a fast-forward."""
     from .remote import git_push_url
 
     rerun = f"cd {shlex.quote(str(repo))} && research merge --mirror {sha}"
@@ -1694,17 +1449,11 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
-#: the Lean cache publisher on the control pod: `SCRIPT SHA` fast-forwards vy-nebius-cpu-4's bare main to SHA and starts
-#: vy-lean-cache-daily there (a no-op while one runs), exits 0 once started and logs to LEAN_PUBLISH_LOG; $RESEARCH_LEAN_PUBLISH
-#: names another script, and empty skips it
 LEAN_PUBLISH, LEAN_PUBLISH_ENV, LEAN_PUBLISH_LOG, LEAN_PUBLISH_TIMEOUT_S = (
     "/data/infra/lean_publish.sh", "RESEARCH_LEAN_PUBLISH", "/data/drive/lean-publish.log", 120)
 
 
 def lean_publish(repo: Path, start: str, tip: str, log=print, run=subprocess.run, clock=time.monotonic) -> bool:
-    """Start the Lean cache's publish of ``tip`` when what landed since ``start`` touches a Lake package's lock or Lean sources
-    (`queue.lean_change`), with one line in ``log`` saying whether it started, why not, and the seconds the script took to start.
-    It waits only for the script's start, bounded by LEAN_PUBLISH_TIMEOUT_S, and nothing raises: the landing stands either way."""
     from .queue import lean_change
 
     script, what = os.environ.get(LEAN_PUBLISH_ENV, LEAN_PUBLISH).strip(), f"research merge: the Lean cache publish of {tip[:12]}"
@@ -1738,16 +1487,11 @@ def lean_publish(repo: Path, start: str, tip: str, log=print, run=subprocess.run
     return True
 
 
-#: `sh -c` around the after-landing command: run it (``$2``...) in its worktree ``$0``, then remove that from ``$1``'s repository
 AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree remove --force "$0"; exit $s'
 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
-    """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
-    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
-    volume, where each worktree add and remove takes minutes.  It is added under `queue.worktrees_locked`, as the queue adds
-    its own in that clone.  None when ``repo`` can't make one."""
+    """A detached worktree, since the caller's checkout moves on under it."""
     import shutil
 
     from .queue import worktrees_locked
@@ -1767,11 +1511,6 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
 
 
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen, attempt: str = "") -> list[str] | None:
-    """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
-    `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
-    ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
-    `Check:` trailer.  Returns the argv started, None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1796,10 +1535,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     return argv
 
 
-#: the remote's ref holding the main commit the after-landing steps last ran for
 AFTER_LAND_REF = "refs/research/after-land"
-#: the remote's ref holding the main commit the spec-change DM last went up to: it moves only when the DM went, so one
-#: that failed is sent again by the next `research merge`, and `--sweep` fails while it lags main
 SPEC_ALERTED_REF = "refs/research/spec-alerted"
 
 
@@ -1809,7 +1545,6 @@ def _remote_refs(repo: Path, remote: str, *refs: str) -> dict[str, str] | None:
 
 
 def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> bool:
-    """Push ``tip`` to ``remote``'s ``ref``, leased on ``was`` (the one read) so two landers don't both advance it."""
     p = _git(repo, "push", "-q", f"--force-with-lease={ref}:{was}", remote, f"{tip}:{ref}", check=False)
     if p.returncode:
         log(f"research merge: {remote}'s {ref} wasn't moved to {tip[:12]} ({(p.stderr or p.stdout).strip()[-200:]}); "
@@ -1819,14 +1554,6 @@ def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> b
 
 def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print,
               runs: dict[str, str] | None = None) -> str | None:
-    """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
-    the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), start the
-    Lean cache publish when what landed touches a Lean package (`lean_publish`), post each landing to the merge thread
-    (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
-    (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
-    when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
-    the markers.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
     from .spec_alert import alert
 
     refs = _remote_refs(repo, remote, "refs/heads/main", AFTER_LAND_REF, SPEC_ALERTED_REF)
@@ -1880,10 +1607,8 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
     return tip if start else None
 
 
-#: what a landing merged, in its own subject or its train's (`prepare`): a pull request, a branch of origin, or a commit
 MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)|^Queue: (#\d+) ")
 CHECK_TRAILER = re.compile(r"^Check(?:ed)?: (.*)$", re.M)
-#: a run id, or the lander's form with `*` for a launch time it didn't copy
 RUN_ID = re.compile(r"r20\d{6}-(?:\d{6}|\*)-[0-9a-f]{4}")
 
 
@@ -1898,10 +1623,6 @@ def _merged_name(ref: str, prs: dict[str, int]) -> str:
 
 def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None = None,
                   runs: dict[str, str] | None = None) -> list[str]:
-    """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
-    commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
-    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member can read closed on
-    GitHub without having landed on its own."""
     prs = prs or {}
     lines = []
     for c in _git(repo, "rev-list", "--first-parent", "--reverse", f"{start}..{tip}").stdout.split():
@@ -1914,7 +1635,7 @@ def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None =
         for s in subjects:
             for m in MERGED_REF.finditer(s):
                 if m[2] is None and len(parents) == 2 and parents[1].startswith(m[1]):
-                    continue                            # the train's own tip, whose merges name what it holds
+                    continue
                 if (ref := _merged_name(m[1] or m[2], prs)) not in merged:
                     merged.append(ref)
         what = " + ".join(reversed(merged)) if merged else f"“{subject}”"
@@ -1923,14 +1644,10 @@ def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None =
     return lines
 
 
-#: who writes the `landed` labels (`label_landed`)
 LANDED_BY = "research-merge"
 
 
 def landed_runs(repo: Path, start: str, tip: str, runs: dict[str, str] | None = None) -> list[tuple[str, str, str]]:
-    """(run, commit, commit time as UTC `...Z`) for each run the `Check:` or `Checked:` trailer of a commit on ``tip``'s first-parent
-    line after ``start`` (the whole line when ``start`` is empty) names, else the run ``runs`` gives for it (as `landing_lines`),
-    oldest first; the lander's `*` ids as written."""
     out = []
     for c in _git(repo, "rev-list", "--first-parent", "--reverse", f"{start}..{tip}" if start else tip).stdout.split():
         body, ct = _git(repo, "log", "-1", "--format=%b%x00%ct", c).stdout.rsplit("\0", 1)
@@ -1941,7 +1658,6 @@ def landed_runs(repo: Path, start: str, tip: str, runs: dict[str, str] | None = 
 
 
 def _resolve_run(remote, run: str) -> str | None:
-    """The one run on ``remote`` a lander's `r<date>-*-<suffix>` id can name, or None (no remote, none, or several)."""
     if "*" not in run:
         return run
     if remote is None:
@@ -1952,9 +1668,6 @@ def _resolve_run(remote, run: str) -> str | None:
 
 
 def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, runs: dict[str, str] | None = None) -> bool:
-    """Write a `landed` label on each check run a landing over ``start``..``tip`` names (`landed_runs`): its value main's merge
-    commit, its ts the later of the commit's time and the run's start (its id's), by LANDED_BY, so a rerun anywhere writes the
-    same assertions (the store README's landed merge train); then push them.  True when every label reached the remote; nothing raises, since the landings stand."""
     try:
         from .store import labels_sync as LS
         from .store.local import LocalStore
@@ -1969,7 +1682,7 @@ def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, run
                 unresolved.append(run)
                 continue
             d = rid[1:16]
-            ts = max(ts, f"{d[:4]}-{d[4:6]}-{d[6:8]}T{d[9:11]}:{d[11:13]}:{d[13:15]}Z")    # the lander's commits carry a fixed date
+            ts = max(ts, f"{d[:4]}-{d[4:6]}-{d[6:8]}T{d[9:11]}:{d[11:13]}:{d[13:15]}Z")
             if not any(lab.key == "landed" and lab.value == commit and lab.by == LANDED_BY for lab in st.labels(rid)):
                 st.add_label(rid, "landed", commit, LANDED_BY, ts=ts)
             done.append(rid)
@@ -1988,9 +1701,7 @@ def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, run
         return False
 
 
-#: a `git revert` commit's own line naming what it reverted
 REVERTS = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
-#: each `landed` label (`label_landed`) whose value is its check run's own source commit: the head that run checked
 CHECKED_HEADS_SQL = """SELECT DISTINCT lv.value, lt.value FROM records l
 JOIN fields lt ON lt.id = l.id AND lt.path = 'target'
 JOIN fields lv ON lv.id = l.id AND lv.path = 'value'
@@ -1999,10 +1710,6 @@ WHERE l.type = 'label' AND l.kind = 'landed' AND rs.value = lv.value"""
 
 
 def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
-    """(commit, run) for each commit on ``tip``'s first-parent line whose own `check` passed and landed it: a train's head.
-    `label_landed` labels every commit of a train on its one check run, but the run checked only its source commit, so a
-    label counts only when its value is that commit (the store index ``idx``, `bucket_index.reader`). Oldest first, less
-    each head whose train holds a commit a later `git revert` on the line names: it broke `main` after its check."""
     line = _git(repo, "rev-list", "--first-parent", "--reverse", tip).stdout.split()
     pos = {c: i for i, c in enumerate(line)}
     found: dict[str, str] = {}
@@ -2018,20 +1725,11 @@ def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
 
 
 def main_line(repo: Path, tip: str, idx) -> list[str]:
-    """The checked train heads newest first (`checked_heads` reversed): the commits on `tip`'s first-parent line whose own
-    `check` passed and landed them, less a reverted train's. `research queue checked-heads --out` writes these, one a
-    line, to the verifier's main-line file (`spot.remote.main_lines`) for a deployment that wants
-    `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main`, the
-    default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
-    landed them."""
     return [c for c, _ in reversed(checked_heads(repo, tip, idx))]
 
 
 def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
                     runs: dict[str, str] | None = None) -> bool:
-    """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
-    whoever pushed it.  True when posted or there was nothing to
-    post; a failure is printed and returns False, and nothing raises, since the landings stand."""
     from .monitors import MERGE_THREAD
     from .slack import FRONT_DOOR, QUIET, Slack, _footer, load_registry, registry_path
 
@@ -2059,7 +1757,6 @@ def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | N
 
 
 def spec_alert_lag(repo: Path, remote: str) -> str:
-    """Why the spec DM is behind ``remote``'s main ("" when it isn't, or there is no marker yet to be behind)."""
     refs = _remote_refs(repo, remote, "refs/heads/main", SPEC_ALERTED_REF) or {}
     tip, alerted = refs.get("refs/heads/main", ""), refs.get(SPEC_ALERTED_REF, "")
     if not alerted or alerted == tip:
@@ -2068,8 +1765,6 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
             "hasn't been sent")
 
 
-#: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" let only that App move `main` and `next`; neither covers `checked`
 DRIVE_ENV = "RESEARCH_DRIVE"
 DRIVE_ONLY = ("main", "next", CHECKED)
 
@@ -2079,17 +1774,11 @@ def on_drive() -> bool:
 
 
 def off_drive(ref: str, verb: str) -> str:
-    """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
     return (f"`{ref}` is moved only by drive's App, and this isn't drive (no {DRIVE_ENV}=1): run it on the control pod, "
             f"`/data/infra/drive.sh {verb}`")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
-    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), send the spec-change DM of what it
-    landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
-    what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
-    says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main
-    before the push), so they cover a landing pushed another way too; the mirror can fail without failing the merge."""
     if push and into in DRIVE_ONLY and not on_drive():
         print(f"research merge: not pushed: {off_drive(into, 'merge ...')}", file=sys.stderr)
         return 1

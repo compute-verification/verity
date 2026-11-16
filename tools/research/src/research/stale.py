@@ -1,7 +1,3 @@
-"""Stale PRs: an open PR that isn't marked ready at its head and has been idle `stale_days` (drive.toml) is
-stale.  Idle is since the latest of its head commit's date and the ready (an eject's `ready = false` too) and review labels on
-that head.  `research queue status` says so (`stale_prs`); `pull_refs` fetches the PRs' pull refs it reads, as the verified
-queue's loop does to find the PRs stacked on one that landed (`landing.Landing._stacked`)."""
 from __future__ import annotations
 
 import calendar
@@ -16,7 +12,6 @@ DAY_S = 86400
 
 
 def _ts(stamp: str | None) -> float | None:
-    """A label's UTC time (`YYYY-MM-DDTHH:MM:SSZ`) as seconds."""
     try:
         return float(calendar.timegm(time.strptime(stamp.rstrip("Z")[:19], "%Y-%m-%dT%H:%M:%S"))) if stamp else None
     except ValueError:
@@ -25,8 +20,6 @@ def _ts(stamp: str | None) -> float | None:
 
 
 def pull_refs(q: Queue, prs: Iterable[PR]) -> dict[int, str]:
-    """{number: its `refs/queue/pr/N`} after fetching the pull ref of each of ``prs`` whose ref in the queue's clone isn't at its
-    head: the sync fetches only PRs based on `main`."""
     def refs() -> dict[int, str]:
         out = _git(q.workdir, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname)", "refs/queue/pr/").stdout
         return {int(n): sha for n, sha in (line.split() for line in out.splitlines()) if n.isdigit()}
@@ -39,7 +32,6 @@ def pull_refs(q: Queue, prs: Iterable[PR]) -> dict[int, str]:
 
 
 def commit_times(repo, shas: Iterable[str]) -> dict[str, float]:
-    """{commit: its committer date} of each of ``shas`` the repository has."""
     shas = sorted(set(shas))
     if not shas:
         return {}
@@ -48,15 +40,12 @@ def commit_times(repo, shas: Iterable[str]) -> dict[str, float]:
     present = [line.split()[0] for line in r.stdout.splitlines() if line.endswith(" commit")]
     if not present:
         return {}
-    out = _git(repo, "log", "--no-walk=unsorted", "--format=%H %ct", *present).stdout       # `show -s` took seconds for ~900
+    out = _git(repo, "log", "--no-walk=unsorted", "--format=%H %ct", *present).stdout
     return {sha: float(ct) for sha, ct in (line.split() for line in out.splitlines())}
 
 
 def stale_prs(q: Queue, prs: Iterable[PR], now: float, days: int,
               reviewed_at: Callable[[int, str], list[str]] | None = None, keep: Collection[int] = ()) -> dict[int, float]:
-    """{number: when it went idle} of each of ``prs`` that is stale at ``now`` (the module's rule; ``days`` 0: none), but one
-    carrying the hold label or listed in ``keep`` (drive.toml's `stale_keep`).  ``reviewed_at``: the times of the review labels on a PR's head.  A PR whose labels can't be read
-    is left out, and logged."""
     if days <= 0:
         return {}
     hold = q.rules().hold_label

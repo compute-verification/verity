@@ -1,59 +1,4 @@
-"""What a node's work leaves behind that nothing else removes: the passes of `research data evict` beside evict.py's three.
-
-Each pass is in `evict_src`'s idiom.  It fails closed: a condition it cannot establish removes nothing more and is the
-report's `error`.  It starts no removal after its time limit (`budget_s`); the next pass goes on.  A dry run removes nothing
-and says what it would.  The report counts what went (`deleted`, `deleted_inodes`, `deleted_bytes`, as removing it freed them:
-a file with another link frees nothing) and what stayed by the kind its reason starts with (`kept_by`): `2:` in use (a live
-process names it, a lock is held, a run has not ended), `recent:`, `run:` (a run dir of its run exists), `request:` (a clone's
-run dir is gone and its request is not), `retired:`, `record:` (a `research keep` record), `unknown:` (a record, a name or a
-layout the pass does not know), `budget:`, `error:`, `unestablished:`.  A path kept because it is in use, recorded, unknown or
-failed is named with its reason, in `kept_first` and in the log, which names the first `LISTED` of each kind.  What a live
-process names (cwd, root, exe, open files, maps, command line, environment: `evict.live_texts`) is read when a pass first
-needs it and again once `SCAN_S` old.  Nothing a `research keep` record covers goes (`retention.py`): a path with a record of
-its own, under a directory that has one, or holding one stays whole, for `research retention` to decide.
-
-* **uv's editable shards and temporary build directories** (`evict_uv`).  uv keys an editable wheel by its source path
-  (`<cache>/sdists-v<N>/editable/<digest>`), so every shipped source tree and every run clone leaves a shard per workspace
-  member; a uv that was killed leaves its `<cache>/builds-v0/.tmp*`.  `uv cache prune` removes neither a shard (each holds a
-  live revision) nor, without `--force`, anything while a uv runs (it waits for the cache's `.lock`, which every uv holds
-  shared), and a prune by another uv version removes the buckets it does not know, so this pass does not call it.  A shard or
-  build directory goes, oldest first, once nothing in it was written for `UV_KEEP_S` and no live process names it.  A shard
-  goes under its own `.lock`, the exclusive flock uv takes before it reads or builds one (`CacheShard::lock`), taken without
-  waiting, and in two steps: uv reads a cached wheel after it has released that lock, so the first step unlinks only the
-  revision pointer (`revision.rev`), without which no uv finds the wheel and the next one to want it builds it again, under
-  the lock, which is a write.  The first step stamps the shard with its time, and the second, once nothing has written the
-  shard for `UV_KEEP_S` more, removes it, its `.lock` last.  A uv that waited on that `.lock` builds the shard again under
-  it and leaves a shard without one: a pass makes it one, as uv does when it finds none, which counts as a write.  uv writes
-  each file of a shard by rename, so two uv in one shard (the one that waited, and one that made a new `.lock`) cost a
-  second build, not a broken wheel.  Only the buckets in `UV_SDISTS` are touched: their layout was read in uv's source, and
-  a bucket of another version is reported, not guessed at.  The wheels the shards linked (`archive-v0`) stay: only
-  `uv cache prune` tells which of them nothing links.
-* **the store's lock files** (`evict_locks`): `<store>/locks/<name>.lock`, one empty file per key ever fetched
-  (`fetchset.lock`).  One goes while this pass holds its flock, taken without waiting, once it is `LOCK_KEEP_S` old; the
-  taker checks that the path still names the file it locked and takes the lock again if not, so no fetch runs beside
-  another on an unlinked file.
-* **request directories whose run directory is gone** (`evict_requests`): `<root>/requests/<run id>` holds the request, its
-  inputs and its custody key, and nothing reads it once its run dir is deleted; without a run dir it also keeps the source
-  tree it names (`evict.record_uses`).  A launch claims the run dir as its first act under `.launch.lock`, so a request goes
-  under that lock, request.json first (a delivery that arrives later finds no request and claims nothing), once nothing in it
-  was written for `REQUEST_KEEP_S`, or for as long as its launch may still deliver it (`remote.launch_limit`) when that is
-  longer, with no run dir under the runs roots or the `runs_root` it names, and no live process naming its run.
-* **the clones of runs that are over, or whose run directory is gone** (`evict_clones`): `<root>/scratch/<run id>`, which
-  its runner removes and `clone.sweep` removes when the next clone is made there.  This pass removes the same clones
-  (`clone.not_over`, asked of the run dir under `runs/`) on a node where none is, and keeps one whose run a live process still
-  names.  A deleted run dir takes with it the records that say a run is over (its runner, its workload's processes), so
-  `not_over` can only answer "unknown" and the clone would stay for good; and a run dir that is missing says nothing by
-  itself, so the pass takes it for over only when nothing else can still be the run's.  The runs directory is a directory (a
-  run dir missing from a disk that is not mounted is not gone) and no runs directory has the run dir: one set aside in
-  `runs-aside/` still holds the run's records, and its clone stays while it does.  No request of the run is left in
-  `requests/`: a launch claims a run dir from its request, and the requests pass removes a request first, under the launch's
-  lock, once no launch may deliver it.  No live process names the run and none is in its job unit (`jobuser.unit_name`): a run
-  whose run dir was deleted under it still runs.  And nothing under the clone was written for `CLONE_KEEP_S`, which speaks
-  for a process that names its run nowhere the pass reads.  A clone is made only once its run dir is claimed (`clone.home`),
-  so one without a run dir is never one a launch is still on its way to.
-
-A request or clone is a directory named like a run id (`ids.is_run_id`); any other entry stays, and is said.
-"""
+"""What a node's work leaves behind that nothing else removes."""
 from __future__ import annotations
 
 import contextlib
@@ -69,29 +14,25 @@ from . import evict as EV
 from . import ids
 from .evict import Unestablished
 
-UV_KEEP_S = 48 * 3600        # a shard or build directory written this recently may belong to a build under way or a tree in use
-LOCK_KEEP_S = 3600           # a lock file made this recently belongs to fetches of one tree that are still taking it in turn
-REQUEST_KEEP_S = 3600        # a request written this recently may be on its way to its launch
-CLONE_KEEP_S = 48 * 3600     # a clone whose run dir is gone, written this recently, may be one a process the pass cannot see still uses
-BUDGET_S = 4 * 60            # no removal of a pass starts after this long: with evict_src's, they stay inside the unit's `timeout 3000`
-SCAN_S = 60                  # what live processes name is read again before a removal once the last reading is this old
-LISTED = 20                  # how many paths a report names of those deleted, and of those kept with a reason to act on
+UV_KEEP_S = 48 * 3600
+LOCK_KEEP_S = 3600
+REQUEST_KEEP_S = 3600
+CLONE_KEEP_S = 48 * 3600
+BUDGET_S = 4 * 60
+SCAN_S = 60
+LISTED = 20
 LOUD = ("2", "error", "record", "unknown", "unestablished")
 UV_TAG = "CACHEDIR.TAG"
 UV_SIGNATURE = "Signature: 8a477f597d28d172789f06886806bc55"
 UV_LOCK = ".lock"
 UV_POINTER = "revision.rev"
-#: the source-distribution buckets whose shard layout this pass knows: `<bucket>/editable/<16 hex>/` holding `.lock`, the
-#: revision pointer `revision.rev` and one directory per revision (uv 0.12 writes sdists-v9, uv 0.13 sdists-v10)
 UV_SDISTS = ("sdists-v9", "sdists-v10")
 UV_BUILDS = "builds-v0"
 _SHARD = re.compile(r"[0-9a-f]{16}")
 _BUILD = re.compile(r"\.tmp[A-Za-z0-9]{6}")
 _UV_NAMED = re.compile(rf"(?:^|[/\0\s:=])(sdists-v[0-9]+/+editable/+[0-9a-f]{{16}}(?![0-9a-f])"
                        rf"|{UV_BUILDS}/+\.tmp[A-Za-z0-9]{{6}}(?![A-Za-z0-9]))")
-"""A shard or build directory however a process spells its cache: one of that name in any cache keeps the one here."""
 _RUN_NAMED = re.compile(rf"(?<![0-9A-Za-z])({ids.RUN_RE.pattern.strip('^$')})(?![0-9a-f])")
-"""A run id anywhere in what a process names (its RESEARCH_RUN_ID, a path under its run dir, request or clone)."""
 
 
 class _Stays(Exception):
@@ -99,8 +40,6 @@ class _Stays(Exception):
 
 
 class _Pass:
-    """One pass's report, time limit and log lines."""
-
     def __init__(self, name: str, where: Path, dry_run: bool, budget_s: float, now: float | None, clock: Callable[[], float],
                  log: Callable[[str], None] | None):
         self.name, self.dry_run, self.budget_s, self.clock, self.t0 = name, dry_run, budget_s, clock, clock()
@@ -115,7 +54,6 @@ class _Pass:
         return self.t_wall + self.clock() - self.t0
 
     def line(self, kind: str, text: str) -> None:
-        """Say `text`, for the first `LISTED` lines of its kind: the pass's last line has the counts of the rest."""
         self.said[kind] = self.said.get(kind, 0) + 1
         if self.said[kind] <= LISTED:
             self.say(f"{self.name}: {text}")
@@ -143,8 +81,6 @@ class _Pass:
             self.line(kind, f"kept {path}: {why}")
 
     def recorded(self, path: Path) -> str | None:
-        """Why a `research keep` record keeps `path`: its own, or one on a directory above it, which covers everything beneath
-        (`retention.load`; the directories above a directory are read once a pass).  One that cannot be read keeps it too."""
         from .. import retention as RT
 
         def at(p: Path, where: str) -> str | None:
@@ -161,9 +97,6 @@ class _Pass:
         return self.above[path.parent]
 
     def each(self, paths: list[Path], one: Callable[[Path], None]) -> str | None:
-        """`one(path)` for each path until the time limit, after which the rest stay for the next pass.  A path a `research keep`
-        record covers, whose lock is held, that changed under the pass or that failed stays with that reason; a condition that
-        cannot be established stops the pass, and is returned."""
         self.rep["found"] += len(paths)
         for i, path in enumerate(paths):
             if self.clock() - self.t0 > self.budget_s:
@@ -196,8 +129,6 @@ class _Pass:
 
 
 class _Named:
-    """What live processes name, by the key `pattern` captures: read at the first question and again once `SCAN_S` old."""
-
     def __init__(self, pattern: re.Pattern[str], what: str, under: Path, proc: Path, nginx_conf: Path, clock: Callable[[], float]):
         self.pattern, self.what, self.under, self.proc, self.nginx_conf, self.clock = pattern, what, under, proc, nginx_conf, clock
         self.at: float | None = None
@@ -214,7 +145,6 @@ class _Named:
 
 
 def _mtime(p: Path) -> float | None:
-    """The mtime of `p` when it is a directory itself (not a link to one), else None."""
     try:
         st = EV._quiet(lambda: os.lstat(p))
     except OSError as e:
@@ -223,8 +153,6 @@ def _mtime(p: Path) -> float | None:
 
 
 def _walk(path: Path) -> tuple[float, int, int]:
-    """(newest mtime, inodes, bytes) of the tree at `path`: the last write anywhere in it, and what removing it frees.  A tree
-    that holds a `research keep` record stays whole (`_Stays`), as `research retention` leaves it."""
     from ..retention import SIDECAR
 
     st = os.lstat(path)
@@ -243,7 +171,6 @@ def _walk(path: Path) -> tuple[float, int, int]:
 
 
 def _unlink(path: Path, dry_run: bool = False) -> tuple[int, int]:
-    """Unlink the file `path`; the (inodes, bytes) that frees: nothing while another link holds it."""
     st = os.lstat(path)
     if not dry_run:
         os.unlink(path)
@@ -251,8 +178,6 @@ def _unlink(path: Path, dry_run: bool = False) -> tuple[int, int]:
 
 
 def _take(path: Path, create: bool = False) -> int:
-    """A descriptor holding an exclusive flock on the regular file `path`, taken without waiting and only while `path` still
-    names that file; `_Stays` says why not.  Opened read-only (a flock needs no more) and without following a link."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | (os.O_CREAT if create else 0), 0o666)
     try:
         held = os.fstat(fd)
@@ -280,8 +205,6 @@ def _age(seconds: float) -> str:
 def evict_uv(cache: Path, *, dry_run: bool = False, keep_s: float = UV_KEEP_S, budget_s: float = BUDGET_S,
              now: float | None = None, clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
              log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
-    """Remove the editable shards and temporary build directories of the uv cache at `cache` that nothing wrote for `keep_s` and
-    no live process names (module docstring), oldest first: a build directory outright, a shard under its `.lock` in two steps."""
     cache = Path(os.path.realpath(cache))
     p = _Pass("uv", cache, dry_run, budget_s, now, clock, log)
     named = _Named(_UV_NAMED, "it", cache, proc, nginx_conf, clock)
@@ -358,14 +281,9 @@ def evict_uv(cache: Path, *, dry_run: bool = False, keep_s: float = UV_KEEP_S, b
     return p.end(error)
 
 
-# ---- the store's lock files ------------------------------------------------------------------------------------------------------------
-
 def evict_locks(store_root: Path, *, dry_run: bool = False, keep_s: float = LOCK_KEEP_S, budget_s: float = BUDGET_S,
                 now: float | None = None, clock: Callable[[], float] = time.monotonic,
                 log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """Unlink the lock files under `<store_root>/locks` (`fetchset.lock`'s: `<name>.lock`, empty) made more than `keep_s` ago, each
-    while this pass holds its flock: one that is held stays.  Only a file named as the store names its locks
-    (`fetchset.LOCK_NAME`) goes: another program's lock file, whose takers may not check what they hold, stays."""
     from . import fetchset
 
     d = Path(store_root) / "locks"
@@ -397,13 +315,11 @@ def evict_locks(store_root: Path, *, dry_run: bool = False, keep_s: float = LOCK
 # ---- request directories whose run directory is gone -----------------------------------------------------------------------------------
 
 def _run_entries(d: Path) -> tuple[list[Path], list[Path]]:
-    """The directories under `d` named like a run id, and the other directories there, which stay."""
     dirs = [d / n for n in EV._entries(d) if _mtime(d / n) is not None]
     return [x for x in dirs if ids.is_run_id(x.name)], [x for x in dirs if not ids.is_run_id(x.name)]
 
 
 def _run_dir(homes: list[Path], name: str) -> Path | None:
-    """The run dir `name` under one of `homes`, None when none has it; Unestablished when one cannot be read."""
     for home in homes:
         try:
             there = EV._quiet(lambda home=home: os.lstat(home / name))
@@ -418,9 +334,6 @@ def evict_requests(requests_dir: Path, *, runs_dirs: list[Path] | None = None, d
                    keep_s: float = REQUEST_KEEP_S, budget_s: float = BUDGET_S, now: float | None = None,
                    clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
                    log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
-    """Remove each `<requests_dir>/<run id>` whose run dir is gone (module docstring).  `runs_dirs`: where run dirs are, by default
-    `runs/` and `runs-aside/` beside `requests_dir`.  The directory a request's run dir would be in (the `runs_root` it names,
-    else the first of `runs_dirs`) must be there: a run dir missing from a directory that is itself missing is not gone."""
     from .. import remote as RM
 
     requests_dir = Path(requests_dir)
@@ -447,7 +360,7 @@ def evict_requests(requests_dir: Path, *, runs_dirs: list[Path] | None = None, d
             return p.stay(path, f"recent: written {_age(age)} ago (a launch may deliver it for {_age(keep)})")
         if why := named(path.name):
             return p.stay(path, why)
-        made = not dry_run or os.path.lexists(path / RM.LAUNCH_LOCK)      # a dry run makes no lock file
+        made = not dry_run or os.path.lexists(path / RM.LAUNCH_LOCK)
         lock = _take(path / RM.LAUNCH_LOCK, create=not dry_run) if made else None
         try:
             if run := _run_dir(homes, path.name):
@@ -475,11 +388,6 @@ def evict_clones(scratch: Path, *, runs_dirs: list[Path] | None = None, requests
                  keep_s: float = CLONE_KEEP_S, budget_s: float = BUDGET_S, now: float | None = None,
                  clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
                  log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
-    """Remove, with `clone.remove`, each `<scratch>/<run id>` that no live process names and whose run is over (`clone.not_over`,
-    asked of its run dir in the first of `runs_dirs`) or whose run dir is gone (module docstring): in none of `runs_dirs`, with
-    no request in `requests_dir`, no process in its job unit and nothing written for `keep_s`.  `runs_dirs` and `requests_dir`
-    are by default `runs/` and `runs-aside/`, and `requests/`, beside `scratch`; the first of `runs_dirs` and `requests_dir`
-    must be directories for a run dir or a request to be missing from them."""
     from .. import clone as CL
     from ..jobuser import unit_name
     from ..telemetry.procs import unit_pids
@@ -496,7 +404,6 @@ def evict_clones(scratch: Path, *, runs_dirs: list[Path] | None = None, requests
         return p.end(str(e))
 
     def left(name: str) -> str | None:
-        """Why the clone of run `name`, whose run dir is in no runs directory, may still be its run's, apart from its last write."""
         if _mtime(requests_dir) is None:
             return f"unknown: its run dir is gone and {requests_dir}, where its request would be, is not a directory"
         if _run_dir([requests_dir], name):

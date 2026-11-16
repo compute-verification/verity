@@ -1,15 +1,4 @@
-"""The Job queue's reference semantics: what Control's Job queue (the site's `/api/jobs`, on Neon) does, as an in-memory model.
-
-The Job queue holds batch, unattended work on pods: a job is added, claimed by a worker under a lease, renewed while it runs,
-and completed with an outcome.  An agent's interactive session on a pod is a Broker allocation, not a job.
-
-This is the executable spec of the job-service design (§2, §3) and of the site spec.  `vectors.json` beside it pins every rule
-as request/response cases; the site's TypeScript runs the same file, and `tests/test_jobs_vectors.py` runs it here.  The
-dispatcher's tests use this model as their server.
-
-`JobService.request(method, path, token, body, now)` is the HTTP contract: it returns `(status, body)`. `tick(now)` is the
-expire-leases cron. Times are seconds since `epoch`, written in responses as ISO 8601 (`iso`).
-"""
+"""The Job queue's reference semantics, as an in-memory model of Control's `/api/jobs`."""
 from __future__ import annotations
 
 import datetime as dt
@@ -22,15 +11,11 @@ KINDS = ("merge-check", "lean-regen", "audit-main", "research-run")
 SCOPES = ("jobs:enqueue", "jobs:work", "events:read")
 STATES = ("queued", "running", "done", "failed", "dead", "cancelled")
 OUTCOMES = ("passed", "failed", "error")
-#: requirement -> the capability it reads: a bool needs the capability true, a `min_` number needs it at least that, a list
-#: needs every name in the capability's list
 REQUIREMENTS = {"avx512": "avx512", "min_mem_gb": "mem_gb", "min_cpus": "cpus", "min_disk_gb": "disk_gb", "min_lease_s": "lease_s",
                 "tools": "tools"}
 DEFAULT_LEASE_S = 900
-#: (min, max) lease_s by kind, checked in code, not by the database, so the interactive kind can carry leases of hours
 LEASE_BOUNDS = {kind: (60, 3600) for kind in KINDS}
 DEFAULT_MAX_ATTEMPTS = 3
-#: a budget line's prefix, as budgets.toml names them (`vy-coord-`)
 LINE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}-")
 
 
@@ -47,11 +32,11 @@ class Token:
 
 @dataclass
 class Worker:
-    id: str                            # a RunPod pod id, or 'dispatch:{name}' for a step-1 dispatcher
-    kind: str                          # pod | dispatcher
-    token: str                         # the name of the one jobs:work token that may claim as this worker
-    kinds: tuple[str, ...]             # the job kinds it may claim
-    capabilities: dict = field(default_factory=dict)   # as its last claim reported them
+    id: str
+    kind: str
+    token: str
+    kinds: tuple[str, ...]
+    capabilities: dict = field(default_factory=dict)
     last_seen: float | None = None
     retired: bool = False
 
@@ -69,7 +54,7 @@ class Job:
     not_before: float
     max_attempts: int
     lease_s: int
-    line: str | None = None            # the budget line the job's compute is charged to
+    line: str | None = None
     state: str = "queued"
     attempts: int = 0
     lease_worker: str | None = None
@@ -91,7 +76,7 @@ class Attempt:
     claimed_at: float
     renewed_at: float | None = None
     ended_at: float | None = None
-    outcome: str | None = None         # passed | failed | error | lease-lost | cancelled
+    outcome: str | None = None
     run_id: str | None = None
     detail: str | None = None
 
@@ -99,14 +84,12 @@ class Attempt:
 @dataclass
 class JobService:
     epoch: str = "2026-09-29T00:00:00Z"
-    tokens: dict[str, Token] = field(default_factory=dict)      # by the token's hash, as the site stores them
+    tokens: dict[str, Token] = field(default_factory=dict)
     workers: dict[str, Worker] = field(default_factory=dict)
     jobs: dict[int, Job] = field(default_factory=dict)
     attempts: list[Attempt] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)
     lease_tokens: int = 0
-
-    # -- setup (the site's Console: minting tokens, registering workers)
 
     def mint(self, secret: str, name: str, scopes: list[str]) -> None:
         self.tokens[sha256(secret)] = Token(name, tuple(scopes))
@@ -121,8 +104,6 @@ class JobService:
         for t in self.tokens.values():
             if t.name == name:
                 t.revoked = True
-
-    # -- helpers
 
     def iso(self, t: float | None) -> str | None:
         if t is None:
@@ -169,12 +150,9 @@ class JobService:
         return j
 
     def _lease(self, j: Job, lease_token: Any) -> None:
-        """A lease token that isn't this job's current one, whether lost to expiry, ended, or never held, is one answer: 409.
-        The worker's rule is then always the same: stop, and report nothing more."""
+        """Any token that isn't this job's current one gets 409."""
         if not isinstance(lease_token, str) or j.lease_hash is None or sha256(lease_token) != j.lease_hash:
             raise Refused(409, f"the lease is not current (the job is {j.state})")
-
-    # -- the API
 
     def request(self, method: str, path: str, token: str | None, body: dict | None, now: float) -> tuple[int, dict]:
         try:
@@ -284,7 +262,7 @@ class JobService:
             return 204, {}
         j = min(ready, key=lambda j: (-j.priority, j.enqueued_at, j.id))
         self.lease_tokens += 1
-        lease = f"lease-{j.id}-{j.attempts + 1}-{self.lease_tokens}"    # the site uses 32 random bytes; tokens are never stored
+        lease = f"lease-{j.id}-{j.attempts + 1}-{self.lease_tokens}"
         j.state, j.attempts, j.lease_worker, j.lease_slot = "running", j.attempts + 1, worker, body.get("slot")
         j.lease_hash, j.lease_expires, j.progress = sha256(lease), now + j.lease_s, None
         self.attempts.append(Attempt(j.id, j.attempts, worker, body.get("slot"), now))
@@ -317,7 +295,7 @@ class JobService:
             j.state, j.result, j.finished_at = "done", result, now
         elif outcome == "failed":                                       # a failure is a verdict: final, never retried
             j.state, j.result, j.finished_at = "failed", result, now
-        elif j.attempts < j.max_attempts:                               # an error is no verdict: another worker tries again
+        elif j.attempts < j.max_attempts:
             j.state, j.result = "queued", result
         else:
             j.state, j.result, j.finished_at = "dead", result, now
@@ -334,17 +312,13 @@ class JobService:
             j.state, j.finished_at = "cancelled", now
             self._event(now, "job.cancelled", f"job:{j.id}", t.name, {"was": "queued"})
         elif j.state == "running":
-            j.cancel_requested = True                                   # the worker learns it at its next renew
+            j.cancel_requested = True
             self._event(now, "job.cancelled", f"job:{j.id}", t.name, {"was": "running"})
         else:
             raise Refused(409, f"the job is already {j.state}")
         return 200, {"state": j.state, "cancel_requested": j.cancel_requested}
 
-    # -- the expire-leases cron
-
     def tick(self, now: float) -> list[int]:
-        """Every running job whose lease has passed: `lease-lost`, then queued again, or dead after `max_attempts`, or
-        cancelled when a cancel was asked. Returns the ids it moved."""
         moved = []
         for j in sorted(self.jobs.values(), key=lambda j: j.id):
             if j.state != "running" or j.lease_expires is None or j.lease_expires >= now:
@@ -372,7 +346,6 @@ class Refused(Exception):
 
 
 def meets(requirements: dict, capabilities: dict) -> bool:
-    """Whether a worker's capabilities meet a job's requirements (`REQUIREMENTS`)."""
     for req, want in requirements.items():
         have = capabilities.get(REQUIREMENTS[req])
         if isinstance(want, bool):
@@ -392,7 +365,7 @@ def check_line(line: Any) -> None:
 
 
 def _int(x: Any) -> bool:
-    return isinstance(x, int) and not isinstance(x, bool)          # JSON's true is no integer
+    return isinstance(x, int) and not isinstance(x, bool)
 
 
 def _number(x: Any) -> bool:
@@ -400,7 +373,6 @@ def _number(x: Any) -> bool:
 
 
 def _limit(query: dict[str, str]) -> int:
-    """`limit`: 1 to 1000, default 100."""
     raw = query.get("limit") or "100"
     if not raw.isdigit() or not 1 <= int(raw) <= 1000:
         raise Refused(400, "limit must be an integer from 1 to 1000")

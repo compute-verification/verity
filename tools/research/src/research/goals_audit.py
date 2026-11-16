@@ -1,19 +1,4 @@
-"""`research goals audit`: what on the Goals page keeps a lead's plan from being read, by lead, each line with its fix.
-
-  overdue    an open goal past its due
-  stale      an open off-track goal, not parked, last written over STALE_H hours ago
-  near       an open goal, not parked, due within NEAR_H hours and not written in the NEAR_H hours before its due
-  unplaced   an open goal with no tier set that no goal waits on and that waits on no goal: tier 1 only by default
-  order      an open goal due before an open goal it waits on, or waiting on a goal the page doesn't hold
-  title      a title of more than TITLE_WORDS words
-  no-goal    a lead named with --owner who owns no open goal
-
-A date gets more precise as it nears (Daniel, 13 Nov): a day more than a week out, the day now expected inside a week,
-and inside a day the hour the last step ends. So a goal is written again inside its last day, with that hour, a new day,
-or `research goals confirm` when the hour stands; and an off-track goal says what is true today. A goal is written by
-`set` and by `confirm`; one the page gives no `updatedAt` for is named by neither finding.
-
-Pure functions of the page's goals (`research goals show --json`) and a time. Stdlib only."""
+"""`research goals audit`: what on the Goals page keeps a lead's plan from being read, by lead, each with its fix."""
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -24,13 +9,11 @@ from .goals import PACIFIC, _when
 TITLE_WORDS = 10
 STALE_H = 24
 NEAR_H = 24
-#: the goal whose subgoals are paused: each keeps the state it stopped in until its review
 PARKED = "top/parked"
 KINDS = ("overdue", "stale", "near", "unplaced", "order", "title", "no-goal")
 
 
 def due_at(due: str) -> datetime:
-    """A goal's due as a time: a day means its end in Pacific time, and a time carries its offset (Pacific without one)."""
     if "T" not in due:
         return datetime.combine(date.fromisoformat(due), time(23, 59, 59), PACIFIC)
     at = datetime.fromisoformat(due)
@@ -46,7 +29,7 @@ def _waits(goal: dict) -> list[str]:
 
 
 def written(goal: dict) -> datetime | None:
-    """When the goal was last written (UTC where it carries no offset); None where the page doesn't say."""
+    """UTC where it carries no offset; None where the page doesn't say."""
     if not goal.get("updatedAt"):
         return None
     at = datetime.fromisoformat(str(goal["updatedAt"]).replace("Z", "+00:00"))
@@ -54,8 +37,6 @@ def written(goal: dict) -> datetime | None:
 
 
 def parked(goals: list[dict]) -> set[str]:
-    """The parked goals' ids: PARKED and what it waits on, through other goals too, less whatever an open goal outside
-    that also waits on. A goal a live goal still needs is live."""
     by = {g["id"]: g for g in goals}
 
     def under(start: Iterable[str]) -> set[str]:
@@ -73,8 +54,6 @@ def parked(goals: list[dict]) -> set[str]:
 
 
 def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> dict[str, dict]:
-    """Each lead's open goals counted, and what the audit found on them, in KINDS' order: `{owner: {"open", "off_track",
-    "findings": [{"kind", "goal", "text"}]}}` for every owner of an open goal and every one of ``owners``."""
     by = {g["id"]: g for g in goals}
     open_ = [g for g in goals if g.get("status") != "done"]
     needed = {w for g in open_ for w in _waits(g)}

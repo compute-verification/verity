@@ -1,31 +1,3 @@
-"""The store's garbage collection (README §7.4): blobs that only uncited artifacts past their kind's TTL hold leave the remote.
-
-What stays (the keep set):
-
-* **cited**: an `art:` id (full, or the abbreviated `art:<8+ hex>` reports print) or a run id named by any label on the remote
-  (its target, ref or value), by a file of a citing tree (`--cite DIR`: the notes repository, a checkout of the code with its
-  fixture registry) or by Linear (`--cite-linear`: every issue's description and comments, projects, project updates and
-  documents); a cited run keeps every `art:` id its attempt names (outputs, inputs, telemetry).
-* **young**: an artifact whose manifest is younger than its kind's TTL (`TTL_DAYS`, by the manifest's LastModified).
-* **untimed**: every artifact of a kind `TTL_DAYS` doesn't name.
-
-What a kept manifest's `refs` name joins the keep set, to a fixed point; what a cited one's `meta` names (art ids and runs) does
-too, but not what a young or untimed one's `meta` mentions: a result naming its own run is no citation of that run.  A blob is a
-candidate when an expired artifact (one outside the keep set) holds it and no kept artifact does.  Manifests, attempts and labels
-are never deleted: an expired id still resolves, and `fetch` reports its blob absent.
-
-Deletion is two-phase, for uploads in flight.  An upload skips a blob the remote already holds (`S3Remote.put` HEADs first), so a
-new artifact can come to hold an old blob before its manifest is listed.  `apply` therefore deletes only a blob that has been a
-candidate since a pass at least `GRACE_S` ago (`state`, the marks) and still is in this one.  It deletes `BATCH` blobs at a
-time, each batch after a fresh listing of `manifests/`, so a blob a new manifest holds is kept unless that manifest appears while
-its own batch is being deleted; the listing after the last batch reports any such blob that is now absent as `lost` (the pass
-exits 1).  `GRACE_S` covers a custody upload (its key lives at most 24 h, README §10.1).
-
-Fails closed: a manifest, label or attempt it can't read, or a citing tree it can't scan, stops the pass before anything is
-deleted.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.  Memory stays small on
-a bucket of millions of blobs: each manifest is parsed as it is read, and its blobs go to a SQLite file in `work` that one query
-groups by digest.
-"""
 from __future__ import annotations
 
 import bisect
@@ -45,7 +17,7 @@ from typing import Any, Callable, Iterator
 TTL_DAYS: dict[str, float] = {
     "run-record/v1": 7,
     "vllm-replay-bundle/v1": 7,
-    "vllm-replay-slim/v1": 7,         # clear values, which no stage publishes
+    "vllm-replay-slim/v1": 7,
     "vllm-rowdir-tar/v1": 3,
     "run-files/v1": 14,
     "vllm-row-meta/v1": 14,
@@ -54,18 +26,17 @@ TTL_DAYS: dict[str, float] = {
 GRACE_S = 24 * 3600
 STRONG = ("cited", "named", "cited run")
 JOBS = 32
-BATCH = 1000                   # deletes between two listings of the manifests (apply)
+BATCH = 1000
 ART_TEXT = re.compile(r"art:([0-9a-f]{8,64})(?![0-9a-f])")
 RUN_TEXT = re.compile(r"(?<![0-9A-Za-z])(r\d{8}-\d{6}-[0-9a-f]{4})(?![0-9a-f])")
 SCAN_MAX_BYTES = 8 << 20
 PARSE_ERRORS = (ValueError, KeyError, TypeError, AttributeError)
 MANIFEST_KEY = re.compile(r"manifests/([0-9a-f]{64})\.json")
 ATTEMPT_KEY = re.compile(r"attempts/(r\d{8}-\d{6}-[0-9a-f]{4})\.json")
-"""The records' keys exactly: a multipart sidecar (`<key>.parts.json`) beside a large one is no record."""
 
 
 class GcError(Exception):
-    """Something the pass could not establish; nothing was deleted."""
+    pass
 
 
 def _epoch(iso: str) -> float:
@@ -73,13 +44,10 @@ def _epoch(iso: str) -> float:
 
 
 def named(text: str) -> tuple[set[str], set[str]]:
-    """The art hex digits (full or abbreviated) and run ids `text` names."""
     return set(ART_TEXT.findall(text)), set(RUN_TEXT.findall(text))
 
 
 def scan_tree(root: Path) -> tuple[set[str], set[str]]:
-    """Every art hex and run id the files of `root` name: its tracked files when it is a git work tree (`git grep`), else every
-    regular file under `SCAN_MAX_BYTES`."""
     root = Path(root)
     if not root.is_dir():
         raise GcError(f"citing tree {root} is not a directory")
@@ -120,9 +88,6 @@ LINEAR_OTHERS = {
 
 
 def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], int]:
-    """Every art hex and run id Linear's text names (lanes cite mostly there): each issue's description and comments,
-    archived ones too, every project's description and content, project updates and documents; and how many pages it read.
-    `gql(query, variables)` is `research.linear.Linear.gql`. Any error is a GcError: a citation it couldn't read could lose a blob."""
     arts: set[str] = set()
     runs: set[str] = set()
     pages = 0
@@ -167,8 +132,6 @@ def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], i
 
 
 class Reader:
-    """GETs immutable keys through a cache directory, `jobs` at a time."""
-
     def __init__(self, remote: Any, cache: Path, jobs: int = JOBS):
         self.remote, self.cache, self.jobs = remote, Path(cache), jobs
 
@@ -188,8 +151,6 @@ class Reader:
         return p.read_bytes()
 
     def each(self, keys: list[str], fn: Callable[[bytes], Any]) -> Iterator[tuple[str, Any]]:
-        """(key, fn(its bytes)) for every key, in order, reading `jobs` ahead; the bytes are dropped once `fn` has them.  Any key
-        unreadable, or that `fn` can't parse, is a GcError once every key has been tried."""
         def one(k: str) -> tuple[str, Any, str | None]:
             try:
                 return k, fn(self.get(k)), None
@@ -224,9 +185,6 @@ class Art:
 
 @dataclass
 class Plan:
-    """`candidates`: blob hex -> bytes; `expired`: art id -> kind; `by_kind`: kind -> {artifacts, bytes, expired, expired_bytes};
-    `kept_by`: why the keep set holds what it holds (artifact counts)."""
-
     listed: set[str]
     candidates: dict[str, int] = field(default_factory=dict)
     expired: dict[str, str] = field(default_factory=dict)
@@ -241,7 +199,6 @@ class Plan:
 
 
 def _parse_manifest(raw: bytes) -> tuple[str, int, frozenset[str], frozenset[str], frozenset[str], list[tuple[bytes, int]]]:
-    """(kind, payload bytes, refs' art hex, meta's art hex, meta's runs, [(blob digest, bytes)])."""
     doc = json.loads(raw)
     payload = doc.get("payload") or {}
     if payload.get("type") == "file":
@@ -255,7 +212,6 @@ def _parse_manifest(raw: bytes) -> tuple[str, int, frozenset[str], frozenset[str
 
 
 def _resolve(hexes: set[str], ordered: list[str]) -> set[str]:
-    """Full ids for `hexes`: a full one if listed, an abbreviated one as every listed id it begins."""
     out: set[str] = set()
     for h in hexes:
         if len(h) == 64:
@@ -337,12 +293,10 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
 
 def _keep(arts: dict[str, Art], ordered: list[str], cited_hex: set[str], cited_runs: set[str], attempts: set[str],
           ttl: dict[str, float], rd: Reader, p: Plan) -> dict[str, str]:
-    """{art hex: why it stays} (module docstring)."""
     keep: dict[str, str] = {}
     stack: list[str] = []
 
     def hold(h: str, why: str) -> None:
-        """Keep `h`; a citation outranks a weak reason (young, untimed, a weak artifact's ref), and is followed again."""
         if h not in arts or keep.get(h) in STRONG or (h in keep and why not in STRONG):
             return
         keep[h] = why
@@ -396,18 +350,12 @@ def save_marks(path: Path, marks: dict[str, float], now: float) -> None:
 
 
 def list_manifests(remote: Any) -> list[str]:
-    """Every key under `manifests/`, its 16 hex prefixes listed at once: one listing of the whole prefix takes about 90 s."""
     with ThreadPoolExecutor(max_workers=16) as ex:
         return [k for keys in ex.map(remote.list, [f"manifests/{x:x}" for x in range(16)]) for k in keys]
 
 
 def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s: float = GRACE_S, jobs: int = JOBS,
           batch: int = BATCH, log: Callable[[str], None] | None = None) -> dict[str, Any]:
-    """Delete the blobs `p` names that were marked at least `grace_s` before `now` and that no manifest listed since `p` holds; mark
-    the rest.  The deletes go `batch` at a time, each after a fresh listing of the manifests, so a put that reuses a blob while
-    the deletes run rescues it unless it lands inside one batch's deletes.  A last listing follows the last batch; a blob already
-    deleted that a newly listed manifest holds, and that its put didn't upload again, is `lost`: the artifact must be put again.
-    Returns {deleted, deleted_bytes, marked, rescued, lost, lost_count, listings, errors, error_count}."""
     say = log or (lambda s: None)
     marks = load_marks(state)
     due = sorted(b for b, t in marks.items() if b in p.candidates and now - t >= grace_s)
@@ -421,7 +369,6 @@ def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s
     listings = 0
 
     def fresh() -> set[str]:
-        """The blobs every manifest listed for the first time now holds."""
         nonlocal listings
         new = [k for k in list_manifests(remote) if (m := MANIFEST_KEY.fullmatch(k)) and m.group(1) not in seen]
         listings += 1
