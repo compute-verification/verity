@@ -27,6 +27,7 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
     served_verdicts.py coin-trees --challenger C --summary FILE
+    served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -44,7 +45,8 @@ docket (`public_registration`: the advice's length padded to its compiler's cap)
 SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
 its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
-audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), and
+audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
+V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
 ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -714,6 +716,12 @@ def challenger_coins(challenger: str) -> str:
     if challenger.startswith("gate:"):
         return "the gate's, the auditor's challenger"
     return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
+
+
+def coins_said(challenger: str, summary: Mapping[str, Any] | None) -> str:
+    """The V3C-AUDIT line's account of its audit's coins: whose they were (`challenger_coins`) and its ``summary``'s
+    ``coin_trees`` (none where the audit wrote no summary or reached no session)."""
+    return f"coins {challenger_coins(challenger)}, coin_trees {(summary or {}).get('coin_trees') or 'none'}"
 
 
 def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> str | None:
@@ -1804,6 +1812,15 @@ def _json(path: Path) -> Any:
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def _summary(path: Path) -> dict[str, Any] | None:
+    """A records audit's summary.json at ``path`` for the lines that say its coin trees: None where there's none, and one
+    that isn't JSON as a summary whose ``coin_trees`` says so."""
+    try:
+        return _json(path)
+    except ValueError:
+        return {"coin_trees": f"unread: {path.name} is not JSON"}
+
+
 def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """The reserve of `session` in the auditor's ledger `lines` and the ``period-open`` body of its prover's period it
     joined (`challenger.verify_periods`' rule: the prover's period open at the reserve), each None where there is none."""
@@ -2497,9 +2514,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl.add_argument("--partition", type=Path)
     sl.add_argument("--challenger")
     sl.add_argument("--summary", type=Path)
-    ct = sub.add_parser("coin-trees")
-    ct.add_argument("--challenger", required=True)
-    ct.add_argument("--summary", type=Path, required=True)
+    for name in ("coin-trees", "coins"):
+        ct = sub.add_parser(name)
+        ct.add_argument("--challenger", required=True)
+        ct.add_argument("--summary", type=Path, required=True)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -2578,12 +2596,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not rows:
             print("no RECORDS line")
             return 1
-        try:
-            summary = _json(a.summary) if a.summary else None
-        except ValueError:
-            summary = {"coin_trees": f"unread: {a.summary.name} is not JSON"}
         print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
-                           a.challenger, summary))
+                           a.challenger, _summary(a.summary) if a.summary else None))
+        return 0
+    if a.cmd == "coins":
+        print(coins_said(a.challenger, _summary(a.summary)))
         return 0
     if a.cmd == "coin-trees":
         try:
