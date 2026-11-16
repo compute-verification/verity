@@ -98,11 +98,13 @@ them as not read, with that reason.
 The prover's side, which is all of what the audit treats as untrusted. What lowers the share is the bytes the card
 reads for the store in each stretch against what it could read.
 
-On one card the share is mostly the timing term. The verifier gives each pass group's answer a deadline A: the slowest
-pass, gap and round trip its calibration measured (at `QUANTILE`) plus twice `JITTER_MS`, against the median pass that
-paces the session, so steadier passes lower it most (the prover on cores no CPU quota throttles, and no pass far
-slower than the median). The sample term is next; it falls with more draws a stretch, which the fixed form sets. The
-`ran with` line prints the lateness allowed and the pass.
+On one card the share is mostly the timing term: the share of the session's span, from its first pass group's release
+to its last one's deadline, that its passes don't cover at the sheet's bandwidth. Each pass is credited only the
+store's bytes, which at that bandwidth take the time a bare read of the store would, so the share falls most with a
+faster pass: a prover that reads and sketches the store nearer the card's bandwidth, with no gap between passes. The deadline A (the slowest pass, gap and round trip its
+calibration measured, at `QUANTILE`, plus twice `JITTER_MS`) adds to the span only at its end. The sample term is next;
+it falls with more draws a stretch, which the fixed form sets. The `ran with` line prints the measured pass and the
+lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
   (`verity/protocols/accounting/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
@@ -110,8 +112,8 @@ slower than the median). The sample term is next; it falls with more draws a str
   how the engine serves from it (`benchmarks/remote_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
-- the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A charges less to timing
-  and leaves a slow pass less room before it misses its deadline.
+- the deadline's margin: `JITTER_MS` (default 50) and `QUANTILE` (default `max`). A smaller A shortens the span only
+  at its end, and leaves a slow pass less room before it misses its deadline.
 
 ## What is fixed
 

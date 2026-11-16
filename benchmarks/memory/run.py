@@ -338,20 +338,23 @@ def parameters(v: dict, vs: dict) -> dict:
     """What session `vs` of the verifier's record `v` ran with, as its record states it: where its coins came from
     (the verifier's `--challenger`), the store's rows, the openings a window, the sample's term a window (`delta`),
     and the windows, their length and the lateness allowed, and the prover its error is priced against:
-    `budget_log2`, the log2 of the SHA-512 compressions it may make on any hardware (`audit.QUERIES_LOG2`). A paced
-    session's `pace` is its verifier's (`pace_of`: the passes a coin, a stretch's milliseconds and openings, the
-    credited stretches, the groups a stretch and the pass they are counted at), and `passes` the passes the ledger
-    counted in all. None where the record states none."""
+    `budget_log2`, the log2 of the SHA-512 compressions it may make on any hardware (`audit.QUERIES_LOG2`), and
+    `passes` the passes the ledger counted in all. A paced session has no windows: its record's `windows` are the pass
+    groups it ran (`pass_groups`) and its `window_ns` a placeholder, so it states neither as windows; its `pace` is
+    its verifier's (`pace_of`: the passes a coin, a stretch's milliseconds and openings, the openings a group, the
+    credited stretches, the groups a stretch and the pass they are counted at). None where the record states none."""
     def ns(x):
         return x / 1e6 if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
     passes = ((vs.get("ledger") or {}).get("inputs") or {}).get("passes")
+    pace = vs.get("pace") if isinstance(vs.get("pace"), dict) else None
+    form = ({"pace": pace, "pass_groups": vs.get("windows")} if pace else
+            {"windows": vs.get("windows"), "window_ms": ns(vs.get("window_ns"))})
     return {"coins": (vs.get("challenger") or {}).get("challenger"), "rows": (v.get("registration") or {}).get("rows"),
-            "samples": vs.get("samples"), "delta": vs.get("delta"), "windows": vs.get("windows"),
-            "window_ms": ns(vs.get("window_ns")), "allowance_ms": ns(vs.get("allowance_ns")),
+            "samples": vs.get("samples"), "delta": vs.get("delta"), **form, "allowance_ms": ns(vs.get("allowance_ns")),
             "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2"),
-            "pace": vs.get("pace") if isinstance(vs.get("pace"), dict) else None,
-            "passes": sum(passes) if isinstance(passes, list) and all(type(x) is int for x in passes) else None}
+            "passes": passes if type(passes) is int else
+            sum(passes) if isinstance(passes, list) and passes and all(type(x) is int for x in passes) else None}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
@@ -641,9 +644,23 @@ def local(run: Callable = subprocess.run) -> dict:
         raise NoNumber(f"the store is {_gb(s['store_bytes'])}, {s['store_bytes'] / hbm_bytes:.3f} of the card's "
                        f"{_gb(hbm_bytes)}, below the {STORE_MIN} this benchmark reads: the session read a request's "
                        "bytes and not the card's memory, so its share is not this benchmark's")
-    machine = {"card": name, "sheet": kind, "arena_gib": arena, "util": util, "sheet_sha256": digest(SHEETS),
+    machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
                "verifier_sha256": digest(VERIFIER)}
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+
+
+def engine_args(held: Path) -> dict:
+    """The arena's GiB and vLLM's share of the card as the session's engine recorded them (`out/engine.0.json`'s
+    `args`), None where it states none."""
+    path = held / "out" / "engine.0.json"
+    if not path.is_file():
+        return {"arena_gib": None, "util": None}
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise Unreadable(f"the session's engine record {path} doesn't read ({type(e).__name__}: {e})") from e
+    args = record.get("args") if isinstance(record, dict) and isinstance(record.get("args"), dict) else {}
+    return {"arena_gib": args.get("arena_gib"), "util": args.get("util")}
 
 
 def session_form() -> dict[str, str]:
@@ -897,23 +914,27 @@ def detail(p: dict, machine: dict | None = None, error: float | None = None, sto
            whole: int | None = None) -> str:
     """The `ran with` line's detail (`parameters`): under `--local` the arena against the card's memory first; the
     session's form (a paced one's stretches, groups and pass, or the windows), the passes, the rows, the openings,
-    the sample's term a window (the record's `delta`, which is not the error), the lateness, the error with its power
-    of two and the prover it is priced against, and under `--local` the sheet the share is of."""
+    the sample's term a pass group or a window (the record's `delta`, which is not the error), the lateness, the error
+    with its power of two and the prover it is priced against, and under `--local` the sheet the share is of. Every
+    figure is the record's: the arena and vLLM's share as the engine's record states them (`engine_args`)."""
     def ms(x):
         return "not stated" if x is None else f"{x:,.0f} ms"
     delta, rows, pace = p.get("delta"), p.get("rows"), p.get("pace")
-    arena = (f"an arena of {machine['arena_gib']} GiB at vLLM's {machine['util']:g} of the card"
-             + (f", the store {_gb(store)} of its {_gb(whole)}" if store and whole else "") + "; "
-             if machine and machine.get("arena_gib") is not None else "")
+    held = f", the store {_gb(store)} of its {_gb(whole)}" if store and whole else ""
+    arena = ("" if not machine or "arena_gib" not in machine else
+             (f"an arena of {machine['arena_gib']} GiB at vLLM's {machine['util']:g} of the card"
+              if machine.get("arena_gib") is not None and machine.get("util") is not None
+              else "an arena its engine's record doesn't state") + held + "; ")
     form = (f"paced: {pace['windows']} credited stretches of {ms(pace['t_ms'])}, {pace['groups']} groups a stretch at "
             f"{pace['pass_ms']:g} ms a pass, a coin every {pace['k']:g} pass{'' if pace['k'] == 1 else 'es'}, "
-            f"{pace['draws_t']} openings a stretch"
+            f"{pace['draws_t']} openings a stretch, {pace['draws']} a group"
             if pace else f"{p.get('samples') or 'no'} openings a window; {p.get('windows') or 'no'} windows of "
             f"{ms(p.get('window_ms'))}")
-    return (arena + form + (f"; {p['passes']:,} passes" if p.get("passes") is not None else "")
+    groups = f" in {p['pass_groups']:,} groups" if pace and p.get("pass_groups") is not None else ""
+    return (arena + form + (f"; {p['passes']:,} passes{groups}" if p.get("passes") is not None else "")
             + f"; {rows or 'no'} sketch rows" + ("" if rows in (None, receipts.WIDE_ROWS) else
                                                 f", not the deployed registration's {receipts.WIDE_ROWS}")
-            + "; the sample's term a window "
+            + f"; the sample's term a {'pass group' if pace else 'window'} "
             + (f"2^{math.log2(delta):.1f}" if isinstance(delta, (int, float)) and delta > 0 else "not stated")
             + f"; lateness allowed {ms(p.get('allowance_ms'))}; "
             + (f"error {power(error)}" if error is not None else "the error")

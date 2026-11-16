@@ -1045,11 +1045,13 @@ def a_local_record(*sessions: dict, arena: int = ARENA) -> dict:
 class Machine:
     """This machine as `--local` asks it, one stand-in for every process it starts: nvidia-smi answers `card` (or fails
     with `smi_rc`, or is not installed, `driver` false), the checkpoint's fetch ends `fetch_rc`, and `run.sh` writes
-    `record` as its verifier's and ends `rc`."""
+    `record` as its verifier's, its engine's record with the `--arena-gib` and `--util` it was handed as `engine.py`
+    does (unless `engine` is false), and ends `rc`."""
 
     def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, fetch_rc: int = 0, rc: int = 0,
-                 record: dict | None = None, driver: bool = True) -> None:
+                 record: dict | None = None, driver: bool = True, engine: bool = True) -> None:
         self.card, self.smi_rc, self.fetch_rc, self.rc, self.driver = card, smi_rc, fetch_rc, rc, driver
+        self.engine = engine
         self.record = a_local_record(a_session(gamma=0.199)) if record is None else record
         self.started: list[tuple[list[str], dict]] = []
 
@@ -1067,6 +1069,12 @@ class Machine:
         out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
         (out / "verifier.json").write_text(json.dumps(self.record))
+        if self.engine:
+            given = kw["env"].get("ENGINE_ARGS", "").split()
+            args = {k: float(given[given.index(f) + 1]) for k, f in (("arena_gib", "--arena-gib"), ("util", "--util"))
+                    if f in given}
+            args["arena_gib"] = int(args["arena_gib"]) if "arena_gib" in args else None
+            (out / "engine.0.json").write_text(json.dumps({"schema": "verity/remote-session/engine/v0", "args": args}))
         return SimpleNamespace(returncode=self.rc)
 
     def runs(self) -> list[tuple[list[str], dict]]:
@@ -1257,7 +1265,7 @@ def test_the_ran_with_line_names_the_coins_the_form_and_the_prover_the_error_is_
           "window_ns": 10 ** 9, "allowance_ns": 2 * 10 ** 6, "ledger": {"sketch_failure": {"queries_log2": 80}}}
     p = M.parameters(v, vs)
     assert p == {"coins": "local", "rows": 16, "samples": 2773, "delta": 2 ** -101, "windows": 7, "window_ms": 1000.0,
-                 "allowance_ms": 2.0, "budget_log2": 80, "pace": None, "passes": None}
+                 "allowance_ms": 2.0, "budget_log2": 80, "passes": None}
     machine = {"sheet": "h200-sxm-141gb-x1"}
     line, said = M.ran({"parameters": p, "machine": machine})
     assert line == f"ran with: coins local challenger; parameters development ({LOCAL_DETAIL})"
@@ -1270,19 +1278,40 @@ def test_the_ran_with_line_names_the_coins_the_form_and_the_prover_the_error_is_
     assert "; error 2.8e-05 (2^-15.1) against a prover of 2^80" in M.detail(p, error=2.8047495865732136e-05)
 
 
-def test_a_paced_sessions_line_names_its_stretches_groups_and_passes():
-    vs = {"challenger": {"challenger": "local"}, "samples": 232, "delta": 2 ** -101, "windows": 96, "window_ns": 1,
-          "allowance_ns": 5 * 10 ** 7, "pace": PACE,
-          "ledger": {"sketch_failure": {"queries_log2": 80}, "inputs": {"passes": [12] * 96}}}
+def test_a_paced_sessions_line_is_its_records_pace_and_states_no_windows():
+    """A paced session, in the shape the node's verifier records one (`PACED=1:1000:2773:7` at the calibration's
+    pass): its record's `windows` are the pass groups it ran and its `window_ns` a placeholder of 1, and its ledger
+    counts its passes as one number. The parameters state the pace, the pass groups and the passes, and no windows
+    or window length; every figure on the line is the record's."""
+    pace = {"k": 1, "t_ms": 1000.0, "draws_t": 2773, "windows": 7, "groups": 19, "draws": 146, "pass_ms": 52.906315}
+    vs = {"challenger": {"challenger": "local"}, "samples": 146, "delta": 3.944304526105059e-31, "windows": 152,
+          "window_ns": 1, "allowance_ns": 190416547, "pace": pace,
+          "ledger": {"sketch_failure": {"queries_log2": 80}, "inputs": {"passes": 152}}}
     p = M.parameters({"registration": {"rows": 16}}, vs)
-    assert p["passes"] == 1152 and p["pace"]["groups"] == 12
-    assert M.detail(p, {"sheet": "h200-sxm-141gb-x1", "arena_gib": 98, "util": 0.8}, 2.8e-05, 98 * GIB,
-                    GPU_HBM["h200-sxm-141gb-x1"]) == (
-        "an arena of 98 GiB at vLLM's 0.8 of the card, the store 105.23 GB of its 151.40 GB; paced: 7 credited "
-        "stretches of 1,000 ms, 12 groups a stretch at 85 ms a pass, a coin every 1 pass, 2773 openings a stretch; "
-        "1,152 passes; 16 sketch rows, not the deployed registration's 64; the sample's term a window 2^-101.0; "
-        "lateness allowed 50 ms; error 2.8e-05 (2^-15.1) against a prover of 2^80 SHA-512 compressions on any "
-        "hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
+    assert p == {"coins": "local", "rows": 16, "samples": 146, "delta": 3.944304526105059e-31, "pace": pace,
+                 "pass_groups": 152, "allowance_ms": 190.416547, "budget_log2": 80, "passes": 152}
+    assert M.detail(p, {"sheet": "h200-sxm-141gb-x1", "arena_gib": 112, "util": 0.88}, 2.8047495865882895e-05,
+                    120259084288, GPU_HBM["h200-sxm-141gb-x1"]) == (
+        "an arena of 112 GiB at vLLM's 0.88 of the card, the store 120.26 GB of its 151.40 GB; paced: 7 credited "
+        "stretches of 1,000 ms, 19 groups a stretch at 52.9063 ms a pass, a coin every 1 pass, 2773 openings a "
+        "stretch, 146 a group; 152 passes in 152 groups; 16 sketch rows, not the deployed registration's 64; the "
+        "sample's term a pass group 2^-101.0; lateness allowed 190 ms; error 2.8e-05 (2^-15.1) against a prover of "
+        "2^80 SHA-512 compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one "
+        "card")
+    assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": [12] * 96}}})["passes"] == 1152
+    assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": True}}})["passes"] is None
+
+
+def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(store, capsys, work):
+    """The arena and vLLM's share on the line are the engine's record of them (`out/engine.0.json`), not what
+    `--local` handed `run.sh`; an engine that left no record leaves them unstated."""
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, _ = printed(capsys)
+    assert (doc["machine"]["arena_gib"], doc["machine"]["util"]) == (ARENA, 0.88)
+    assert bench(store, "--local", run=Machine(engine=False)) == 0
+    _, doc, _ = printed(capsys)
+    assert (doc["machine"]["arena_gib"], doc["machine"]["util"]) == (None, None)
+    assert doc["ran_with"]["detail"].startswith("an arena its engine's record doesn't state, the store ")
 
 
 @pytest.mark.parametrize("machine, why, code", [
