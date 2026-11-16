@@ -5,7 +5,7 @@ under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence sl
 replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
 trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
 on the SHA-512 engine (`verity/commitments/cuda/sha512_rows/`).
-`verity/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
+`tests/verity/commitments/fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
 
@@ -76,5 +76,5 @@ from the tree's root; its header has the options).
 openings and their refusals; layouts written and loaded back; the host twin against the reference; the streamed slot
 trees; a step's memory and a row-slot's compressions, counted; planning at scale; and, with a GPU, the device against the
 host twin. Two say why they skip where they can't run: the FAMILIES layout's round trip where its fetched fixture is
-absent (`research data fetch-fixtures verity/commitments/tests/fixtures/layouts`; the suites' runner and `gpu.sh` fetch
+absent (`research data fetch-fixtures tests/verity/commitments/fixtures/layouts`; the suites' runner and `gpu.sh` fetch
 it), and the plan on some SMs where this Python's torch has no driver bindings (`slots_gpu.driver_bindings`).

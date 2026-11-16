@@ -1,5 +1,5 @@
 {
-  "rule": "superseded Definition versions (tools/verity/circuit_check/tests/test_superseded_versions.py)",
+  "rule": "superseded Definition versions (tests/tools/verity/circuit_check/test_superseded_versions.py)",
   "held": {},
   "entries": [
     {"file": "adapters/vllm/verity_vllm/program/frontend/seed_rule.py", "kind": "superseded", "symbol": "SeedCheck", "detail": "SeedCheck_v1"},
