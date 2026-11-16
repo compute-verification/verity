@@ -97,7 +97,7 @@ and the strip's bits and bound, all through their committed rows (`PORTS`; the c
   - The tile and the tally are cut per tile row because Flock's composer gives each row a unit reads or writes an
     hm96 slot of 2^18 bits and a unit at most 2^27 bits (`circuit.K_MAX`), so at most 256 rows: a tile reading its
     words' rows directly would need 2^31 at 64 × 64.  Cut per row, no unit of a 64 × 64 tile has more than 66 rows
-    (the row tally's TN inert-work bound-flags rows, its sd row and its cap-sums row).
+    (the row tally's TN cap-flags rows, its sd row and its cap-sums row).
   - The tally's verdict is `Pc8TileCap`'s: every passing row's words are good, and the inequality holds.  It is the
     tally's public output (``public`` in `PORTS`: the verifier reads it; no row holds it), beside the tile digest, and
     the verifier accepts a sampled tile only when its tile check passes (the digest is the miner's h0) and the verdict is
@@ -591,7 +591,7 @@ Pc8CapWordUnitDef = CompositeDefinition(
     conformance="protocol-defined")
 
 
-#: a tile row's inert-work bound-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
+#: a tile row's cap-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
 CHUNK_WORDS = L.INERT_BOUND_ROW_WORDS // 2
 
 

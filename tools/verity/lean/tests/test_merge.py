@@ -1652,7 +1652,7 @@ def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
 
 
 def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_path, capsys):
-    """A PR that lowers two inert-work bounds to their counts and room, merged onto a `main` that kept the base's limits but edited the
+    """A PR that lowers two caps to their counts and room, merged onto a `main` that kept the base's limits but edited the
     file elsewhere: the lowered limits stand, whichever side brings them, where the larger of the sides would put the base's
     back."""
     props, flock = 186, 7

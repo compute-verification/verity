@@ -542,7 +542,7 @@ def _h0(tile, c, u):
 def test_the_split_h0_is_pearl_tile_digests_on_edge_tiles(tile):
     """On words fed to the row digests directly (half `EDGE`'s, half random bits), at TN on either side of a 32-column
     chunk and at the deployed 64 × 64: the split's h0 is `PearlTileDigest`'s and `pearl_c.leaf`'s, and each row's
-    inert-work bound-chunks words are `pearl_c.message_digest`'s of its chunks, then zeros."""
+    cap-chunks words are `pearl_c.message_digest`'s of its chunks, then zeros."""
     tm, tn = tile
     rng = random.Random(f"cap-h0-{tile}")
     word = lambda: rng.choice(EDGE) if rng.random() < 0.5 else rng.getrandbits(32)  # noqa: E731
