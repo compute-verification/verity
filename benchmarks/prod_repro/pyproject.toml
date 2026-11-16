@@ -1,7 +1,7 @@
 # vLLM at its serving settings, replayed (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the
 # report on synthetic arm and replay directories and the runner against a stand-in for the serving cost benchmark's,
 # stdlib only but for the scheduler replay's loader, which the report loads for its advice line: the loader's kept code
-# is advice v1's, over the certifier's circuits, and needs the tree's `verity` and numpy.
+# is advice v1's, over network certification's circuits, and needs the tree's `verity` and numpy.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -40,8 +40,8 @@ inputs = [
     # of a runtime patch is `engine.hooks` (the stdlib alone; its package's init is a docstring)
     "adapters/vllm/verity_vllm/engine/__init__.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
-    # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
-    # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
+    # `window_code` takes the window it charges from network certification's prover (`window_charge.Advice`) and its
+    # code word's width from its verifier (`arith_encode.CW`); those two load its chain checks
     # beside them and the grid and certificate `head_check` reads
     "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
     "verity/protocols/resource_accounting/network/__init__.py",
@@ -65,7 +65,7 @@ inputs = [
     # `head_check` counts a Definition's ANDs with the census
     "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/census.py",
-    # the certifier's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
+    # network certification's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
     # them (the evaluator's directory is read whole), with the errors they raise
     "verity/errors.py",
     "verity/circuits/__init__.py",

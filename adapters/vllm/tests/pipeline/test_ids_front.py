@@ -259,7 +259,7 @@ def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_
 
 def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
     """Through the front, what isn't an id request in the front's cells reaches the server unchanged and its answer
-    comes back whole: ``/v1/models``, ``/tokenize``, the certifier's shim's streamed POST (vLLM's chunks, with their
+    comes back whole: ``/v1/models``, ``/tokenize``, the network attester's shim's streamed POST (vLLM's chunks, with their
     token ids), and an id request in other cells, which the server answers in HTTP. None is recorded."""
     with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, proto.ID_PAYLOAD) as f:
         models = f.ask("GET", "/v1/models")
@@ -351,7 +351,7 @@ def test_once_the_certifiers_side_has_ended_the_front_ends_the_servers(answer, s
     """While the front waits on the server's stream of an id request (the server has sent nothing, its 200 head and no
     chunk, or a chunk and no more, as vLLM's own server does for a request the tick gate dropped), the network
     attester's side ends, closed or only its sending half. The front then closes its connection to the server, which
-    is what tells that server to abort the request, and its own to the certifier, with the ids so far and no trailer;
+    is what tells that server to abort the request, and its own to the network attester, with the ids so far and no trailer;
     the record says why. Without it the server's thread, which waits for that close, never ends."""
     server = Silent(answer)
     with Fronted(server.address) as f:
