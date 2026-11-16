@@ -153,10 +153,12 @@ theorem outLay_refuses_allTrue :
     have hi : outLay.inputOf 1 [[]] (fun _ => false) 0 = false :=
       inputOf_of_mem_freeInputs (ins := [[]]) rfl (fun _ => false) zero_mem_freeInputs_notProg
     rw [notProg_valOver_one _ rfl rfl, hi]
+    rfl
   have hv2 : valOver notProg (outLay.inputOf 1 [[]] (fun g => decide (g = 0))) (fun _ => none) 1 = false := by
     have hi : outLay.inputOf 1 [[]] (fun g => decide (g = 0)) 0 = decide ((0 : ℕ) = 0) :=
       inputOf_of_mem_freeInputs (ins := [[]]) rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg
     rw [notProg_valOver_one _ rfl rfl, hi]
+    rfl
   have hc := congrFun hrow 0
   have k1 : valOver notProg (outLay.inputOf 1 [[]] (fun _ => false)) (fun _ => none)
       (outLay.egress 0 0 0).1 = true := hv1
