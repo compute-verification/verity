@@ -1,57 +1,25 @@
 # Route capture
 
-What a model served at serving's settings executes, at the granularity the ahead-of-time step compiler names routes in: every
-engine step's launch-shape class, and the device kernels of the first steps of each class. A served step hides most of
-its kernels from Python (CUDA graphs replay them, and for a model vLLM compiles, Inductor fuses them), so the capture reads
-the step's shape from its scheduler output, the graph dispatch from the model runner, and the kernels from
-`torch.profiler`, which sees the kernels a graph replays.
+To prove what a served model computes, its circuit has to cover every path a served step can take. This capture
+records what GLM-5.3 actually executes when served the way serving runs it: every engine step's launch-shape class
+(phase mix, tokens, requests, attention route), and the device kernels of the first steps of each class, read with
+`torch.profiler` because CUDA graphs hide most kernels from Python. The gap, below, lists what class G's circuits
+don't yet cover. `route_capture_plugin.py`'s docstring lists the files a capture writes.
 
-`run.sh` serves GLM-5.3 on eight H200s at TP8 the way serving does: `vllm serve` at vLLM's defaults (CUDA graphs,
-chunked prefill, prefix caching, async scheduling, the model runner vLLM picks), at most 256 sequences and 8,192 tokens a
-step, prompts up to 32k tokens. At the integration's vLLM pin, GLM-5.3's architectures are among those vLLM serves with
-breakable CUDA graphs (`DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES`), which turn torch.compile off: the model runs vLLM's
-custom CUDA kernels, captured whole into graphs that break around attention, which runs eagerly. Four `vllm bench serve` clients run for about `DURATION_S`
-(600 s) at once:
+## Try it
 
-| Client | Prompts | Sampling | Arrivals |
-| --- | --- | --- | --- |
-| `sharegpt-greedy` | ShareGPT | greedy | Poisson, ramped linearly from 1 to 24 requests/s |
-| `sharegpt-sampled` | ShareGPT | temperature 0.7, top-p 0.95 | Poisson, 2/s |
-| `long-context` | random, 8,192 to 32,768 tokens | temperature 0.7, top-p 0.95 | Poisson, 0.1/s |
-| `shared-prefix` | 16 shared 4,096-token prefixes, each with a 512-token suffix | greedy | Poisson, 1/s |
+~~~sh
+uv run tools/check/suites.py benchmarks/route_capture
+~~~
+
+It runs the plugin on stand-ins for both model runners and torch's profiler, and `gap.py` on synthetic steps, on the
+CPU in a few seconds.
+
+The capture itself serves GLM-5.3 on eight H200s at TP8 under four concurrent clients for about ten minutes
+(`run.sh`'s header lists its variables; [`DESIGN.md`](DESIGN.md) has the clients and the serving settings):
 
     # on the node, from a checkout of this tree, under research run (VENV's vLLM at the integration's pin)
     research run --on NODE --project verity --source CHECKOUT --cwd source -- bash benchmarks/route_capture/run.sh
-
-`run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The engine runs with the Inductor pin
-the integration serves with (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), so for a model vLLM compiles, the fused kernels
-captured are the ones a replay runs. vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only when FlashInfer's kernels
-are prebuilt (`flashinfer-cubin`, which serving images ship) or `nvcc` is on PATH to compile them, and FlashInfer's
-sampler compiles at warmup with that `nvcc`, so `run.sh` puts `CUDA_HOME`'s `nvcc` on PATH, and `engine_env.txt` records
-`has_flashinfer()`. The FlashInfer sampler stays on, vLLM's default; if a sampled smoke request fails with it, the server
-restarts with it off, and `engine_env.txt` says so.
-
-## The plugin
-
-`route_capture_plugin.py` is a vLLM general plugin (the entry point `run.sh` writes into a site directory on
-`PYTHONPATH`, the only plugin `VLLM_PLUGINS` loads). `register` runs in every process and patches the V1 and V2 model
-runners when their modules are imported; `settings.py` declares its variables (`ROUTECAP_OUT` turns it on). On each
-recording rank (`ROUTECAP_RANKS`, rank 0 by default) it writes into `ROUTECAP_OUT`:
-
-| File | What it holds |
-| --- | --- |
-| `steps.rank<R>.jsonl` | one row per step: tokens, requests, each prefill's query length, computed tokens and prompt length, the decodes' context lengths, the requests' sampling kinds, the graph dispatch (mode, padded tokens and requests), the step's class and its trace's name when profiled |
-| `kineto/rank<R>/step<N>.json.gz` | a profiled step's Chrome trace: every kernel with its grid and block, those replayed in a graph included, and the eager operators' input shapes |
-| `capture_ops.rank<R>.json` | the operators run while the CUDA graphs are captured, by name and input shapes, over every captured size |
-| `engine.rank<R>.json` | the runner's model, cache, scheduler, parallel and compilation configuration, and the versions |
-
-A step's class (`key`) is its phase mix (decode, prefill or mixed), its token count rounded up to `ROUTECAP_M_EDGES` (which
-hold every M where a GLM-5.3 route switches), its request count rounded up to a power of two, the prefills' attention route
-(dense while the longest prefill sequence is at most the indexer's top-k, sparse past it), whether a new request hit the
-prefix cache, and the sampler's mix. A rank profiles the first `ROUTECAP_PER_CLASS` steps of each class, at most
-`ROUTECAP_BUDGET` in all, and past its first `ROUTECAP_WARM` only while profiling has held it for at most `ROUTECAP_DUTY`
-of the run. A profiled step synchronizes the device at its start and end, so the steps around it batch a little more
-than they would have. Every step gets a row; the kernels of an unprofiled step are those of its class.
 
 After the server stops, `run.sh` keeps whatever the engine compiled (vLLM's and Inductor's Python, which name the ATen
 nodes each fused Triton kernel computes, and Triton's kernel metadata) in `compiled-code.tar.gz`, and writes
@@ -82,5 +50,3 @@ steps, and `gap.py` leaves the capture's leading ones out and counts them (`warm
 unseeded requests only when one filters by top-k or top-p and none is seeded, so a seeded request keeps its whole batch
 on the native sampler.
 
-The suite (`tests/`) runs the plugin on stand-ins for both model runners and torch's profiler, and `gap.py` on synthetic
-steps.
