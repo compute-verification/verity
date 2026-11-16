@@ -1,4 +1,4 @@
-"""The network certifier's messages between the workload and the prover: the committed rows the served-rows tie reads,
+"""The network attester's messages between the workload and the prover: the committed rows the served-rows tie reads,
 and the reported advice the certifier's prover computes from the workload's scheduling. The parties are SPOT's
 (`spot.prover.workload`), declared again here because this place does not load SPOT's, and the one list of every
 protocol's messages is `tests/test_workload_messages.py`'s.
@@ -7,7 +7,7 @@ protocol's messages is `tests/test_workload_messages.py`'s.
 workload -> prover     CommittedRows, ReportedAdvice
 ~~~
 
-The forms the workload and the network certifier agree on are declared here for the workload: the link frame's header
+The forms the workload and the network attester agree on are declared here for the workload: the link frame's header
 (`FRAME_HEADER`), the canonical id request (`id_request`), and a response's id events (`id_event`) and its last bytes
 (`TRAILER`). The verifier keeps its own (`link_frame.HEADER`, `id_form.id_request`, `io_tie.id_event`, `io_tie.TRAILER`)
 and reads nothing of this module; `test_network_certifier_id_request_writers.py` holds each pair equal.
@@ -77,7 +77,7 @@ def _name(s: str, what: str) -> bytes:
 
 def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
                top_p: float = 1.0, seed: int = 0, frame_bytes: int) -> bytes:
-    """The canonical `/v1/completions` request of a token-id prompt in the network certifier's `frame_bytes`-byte
+    """The canonical `/v1/completions` request of a token-id prompt in the network attester's `frame_bytes`-byte
     cells, which carry the request's bytes alone: every field at a place fixed by the prompt's length and the frame
     size, none straddling a frame. The verifier's `id_form.id_request` at ``offset=0`` writes the same bytes and
     refuses the same fields (`test_network_certifier_id_request_writers.py`)."""

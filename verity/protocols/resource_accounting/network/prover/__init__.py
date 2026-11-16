@@ -1,4 +1,4 @@
-"""verity.protocols.resource_accounting.network.prover: the network certifier's Boolean Definitions that core doesn't read: the
+"""verity.protocols.resource_accounting.network.prover: the network attester's Boolean Definitions that core doesn't read: the
 whole window's charge, the ingress-ids tie, the scan's ingress and egress, the lengths rows' proof block and the
 response tie's.  They are stated over the certifier's schedule and records in
 `verity.protocols.resource_accounting.network.verifier`. The Definitions core's service and tie service read stay there with

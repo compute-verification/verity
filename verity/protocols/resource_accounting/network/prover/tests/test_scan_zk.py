@@ -1,5 +1,5 @@
-"""scan_zk's host side: the run it reads (each execution phase's rows the network certifier's committed ones, each
-egress bucket computing the network certifier's row from the view its ingress bucket wrote, w63's request 5 in request
+"""scan_zk's host side: the run it reads (each execution phase's rows the network attester's committed ones, each
+egress bucket computing the network attester's row from the view its ingress bucket wrote, w63's request 5 in request
 1's slot past its egress) and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the
 references' outputs) as the round's. Each execution phase is a registration of its own, its rounds named
 ``<kind>-<w>``: honest accepted with every output 1, its state and view chains wired through the registered roots
@@ -12,10 +12,10 @@ pins, each later one from the record before's ``last/o1``, held to the verifier'
 A network_certifier_serve run's directory (`--warden-run`, here the synthetic run published as `network_certifier_serve.Publisher`
 publishes a served one) is read under its deployment's key, its registration's ``rows/<direction>/<w>`` roots
 (`scan_zk.network_certifier_roots`) the root and domain of each row registration in ``cells.jsonl``, and refused by name where a
-row, the key or the schedule isn't the network certifier's. The honest round on the challenger's coins
-(``--challenger``): its flags refused by name where they can't sample, the root bound to the network certifier's signed
+row, the key or the schedule isn't the network attester's. The honest round on the challenger's coins
+(``--challenger``): its flags refused by name where they can't sample, the root bound to the network attester's signed
 execution phase, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
-takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at egress_cells 5 and
+takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network attester at egress_cells 5 and
 reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
 
@@ -378,7 +378,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
 def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_root(tmp_path):
     """The verifier's registered reads name every port of every member's circuit, inputs and output rows, as Lean's
     `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree, start or
-    network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block
+    network attester row registration holds (each proof block's public o0, the last proof block's o1, a block
     member's row-seg ``x``) is the member's own rows (`scan_zk.Frame`, value ``frame``): its domain the member's frame
     domain of the port (`frame_binding` over its input set, its n proof blocks and the port's schema), each proof
     block's b‖c its own row under the salt the stager is given, which opens the root at its position as core's mirror
@@ -677,9 +677,9 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     network_certifier_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a network certifier key of its own, beside its `deployment.json`, which carries the session's
+    and salts), under a network attester key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
-    ``fails.records``). ``change`` (a record to the record kept) stands in for a network certifier that recorded the
+    ``fails.records``). ``change`` (a record to the record kept) stands in for a network attester that recorded the
     served cells otherwise: what it gives is kept and certified, and the wire's rows stay the served record's."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
@@ -759,7 +759,7 @@ def test_each_registration_names_its_execution_phases_network_certifier_rows_its
 
 def test_lean_reads_each_network_certifier_port_at_the_root_the_network_certifier_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
-    passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and
+    passes it, and a Lean verdict's ``registered`` reports its roots) holds each network attester port at the root and
     domain of the row registration the deployment's key signed (`network_certifier_rows.check_registration`, read here afresh from
     the run's ``cells.jsonl``), the root `network_certifier_roots` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
@@ -878,9 +878,9 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
-    """A network certifier run whose network certifier failed a connection late (its server sent nothing: a FAIL in the
-    egress row the network certifier signed, its reason in ``fails.records``) is read, not refused: the scan renders the
-    connection's END where the network certifier wrote FAIL, that bucket alone differs from the network certifier's row,
+    """A network attester run whose network attester failed a connection late (its server sent nothing: a FAIL in the
+    egress row the network attester signed, its reason in ``fails.records``) is read, not refused: the scan renders the
+    connection's END where the network attester wrote FAIL, that bucket alone differs from the network attester's row,
     and the execution phase's honest round is refused ("does not open") at its egress member, every other member
     held, with no negative and no stale round. A group past an execution phase with a FAIL is refused by name: the one
     after a refused execution phase has no start the verifier holds."""
@@ -1345,7 +1345,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 
 
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
-    """A connection's reason in the network certifier's ``fails`` record is in the bucket of its egress `FAIL` (a void
+    """A connection's reason in the network attester's ``fails`` record is in the bucket of its egress `FAIL` (a void
     run, whose execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL`
     is refused, naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase
     past the group is another group's, and the group is read as if it weren't there."""
@@ -1381,7 +1381,7 @@ def test_a_challenger_sample_that_cant_sample_is_refused_by_name_before_anything
 
 
 def test_the_window_root_is_the_network_certifiers_signed_execution_phase(tmp_path):
-    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is
+    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network attester run's is
     read from its published registrations alone, and each execution phase of a group has its own."""
     def phase(whole, w: int = 0) -> SimpleNamespace:
         return SimpleNamespace(session=whole.session, sides={s: ws[w] for s, ws in whole.sides.items()})

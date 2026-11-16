@@ -2,7 +2,7 @@
 
 `verity bench certifier_term`'s rows that hold the lengths by a stop block charge their stop class below its
 schedule only as a served run's verdict records say. This module reads those records and the signed heads they
-name, asks the network certifier's own rule (`class_charge.charge`) how each class of each head is charged, holds
+name, asks the network attester's own rule (`class_charge.charge`) how each class of each head is charged, holds
 what the rule charges below to what the rule doesn't read (a negative control for each verifier that accepted,
 the rate the serve registered, the one serve of an execution phase, a verdict under another head and the order of
 runs; each below), and hands the calculator (`leak_bounds`) the answer, a `Stop`.
@@ -26,8 +26,8 @@ readers are the harness's). A run holds, each one JSON object a line:
   a record of such a format is counted in a line and charges nothing. No format is listed, the response tie's
   among them, since no statement registers what the tie reads: so every verdict reads as missing, and no
   execution phase is charged below its schedule whatever a run's files hold;
-- `REGISTRATIONS_FILE`: its first line, of the format `CHECKED`, what the offline check of the network certifier's
-  run that wrote the file was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network certifier's
+- `REGISTRATIONS_FILE`: its first line, of the format `CHECKED`, what the offline check of the network attester's
+  run that wrote the file was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network attester's
   public key and the session), then the registration of each execution phase's connection rows that its verdicts
   were decided under,
   as `connection_rows.registration` writes it and as that check kept it ("A head", below). A record names its head
@@ -106,9 +106,9 @@ the command does not write itself, closes that, and the reader is handed none.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
-certifier's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
-written, by the offline check of the network certifier's run (`network_certifier_serve.py check --registrations`,
-`connection_rows_check.check`). The auditor hands that check the SHA-512 of the network certifier's public key and
+attester's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
+written, by the offline check of the network attester's run (`network_certifier_serve.py check --registrations`,
+`connection_rows_check.check`). The auditor hands that check the SHA-512 of the network attester's public key and
 the session; it holds the run's deployment record to them, verifies each registration under that key and session
 (`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file only
 where it found no problem: a first line, of a ``format`` of its own (`CHECKED`), that names the hash and the
@@ -127,7 +127,7 @@ is a run's word and no proof, and the answer's second line says so (`SERVE_NAMED
 of a link are two execution phases only where the records of each name a serve and no serve is named for both.
 They are one execution phase given two heads, which holds no execution phase at all, where a serve is named for
 both, where no record names a serve for one of them, and where a table of one name has one domain in both: a
-table's domain binds the network certifier's session, the link, the phase's number and the table's rows, so the
+table's domain binds the network attester's session, the link, the phase's number and the table's rows, so the
 two are one session's execution phase whatever serves their records name. A head whose records name two serves is
 no one serve's execution phase and is charged its whole schedule.
 
@@ -233,7 +233,7 @@ CONTROLS_FILES, SERVES_FILE = "out/*-controls.jsonl", "out/serve-registrations.j
 FILES = (RECORDS_FILES, REGISTRATIONS_FILE, CONTROLS_FILES, SERVES_FILE)
 #: the first line of a registrations' file, as the check that wrote it writes it (`connection_rows_run`'s "The
 #: registrations' file"): its own ``format`` word, which no registration has, and what its registrations were
-#: checked under, the SHA-512 of the network certifier's public key and the session, each in hex
+#: checked under, the SHA-512 of the network attester's public key and the session, each in hex
 CHECKED = "verity-network-certifier/checked-registrations/v1"
 CHECKED_UNDER, KEY_SHA512, SESSION = "checked_under", "key_sha512", "session"
 #: what the reader says of a registrations' file without that line
@@ -264,7 +264,7 @@ RUN_NOT_PROVED = "run, not proved"
 
 class Stop(NamedTuple):
     """How the stop class is charged, as the verdict records of a served run say (`stop_verdicts.stop`, which reads
-    them through the network certifier's own rule, `class_charge.charge`). ``held``: how many execution phases of a
+    them through the network attester's own rule, `class_charge.charge`). ``held``: how many execution phases of a
     link are charged below their schedule, those whose signed head was read and in which every class that holds a
     row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,
     one no registration was read for among them. ``why``: one line a class and execution phase read, and what was
@@ -358,7 +358,7 @@ def _hex(x: object, size: int | None = None) -> bool:
 
 def checked_under(first: str | None) -> tuple[str, str]:
     """What a registrations' file says it was checked under (the module docstring's "A head"), from its first
-    line, the file's line 1, None for a file that holds no line: the SHA-512 of the network certifier's public key
+    line, the file's line 1, None for a file that holds no line: the SHA-512 of the network attester's public key
     and the session, each the hex the line holds. ValueError, saying why the file does not say it: no line; a
     blank line 1; one that is no JSON or no object; one whose ``format`` is not `CHECKED`, by name where it has
     none, has a registration's or has another; one of that format that holds anything but the two."""

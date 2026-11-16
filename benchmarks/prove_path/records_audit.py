@@ -108,7 +108,7 @@ quotes the warm's beside it.
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
-``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+``period``: a window's audit as one compute audit of the network attester's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 docket (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
 ``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:
@@ -486,7 +486,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
     (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
     program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
-    is their values together, each under its own program (the weights under the model's, the output a network certifier
+    is their values together, each under its own program (the weights under the model's, the output a network attester
     relayed under the reading program's), a value pinned once."""
     if isinstance(doc, list):
         out: dict[str, dict[str, Any]] = {}
@@ -782,9 +782,9 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 
 
 def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dict[str, Any]:
-    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
+    """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
-    value the period ties to its scan's state tree (``stateTied``): the network certifier's scan-state value, which the
+    value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
     caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""

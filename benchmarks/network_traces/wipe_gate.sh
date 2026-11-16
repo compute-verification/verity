@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Network certification's side of a memory wipe: one network certifier session through the auditor's gate
+# Network certification's side of a memory wipe: one network attester session through the auditor's gate
 # (`warden-rehearse --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key
 # (GATE_KEY), inside a job on the machine that holds it (site.json's auditor), cwd = the source tree; everything into
 # $OUT. GATE_KEY, CHALLENGER, PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep; the
@@ -11,7 +11,7 @@
 # after AT it sends nothing. It
 # sends the gate REQUESTS prompts of the toy's class (`demo_stub.py prompts`), the toy (`demo_stub.py serve`) already
 # listening on PEER's loopback PORT, and keeps the gate's answer in KEEP/RUN/start.json alone (0600), never published:
-# it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the network certifier's witness also
+# it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the network attester's witness also
 # records (stalls.json's cgroup paths) and no public file holds, so the leak guard would hold it as a piece of the
 # witness. A refusal (another rehearsal still runs), an answer naming no certifier run, goes to the log: a visible
 # failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with

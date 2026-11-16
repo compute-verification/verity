@@ -1,4 +1,4 @@
-"""load-relay: the network certifier's relay of the weights' load to the H200 and its commit of what crosses, in the exact
+"""load-relay: the network attester's relay of the weights' load to the H200 and its commit of what crosses, in the exact
 form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
 byte on to the sink (the H200's) as it reads it, and commits every tensor of the seeded weights' manifest as a
 registered value, as the reading program's units read it (interface 1's registration for a program named by its
@@ -29,7 +29,7 @@ The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-r
   stream (what the H200's server loads) and the witness ``--witness`` (0600): the salts are the prover's alone,
   kept on the H200's host and never on the certifier's. The relay writes ``load-heads.json`` (`heads_doc`) and
   ``load-relay.json`` (its counts and the sink's acknowledgements), and signs nothing.
-* **The signature** (`heads_of`, `sign_heads`, `load_doc`): the serving network certifier's one signer signs the
+* **The signature** (`heads_of`, `sign_heads`, `load_doc`): the serving network attester's one signer signs the
   heads in its session before it serves (``network_certifier_serve.py serve --load-heads``), so one LMS key and one session
   carry the load and the windows' transfers; it writes ``load.json``, the client's kept registrations of the load
   that the block record pins (`blocks.pins`' ``registrations``), which `check_load` reads as the verifier does.
@@ -984,7 +984,7 @@ HEX64 = re.compile(r"[0-9a-f]{128}")
 
 
 def heads_doc(shape: Shape, program: str, roots: Mapping[str, bytes], link: str = LINK) -> dict[str, Any]:
-    """``load-heads.json``: what the network certifier's signer signs for the load (`heads_of`), each value's root."""
+    """``load-heads.json``: what the network attester's signer signs for the load (`heads_of`), each value's root."""
     return {"format": HEADS_FORMAT, "shape": shape.name, "link": link, "window": WINDOW, "program": program,
             "roots": {v.name: roots[v.name].hex() for v in manifest(shape)}}
 
@@ -1008,7 +1008,7 @@ def heads_of(doc: Mapping[str, Any]) -> tuple[Shape, list[TR.TransferHead]]:
 def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Sequence[dict[str, Any]], key: dict,
              session: bytes) -> dict[str, Any]:
     """``load.json``: the load's registrations, the block record's (`blocks.pins`' ``registrations``, the uplink's
-    certifier the network certifier's key and session it names)."""
+    certifier the network attester's key and session it names)."""
     h = heads_[0]
     return {"format": FORMAT, "shape": shape.name, "link": h.link, "window": WINDOW, "program": h.program.hex(),
             "link_format": "plain", "key": key, "session": session.hex(), "values": list(registrations)}
@@ -1017,7 +1017,7 @@ def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Seq
 def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], program: str, out: Path, *,
                workers: int = 1, link: str = LINK, progress: Callable[[int, int], None] | None = None,
                read_bytes: int = READ_BYTES, **streams: Any) -> dict[str, Any]:
-    """The load, as the network certifier relays it: `shape`'s store (`read_store`) read in order and sent over one
+    """The load, as the network attester relays it: `shape`'s store (`read_store`) read in order and sent over one
     stream a sink address (`Streams`), each value's bytes held to interface 1's digest and committed as they cross
     under the verifier's domain for `program`, the salts sent to the sink with them, never kept here. Writes
     ``load-heads.json`` (`heads_doc`, what the signer signs) and ``load-relay.json`` (the relay's counts and the sink's

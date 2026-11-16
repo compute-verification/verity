@@ -490,7 +490,7 @@ WATERMARK = ["--", "--watermark", "--window", "60", "--lanes", "64"]
 
 def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_that_try(tmp_path, capsys, monkeypatch):
     """The relay's connect to connection 2's server fails, so its release is never written: the watermark names it
-    lost, on the line of its bucket, and the network certifier's log keeps it. No class is tried after that try, the
+    lost, on the line of its bucket, and the network attester's log keeps it. No class is tried after that try, the
     command says which try, and its exit is the lost release's, whatever the rows; the table made again from what
     the tries kept says and exits the same."""
     flags = ["try", "--stand-in", "--out", str(tmp_path / "out"), "--scratch", str(tmp_path / "scratch"), *WATERMARK]
@@ -538,8 +538,8 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
 
 
 def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_stops_the_tries(tmp_path, capsys):
-    """A try that wrote no check has no row, and its network certifier's log is still read. With no log the tries stop
-    only where a watermark line could have been sent: the network certifier ran, with the watermark."""
+    """A try that wrote no check has no row, and its network attester's log is still read. With no log the tries stop
+    only where a watermark line could have been sent: the network attester ran, with the watermark."""
     seen = []
 
     def args(name, *rehearse):
@@ -574,7 +574,7 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
     assert stopped == (f"tokens: STOPPED: its network certifier ran with the watermark and wrote no log "
                        f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known; not tried: fail")
 
-    # the network certifier never ran: nothing was sent, and the classes after it are tried, as without the watermark
+    # the network attester never ran: nothing was sent, and the classes after it are tried, as without the watermark
     assert tries("never-ran", "never ran", *WATERMARK) == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert tries("plain", "no log") == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert dv.watermark_log(tmp_path / "none") is None and dv.watermark_stop("fail", tmp_path / "none", True) is None
@@ -615,7 +615,7 @@ def test_a_watermark_its_server_closed_stops_the_tries_at_that_try_with_the_erro
 
 
 def test_a_watermarks_error_is_kept_by_its_kind_and_named_beside_a_lost_release(tmp_path):
-    """The network certifier's log gives the error that stopped its watermark as text, which can hold the address it
+    """The network attester's log gives the error that stopped its watermark as text, which can hold the address it
     connected to: what is kept, and what the stop says, is the error's first word. A try with a lost release and an
     error is stopped for both."""
     run = tmp_path / "run"

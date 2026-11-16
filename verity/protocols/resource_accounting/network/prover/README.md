@@ -1,8 +1,8 @@
-# The network certifier's prover side (`verity.protocols.resource_accounting.network.prover`)
+# The network attester's prover side (`verity.protocols.resource_accounting.network.prover`)
 
 ## Interface
 
-The network certifier's Boolean Definitions that its verifier doesn't read: the whole window's charge, the ingress-ids
+The network attester's Boolean Definitions that its verifier doesn't read: the whole window's charge, the ingress-ids
 tie, the scan's ingress and egress, the lengths rows' proof block and the response tie's. The Definitions the
 verifier's service and tie service read are in `verity/protocols/resource_accounting/network/verifier`, with the ones they
 build on. Advice's validity check, the block-pool cache step and the compile slices built on it, and the served rows'

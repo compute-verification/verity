@@ -3,7 +3,7 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 `Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case_twin`
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
-certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
+attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
 certificates and one-stage's answers, `verity/protocols/resource_accounting/network/verifier/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `inference_only_reference.check_theta`, behind the protocol's decoders,
@@ -86,7 +86,7 @@ def module(name: str, path: Path) -> ModuleType:
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests/pouw_period_cases.py")
-#: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
+#: The network attester's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", ROOT / "verity/protocols/resource_accounting/network/verifier/network/tests/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_theta`) behind the
