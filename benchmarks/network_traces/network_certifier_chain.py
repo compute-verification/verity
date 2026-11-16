@@ -47,14 +47,14 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import lean_audit as LA
-from verity.protocols.accounting.certifier.verifier import service as SVC
-from verity.protocols.accounting.certifier.verifier import network_certifier as W
-from verity.protocols.accounting.certifier.verifier.id_form import id_request
-from verity.protocols.accounting.certifier.verifier.certificate import Direction
-from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import lean_audit as LA
+from verity.protocols.resource_accounting.network.verifier import service as SVC
+from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction
+from verity.protocols.resource_accounting.network.verifier.schedule import SyncSet
+from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent

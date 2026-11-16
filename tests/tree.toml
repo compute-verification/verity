@@ -182,11 +182,11 @@ path = "verity/protocols/proofs/"
 means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
-path = "verity/protocols/accounting/"
+path = "verity/protocols/resource_accounting/"
 means = "the accounting layer: pouw, pous, poub and certifier, for compute, memory and network, on the proofs"
 
 [[tree]]
-path = "verity/protocols/policy/"
+path = "verity/protocols/workload_classification/"
 means = "the policy layer: inference_only, on accounting and the proofs"
 
 [[tree]]
@@ -215,32 +215,32 @@ means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/pouw/"
+path = "verity/protocols/resource_accounting/compute/pouw/"
 means = "proof of useful work"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/pous/"
+path = "verity/protocols/resource_accounting/memory/pous/"
 means = "proof of useful space"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/poub/"
+path = "verity/protocols/resource_accounting/memory/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/certifier/"
+path = "verity/protocols/resource_accounting/network/"
 means = "network certification: the network certifier and its guarantee"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/policy/inference_only/"
+path = "verity/protocols/workload_classification/training_detection/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/registration/"
+path = "verity/protocols/registration/"
 means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
 protocol = true
 

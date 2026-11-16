@@ -19,8 +19,8 @@ import pytest
 import torch
 
 from verity_vllm.compiler import compile_slice as CS, served_rows as SRW
-from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT, release as REL
-from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT, release as REL
+from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived

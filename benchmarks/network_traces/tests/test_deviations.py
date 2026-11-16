@@ -19,13 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.id_form import ID_REQUEST_HEAD
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.certificate import Issuer
-from verity.protocols.accounting.certifier.verifier.network_certifier import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
-from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.resource_accounting.network.verifier.id_form import ID_REQUEST_HEAD
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
+from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.resource_accounting.network.verifier.certificate import Issuer
+from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
