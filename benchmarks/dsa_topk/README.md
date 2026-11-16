@@ -33,8 +33,10 @@ another key and tie rule. `dsa_topk.reference` is the definition in Python, held
 a Triton pass (`dsa_topk_kernels.py`) that rewrites only the rows longer than `k`, on the device, before attention
 reads them. The pass takes the fast kernel's smallest selected key as a candidate k-th key and reads the row once,
 writing the keys at or above it in ascending order and counting them. With no tie across the k-th key the row stands;
-with one, the row is written again from the counts; a row whose candidate fails the count check is selected again by
-bisection over the keys. So the output never depends on what the fast kernel wrote. GLM-5.3's indexer
+with one, the row is written again from the counts. A row whose candidate fails the count check is selected again by
+the row's segments together, from the keys within three 13-bit key prefixes of the candidate, or by bisection over
+the keys where the k-th key lies outside them (`VERITY_DSA_TOPK=canonical-bisect` bisects every such row). So the
+output never depends on what the fast kernel wrote. GLM-5.3's indexer
 runs eagerly between CUDA-graph pieces (vLLM's `eager_break_during_capture`), so the wrappers run on every call; under a
 plain CUDA graph the pass is captured with the op, and what the wrappers decide on the host reads only shapes. A `cooperative_topk` call whose
 `max_seq_len` is at most `k` launches nothing: vLLM passes the batch's longest sequence there.
@@ -42,8 +44,8 @@ plain CUDA graph the pass is captured with the op, and what the wrappers decide 
 `python dsa_topk.py site DIR` writes the plugin's entry point into `DIR`; a server or replay with `DIR` on its
 `PYTHONPATH` loads it. `VERITY_DSA_TOPK_LOG=DIR` keeps each process's counters in `DIR/dsa_topk.PID.json`, from the
 plugin's load on: calls and launches per op, and the rows rewritten, those with a tie across the k-th key, and those
-bisected. vLLM kills its workers, which then run no exit handler, so a process writes its record over, in place, at
-the end of every call: one write on the host, nothing synced to the disk. Its calls and launches are there whatever
+whose candidate failed, bisected or refined. vLLM kills its workers, which then run no exit handler, so a process
+writes its record over, in place, at the end of every call: one write on the host, nothing synced to the disk. Its calls and launches are there whatever
 ends it. A call is a wrapper's run on the host, so a call a CUDA graph replays adds rows and no call. The rows are the
 device's own counters, read every 4,096 calls outside a capture and when the process exits in order; `rows_at` is the
 calls it had made by then, so a killed process's rows are a lower bound.
