@@ -16,9 +16,6 @@ It matches the Lean models' definitions and is the oracle for GPU kernels. Pure 
 slow by design: a 32 MiB band segment decodes in about 25 s on one core, a dense one in about 8 minutes, and a
 14.4 MB P3 segment in about 21 s.
 
-`PROTOCOL.md` describes the lifecycle, the API and the byte formats. `DISCREPANCIES.md` lists where the Lean model,
-the prose spec and this code differ.
-
 ## Interface
 
 What code outside this directory may use. Everything else here is internal.
@@ -144,8 +141,7 @@ fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` 
 whole memory at `k = 2906` within 5 GB (`StreamedWipeMeetsH200`); with the count of the missing labels in
 place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
 `StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`), one H200 as measured at its deployed
-`k = 5500` (`StreamedWipeMeetsServerH200`). `PROTOCOL.md` ("The
-streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
+`k = 5500` (`StreamedWipeMeetsServerH200`). The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/protocols/resource_accounting/memory/pous/attester/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
 

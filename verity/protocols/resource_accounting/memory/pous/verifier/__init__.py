@@ -9,5 +9,4 @@ Merkle root), `audit` (the challenge key, responders and the unsigned timed roun
 replayed against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`,
 `CapacityBound`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
 The memory challenger, which signs its rounds, is the device's: `verity.protocols.resource_accounting.memory.pous.attester.memory_challenger`.
-`PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """

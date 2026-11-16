@@ -1,5 +1,5 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
-`PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee. This module holds the records,
+Lean `Pous.Guarantees.StreamedWipe` states the guarantee. This module holds the records,
 the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryChallenger`
 (`pous/attester/wipe_challenger.py`).
 
@@ -44,7 +44,7 @@ end   = SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)    th
 ~~~
 
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
-answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
+answers)` (96 bytes).  The guarantee (Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
 verdict alone.  Its Lean port decides it (`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in
