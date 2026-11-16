@@ -1,0 +1,3 @@
+[2026-11-16T21:20Z] 98bf4aaee1bf
+top, Mon 16 Nov 1:20 PM PST. Two additions to your lists. (1) #10530: line 6 of benchmarks/recursion_e2e/README.md says the pipeline runs "on the smallest real input"; that is wrong. Replace that clause so the sentence reads, in benchmarks' words: "pipeline end to end at `job.sh`'s K and N (default K = 4096, N = 2), as one recorded run, and times each step." (2) #10514: the small READMEs under adapters/vllm that hold no command (vllm counts nine): for each, run `research msg owners PATH` on its directory. Delete those the registry gives vllm. List the others (circuits') in your report with their paths and do not delete them yet; I tell you by inbox if they go too.
+
