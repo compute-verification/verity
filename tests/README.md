@@ -1,7 +1,8 @@
 # `tests`
 
-Every test in the repository is here. The tests of a directory `X` are at `tests/X`, one suite each, run in its own
-process and cached by its inputs. What sits directly in `tests/`, with `lint/`, is the repository's own suite: rules
+Every test in the repository is here. A directory's tests sit at the same path under `tests/` (`verity`'s at
+`tests/verity`, the `research` tool's at `tests/tools/research`), one suite each, run in its own process and cached by
+its inputs. What sits directly in `tests/`, with `lint/`, is the repository's own suite: rules
 that hold of the whole tree rather than of one package, such as which folder may import which, that no document names
 a dead path, and that no retired term comes back.
 
@@ -25,7 +26,7 @@ uv run tools/check/suites.py .                 # this suite, on a node through `
 
 | Where | What it holds |
 | --- | --- |
-| `tests/X` | The tests of `X`, as its suite. `tests/verity` holds `verity`'s, `tests/tools/research` the `research` tool's. |
+| `tests/verity`, `tests/tools/research`, … | A directory's tests at its path, as its suite. |
 | `tests/*.py` | The repository suite's invariants. Each test's docstring states its rule, and names its exceptions with a reason each. |
 | `tests/lint/` | Lint ratchets: kinds of finding counted per file against a list in `lint/allowlists/`. |
 
