@@ -323,9 +323,9 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     assert said["source"] == (
         "each execution phase's scan's δ, this command's, in place of the calculator's default: 9.537e-07 (2^-20), the error "
         "a monitoring period's figure is to carry at most, over the 1.155e+13 execution phases of the world's year, the row "
-        "printed that sums the most, so that every row printed carries that error or less. The network attester's result "
+        "printed that sums the most, so that every row printed carries that error or less. The network certifier's result "
         "of record takes its δ so (benchmarks/certifier_term/README.md), and no term depends on it")
-    assert by["scan_delta"] == {"part": "network attester", "input": "scan_delta", **said}
+    assert by["scan_delta"] == {"part": "network certifier", "input": "scan_delta", **said}
 
     rows = {(r["scope"], r["period"]): r for r in theirs["rows"]}
     for p in doc["periods"]:

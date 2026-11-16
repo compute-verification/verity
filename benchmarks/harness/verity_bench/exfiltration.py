@@ -273,7 +273,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
     share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
     scan = cert["legend"]["scan"].get("mark")
-    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
+    # a measurement's input as the run's result records it, held with the document's words until a format version
+    term = (f"the network certifier's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
             f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
     out = []
     for p in sorted(doc["periods"], key=lambda p: (p["compute"], p["period"]) == ("world", "year")):

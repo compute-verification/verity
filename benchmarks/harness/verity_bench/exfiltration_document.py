@@ -87,7 +87,8 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     def one(part: str, name: str, value: Any, unit: str, mark: str, source: str) -> dict:
         return {"part": part, "input": name, "value": value, "unit": unit, "mark": mark, "source": source}
 
-    audit, both, net = "compute audit", "both", "network attester"
+    # `exfiltration/v3`'s part names, held until a format version; the print says the Glossary's (`render`'s `_said`)
+    audit, both, net = "compute audit", "both", "network certifier"
     priced = head["priced"] or {"ways": {}}
     default = (priced.get("sources") or {}).get("default")
 

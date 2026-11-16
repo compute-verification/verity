@@ -53,12 +53,13 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
 
     how = "given (--scan-delta)"
     if scan_delta is None:
+        # the document's `scan_delta` source, as `exfiltration/v3` writes it until a format version
         most = max(read(lb.inputs(response_ids=response_ids), only=SCOPES)["rows"], key=lambda r: r["phases"])
         scan_delta = PERIOD_ERROR / Fraction(most["phases"])
         how = (f"this command's, in place of the calculator's default: {_p(float(PERIOD_ERROR))}, the error a monitoring "
                f"period's figure is to carry at most, over the {_n(most['phases'])} execution phases of the "
                f"{most['scope']}'s {most['period']}, the row printed that sums the most, so that every row printed "
-               "carries that error or less. The network attester's result of record takes its δ so "
+               "carries that error or less. The network certifier's result of record takes its δ so "
                "(benchmarks/certifier_term/README.md), and no term depends on it")
     term = read(lb.inputs(response_ids=response_ids, scan_delta=scan_delta), only=SCOPES)
     default = read(lb.inputs(scan_delta=scan_delta), only=("world",), periods=("year",))

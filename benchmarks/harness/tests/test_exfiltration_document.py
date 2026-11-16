@@ -28,7 +28,7 @@ from verity_bench import exfiltration as E
 def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     by = {i["input"]: i for i in doc["inputs"]}
-    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network attester", "both")
+    assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network certifier", "both")
                for i in doc["inputs"])
     assert {k: (by[k]["part"], by[k]["mark"], by[k]["value"]) for k in (
         "planner_rows", "compute_share", "delta", "output_bits", "network_check_share", "advice")} == {
@@ -43,7 +43,7 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
     assert (by["request_count"]["part"], by["request_count"]["value"], by["request_count"]["mark"]) == ("both", "plan", "assumed")
     assert (by["weights"]["part"], by["weights"]["mark"]) == ("both", "measured")
     assert (by["response_ids"]["part"], by["response_ids"]["value"], by["response_ids"]["mark"]) == (
-        "network attester", 1024, "assumed")
+        "network certifier", 1024, "assumed")
     assert (by["mfu_serve"]["part"], by["mfu_serve"]["mark"], by["mfu_serve"]["value"]) == ("both", "assumed", 0.4)
     # a request is the plan's, not the census's
     assert (by["request_tokens"]["value"], by["request_tokens"]["mark"]) == (3320.5, "modeled")
