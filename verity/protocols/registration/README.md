@@ -3,9 +3,9 @@
 The accounting protocol that runs once, before any challenge: a deployment's registration log and its check.
 Its Lean check is `verifier/lean/` (the Lake package `core_registration`: `RegistrationLog.lean`, and the
 `core-registration` executable, `RegistrationLog/Main.lean`), on the interface every core protocol implements
-(`../../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`. The package
+(`../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`. The package
 also holds registration's check on the Site (`RegistrationLog/SiteCheck.lean`: each site entry's checks and refusal,
-the inventory a log is held to, the log's head and its check, over the interface's Site, `../../interface/CoreProtocol/Site.lean`),
+the inventory a log is held to, the log's head and its check, over the interface's Site, `../interface/CoreProtocol/Site.lean`),
 with their guards (`RegistrationLog/SiteV2Guards.lean`), and serves the Site's port (`site-difftest`, `RegistrationLog/SiteDifftest.lean`), which its suite
 (`verifier/lean/tests/test_site_difftest.py`) holds to `verity.device`.
 
@@ -18,7 +18,7 @@ format:
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `../../interface/CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON and digest, and its check `verifier/lean/RegistrationLog/SiteCheck.lean`'s |
+| `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `../interface/CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON and digest, and its check `verifier/lean/RegistrationLog/SiteCheck.lean`'s |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 

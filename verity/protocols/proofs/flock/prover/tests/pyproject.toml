@@ -254,8 +254,8 @@ paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/
 tests = ["test_partition_units.py", "test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
-    "verity/protocols/resource_accounting/certifier",
-    "verity/protocols/resource_accounting/pous",
+    "verity/protocols/resource_accounting/network",
+    "verity/protocols/resource_accounting/memory/pous",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
 ]
 

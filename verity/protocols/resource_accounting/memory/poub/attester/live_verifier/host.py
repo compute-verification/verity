@@ -119,9 +119,9 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Sequence
 
 HERE = Path(__file__).resolve().parent
-TREE = Path(__file__).resolve().parents[6]
-VERIFIER = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
-REPLAY = TREE / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "lean"
+TREE = Path(__file__).resolve().parents[7]
+VERIFIER = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
+REPLAY = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean"
 DIFFTEST = TREE / "tools" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
@@ -393,7 +393,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
-    argv = [python, "-I", str(tree / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "remote_session" / "verifier_process.py"),
+    argv = [python, "-I", str(tree / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],

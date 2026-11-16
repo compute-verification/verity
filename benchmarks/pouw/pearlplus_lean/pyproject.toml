@@ -15,10 +15,8 @@ parallel = true
 # pearl_c_sm90 (the H100 kernel bench_arm names, the give-up's device path) with the run result and settings it reads, and
 # verity_torch's Pearl-C device run (its package files and pearl_c), which test_pearl_c_vllm imports.
 inputs = ["verity", "adapters/torch/verity_torch/__init__.py", "adapters/torch/verity_torch/pouw/__init__.py",
-          "adapters/torch/verity_torch/pouw/pearl_c",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/lakefile.toml",
-          "tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear",
-          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c", "benchmarks/pouw/pearl_c_sm120",
+          "adapters/torch/verity_torch/pouw/pearl_c", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/lakefile.toml",
+          "tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
           "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
           "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py",
