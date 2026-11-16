@@ -24,7 +24,7 @@ struct Args { uint64_t p[16]; int32_t i[16]; };
 
 #define DEV __device__ __forceinline__
 
-#include "../../../../accounting/pouw/prover/kernels/pearl_c/sha512.cuh"
+#include "../../../../resource_accounting/compute/pouw/prover/kernels/pearl_c/sha512.cuh"
 
 constexpr unsigned FULL = 0xFFFFFFFFu;
 enum { NVFP4 = 0, MXFP4 = 1 };

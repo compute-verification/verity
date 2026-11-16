@@ -186,11 +186,11 @@ An off-track goal's blockers say in one or two plain sentences what stops it tod
 Goals as Daniel approved them. An outcome whose problem today needs saying:
 
 ~~~markdown
-The network certifier certifies every execution phase of a GLM-5.3 serving run.
+The network attester certifies every execution phase of a GLM-5.3 serving run.
 
 On the last served try it did not sign the first execution phase, because it stalled while the operating system moved
 its memory pages. It signed every later phase, and the try as a whole was still refused, since one phase
-was unsigned. The certifier's node is now set not to move those pages.
+was unsigned. The attester's node is now set not to move those pages.
 
 ### Risks
 

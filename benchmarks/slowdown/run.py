@@ -4,7 +4,7 @@
                                         [--out DIR] [--figures DIR]
 
 Each scenario gets one slowdown number, its lower bound (every bound a lock states met at once, `bounds.lock_only`):
-the hardware multiple over the reference training algorithm at its MFU, with its status, where its premises stand and
+the GPU-hours over the reference training algorithm's at its MFU, with its status, where its premises stand and
 the padded size ratio `|A| / T_0` it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
 
@@ -51,12 +51,12 @@ def when(s: Scenario, overhead: float) -> str:
 
 
 def picked(r: Result) -> FamilyResult | None:
-    """The family the adversary picks: the one with the least lower bound."""
+    """The family the malicious developer picks: the one with the least lower bound."""
     return min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)
 
 
 def padded(r: Result) -> float:
-    """The padded size ratio `|A| / T_0` of the lower bound, at the family the adversary picks."""
+    """The padded size ratio `|A| / T_0` of the lower bound, at the family the malicious developer picks."""
     best = picked(r)
     return best.combined.padded if best else math.nan
 
@@ -76,7 +76,7 @@ def setter(f: FamilyResult) -> Estimate | None:
 
 
 def monitored(r: Result) -> float:
-    """The share of the adversary's counted weight on monitored gates, for the family the adversary picks."""
+    """The share of the malicious developer's counted weight on registered gates, for the family the malicious developer picks."""
     best = picked(r)
     return best.combined.parts.monitored if best and best.combined.parts else math.nan
 
@@ -235,15 +235,15 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                     f"(`structure.{st.name}.omega_max`) and `μ` = {fmt(st.mu)} (`structure.{st.name}.mu`).")
     sets = setter(best) if best else None
     claim = (f"**Slowdown ≥ {fmt(r.lo)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
-             f"the hardware multiple over the reference training algorithm at MFU₀ = {fmt(s.mfu)}: every bound met at "
+             f"the GPU-hours over the reference training algorithm's at MFU₀ = {fmt(s.mfu)}: every bound met at "
              f"once"
              + (f", set by {sets.argument}" if sets else "") if best else "**Slowdown:** no family")
     attack = best_attack(r)
     attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at slowdown "
-                 f"{fmt(attack[1].slowdown)}, {when(s, attack[1].slowdown)} to the target: a construction, beside the bound."
+                 f"{fmt(attack[1].slowdown)}, {when(s, attack[1].slowdown)} to the task: a construction, beside the bound."
                  if attack else "**Best known attack:** none applies.")
     out = [f"## {s.name}", "", setting, "",
-           (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (wall-clock, the slowdown times "
+           (f"{claim}. **Time to the task ≥ {when(s, r.lo)}** (wall-clock, the slowdown times "
             f"`T_0 / (MFU₀ Φ_total)`, the reference's own time). **Inference overhead:** {inference(s)}."),
            "",
            (f"The slowdown is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
@@ -262,7 +262,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
            "What sets the slowdown (each part's share of its rate, `s + x/MFU₀`, and the most it can be while it "
            "remains): "
            + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
-           f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
+           f"The malicious developer holds {monitored(r):.1%} of its counted weight on registered gates.", ""]
     out += certified_md(certified(s)) + operating_md(points) + incorrect
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", ""]
@@ -332,25 +332,25 @@ def main() -> None:
 
     md: list[str] = []
     head = ("| scenario | slowdown ≥ | status, premises | set by | padded size ratio | inference overhead | "
-            "time to the target ≥ | from conditional or stronger bounds and cuts | on monitored gates | rests on | "
+            "time to the task ≥ | from conditional or stronger bounds and cuts | on registered gates | rests on | "
             "at the corner |")
     summary = ["# The slowdown", "",
-               ("The slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀: the "
-                "adversary's GPU-hours to the target over the reference's, at least 1 (Lean's `hardwareMultiple`), so "
+               ("The slowdown is the malicious developer's GPU-hours to the task over the reference training algorithm's "
+                "at its MFU, MFU₀, at least 1 (Lean's `hardwareMultiple`), so "
                 "no protocol gives 1. The claim is its lower bound, every bound met at once; a bound whose premises "
                 "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted."
                 + (" Only a bound a lock states bounds a block: a class one of whose own citations is a `draft:` "
                    "statement bounds none (`bounds.lock_only`), and is still listed alone, labeled draft."
                    if reg["bounds.lock_only"] else "") + " The "
                 "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each server block "
-                "padded to capacity, is the intermediate it comes from. The time to the target, wall-clock, is at "
+                "padded to capacity, is the intermediate it comes from. The time to the task, wall-clock, is at "
                 "least the slowdown times `T_0 / (MFU₀ Φ_total)`."), "", head,
                "|---|---|---|---|---|---|---|---|---|---|---|"]
     attacks = ["## Attacks", "",
                ("The best known attack on each scenario: a construction, and the time it takes, beside the lower bound "
                 "rather than an end of it. A bound whose padded size ratio is above its is a contradiction: one of the "
                 "bound's premises is false there."), "",
-               "| scenario | attack | family | status | slowdown | time to the target | contradictions |",
+               "| scenario | attack | family | status | slowdown | time to the task | contradictions |",
                "|---|---|---|---|---|---|---|"]
     below = ["## Where the slowdown falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}

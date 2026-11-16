@@ -13,7 +13,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/psched.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PS_ARMS=${PS_ARMS:-"32:2048:92:fixed:8:4:256:0.8"}
 export PS_REPS=${PS_REPS:-15} PS_PGATE_S=${PS_PGATE_S:-"128 256"}

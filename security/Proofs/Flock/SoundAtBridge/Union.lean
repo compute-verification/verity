@@ -39,7 +39,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The bridge's probability steps, over any family of sessions
 
-The proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`) is a probability over a window's paths (uniform on
+The proof layer's soundness (`ResourceAccounting.TS.ProofLayer.SoundAt`) is a probability over a window's paths (uniform on
 `Paths Ω S`, `Pouw.RelativeSecurity.prob`), per round `w` and proof `i`; Flock's bounds are probabilities over one
 session's audit game played by its prover (`FlockSoundness.Game.prob`). This file joins the two for any family of
 sessions, with no Flock definition:
@@ -56,7 +56,7 @@ namespace Flock.SoundAtBridge
 
 universe u
 
-open FlockSoundness Accounting.TS
+open FlockSoundness ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 

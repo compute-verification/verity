@@ -1,4 +1,4 @@
-"""Pearl-C's sm_120 tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
+"""Pearl-C's sm_120 tree off the card (verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
 every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
 lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
 and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
@@ -23,10 +23,10 @@ import pytest
 from conftest import load
 from verity_config.settings import of
 
-from verity.protocols.accounting.pouw.verifier.audit import weights_root
-from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 
 
 #: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
@@ -156,9 +156,9 @@ def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unc
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)

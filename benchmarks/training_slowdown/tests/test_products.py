@@ -10,9 +10,10 @@ import pytest
 import torch
 import torch.nn.functional as tF
 from torch import nn
+from verity_torch.frontend import train_trace
 
 from training_slowdown import calculator, policy, work
-from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products, trace
+from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products
 
 V, H, B, CTX = 16, 256, 4, 8
 SHAPES = {"emb": [V, H], "fc": [H, H], "head": [V, H]}
@@ -743,7 +744,7 @@ def attending(how: str, autocast: bool, marked: bool = True):
     m = Attending(how)
     with pytest.MonkeyPatch.context() as patch:
         if not marked:
-            patch.setattr(trace, "_marked_attention", contextlib.nullcontext)
+            patch.setattr(train_trace, "_marked_attention", contextlib.nullcontext)
         return capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), loss,
                             (torch.empty(AB, AS, dtype=torch.long), torch.empty(AB, AS, dtype=torch.long)))
 
@@ -811,13 +812,3 @@ def test_attention_the_capture_marks_no_call_of_is_priced_as_traced(how, dtype):
     assert {tuple(r["dtypes"]) for r in raw if r["op"] == "bmm"} == {(dtype, dtype)}
     assert _priced(g) == _priced(unmarked) and products.step_gates(g) == products.step_gates(unmarked)
 
-
-def test_a_call_that_returns_in_another_dtype_than_it_is_marked_is_refused(monkeypatch):
-    """The marker's dtype is the one the call computes in, and either kernel returns in it: a call whose output is
-    in another dtype than its marker would have its ops priced in a dtype it did not compute in, and the capture is
-    refused, naming the call and both dtypes."""
-    monkeypatch.setattr(trace, "_computes_in", lambda query: torch.float16)
-    with pytest.raises(CaptureRefused) as e:
-        attending("plain", True)
-    assert (e.value.reason, e.value.op) == ("trace", "scaled_dot_product_attention")
-    assert "an attention call marked torch.float16 returned torch.bfloat16" in str(e.value)

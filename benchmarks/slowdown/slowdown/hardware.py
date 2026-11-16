@@ -1,10 +1,10 @@
-"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `Accounting.Hardware` and `Accounting.Covered`),
+"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `ResourceAccounting.Hardware` and `ResourceAccounting.Covered`),
 which bounds the feasible set 𝓕: the inventory's locations, its unregistered leaves and the monitoring period, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
 attacks' FLOP-model statements all pass through it, so under `structure.reference` (whose `s_×` moves with it) the
-overhead and the time to the target don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
+slowdown and the time to the task don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
 value comes from (`FLOP_MODEL`, or `boolean:<design>` when measured on one Boolean design); a structure's `s_×` must
 come from the same one (`classes.Structure.check`).
 
@@ -12,13 +12,13 @@ A **location** is the largest set of devices joined by links no certifier sees (
 rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` is `Φ_X`, its capacity in gates per
 second (`|A[X,J]| ≤ Φ_X |J|`), `memory` its devices' bits, and its *hosts* (the servers or compute trays, each with its
 own NICs, certifier and side channels) carry host memory, disks, host CPUs and the boundary links whose line rate is
-`links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
+`links` (`β_X`, `ResourceAccounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
 RAM, disks): the capacity the wipe's per-server bound is stated against.
 
-A **fleet** is the inventory: the monitored locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
-one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
+A **fleet** is the inventory: the registered locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
+one connected pool outside every registered location (ruled). The physical model bounds every gate at capacity,
 so the bound counts the unregistered leaves at `Φ`; `mfu_train` and `mfu_unreg` are what a construction (an attack) gets of the
-monitored and the unregistered gates. A **monitoring period** is the stretch of time a result is over, one of core's
+registered and the unregistered gates. A **monitoring period** is the stretch of time a result is over, one of core's
 (`params.PERIODS`).
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
@@ -68,7 +68,7 @@ class Location:
     disk: float = 0.0
     #: the host CPUs in gates per second (their densest integer matrix rate, through `Units`)
     host_phi: float = 0.0
-    #: `β_X`: bit/s across the location's boundary, its NICs' line rate (`Accounting.linkCapacity`)
+    #: `β_X`: bit/s across the location's boundary, its NICs' line rate (`ResourceAccounting.linkCapacity`)
     links: float = math.inf
 
     @property
@@ -81,15 +81,15 @@ class Location:
 class Fleet:
     name: str
     location: str
-    #: monitored locations
+    #: registered locations
     count: float
     #: `ε_unreg`: the unregistered leaves' share of the inventory's capacity, `Φ(L_unreg) / Φ_total`
     eps_unreg: float
-    #: the share of a monitored location's gates a construction trains with, and the one its served work runs at
+    #: the share of a registered location's gates a construction trains with, and the one its served work runs at
     mfu_train: float
     mfu_serve: float
     #: the share of the unregistered leaves' gates a construction trains with (one connected pool: its interconnect may beat
-    #: the monitored fleet's); None: `mfu_train`
+    #: the registered fleet's); None: `mfu_train`
     mfu_unreg: float | None = None
 
     @property

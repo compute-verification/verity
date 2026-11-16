@@ -79,6 +79,7 @@ ADAPTER: dict = {
     "target_profile_module": "verity_vllm.program.frontend.target_profile",
     "reuse_api_modules": (
         "verity_vllm.program.frontend.target_profile",
+        "verity_vllm.program.frontend.artifact",
         "verity_vllm.check.artifact",
         "verity_vllm.check.artifact_identity",
         "verity_vllm.check.applicability",

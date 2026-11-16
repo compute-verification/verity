@@ -39,7 +39,7 @@ Proved by `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, `Pouw.Security
 
 namespace Pouw.Guarantees
 
-open Accounting.Compose Accounting.Compose.PeriodBinding Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.Compose ResourceAccounting.Compose.PeriodBinding ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-- **A period's binding per prover.** For every circuit `Cd` of at least one round, outcomes `pr` of its period's
 proofs and openings `hl` of their positions under the hash `H`, if the fork finder at the period's positions

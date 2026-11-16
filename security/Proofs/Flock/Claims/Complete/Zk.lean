@@ -60,6 +60,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Model
 public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
 public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
@@ -127,9 +128,9 @@ proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTable
 model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
 masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
-checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`). Level 0's last premise,
-the verifier returning the prover's record at its transcript at either statement version (`ZkTables.Level0.Verifier`),
-is not proved: with the other three (`Level0Premises`) and `MaskRank.maskRankBound`,
-`ZkTables.complete_jsonT_of_level0` leaves it and the JSON specification. -/
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` level 0's
+last premise, the verifier returning the prover's record at its transcript at either statement version
+(`ZkTables.Level0.Verifier`: `verifier`), from those and the model's record (`recZ_eq`). With the other three
+(`Level0Premises`) and `MaskRank.maskRankBound`, `ZkTables.complete_jsonT_of_level0` leaves the JSON specification. -/
 
 @[expose] public section

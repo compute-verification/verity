@@ -30,7 +30,7 @@ The chip's state is charged `M + 1` bits, its length included, so at `e = 0` the
 namespace Bandwidth.Guarantees
 
 open Pous (Bits pr)
-open Accounting
+open ResourceAccounting
 open Bandwidth.Causal
 open scoped ENNReal
 

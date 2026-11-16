@@ -15,7 +15,7 @@ on-chip state, device memory or side sources, which the audit counts as before. 
 at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
 
 The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
-named assumption `Accounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`): completing `x`
+named assumption `ResourceAccounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`): completing `x`
 of a word's `b` bits costs at least `x/b` of a word's price, `rounds·c_root` for a codec of `rounds` rounds. The game is
 generous to the device: a completion returns its bits whether or not the device holds the rest of the word, and its cost does not depend on what it holds, so a device that
 completes from a hint is a device of this game whose hint it reads as before. A completion takes one word, so the game
@@ -28,13 +28,13 @@ side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sam
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
 plays, without `RealizesRate`'s compute field: that the game's compute and the compute account's work share no work is
-the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
+the named assumption `ResourceAccounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
 as a hypothesis.
 -/
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -168,14 +168,14 @@ def Accepts {s : ℕ} (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bi
 
 end PartialDevice
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- Run `r`'s bandwidth audit is the rate audit's game with partial completion, played at each value of the other
 audits' coins by a partial device within the device model's limits over the bandwidth window, whose ingress the
 bandwidth account's reads from device memory cover. Unlike `RealizesRate`, it says nothing of the game's compute: that
-it shares no work with the compute account is `Accounting.Assumptions.RateComputeAdditive`. -/
+it shares no work with the compute account is `ResourceAccounting.Assumptions.RateComputeAdditive`. -/
 structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type} [Fintype α]
     (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
   /-- the device of the game at the other audits' coins -/
@@ -186,4 +186,4 @@ structure RealizesRatePartial {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : D
   /-- the bandwidth account's reads from device memory cover the game's ingress -/
   ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1.1 y.2.1.2 ≤ r.read (x, y, s')
 
-end Accounting
+end ResourceAccounting

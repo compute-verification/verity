@@ -192,6 +192,28 @@ def test_a_row_says_the_cpus_its_processes_could_run_on(monkeypatch, tmp_path):
     assert (rc, row["cores"]) == (0, {"count": len(mine), "list": SR.cpu_list(mine), "numa_nodes": [7]})
 
 
+def test_a_row_says_its_cgroups_throttling_and_null_where_no_cpu_stat_counts_it(monkeypatch, tmp_path):
+    """A cgroup without a cpu.stat, or with one that counts no throttling (a host's root cgroup), gives null counts, so
+    `no_throttling` can't tell rather than read no throttling; the row names the cgroup read and its cpu.max."""
+    (cg := tmp_path / "cg").mkdir()
+    (own := tmp_path / "own").write_text("0::/\n")
+    monkeypatch.setattr(SR, "CGROUP", cg)
+    monkeypatch.setattr(SR, "OWN_CGROUP", own)
+    assert SR.throttled() is None
+    (cg / "cpu.stat").write_text("usage_usec 10\nuser_usec 6\nsystem_usec 4\n")
+    assert SR.throttled() is None
+    assert SR.throttling(None, None) == {"nr_throttled": None, "throttled_usec": None, "cgroup": str(cg),
+                                         "own_cgroup": "0::/", "cpu_max": None}
+    (cg / "cpu.stat").write_text("usage_usec 10\nnr_periods 9\nnr_throttled 2\nthrottled_usec 500\n")
+    (cg / "cpu.max").write_text("2400000 100000\n")
+    assert SR.throttled() == {"nr_throttled": 2, "throttled_usec": 500}
+    assert SR.throttling({"nr_throttled": 2, "throttled_usec": 500}, {"nr_throttled": 5, "throttled_usec": 900}) == {
+        "nr_throttled": 3, "throttled_usec": 400, "cgroup": str(cg), "own_cgroup": "0::/", "cpu_max": "2400000 100000"}
+    assert SR.throttling(None, {"nr_throttled": 5, "throttled_usec": 900})["nr_throttled"] is None
+    rc, row = run(monkeypatch, tmp_path)
+    assert (rc, row["throttled"]["nr_throttled"], row["throttled"]["cpu_max"]) == (0, 0, "2400000 100000")
+
+
 def test_cores_are_a_count_a_list_as_the_kernel_writes_one_and_the_numa_nodes_that_hold_them(tmp_path):
     d = nodes(tmp_path, node0="0-23", node1="24-47", node2="", node3="72-95", node10="96,98-99")
     assert SR.cores(range(72, 82), d) == {"count": 10, "list": "72-81", "numa_nodes": [3]}

@@ -219,6 +219,40 @@ def test_the_relay_runs_every_relay_side_monitor_but_the_one_that_reads_the_node
     assert len(only) == len(set(only))
 
 
+def test_the_loop_that_runs_the_asks_monitor_reads_the_notion_key_when_its_file_is_there_and_starts_without_it():
+    """The `asks` monitor reads an ask's Notion page with NOTION_API_KEY, which only `notion.env` holds on the pod. The relay's
+    other monitors run without it, so the file is optional: absent, the relay starts and `asks` alone alerts."""
+    _, loops = W.load(CONTROL / "watchers.toml")
+    running = [lp for lp in loops if lp.argv[3:5] == ["research.monitors", "relay"] and "asks" in lp.argv[lp.argv.index("--only") + 1:]]
+    assert [lp.name for lp in running] == ["monitors-relay"]
+    (lp,) = running
+    assert lp.optional_env_files == ["/data/watchers/notion.env"], "the asks monitor's Notion key file, read when there"
+    assert "/data/watchers/notion.env" not in [*lp.env_files, *lp.needs]
+
+
+def test_an_optional_env_file_is_read_when_there_and_never_holds_the_loop(tmp_path):
+    opt, req = tmp_path / "opt.env", tmp_path / "req.env"
+    req.write_text("A=1\n")
+    lp = W.Loop("a", ["a"], {"E": "e"}, env_files=[str(req)], optional_env_files=[str(opt)])
+    assert lp.missing() == [] and W.loop_env(lp) == {"E": "e", "A": "1"}
+    opt.write_text("B=2\nPYTHONPATH=/elsewhere\n")
+    assert lp.missing() == [] and W.loop_env(lp) == {"E": "e", "A": "1", "B": "2"}
+    sup, _, started = supervisor(tmp_path, [W.Loop("b", ["b"], optional_env_files=[str(tmp_path / "none.env")])])
+    sup.step()
+    assert started == ["b"] and sup.loops["b"].state == "running"
+
+
+def test_load_expands_optional_env_files_and_check_names_them_and_shows_their_change(tmp_path, capfd):
+    live = config(tmp_path, "live.toml", ("a", 'argv = ["true"]'))
+    new = config(tmp_path, "new.toml", ("a", 'argv = ["true"]\noptional_env_files = ["{dir}/x.env"]'))
+    _, (lp,) = W.load(new)
+    assert lp.optional_env_files == [f"{tmp_path}/x.env"] and lp.missing() == []
+    assert W.main(["check", "--config", str(new), "--replaces", str(live)]) == 0
+    out = capfd.readouterr().out
+    assert f"    env PATH, {tmp_path}/x.env:*\n" in out and "waits for" not in out
+    assert f"    a: optional_env_files differs\n        live  (none)\n        new   {tmp_path}/x.env\n" in out
+
+
 def test_an_extra_job_that_exits_0_is_done_and_one_that_fails_starts_again(tmp_path):
     extra = tmp_path / "extra.d"
     extra.mkdir()

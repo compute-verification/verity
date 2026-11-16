@@ -9,7 +9,7 @@ public import Properties.Pous.MemoryChallenger
 /-!
 # A party's signed period roots and liveness records: what a period's proof establishes, and what the auditor sees
 
-An auditor party (the memory challenger; a network certifier) holds a lower HSS key its device's identity certified for
+An auditor party (the memory challenger; a network attester) holds a lower HSS key its device's identity certified for
 it, commits each certification period's records as the leaves of one frame-v3-sha512 tree and signs the root once, and
 signs one liveness record per sampling block (`Attest.Period`, `verity.commitments.attest`). The records, the root
 and its signature go to the prover only, as witness; a period's proof runs `Attest.check` on them under the lower key.
@@ -48,7 +48,7 @@ records read, their paths)`: their zero knowledge is Flock's (`Claims.ZKmalR` at
 namespace MemoryChallenger.Attest.Properties
 
 open Flock
-open Accounting.Assumptions
+open ResourceAccounting.Assumptions
 
 /-! ## What the devices sign -/
 

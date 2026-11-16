@@ -105,6 +105,10 @@ PROGRAM_FIELDS = ("program_sha512", "program_handed_sha512", "program_note")
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
 #: where the kernel lists each NUMA node's CPUs
 NODES = Path("/sys/devices/system/node")
+#: the cgroup whose cpu.max is the machine's CPU quota, gpu-lease's (its $GPU_LEASE_CPU_MAX's directory), and the line of
+#: /proc/self/cgroup that says which cgroup that is
+CGROUP, OWN_CGROUP = Path("/sys/fs/cgroup"), Path("/proc/self/cgroup")
+THROTTLE_KEYS = ("nr_throttled", "throttled_usec")
 # the CUDA prover prints the runtime's error string ("FFI CUDA error out of memory at ...") before it fails the session
 DEVICE_OOM = re.compile(r"out of memory", re.IGNORECASE)
 
@@ -303,10 +307,24 @@ def version_reasons(asked: str, ran: dict[str, int]) -> list[str]:
     return [why]
 
 
-def throttled() -> dict:
-    """The cgroup's CPU throttling so far (cgroup v2's cpu.stat; none without it)."""
-    p = Path("/sys/fs/cgroup/cpu.stat")
-    return {k: int(v) for k, v in (x.split() for x in p.read_text().splitlines())} if p.exists() else {}
+def _text(p: Path) -> str | None:
+    return p.read_text().strip() if p.is_file() else None
+
+
+def throttled() -> dict | None:
+    """`CGROUP`'s CPU throttling so far, its cpu.stat's `THROTTLE_KEYS`; None where it has no cpu.stat or the file counts
+    no throttling (a host's root cgroup), which is not having been throttled no times."""
+    if not (CGROUP / "cpu.stat").is_file():
+        return None
+    stat = dict(x.partition(" ")[::2] for x in (CGROUP / "cpu.stat").read_text().splitlines())
+    return {k: int(stat[k]) for k in THROTTLE_KEYS} if all(stat.get(k, "").isdigit() for k in THROTTLE_KEYS) else None
+
+
+def throttling(before: dict | None, after: dict | None) -> dict:
+    """The row's `throttled`: each of `THROTTLE_KEYS` from `before` to `after` (null where either is None, so the check
+    can't tell), the cgroup read and its cpu.max (null without one)."""
+    return {**{k: None if before is None or after is None else after[k] - before[k] for k in THROTTLE_KEYS},
+            "cgroup": str(CGROUP), "own_cgroup": _text(OWN_CGROUP), "cpu_max": _text(CGROUP / "cpu.max")}
 
 
 def cpu_list(cpus) -> str:
@@ -484,7 +502,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
     rec |= {"statements_per_s": round((i1 - i0) / span, 4) if span > 0 else None, "window_s": round(span, 2),
             "window_sessions": i1 - i0, "busy": gpu.busy(w0["filed"], w1["filed"]), "device_peak_mib": gpu.peak_mib(),
             "load1": [round(w0["load1"], 1), round(w1["load1"], 1)],
-            "throttled": {k: throttled().get(k, 0) - cpu0.get(k, 0) for k in ("nr_throttled", "throttled_usec")},
+            "throttled": throttling(cpu0, throttled()),
             "median": {k: med(k) for k in ("e2e_s", "prove_total_s", "witness_s", "wait_s", "verdict_wait_s", "tp_s")},
             "prebuilt_used": sum(1 for r in win if r["s"].live.get("witness_prebuilt_s") is not None),
             "per_prover": dict(sorted(Counter(r["s"].prover for r in win).items()))}
