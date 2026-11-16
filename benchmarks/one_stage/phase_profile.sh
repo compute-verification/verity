@@ -80,10 +80,10 @@ if has build; then
 fi
 if has test; then
   $PY -c 'import pytest' 2> /dev/null || $HOME/.local/bin/uv pip install -q --python $PY pytest
-  T=${TESTS:-verity/protocols/proofs/flock/prover/tests/test_hm96_leaves.py verity/protocols/proofs/flock/prover/tests/test_arena_layout.py verity/protocols/proofs/flock/prover/tests/test_ligerito_folds.py}
+  T=${TESTS:-tests/verity/protocols/proofs/flock/prover/test_hm96_leaves.py tests/verity/protocols/proofs/flock/prover/test_arena_layout.py tests/verity/protocols/proofs/flock/prover/test_ligerito_folds.py}
   G=$W/ghash-b684b12
   [ -d $G/cuda-ghash ] || for F in $W/fw/*/flock; do mkdir -p $G && git -C $F archive b684b12 cuda-ghash | tar -x -C $G && break; done
-  (cd verity/protocols/proofs/flock/prover/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
+  (cd tests/verity/protocols/proofs/flock/prover && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
     $PY -m pytest -q -rs -p no:cacheprovider $(for t in $T; do echo $REPO/$t; done)) > $O/test-$AS.txt 2>&1
   rc=$?; tail -3 $O/test-$AS.txt | sed "s/^/test-$AS /" | tee -a $O/job.log; log "test-$AS rc=$rc"
   [ $rc = 0 ] && ! grep -q skipped $O/test-$AS.txt || fail=1

@@ -36,7 +36,7 @@ the blocks' sources and the stream's witness) at their widths.
   charge's context, counts decisions only, as `code_v1`'s does, and the admission doesn't reset it as it resets the
   scan's ``pc``. Each of 8eb1's 339 execution phases opens with one. Over them the chain is `code_v1`'s charge of the decisions
   alone (its other counts 0) on every execution phase, 5,500 bits; charged as a 1, the forced admissions would change 330
-  execution phases' charges (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+  execution phases' charges (`tests/benchmarks/network_e2e/encodings/test_served_window.py`).
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
@@ -63,7 +63,7 @@ and its carry are witness until the slice binds them):
   and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
   certified-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
   and the chain refuses it: ``CH-first`` on a session's first execution phase, ``CH-carry`` after it.
-- The slice-level cases are `adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
+- The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
 
 **Every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an unproved one's
 carry-out is whatever the prover likes. And `en` is pinned only by the slice's own scan. So the compile slice (the load
@@ -74,7 +74,7 @@ class is protocol structure. So a session proves every execution phase at its en
 D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
 is the class's and never an execution phase's: an AS chosen per execution phase would show whether its schedule matched sync
 order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
-(`verity/protocols/resource_accounting/network/verifier/tests/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
+(`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
 decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv``
 (`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
 - It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
@@ -90,7 +90,7 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
 - **The sync class** is the same sizes under a sync scheduler (AS = 0): w212's 20 steps and 34 idle ones
   (`compile_slice_w212_class.json`), 857,866 ANDs, and at w212's own statics, which would show its counts, 117,164.
   The circuit is its reference on the honest execution phase and every negative at both
-  (`adapters/vllm/tests/compiler/test_network_attester_compile_slice_w212.py`), and the padding changes no
+  (`tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_w212.py`), and the padding changes no
   verdict and no charge. At AS = 1 the class's circuit is its reference on w1
   (`test_network_attester_compile_slice_w1.py`), and on w212.
 - The honest execution phase charges 27 bits from the session's carry into it, ((58, 50), (58, 0), (392, 48)) at run 0. It
