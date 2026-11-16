@@ -170,4 +170,67 @@ theorem helloLen_le {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTre
   have h2 := helloList_sum_le tags sigma hs mPts hm ct names
   omega
 
+/-- A list of names' weight: eighteen per character, two quotes and a comma each, and two brackets. -/
+theorem jsz_arr_str (a : Array String) :
+    jsz (Json.arr (a.map Json.str)) = (a.toList.map fun s => 18 * s.length + 2 + 1).sum + 2 := by
+  rw [jsz_arr, Array.toList_map, List.map_map]
+  have : List.map ((fun j => jsz j + 1) ∘ Json.str) a.toList = List.map (fun s => 18 * s.length + 2 + 1) a.toList :=
+    List.map_congr_left (fun s _ => by simp [Function.comp, jsz_str])
+  rw [this]
+
+/-- **A coin tree's spec weighs its numbers, its scheme's and its streams' names** and a constant. -/
+theorem jsz_toJson_spec_le (ct : CoinTree.Spec) :
+    jsz ct.toJson ≤ 4 * ct.block + 4 * ct.roundsLog + 18 * CoinTree.SCHEME.length +
+      (ct.streams.toList.map fun s => 18 * s.length + 2 + 1).sum + 700 := by
+  have h := jsz_mkObj_le (l := [("block", Lean.toJson ct.block), ("rounds_log", Lean.toJson ct.roundsLog),
+    ("scheme", Json.str CoinTree.SCHEME), ("streams", Json.arr (ct.streams.map Json.str))])
+    (by first | decide +kernel | simp)
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil] at h
+  have h1 := jsz_toJson_gen ct.block
+  have h2 := jsz_toJson_gen ct.roundsLog
+  have h3 := jsz_arr_str ct.streams
+  rw [jsz_str] at h
+  have e1 : ("block" : String).length = 5 := by decide +kernel
+  have e2 : ("rounds_log" : String).length = 10 := by decide +kernel
+  have e3 : ("scheme" : String).length = 6 := by decide +kernel
+  have e4 : ("streams" : String).length = 7 := by decide +kernel
+  unfold CoinTree.Spec.toJson
+  omega
+
+/-- **A coin tree's `coins` with a nonce weigh its spec's and the nonce's** and a constant. -/
+theorem jsz_coins_le (ct : CoinTree.Spec) (n : String) : jsz (ct.coins n) ≤ jsz ct.toJson + 18 * n.length + 100 := by
+  obtain ⟨m, hm, hwf⟩ : ∃ m : Std.TreeMap.Raw String Json compare, ct.toJson = .obj m ∧ m.WF :=
+    ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩
+  have e : ct.coins n = .obj (m.insert "nonce" (Json.str n)) := by
+    unfold CoinTree.Spec.coins
+    rw [hm]
+    rfl
+  rw [e]
+  have h := jsz_insert_le hwf "nonce" (Json.str n)
+  rw [jsz_str] at h
+  have e5 : ("nonce" : String).length = 5 := by decide +kernel
+  rw [hm]
+  omega
+
+theorem coinSpec_one (t : String) :
+    Zk.coinSpec #[t] = ⟨#["session", t ++ "/rep0", t ++ "/rep1"], 9, 512⟩ := by
+  first | rfl | simp [Zk.coinSpec] | (unfold Zk.coinSpec; simp)
+
+/-- **A one-table session's coin tree weighs little**: its spec, and its `coins` with a nonce of at most `64` characters. -/
+theorem jsz_coinSpec_one_le (t : String) (n : String) (hn : n.length ≤ 64) :
+    jsz (Zk.coinSpec #[t]).toJson ≤ 18 * t.length * 2 + 8000 ∧
+      jsz ((Zk.coinSpec #[t]).coins n) ≤ 18 * t.length * 2 + 8000 + 18 * 64 + 100 := by
+  have h := jsz_toJson_spec_le (Zk.coinSpec #[t])
+  rw [coinSpec_one] at h ⊢
+  simp only [List.toList_toArray, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, String.length_append] at h
+  have e1 : ("session" : String).length = 7 := by decide +kernel
+  have e2 : ("/rep0" : String).length = 5 := by decide +kernel
+  have e3 : ("/rep1" : String).length = 5 := by decide +kernel
+  have e4 : CoinTree.SCHEME.length = 24 := by decide +kernel
+  have hc := jsz_coins_le (⟨#["session", t ++ "/rep0", t ++ "/rep1"], 9, 512⟩ : CoinTree.Spec) n
+  have hj : jsz (CoinTree.Spec.toJson (⟨#["session", t ++ "/rep0", t ++ "/rep1"], 9, 512⟩ : CoinTree.Spec)) ≤
+      18 * t.length * 2 + 8000 := by
+    omega
+  exact ⟨hj, by omega⟩
+
 end FlockComplete.ZkTables

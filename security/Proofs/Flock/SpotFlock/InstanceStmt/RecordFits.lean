@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Complete.ZkTables.HelloSize
 import Proofs.Flock.Claims.Complete.Json.CanonSize
+import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-!
 # The two-instance statement's honest record fits its length word, from its spec's text
@@ -26,6 +27,8 @@ open Lean (Json)
 
 set_option maxHeartbeats 200000000
 set_option maxRecDepth 200000
+
+open private setupOne_stmt unitSample_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 namespace SpotFlock.InstanceStmt
 
@@ -84,18 +87,54 @@ theorem domain_size (rep : ℕ) (hrep : rep < 2) : (tz.domain rep).utf8ByteSize 
   rw [String.utf8ByteSize_append]
   omega
 
+theorem jsz_sampleJ_le : jsz sampleJ ≤ 1000 := by
+  have h := FlockComplete.jsz_mkObj_le (l := [("k", jn 1), ("law", js "subset"), ("population", jn 2),
+    ("units", ja [jn 0])]) (by first | decide +kernel | simp)
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil] at h
+  have h1 : jsz (jn 1) ≤ 84 := calc
+    jsz (jn 1) = jsz (Lean.toJson (1 : ℕ)) := rfl
+    _ ≤ 4 * 1 + 80 := FlockComplete.jsz_toJson_gen 1
+    _ = 84 := rfl
+  have h2 : jsz (jn 2) ≤ 88 := calc
+    jsz (jn 2) = jsz (Lean.toJson (2 : ℕ)) := rfl
+    _ ≤ 4 * 2 + 80 := FlockComplete.jsz_toJson_gen 2
+    _ = 88 := rfl
+  have h0 : jsz (jn 0) ≤ 80 := calc
+    jsz (jn 0) = jsz (Lean.toJson (0 : ℕ)) := rfl
+    _ ≤ 4 * 0 + 80 := FlockComplete.jsz_toJson_gen 0
+    _ = 80 := rfl
+  have h4 : jsz (ja [jn 0]) ≤ 100 := by
+    unfold ja
+    rw [FlockComplete.jsz_arr]
+    simp only [List.toList_toArray, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+    omega
+  have h5 : jsz (js "subset") = 110 := by
+    unfold js
+    rw [FlockComplete.jsz_str]
+    have : ("subset" : String).length = 6 := by decide +kernel
+    omega
+  have e1 : ("k" : String).length = 1 := by decide +kernel
+  have e2 : ("law" : String).length = 3 := by decide +kernel
+  have e3 : ("population" : String).length = 10 := by decide +kernel
+  have e4 : ("units" : String).length = 5 := by decide +kernel
+  unfold sampleJ
+  omega
+
 /-- **The statement's spec text is small**: its `Hello` (`helloLen_le`), its sample, its coin tree, `Σ`, its table's
 name and its two domains weigh far under `2^55`. -/
 theorem specText_x_lt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     FlockComplete.ZkTables.specText (tabAt r).1 < 2 ^ 55 := by
   have hset := setup_tabAt hn hr
   have hctree : (tabAt r).1.coinTree = some (Zk.coinSpec (t0.tableNames 1)) := by kernel_rfl'
-  have hunit : jsz ((tabAt r).1.unitSample.getD Json.null) ≤ 100000 := by decide +kernel
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hd, hspec, hsts⟩ | ⟨hc, -⟩
-  · rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hidden_tzX] at hd
+  · obtain ⟨⟨c, pop, hl, hdr⟩, -, -, -⟩ := setupOne_stmt hd
+    have hu := unitSample_of hl (hdr sampleJ rfl)
+    have hU : st.spec.unitSample = some sampleJ := by simp [Flock.Stmt.spec, hu, Except.toOption]
+    rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hidden_tzX] at hd
     have hsp := FlockSoundness.Discharge.Hidden.setupHidden_spec hd
     have hrange := (checkInRange_ok _ _ _).1 hsp.inRange
     have hσ : st.sigma.size = 64 := by rw [hsp.sigma]; exact Sha512.hash_size _
+    have hts : t0.tableNames 1 = #[tz.table] := by first | rfl | simp [Tags.tableNames]
     have hl := FlockComplete.ZkTables.helloLen_le (tags := tz) (sigma := st.sigma) (mPts := PT_LOCAL + st.nbl)
       (ct := Zk.coinSpec (t0.tableNames 1)) (names := #[tz.table]) hsp.hello hσ hrange.2.2 (spec := st.spec) rfl
       (by rw [← hspec]; exact hctree)
@@ -107,15 +146,20 @@ theorem specText_x_lt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
       rw [hsp.tagsEq]
     have hG : st.spec.tables.getD 0 "" = tz.table := by rw [hT]; rfl
     have hS : st.spec.sigma.size = 64 := hσ
-    have c1 : jsz (Json.arr ((#[tz.table]).map Json.str)) ≤ 1000 := by decide +kernel
-    have c2 : jsz ((Zk.coinSpec (t0.tableNames 1)).coins "") ≤ 1000000 := by decide +kernel
-    have c3 : jsz (Zk.coinSpec (t0.tableNames 1)).toJson ≤ 1000000 := by decide +kernel
+    rw [hts] at hl hctree
+    obtain ⟨k1, k2⟩ := FlockComplete.ZkTables.jsz_coinSpec_one_le tz.table "" (by decide)
+    have c1 : jsz (Json.arr ((#[tz.table]).map Json.str)) ≤ 18 * tz.table.length + 5 := by
+      rw [FlockComplete.ZkTables.jsz_arr_str]
+      simp only [List.toList_toArray, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+      omega
+    have c4 := jsz_sampleJ_le
     have c5 : tz.table.utf8ByteSize ≤ 1000 := by decide +kernel
+    have c5' : tz.table.length ≤ 1000 := by decide +kernel
     have c6 := domain_size 0 (by decide)
     have c7 := domain_size 1 (by decide)
-    rw [hspec] at hctree hunit ⊢
+    rw [hspec] at hctree ⊢
     unfold FlockComplete.ZkTables.specText FlockComplete.ZkTables.coinTreeText
-    rw [hctree, hG, hD, hD]
+    rw [hctree, hU, hG, hD, hD]
     simp only [Option.getD_some]
     omega
   · exact absurd hc (Nat.lt_irrefl 1)
