@@ -60,9 +60,9 @@ def test_a_measurement_holds_no_command_outside_a_research_run_or_where_job_json
     run = tmp_path / "run"
     run.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
-    for job in (None, "not json", {"execution": {}}, {"execution": {"command": "uv run x"}}):
+    for job in (None, {}, {"execution": {}}, {"execution": {"command": "uv run x"}}, {"execution": {"command": [1]}}):
         if job is not None:
-            (run / "job.json").write_text(job if isinstance(job, str) else json.dumps(job))
+            (run / "job.json").write_text(json.dumps(job))
         assert kit.run_command() is None
 
 

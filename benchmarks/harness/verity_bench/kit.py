@@ -519,14 +519,14 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
 def run_command() -> list[str] | None:
     """The command `research run` ran this run as, from its `job.json` (`execution.command`, which research writes
     before the run's command starts, with secrets and machines' addresses already redacted), or None outside a research
-    run or where the file doesn't give it as a list of strings."""
+    run, where the run's directory holds no `job.json`, or where it gives no list of strings. A `job.json` that isn't
+    JSON raises: research wrote it."""
 
-    if not settings.is_set("RESEARCH_RUN_DIR"):
+    job = Path(settings.RESEARCH_RUN_DIR) / "job.json" if settings.is_set("RESEARCH_RUN_DIR") else None
+    if job is None or not job.is_file():
         return None
-    try:
-        argv = json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))["execution"]["command"]
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
+    execution = json.loads(job.read_text(encoding="utf-8")).get("execution")
+    argv = execution.get("command") if isinstance(execution, dict) else None
     return argv if isinstance(argv, list) and all(isinstance(a, str) for a in argv) else None
 
 
