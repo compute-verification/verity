@@ -89,8 +89,8 @@ def Certified (pt : Run.Point) (ω : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins
 end AuditsOf
 
 /-- `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512`, per run, **at the point `pt` and `N` blocks**:
-a ring-model server for `pt`'s certificate and the ring game at `N`, in the form `PeriodHeld` no longer takes (it reads
-the fixed extractor `extract` of every prover strategy instead). At each value `o` of the other audits' coins and each
+a ring-model server for `pt`'s certificate and the ring game at `N`, in a form `PeriodHeld` does not take (it reads
+the fixed extractor `extract` of every prover strategy). At each value `o` of the other audits' coins and each
 bound `B` with `B + S_chip + ∑ cap_i · round` within the ring game's state bound `SAt N`, there is one `(D, Q, L)`-bounded
 server at `N` with `SAt N` bits of state, fixed before the capacity coins, that passes the ring game's session at `N`
 (`PassesAt N`, at the designated id, on the payload `W`) on every capacity coin where the

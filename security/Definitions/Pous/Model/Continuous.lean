@@ -8,7 +8,7 @@ public import Definitions.Pous.Model.Audit
 # The continuous audit: a memory challenger, and a responder that runs on its clock
 
 Its guarantees are `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`, and, over the arrivals and the
-memory at every time (the last section), `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed. A round-structured
+memory at every time (the last section), `Pous.Guarantees.ContinuousTimeAverage`. A round-structured
 model would have to assume three requirements on the protocol (no pipelining, a hard deadline, every answer past `Δ`
 counted late). Here the memory challenger is explicit and enforces each rule. The responder may
 try to break any of them, and no statement takes a hypothesis about its timing.
@@ -227,7 +227,7 @@ noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
 
 /-! ## Arrivals sampled by the memory challenger, and the memory at every time
 
-Its statement is `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
+Its statement is `Pous.Guarantees.ContinuousTimeAverage`.
 
 The memory challenger samples the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `OracleAlgorithm.depth`
 and of `arr` above. At slot `t` the memory challenger samples `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of

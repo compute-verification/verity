@@ -377,7 +377,7 @@ candidates, and grinding multiplies only the tag-guess term. From seven windows 
 pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
 `n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
 case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`;
-`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployedProduct` keeps it stated), which at those caps was
+`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployedProduct` keeps it stated), which at those caps is
 vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
 
 Proof: `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed`, from

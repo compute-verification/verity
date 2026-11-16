@@ -27,7 +27,7 @@ where the two agree.
 namespace PousCheck.P2
 
 /-- The codec `p2-16448/v4` at any width: `segments` segments of `blocksPerSegment` blocks of `w` bits. Only the
-counter-mode SHA-512 expander (`sha512-ctr-v4`); v2's ChaCha8 is nonconforming and not ported. -/
+counter-mode SHA-512 expander (`sha512-ctr-v4`). -/
 structure Params where
   w : Nat
   c0 : Nat

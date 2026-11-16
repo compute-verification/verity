@@ -12,8 +12,8 @@ public import Definitions.Pous.Model.Invertible
 
 The definitions the concrete-`H` P3 pins read (`Pous.Guarantees.P3ConcreteMeets64`, `P3ConcreteMeets14GB`,
 `P3ConcreteMeets64D12`), copied verbatim from the proofs' source modules (the like-named sections of
-`Security/Proofs/Pous/Chain/Flat.lean` hold the rest of each). Each source namespace `PousX` becomes `Pous.X` (the
-`Pous.Dense` precedent), so these copies never clash with the sources' own files, and a graded submission, with the
+`Security/Proofs/Pous/Chain/Flat.lean` hold the rest of each). Each source namespace `PousX` becomes `Pous.X`, so
+these copies never clash with the sources' own files, and a graded submission, with the
 same renaming, states and proves the pins about these constants:
 - `Pous.Sponge` (`SpongeDense`): the overwrite chain `H` on `Π₂`, the
   two-permutation model `p3ChainModel` (a tweakable `P` of labels, one independent uniform permutation per tweak, and

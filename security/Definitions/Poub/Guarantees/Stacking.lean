@@ -132,7 +132,7 @@ carrier is one it computes rather than reads at its position, a rebuild.
   is in no plan of that pass, which the game's store states and which the audit checks.
 * **The append coin.** The game is the protocol's order: an append's choices are fixed when its root commits the
   digests, and its coin is flipped after, so no choice the writers make reads the encoding it keys, and none is advice.
-  What a writer could once choose by looking at encodings it now chooses before the coin: a payload's padding and
+  A writer chooses before the coin what it might choose by looking at encodings: a payload's padding and
   dead values, the run inputs behind a block, how many blocks an append holds. What the memory map fixes is no choice
   at all: append order and dummy appends (the memory-map unit proves the appends are the map's writes, in order, with
   none extra) and re-keys, each a release and an append of the same payload, at the lifetime cap only. After an
