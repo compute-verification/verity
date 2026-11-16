@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "ruff.toml"
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: what the integration's ruff lint holds to its own list (its `ROOT`)
-LEFT_OUT = ("adapters/vllm/",)
+LEFT_OUT = ("adapters/vllm/", "tests/adapters/vllm/")
 FIELDS = ("file", "rule", "count")
 #: the rules whose findings are errors: a syntax error, an undefined name, a misused statement or comparison
 ERRORS = ("syntax-error", "E9", "F63", "F7", "F82")

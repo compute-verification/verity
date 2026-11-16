@@ -322,7 +322,7 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
             guard = Path(loaded.__file__).parent
             environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
     r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
-                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"), env=environ,
+                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
                        capture_output=True, text=True)
     lines = r.stdout.splitlines()
     left = f"{cases}::test_a_switch_left_changed_is_failed_by_name"

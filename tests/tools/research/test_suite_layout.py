@@ -15,8 +15,8 @@ DIRS = {"tools/research": "research", "adapters/vllm": "verity-vllm"}
     ("./", {}, "repository"),
     ("tools/research", {"name": "research"}, "research"),
     ("tools/verity_graph", {"name": "Verity_Graph"}, "verity-graph"),
-    ("tests/verity", {}, "tests/verity"),                                  # a suite with no distribution: its path
-    ("tests/adapters/vllm/tests", {"name": "verity-vllm-tests"}, "verity-vllm"),   # the tests of a member, in its own directory
+    ("verity/tests", {}, "verity/tests"),                                  # a suite with no distribution: its path
+    ("adapters/vllm/tests", {"name": "verity-vllm-tests"}, "verity-vllm"),   # the tests of a member, in its own directory
     ("tests/adapters/vllm/tests", {"name": "verity-vllm-tests"}, "verity-vllm"),   # and mirrored
     ("tests/adapters/vllm", {"name": "verity-vllm-tests"}, "verity-vllm"),
     ("tests/tools/research", {"name": "research-tests"}, "research"),
@@ -38,9 +38,9 @@ def test_the_members_are_read_from_the_workspace_with_their_names_normalized():
 
 def test_tests_names_the_repository_suite_and_a_mirrored_suite_is_named_by_what_it_holds_the_tests_of():
     assert {"tests", "tests/", "repository", "."} <= set(L.names(".", "repository"))
-    assert "tests" not in L.names("tests/verity", "tests/verity") and "tests/" not in L.names("tests/verity", "tests/verity")
+    assert "tests" not in L.names("verity/tests", "verity/tests") and "tests/" not in L.names("verity/tests", "verity/tests")
     assert set(L.names("tests/adapters/vllm/tests", "verity-vllm")) == {
-        "verity-vllm", "tests/adapters/vllm/tests", "tests/adapters/vllm/tests", "adapters/vllm"}
+        "verity-vllm", "tests/adapters/vllm/tests", "adapters/vllm/tests", "adapters/vllm"}
     assert set(L.names("tools/check", "verity-check")) == {"verity-check", "tools/check"}
 
 
@@ -59,7 +59,7 @@ def test_a_path_covers_its_tests_under_the_roots_tests_where_they_exist():
     ("tests/tools/research/test_queue.py", False, "tools/research/test_queue.py"),
     ("tests/linted/test_a.py", False, "linted/test_a.py"),
     ("tests/tests/test_a.py", True, None),
-    ("tests/verity/test_a.py", False, None),
+    ("verity/tests/test_a.py", False, None),
     ("testsuite/test_a.py", False, None),
 ])
 def test_the_repository_suites_own_under_tests_are_its_files_and_own_directories(path, own, stands):

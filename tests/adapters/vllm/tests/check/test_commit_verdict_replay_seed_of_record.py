@@ -17,6 +17,7 @@ import inspect
 from pathlib import Path
 from typing import Any
 
+import verity_vllm
 from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.sample import challenge_seed
@@ -92,7 +93,7 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     assert "seed_challenge" in inspect.signature(SR.sampled_replay).parameters
     src_txt = inspect.getsource(SR.sampled_replay)
     assert '**({"challenge": str(seed_challenge)} if seed_challenge is not None else {})' in src_txt
-    cd = "".join(Path(__file__.rsplit("/tests/", 1)[0] + f"/verity_vllm/pipeline/{m}.py").read_text() for m in ("commit", "c2_replay"))
+    cd = "".join((Path(verity_vllm.__file__).parent / "pipeline" / f"{m}.py").read_text() for m in ("commit", "c2_replay"))
     assert "_seed_chal = str(args.replay_challenge)" in cd and "seed_challenge=_seed_chal" in cd
     ok, why = _replay_seed_of_record(_sr(7, "--replay-seed (targeted)"), RUN_ROOT)
     assert ok is False and "prover-chosen" in why and "not a C2 of record" in why

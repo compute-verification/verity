@@ -8,7 +8,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def pool() -> str:
-    s = importlib.util.spec_from_file_location("lean_changed_pool", HERE.parent / "lean_changed.py")
+    s = importlib.util.spec_from_file_location("lean_changed_pool", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_changed.py")
     m = importlib.util.module_from_spec(s)
     s.loader.exec_module(m)
     return m.FAST_POOL

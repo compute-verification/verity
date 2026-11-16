@@ -494,7 +494,7 @@ def _sites_in(path: str, text: str) -> list[Site]:
 @functools.cache
 def sites() -> tuple[Site, ...]:
     """Every import of the package by a tracked Python file outside the integration."""
-    files = subprocess.run(["git", "grep", "-l", "-F", PACKAGE, "--", "*.py", f":!{INTEGRATION}"], cwd=ROOT, capture_output=True,
+    files = subprocess.run(["git", "grep", "-l", "-F", PACKAGE, "--", "*.py", f":!{INTEGRATION}", f":!tests/{INTEGRATION}"], cwd=ROOT, capture_output=True,
                            text=True, check=True).stdout.split()
     return tuple(s for f in files if f not in NOT_SCANNED for s in _sites_in(f, (ROOT / f).read_text(encoding="utf-8")))
 
@@ -622,5 +622,5 @@ def test_the_scan_sees_each_form_and_the_tree():
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
     assert ("tests/benchmarks/harness/specs/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
-    assert not any(s.file.startswith(INTEGRATION) for s in sites())
+    assert not any(s.file.removeprefix("tests/").startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)
