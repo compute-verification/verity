@@ -642,7 +642,7 @@ def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[
     return counts, other
 
 
-def test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it():
+def test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it():
     """No file's name holds the network attester's older name, a file's text holds it only in what a format fixes, a
     caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
     only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""

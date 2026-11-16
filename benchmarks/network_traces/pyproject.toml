@@ -92,7 +92,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package
-# (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_certifier_zk
+# (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_attester_zk
 # and test_egress_zk run on their staged members.
 artifacts = ["verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-rows",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"]
