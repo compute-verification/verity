@@ -5,7 +5,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 
 | Part | Jobs |
 | --- | --- |
-| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
+| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM adapter's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
 | `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
@@ -101,7 +101,7 @@ Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checko
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py flock"            # one suite
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py verity-flock"     # one suite
 $R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
 uv run tools/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
