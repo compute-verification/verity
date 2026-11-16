@@ -1,0 +1,26 @@
+# The retired word family DRAW in the comments of PoUW's scripts (`benchmarks/pouw/`, `benchmarks/compute/` and PoUW's
+# own tree), renamed to the Glossary's sample, sampled, samples and sampling (a coin is flipped): prose only, never code,
+# a string, a flag, a path or a name (`pouw_draw_map.toml` renames the flags our scripts pass).
+scope = "prose"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/compute/serve.sh", "benchmarks/pouw/dc/emp.sh", "benchmarks/pouw/dc/ffill.sh", "benchmarks/pouw/dc/pipe.sh", "benchmarks/pouw/dc/run.sh", "benchmarks/pouw/dc/uni.sh", "benchmarks/pouw/edited_gemm_profile/fattnrun.sh", "benchmarks/pouw/filler/capfill_co_probe.sh", "benchmarks/pouw/filler/capfill_fit_probe.sh", "benchmarks/pouw/filler/capfill_fold_probe.sh", "benchmarks/pouw/filler/capfill_fstep_probe.sh", "benchmarks/pouw/filler/comm/tpcomm.sh", "benchmarks/pouw/filler/dcap.sh", "benchmarks/pouw/filler/dfill.sh", "benchmarks/pouw/filler/fill.sh", "benchmarks/pouw/filler/flin.sh", "benchmarks/pouw/filler/fold_probe.sh", "benchmarks/pouw/filler/pfill_probe.sh", "benchmarks/pouw/filler/psched.sh", "benchmarks/pouw/filler/psched_probe.sh", "benchmarks/pouw/filler/tile_probe.sh", "benchmarks/pouw/h1_lanes/served.sh", "benchmarks/pouw/h1_prove/drawn.sh", "benchmarks/pouw/h1_prove/drawn_cost.sh", "benchmarks/pouw/h1_prove/job.sh", "benchmarks/pouw/h1_prove/served.sh", "benchmarks/pouw/hidden_zk/job.sh", "benchmarks/pouw/hidden_zk/send_check.sh", "benchmarks/pouw/opcode_probe/clock_ceiling_lease.sh", "benchmarks/pouw/opcode_probe/power_lease.sh", "benchmarks/pouw/opcode_probe/sm89/clock.sh", "benchmarks/pouw/opcode_probe/sm89/run.sh", "benchmarks/pouw/pearl_c_sm90/h200.sh", "benchmarks/pouw/pearl_c_vllm/served_inputs.sh", "benchmarks/pouw/pearl_c_vllm/verify.sh", "benchmarks/pouw/served_h1/commit_variants.sh", "benchmarks/pouw/tensor_kinds/run.sh", "benchmarks/pouw/tensor_kinds/run_sm80.sh", "benchmarks/pouw/tensor_kinds/search.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/aprun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/cpvrun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/crun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/cwrun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/d2srun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/egemm_dial_probe.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/egemm_fill_probe.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/profile.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run80.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/tb_run.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/erun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/lprun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/pvrun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/srun.sh", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh"]
+[words_in.words]
+"coin was drawn" = "coin was flipped"
+"coin is drawn" = "coin is flipped"
+"coin, drawn" = "coin, flipped"
+"drawn units" = "sampled proof blocks"
+"drawn unit" = "sampled proof block"
+"draw coin" = "sampling coin"
+"draw" = "sample"
+"draws" = "samples"
+"drawn" = "sampled"
+"drawing" = "sampling"
+"Draws" = "Samples"
+"Drawn" = "Sampled"
+"Drawing" = "Sampling"
