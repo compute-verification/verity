@@ -3488,7 +3488,7 @@ def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_
     (said,) = [s for s in world.logs if "warning" in s]
     assert said.startswith(
         f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate {ADDED} at `main` {main[:12]}: pkg/tests/test_pkg.py "
-        f"gains 1 issue id(s), 0 -> 1: pkg/tests/test_pkg.py:1 linear: {issue} in `def test_pkg():  # {issue}`; Say what is "
+        f"gains 1 issue id(s), 0 -> 1: pkg/tests/test_pkg.py:1 linear: {issue} in `def test_pkg(): # {issue}`; Say what is "
         "true now"), said
     assert said.endswith(f"(`python3 {ADDED} origin/main HEAD` in the branch runs it). {WARN_GATE_SAYS}"), said
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)

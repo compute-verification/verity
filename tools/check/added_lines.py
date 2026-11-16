@@ -175,7 +175,7 @@ class Failure:
     fix: str = ""
 
     def why(self) -> str:
-        shown = ", ".join(f"{self.path}:{s['line']} {s['what']} in `{s['text'][:80]}`" for s in self.sites[:SHOWN])
+        shown = ", ".join(f"{self.path}:{s['line']} {s['what']} in `{' '.join(s['text'].split())[:120]}`" for s in self.sites[:SHOWN])
         more = f", and {len(self.sites) - SHOWN} more" if len(self.sites) > SHOWN else ""
         return f"{self.path} gains {self.after - self.before} {self.kind}(s), {self.before} -> {self.after}: {shown}{more}"
 
