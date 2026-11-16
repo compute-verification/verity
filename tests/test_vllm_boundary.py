@@ -105,7 +105,7 @@ def _importers(texts: dict[str, str]) -> dict[str, list[str]]:
     """Each file of ``texts`` (repository path -> source) outside the integration that imports vLLM, with where."""
     out = {}
     for rel, text in texts.items():
-        if rel.startswith(INTEGRATION) or "vllm" not in text:
+        if rel.removeprefix("tests/").startswith(INTEGRATION) or "vllm" not in text:
             continue
         hits = sorted({(line, name) for name, line, imported in _imports(ROOT / rel, ROOT, (), ast.walk(ast.parse(text, filename=rel)))
                        if imported and name.split(".")[0] == "vllm"})

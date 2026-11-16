@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-FIXTURES = HERE / "tests" / "fixtures"
+FIXTURES = HERE.parents[2] / "tests" / "benchmarks" / "network_e2e" / "encodings" / "fixtures"
 
 
 def _load(name: str) -> Any:
@@ -75,7 +75,7 @@ WHOLE, SEEDED = (4, 2, 2, 2), (12, 10, 8)
 #: the decisions streams' book caps: v1's table caps, which send no hit, resume or lag bit, with room for them
 CAPS = dataclasses.replace(V.TABLE_CAPS, hits=1 << 20, resumes=1 << 12, lag=1 << 12)
 EOS = 2
-FIXTURE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+FIXTURE = HERE.parents[2] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "arith_encode_vectors.json"
 
 
 def _ae() -> Any:

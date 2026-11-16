@@ -1010,17 +1010,17 @@ def test_suites_are_named_and_picked_as_suites_py_does_where_their_tests_mirror_
                        "tests/adapters/vllm/tests": '[project]\nname = "verity-vllm-tests"\n[tool.pytest.ini_options]\n'
                                                     '[tool.verity.tests]\nworker_gb = 16\n',
                        "tests/verity": '[tool.pytest.ini_options]\n',
-                       "tests/verity/protocols": '[tool.pytest.ini_options]\n'}.items():
+                       "verity/protocols/tests": '[tool.pytest.ini_options]\n'}.items():
         (repo / path).mkdir(parents=True, exist_ok=True)
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     suites = suite_size.declared(repo)
     assert {s["path"]: s["name"] for s in suites} == {".": "repository", "tests/verity": "verity", "tests/adapters/vllm/tests": "verity-vllm",
-                                                      "tests/verity/protocols": "tests/verity/protocols"}
+                                                      "verity/protocols/tests": "verity/protocols/tests"}
     assert [s["path"] for s in suite_size.pick(suites, ["tests"])] == ["."]
     assert [s["path"] for s in suite_size.pick(suites, ["tests/"])] == ["."]
-    assert [s["path"] for s in suite_size.pick(suites, ["tests/adapters/vllm/tests"])] == ["tests/adapters/vllm/tests"]
-    assert [s["path"] for s in suite_size.pick(suites, ["tests/verity/protocols"])] == ["tests/verity/protocols"]
+    assert [s["path"] for s in suite_size.pick(suites, ["adapters/vllm/tests"])] == ["tests/adapters/vllm/tests"]
+    assert [s["path"] for s in suite_size.pick(suites, ["verity/protocols/tests"])] == ["verity/protocols/tests"]
     assert [s["path"] for s in suite_size.pick(suites, ["verity-vllm", "verity"])] == ["tests/adapters/vllm/tests", "tests/verity"]
 
 

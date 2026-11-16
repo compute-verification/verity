@@ -40,7 +40,7 @@ def test_each_module_binds_what_it_lists_and_the_checks_read_only_listed_names()
 
 @pytest.mark.parametrize("path, code", [
     (REPO, "from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_conform as C, receipt_folds as F"),
-    (HERE.parent, "import receipt_conform as C, receipt_folds as F"),
+    (HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "receipts", "import receipt_conform as C, receipt_folds as F"),
 ], ids=["the package's name, the repository on the path", "the bare name, the directory on the path"])
 def test_the_checks_import_under_each_name_and_check_that_names_reference(path, code):
     """A reader in the workspace imports `receipt_conform` by the package's name with the repository alone on the
@@ -58,7 +58,7 @@ def test_run_as_a_file_the_checks_find_their_sibling():
     """`python receipt_conform.py` is a command (README.md): started by path from another directory with nothing on the
     path, the file imports `receipt_folds` from its own directory and checks it. The empty PATH leaves it no compiler,
     so the header's checks, which the tests below run, are not built a second time here."""
-    run = subprocess.run([sys.executable, "-S", str(HERE.parent / "receipt_conform.py")], cwd=HERE, env={"PATH": ""},
+    run = subprocess.run([sys.executable, "-S", str(HERE.parents[7] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "receipts" / "receipt_conform.py")], cwd=HERE, env={"PATH": ""},
                          capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     assert run.stdout.splitlines() == [f"receipt_folds.py: {C.check_reference()} checks agree"]

@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-#include "../cuda/ring_switch.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/ring_switch.cuh"
 
 __host__ __device__ inline uint64_t rs_mix(uint64_t x) {
     x += 0x9e3779b97f4a7c15ull;
