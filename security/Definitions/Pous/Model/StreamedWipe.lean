@@ -14,7 +14,7 @@ Fin N`, uniform and independent, one at a time, and accepts when every answer is
 Before the wipe the server holds `q` bits of prior content `z`, uniform: a statement over a fixed `z` is false, since a
 prover can hard-code it. Its fill is any function of `z` and the labels. When the fill ends the server holds
 `σ : Bits M` inside the boundary, every tier counted, and the outside holds `ξ : Bits E`, every bit that left the
-boundary during the wipe as the network certifier counts it. No label reaches the outside except through that egress.
+boundary during the wipe as the network attester counts it. No label reaches the outside except through that egress.
 Round `j`'s answer reads `σ`, `ξ`, the indices revealed before it, in order, and its own index. The outside can answer
 too, from `ξ` and the indices it is sent, so whatever the two sides do during the challenges is a function of these.
 The prover *keeps* `z` when a function of `σ`, `ξ` and the challenges returns it (`Keeps`): then `z` survives the

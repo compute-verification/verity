@@ -24,7 +24,7 @@ from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
@@ -59,27 +59,27 @@ def _work_design(design: str, params: Mapping[str, Any]) -> None:
 
 
 def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network attester's parameters: `NetworkCertifierParams`' fields, and ``tie``, which is true. A field that is unset
+    """The network attester's parameters: `NetworkAttesterParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
-    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form
+    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkAttesterParams.digest`, so a configuration that sets none has the form
     and hash it had before any was a parameter."""
-    names = [f.name for f in fields(NetworkCertifierParams)]
+    names = [f.name for f in fields(NetworkAttesterParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
-        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkCertifierParams' "
+        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkAttesterParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
     given = {k: params[k] for k in names if k in params}
     try:
-        NetworkCertifierParams(**given)
+        NetworkAttesterParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
     return {**given, "tie": True}
 
 
-#: The network attester's defaults: `NetworkCertifierParams`' but the fields unset by default (the response's token bound, the lengths
+#: The network attester's defaults: `NetworkAttesterParams`' but the fields unset by default (the response's token bound, the lengths
 #: rows' form, the content rows' classes, the request words), and ``tie``.
-CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
+CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkAttesterParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:

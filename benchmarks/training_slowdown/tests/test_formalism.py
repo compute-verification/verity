@@ -54,7 +54,7 @@ def test_even_update_token_form_is_the_corollary():
     assert r["s_star"] == pytest.approx(k * k / (4 * 1e9) / 8192)
     assert r["token_form"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3)
     got = F.at(m, c, k)
-    assert not got["fit"] and got["slowdown"] is None and "slowdown" not in got
+    assert not got["fit"] and got["slowdown"] is None and "token_form" not in got
 
 
 def test_a_frozen_tail_is_always_charged():

@@ -153,7 +153,7 @@ client does, and writes no `traffic.json`, `client.log` or `client.json`.
   still open then is cut (the relay's `run`): one in the queue gets no cell and is in no record; one admitted at
   bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit
   takes; one cut from s + D on, with no `END` or `FAIL`, is refused by the audit in the execution phase of its
-  admission. A connection admitted by bucket windows · T − `NetworkCertifierParams.span` − 1 ends inside the run.
+  admission. A connection admitted by bucket windows · T − `NetworkAttesterParams.span` − 1 ends inside the run.
 - *A full queue.* A connection that arrives while the queue holds the schedule's `queue` gets one `REFUSED` cell, and
   the relay certifies no record of the execution phase it arrived in, so `check` does not accept the run: a client
   has no more connections open at once than the schedule's lanes and queue hold.
@@ -179,7 +179,7 @@ and with `--content` `filed.jsonl` (witness: the releases filed in each class, f
 every execution phase that has connection rows to a registration that verifies and whose head is the tables laid from
 the records. Under `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its
 head, or in the network attester's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
-to the one that is due. The network attester then admits nothing in the run's last `NetworkCertifierParams.span` buckets, so
+to the one that is due. The network attester then admits nothing in the run's last `NetworkAttesterParams.span` buckets, so
 `rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). An arrival in them
 is turned away (`network_attester`'s "The lengths rows"): no refusal, so no window's records are withheld for it. Its client
 reads the one `REFUSED` cell a refused one does, `warden.json` counts it on its own (`turned_away`, `counts`), and
@@ -242,8 +242,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (C
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused, raw_clock
 from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_PATH
-from verity.protocols.resource_accounting.network.verifier.network_attester import (EGRESS_FORMS, INTEGER_FIELDS, Shim, NetworkCertifier,
-    NetworkCertifierParams, cells)
+from verity.protocols.resource_accounting.network.verifier.network_attester import (EGRESS_FORMS, INTEGER_FIELDS, Shim, NetworkAttester,
+    NetworkAttesterParams, cells)
 from verity.protocols.resource_accounting.network.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,
     FAILS, INGRESS, KIND_CHARS, LINK, _quantiles, check)
 
@@ -263,10 +263,10 @@ C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
 #: certifier's heap grows tens of MB in a run
 LOCK_HEADROOM = 4 << 30
 M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
-#: the schedule's defaults here, where they differ from `NetworkCertifierParams`'s: r·P = 494 bytes a bucket each way stays
+#: the schedule's defaults here, where they differ from `NetworkAttesterParams`'s: r·P = 494 bytes a bucket each way stays
 #: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s from admission covers
 #: the request's ingress and a queued prefill
-SCHEDULE = asdict(NetworkCertifierParams()) | {"slots": 2, "delay": 30, "lanes": 8, "ingress_cells": 96, "ingress_buckets": 100}
+SCHEDULE = asdict(NetworkAttesterParams()) | {"slots": 2, "delay": 30, "lanes": 8, "ingress_cells": 96, "ingress_buckets": 100}
 QUESTIONS = ("Explain how a bloom filter works.", "Write a haiku about the sea.", "List three uses of copper.",
              "What is the capital of Australia? Answer in one word.", "Summarize the notes above in one sentence.",
              "Translate 'good morning' into French, Spanish and German.",
@@ -331,7 +331,7 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
     return out
 
 
-def group_windows(params: NetworkCertifierParams, tokens: int) -> int:
+def group_windows(params: NetworkAttesterParams, tokens: int) -> int:
     """The execution phases a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
     first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
@@ -339,14 +339,14 @@ def group_windows(params: NetworkCertifierParams, tokens: int) -> int:
     return -(-(params.delay + tokens // params.slots + 3) // params.window)
 
 
-def closing_windows(params: NetworkCertifierParams, at: float) -> int:
+def closing_windows(params: NetworkAttesterParams, at: float) -> int:
     """The fewest execution phases of a run under the lengths rows' form 2 in which a request sent `at` seconds after
     the origin is admitted when a lane is free: by the bucket after its arrival's (and one more for the client's
-    lag), which is `NetworkCertifierParams.span` buckets before the run's end at the latest (`network_attester`'s "The lengths rows")."""
+    lag), which is `NetworkAttesterParams.span` buckets before the run's end at the latest (`network_attester`'s "The lengths rows")."""
     return -(-(math.floor(at * 1000 / params.bucket_ms) + params.span + 3) // params.window)
 
 
-def read_prompts(data: bytes, params: NetworkCertifierParams) -> list[list[int]]:
+def read_prompts(data: bytes, params: NetworkAttesterParams) -> list[list[int]]:
     """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
     scan's IDB), each prompt's id request (`id_form.id_request`, offset 0) within the schedule's ingress bound."""
     try:
@@ -366,7 +366,7 @@ def read_prompts(data: bytes, params: NetworkCertifierParams) -> list[list[int]]
     return prompts
 
 
-def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: NetworkCertifierParams, max_tokens: int,
+def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: NetworkAttesterParams, max_tokens: int,
                    rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
                    top_p: float | None = None, window_per_group: bool = False, users: str = "user") -> list[dict]:
     """n network-certifier-form id requests (`id_traffic`'s items) of the given prompts, request j's
@@ -390,7 +390,7 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Netw
     return out
 
 
-def groups(n: int, per: int, params: NetworkCertifierParams, max_tokens: int) -> list[dict]:
+def groups(n: int, per: int, params: NetworkAttesterParams, max_tokens: int) -> list[dict]:
     """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution
     phases."""
     G = group_windows(params, max_tokens)
@@ -582,7 +582,7 @@ class Publisher:
     thread, or on any thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the
     issuer's refusals."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: NetworkCertifierParams, commit=WR.Cells.of) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: NetworkAttesterParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
     def __call__(self, record: BlockGrid, grid: GridParams) -> None:
@@ -681,7 +681,7 @@ def registered_key(key: Path) -> LmsKey:
         raise StartRefused(f"{key}: no registered key ({type(e).__name__}); `keys --dir` makes one") from None
 
 
-def certify_start(issuer: Issuer, base_ms: int, ordinal: int, params: NetworkCertifierParams) -> CertifiedStart:
+def certify_start(issuer: Issuer, base_ms: int, ordinal: int, params: NetworkAttesterParams) -> CertifiedStart:
     """The start's certificate of `issuer`'s session (`Issuer.certify_start`, under `LINK`): the session starts at
     `base_ms` of its key's life, is the key's session number `ordinal`, and runs under `params`'s schedule. A signer
     that refuses raises `SignerRefused`, and the network attester does not start."""
@@ -697,7 +697,7 @@ def start_json(start: CertifiedStart) -> dict:
             "certificate": RF.certificate_json(start.certificate)}
 
 
-def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: NetworkCertifierParams, commit,
+def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: NetworkAttesterParams, commit,
                     load_heads: Path | None, base_ms: int, ordinal: int, lines=None) -> None:
     """`PublisherProcess`'s process: the network attester's key and its leaf state are this process's alone. It signs
     the load's heads first when there are any (`sign_load`), then the start's certificate of its session at `base_ms`
@@ -763,7 +763,7 @@ class PublisherProcess:
     the thread's buffers have grown to a row's; `feeder` is its thread id. In a schedule with a head offset the
     process writes no line of connection rows: it sends each one back, and `heads` names who takes them."""
 
-    def __init__(self, out: Path, key: Path, session: bytes, params: NetworkCertifierParams, commit=None,
+    def __init__(self, out: Path, key: Path, session: bytes, params: NetworkAttesterParams, commit=None,
                  load_heads: Path | None = None, *, base_ms: int, ordinal: int) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
@@ -843,7 +843,7 @@ class PublisherProcess:
         """In a schedule with a head offset: from now `back(execution phase, line)` takes each line of connection
         rows the process sends back, on a thread of this object's that only waits on them, until the process says
         it sends no more or is gone, when the thread calls `ended()` if given. `serve` has the network attester's
-        loop hand each line to `NetworkCertifier.head_back`. A process that is gone without that word raises on the thread,
+        loop hand each line to `NetworkAttester.head_back`. A process that is gone without that word raises on the thread,
         as it does at `close`."""
         if self.lines is None or self._reader is not None:
             raise ValueError("the publisher process sends lines back in a schedule with a head offset, to one taker")
@@ -868,7 +868,7 @@ class PublisherProcess:
             self.rows.put(item)
 
 
-def deployment_record(params: NetworkCertifierParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
+def deployment_record(params: NetworkAttesterParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
                       slack: float, run_id: bytes | None = None, start: dict | None = None,
                       origin_raw: float | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the network attester's public key and session, the schedule's
@@ -937,7 +937,7 @@ def reserve_fds(n: int) -> int:
     return n
 
 
-def prepare_process(params: NetworkCertifierParams) -> dict:
+def prepare_process(params: NetworkAttesterParams) -> dict:
     """The network attester's process made ready before its origin, so that no tick waits in the kernel (state D) on
     what the run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
@@ -982,7 +982,7 @@ async def listening(handle, listen: tuple[str, int], sock: socket.socket | None 
     return await asyncio.start_server(handle, sock=sock)
 
 
-async def serve(params: NetworkCertifierParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
+async def serve(params: NetworkAttesterParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cli._announce, probe: bool = False, process: dict | None = None,
                 load_heads: Path | None = None, paced_ms: float = cli.PACED_MS, watermark: bool = False,
@@ -991,8 +991,8 @@ async def serve(params: NetworkCertifierParams, out: Path, *, upstream: tuple[st
     socket `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its
     records published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads
     `load_heads` when given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer
-    `paced_ms` after its boundary (`NetworkCertifier(paced=…)`, which a network attester on the host's clock must have), and the watermark
-    stream sent to `upstream` when `watermark` (`NetworkCertifier(watermark=…)`). Returns what `warden.json` holds, with
+    `paced_ms` after its boundary (`NetworkAttester(paced=…)`, which a network attester on the host's clock must have), and the watermark
+    stream sent to `upstream` when `watermark` (`NetworkAttester(watermark=…)`). Returns what `warden.json` holds, with
     `process`, what `prepare_process` did.
     The loop's errors are kept, not logged: the ticker writes no file, but in a schedule with a head offset, where
     the tick a line of connection rows leaves at appends it to `rows.jsonl` (`runner_parts.Lines`): the
@@ -1026,7 +1026,7 @@ async def serve(params: NetworkCertifierParams, out: Path, *, upstream: tuple[st
         lines = rp.Lines(out, LINK) if params.head_offset is not None else None
         started = (clock(), wall())
         origin = started[0] + start_in
-        network_attester = NetworkCertifier(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
+        network_attester = NetworkAttester(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                         clock=clock, sleep=sleep, publish=publish, withhold=publish.withhold, release=publish.release,
                         slack=slack, paced=paced_ms / 1000 if paced_ms else None, leave=lines,
                         watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
@@ -1076,7 +1076,7 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def counts(device: NetworkCertifier) -> dict:
+def counts(device: NetworkAttester) -> dict:
     """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
     arrivals turned away, which are neither, those of them whose client reset its link after the cell, and the
     ticks."""
@@ -1103,7 +1103,7 @@ async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Pa
     sent as its network-certifier-form id request (`id_form.id_request`, offset 0) and its response read as id-form. It
     runs on the network attester's host and reads that host's raw clock, the one the origin is a reading of
     (`origin_raw`), so that a cell's arrival is laid against the grid on the grid's own clock however long the run."""
-    params = NetworkCertifierParams(**deployment["params"])
+    params = NetworkAttesterParams(**deployment["params"])
     origin, listen = deployment["origin_raw"], tuple(endpoints["listen"])
     host = "%s:%d" % tuple(endpoints["upstream"])
 
@@ -1167,7 +1167,7 @@ def traffic_of(args, model: str) -> list[dict]:
 
 
 def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
-    """`NetworkCertifierParams` as `q`'s flags: each integer field at `SCHEDULE`'s, and `--egress` at `egress` (None: the
+    """`NetworkAttesterParams` as `q`'s flags: each integer field at `SCHEDULE`'s, and `--egress` at `egress` (None: the
     traffic's, id with `--ids` and else bytes)."""
     for name in INTEGER_FIELDS:
         q.add_argument(f"--{name.replace('_', '-')}", type=int, default=SCHEDULE[name])
@@ -1181,9 +1181,9 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
                         "(default: none)")
 
 
-def _params(args) -> NetworkCertifierParams:
+def _params(args) -> NetworkAttesterParams:
     egress = args.egress or ("id" if getattr(args, "ids", False) else "bytes")
-    return NetworkCertifierParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress,
+    return NetworkAttesterParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress,
                         max_tokens_cap=getattr(args, "max_tokens_cap", None))
 
 
@@ -1214,7 +1214,7 @@ def _addresses(text: str) -> list[tuple[str, int]]:
     return [cli._address(a) for a in text.split(",")]
 
 
-def traffic_windows(args, params: NetworkCertifierParams, model: str, out: Path) -> int:
+def traffic_windows(args, params: NetworkAttesterParams, model: str, out: Path) -> int:
     """A rehearsal's traffic, written to `out` (`traffic.json`, and a `--window-per-group` run's `groups.json`), and
     the execution phases its run lasts: to its last request's time and `--tail`, its groups' windows, and under
     `--lengths 2` as many as admit its last request (`closing_windows`)."""

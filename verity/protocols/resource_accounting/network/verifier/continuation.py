@@ -42,7 +42,7 @@ stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
 form. `read` reads the network attester's own records (`network_attester.py`'s schedule in the id egress form: `Record`s of
-`NetworkCertifierParams.window` buckets) up to b, through `network_attester.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
+`NetworkAttesterParams.window` buckets) up to b, through `network_attester.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
 number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
@@ -240,7 +240,7 @@ def _request(q: int, data: bytes, cell_bytes: int) -> Request:
     return r
 
 
-def _buckets(params: W.NetworkCertifierParams, records: Sequence[BlockGrid], b: int, what: str):
+def _buckets(params: W.NetworkAttesterParams, records: Sequence[BlockGrid], b: int, what: str):
     """Each bucket before b of a link's records with its cells, in bucket order."""
     T, by_window = params.window, {rec.window: rec for rec in records}
     if len(by_window) != len(records):
@@ -259,7 +259,7 @@ def _buckets(params: W.NetworkCertifierParams, records: Sequence[BlockGrid], b: 
             yield t, out
 
 
-def read(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
+def read(params: W.NetworkAttesterParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
     """The requests released before b and their responses' cells before b, in release order, from the network
     attester's ingress and egress records (the module docstring's "The records"). Raises `Refused` (`records`)."""
     if type(b) is not int or b < 0 or b % params.window:
@@ -298,7 +298,7 @@ def read(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress:
     return [Response(q, n, t, requests[q], tuple(ids[q]), ended.get(q)) for q, (n, t) in at.items()]
 
 
-def edge(params: W.NetworkCertifierParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
+def edge(params: W.NetworkAttesterParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
          eos: Collection[int]) -> Edge:
     """The close at b on the network attester's records: the stamps it writes and the continuations they give,
     `eos` the deployment's end-of-sequence ids."""

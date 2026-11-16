@@ -761,13 +761,17 @@ def live_stop(machine: str, project: str) -> tuple[int | None, str]:
 def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
     description in the --source tree (infra/cluster), with each candidate node's stop as the node reports it (`live_stop`, passed
-    as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job."""
+    as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job. Under a trusted
+    launcher tree (research.launcher) both are that tree's, run from its own directory, and the --source tree isn't read."""
+    from . import launcher
     from .store import tools_registry
 
-    src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
-           if source is not None else None)
+    tree = launcher.code(source)
+    src = (Path(tree) / (tools_registry.resolve("infra/cluster", lambda p: (Path(tree) / p).is_dir()) or "infra/cluster")
+           if tree is not None else None)
     if src is None or not (src / "src" / "cluster" / "submit.py").is_file():
-        raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
+        which = f"the trusted tree ${launcher.ENV}" if launcher.tree() else "the --source tree"
+        raise Refused(f"--queue: {which} has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     description = src / "descriptions" / "nebius.toml"
@@ -788,7 +792,8 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, n
             argv.append(f"--{k}")
         elif v not in (None, False):
             argv += [f"--{k}", str(v)]
-    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60)
+    # `-m` puts its working directory first on sys.path: under a trusted tree, never the --source tree it was launched from
+    r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60, cwd=src / "src" if launcher.tree() else None)
     try:
         out = json.loads(r.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -954,8 +959,11 @@ GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGit
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
+    from . import launcher
+
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(["git", *GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc = subprocess.Popen(launcher.git(*GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"), cwd=git_dir, stdout=subprocess.PIPE,
+                            stderr=err, env=launcher.git_env())
     proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
     return proc
 
@@ -1184,13 +1192,15 @@ def _push_main(ssh: list[str], repo: str, git_dir: Path, size: int) -> None:
     `origin/main` (its clone's view of that `main`) is no older than its newest launcher's, and `suites.py --changed origin/main` in a
     run diffs against a current `main`, not the one the repository was created with.  A launcher whose `origin/main` is older is
     refused by git and changes nothing; no failure here stops the ship."""
-    main = subprocess.run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}"], cwd=git_dir,
-                          capture_output=True, text=True).stdout.strip()
+    from . import launcher
+
+    main = subprocess.run(launcher.git("rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}"), cwd=git_dir,
+                          capture_output=True, text=True, env=launcher.git_env()).stdout.strip()
     if not main:
         return
     try:
-        subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"],
-                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(size))
+        subprocess.run(launcher.git("-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"),
+                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(size), env=launcher.git_env())
     except subprocess.TimeoutExpired as e:
         print(f"research: the push of origin/main to the machine timed out after {e.timeout:.0f} s, so its main may be older", file=sys.stderr, flush=True)
 
@@ -1204,9 +1214,12 @@ def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) 
         return NO_GIT
     if r.returncode != 0:
         return f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
+    from . import launcher
+
     try:
-        push = subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{sha}:refs/research/src/{sha}"],
-                              cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(2 * size))
+        push = subprocess.run(launcher.git("-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo),
+                                           f"{sha}:refs/research/src/{sha}"),
+                              cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(2 * size), env=launcher.git_env())
     except subprocess.TimeoutExpired:
         return "git push timed out"
     if push.returncode != 0:
@@ -1355,13 +1368,17 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          `launch` refuses a command that needs git (`needs_git`).
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
-    st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=git_dir, capture_output=True, text=True)
+    from . import launcher
+
+    launcher.tree(git_dir)                   # refuses a trusted tree that is the shipped one, inside it or around it
+    env = launcher.git_env()
+    st = subprocess.run(launcher.git("status", "--porcelain", "--untracked-files=all"), cwd=git_dir, capture_output=True, text=True, env=env)
     if st.returncode != 0:
         raise Refused(f"{git_dir} is not a git checkout")
     if st.stdout.strip():
         raise Refused(f"{git_dir} has uncommitted changes; commit them (an unpushed commit is fine) or the snapshot would be mislabeled as HEAD")
-    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=git_dir, capture_output=True, text=True, check=True).stdout.strip()
-    tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=git_dir, capture_output=True, text=True).stdout.strip() or None
+    sha = subprocess.run(launcher.git("rev-parse", "HEAD"), cwd=git_dir, capture_output=True, text=True, check=True, env=env).stdout.strip()
+    tree = subprocess.run(launcher.git("rev-parse", "HEAD^{tree}"), cwd=git_dir, capture_output=True, text=True, env=env).stdout.strip() or None
     dest = f"{root}/src/{sha}"
     state, doc = _probe_source(ssh, dest)
     push = not _stream_forced()

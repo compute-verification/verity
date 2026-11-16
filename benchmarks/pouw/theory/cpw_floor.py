@@ -1,7 +1,7 @@
 """The sm_120 unit's floor under CP-W, against the sm_120 headline: the Lean bound's break line, and what the
 per-set checkpoint adds to the floor of every program `PouwWarpCheck_v2` accepts at fold fx1.
 
-The bound is `Accounting.Guarantees.TS.Sm120SheetHeadline`'s, read from `lean_headline.instance()`, the data
+The bound is `ResourceAccounting.Guarantees.TS.Sm120SheetHeadline`'s, read from `lean_headline.instance()`, the data
 `Definitions/Pouw/Headline/Sm120.lean` is written from (`machine-model lean-headline --check` holds the two
 equal). It reads a cheater's floor a unit as N_w (w* + φ*) at the certificate π*, which prices an issue slot at c, its
 issue weight: an IMMA.16832 writes 128 words a slot (w* = c/128), and fx1's fold is 8 ALU + 8 IMAD lane instructions a

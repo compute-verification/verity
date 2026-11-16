@@ -302,7 +302,7 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
                                 "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
@@ -1377,3 +1377,36 @@ def test_a_progress_line_that_does_not_parse_is_skipped_and_said_but_no_progress
     (tmp_path / "steps.jsonl").write_text('{"step": "lint", "status": "failed"}\n{"step": "su')
     assert landing.failing(tmp_path) == "step lint"
     assert "landing: a line of steps.jsonl is not JSON, skipped" in capsys.readouterr().err
+
+
+#: a workspace as the root's `tests/` mirroring the tree leaves it: each member's tests at `tests/<its directory>` (a virtual
+#: member `NAME-tests` beside the member, or a suite with no distribution), the repository's own suite beside them
+MIRRORED = {
+    "pyproject.toml": '[project]\nname = "verity"\n\n[tool.uv.workspace]\nmembers = ["tools/research", "tests/tools/research", '
+                      '"adapters/vllm", "tests/adapters/vllm/tests"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "tools/research/pyproject.toml": '[project]\nname = "research"\n',
+    "tools/research/src/research/q.py": "",
+    "tests/tools/research/pyproject.toml": ('[project]\nname = "research-tests"\ndependencies = ["research"]\n\n'
+                                            '[tool.pytest.ini_options]\ntestpaths = ["."]\n'),
+    "tests/tools/research/test_q.py": "",
+    "adapters/vllm/pyproject.toml": '[project]\nname = "verity_vllm"\ndependencies = ["research"]\n',
+    "adapters/vllm/x.py": "",
+    "tests/adapters/vllm/tests/pyproject.toml": ('[project]\nname = "verity-vllm-tests"\ndependencies = ["verity-vllm"]\n\n'
+                                                 '[tool.pytest.ini_options]\ntestpaths = ["."]\n\n[tool.verity.tests]\n'
+                                                 'inputs = ["hardware", "tools/config/x.py"]\n'),
+    "tests/adapters/vllm/tests/test_v.py": "",
+    "hardware/cards.toml": "", "tests/hardware/test_cards.py": "", "tools/config/x.py": "",
+    "tests/verity/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/verity/test_a.py": "",
+    "tests/test_root.py": "",
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+}
+
+
+@pytest.mark.parametrize(("suite", "name"), [
+    ("tests/adapters/vllm/tests", "verity-vllm"), ("tests/tools/research", "research"), ("tests/verity", "verity"),
+    ("tests/verity/", "verity"), (".", "repository"), ("", "repository"), ("benchmarks/pouw", "pouw-bench"),
+])
+def test_a_suite_is_named_as_suites_py_names_it_where_its_tests_mirror_the_tree(world, suite, name):
+    """A reds row, an allowance and the graph name a suite by its directory at the commit, as `suites.discover` names it
+    (`suite_layout.suite_name`): the tests of a member at `tests/<its directory>` by the member's distribution."""
+    assert landing.suite_name(world.dev, world.change(MIRRORED), suite) == name
