@@ -361,9 +361,10 @@ The table's columns, after the layer and its workload:
   `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
   `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
-  another's: `2.5 s a proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a proof block (...)`,
-  and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four benchmark results
-  stay one table: the three a sampled proof block compare cell for cell, and recursion's figures are a whole run's.
+  another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
+  block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four
+  benchmark results stay one table: the three a sampled proof block compare cell for cell, and recursion's figures are
+  a whole run's.
 
 The table is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
 
