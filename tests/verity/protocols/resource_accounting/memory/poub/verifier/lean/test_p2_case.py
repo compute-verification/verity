@@ -172,6 +172,16 @@ def test_a_rejected_sessions_case_is_rejected_with_its_failure(exe, lean, store,
     assert got["verdict"] == "reject" and f"rejected: {failure} at window 0" in got["reason"]
 
 
+def test_with_no_executable_an_accepted_sessions_case_is_refused_and_never_the_sessions_own_accept(exe, store) -> None:
+    """`judged` with no `poub-p2-protocol` refuses the case of a session the live verifier accepted, rather than answer
+    it as the session did; with no Lean the case is `unjudged`'s, undecided."""
+    answer, case = session(exe, store)
+    assert answer["verdict"] == "accept" and case is not None
+    with pytest.raises(ValueError, match="no poub-p2-protocol to answer the case"):
+        p2_case.judged(case, answer, None)
+    assert p2_case.unjudged(case, answer)["verdict"] == "undecided"
+
+
 def test_a_case_before_its_last_window_is_verified_is_undecided(exe, lean, store) -> None:
     _, case = session(exe, store)
     log = _evidence(case)["log"]
