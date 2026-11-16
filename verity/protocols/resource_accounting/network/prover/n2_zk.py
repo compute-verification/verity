@@ -74,6 +74,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
+from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
 from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import CertifiedRecord, Direction
@@ -189,7 +190,6 @@ def network_attester_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
     """A network attester run's link (`network_attester_chain.link`: the active network attester's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
     the signer's refusals. A certifier rehearsal's run is refused by name (`network_attester_chain.PROXY`)."""
-    WC = proof_drivers.drivers().network_attester_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
