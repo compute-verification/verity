@@ -33,7 +33,7 @@ The streamed-label wipe's verdict (`StreamedWipe.verdict`, the wipe judge of rec
 
 On acceptance it publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the
 evidence names. No network attester signs that count, so until the check that composes the wipe with the network
-attester holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as
+attester holds it to the attester's, the bound is taken on no count, and the profile names the evidence's count as
 a gap (`writerGap`).
 
 `certify` is what that check is to publish: the foreign content an accepted wipe may leave and the error that holds at,

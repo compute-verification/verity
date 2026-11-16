@@ -22,7 +22,7 @@ device model (`ResourceAccounting.Wipe.Strategy`), with the labels `prf K` of th
   `eps + prfAdvantage prf (τ.distinguisher …) + τ.deltaNet …`,
 
 on the event the auditor's devices observe (`ResourceAccounting.Wipe.Strategy.Observed`): every spot read answered with its
-label, as the memory challenger signs it, and the certifiers' count of the egress at most `E`. No term is zero:
+label, as the memory challenger signs it, and the network attesters' count of the egress at most `E`. No term is zero:
 
 * the labels' PRF advantage (`Pous.StreamedWipe.prfAdvantage`) against the distinguisher the adversary's moves make
   (`ResourceAccounting.Wipe.Strategy.distinguisher`), SHA-512's under `prf/sha-512`;

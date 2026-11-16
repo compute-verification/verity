@@ -24,7 +24,7 @@ is not computing on it: the block then comes in by the trace's `link` route.
 `Ingress Ω` is what enters the node over its uplinks, the links between it and any other host, at each outcome and
 tick: `entered ω t`, the bits other than the verifier's messages that enter it at tick `t`, and `counted ω t`, those
 the network attesters on its uplinks sign as entering it then. `Quiet T n ω` says `n` is 0 at every tick of every
-credited pass of `T` at `ω`: at `n = counted` it is the event the certifiers observe.
+credited pass of `T` at `ω`: at `n = counted` it is the event the network attesters observe.
 -/
 
 @[expose] public section
