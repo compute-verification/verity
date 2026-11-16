@@ -507,21 +507,22 @@ def test_only_an_audit_on_the_gates_coins_whose_sessions_took_their_own_coin_tre
         assert "\n" not in why
 
 
-def _sampled_coins(tmp_path: Path, summary: dict | str | None, **extra: str) -> tuple[int, list[str]]:
-    """`served_verdicts.sh sampled-coins` on a serve dir whose step 3 audit kept ``summary`` as its summary.json (none
-    where None; a string as the file's text), ``extra`` added to the environment: the exit status and the verdict lines."""
+def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit: str = "sampled-proofs-served",
+                   **extra: str) -> tuple[int, list[str]]:
+    """`served_verdicts.sh ARGS` (default `sampled-coins`) on a serve dir whose records audit under ``audit`` (step 3's
+    by default) kept ``summary`` as its summary.json (none where None; a string as the file's text), ``extra`` added to
+    the environment: the exit status and the verdict lines."""
     venv, serve = tmp_path / "venv" / "bin", tmp_path / "serve"
-    for d in (venv, serve / "sampled-proofs-served"):
+    for d in (venv, serve / audit):
         d.mkdir(parents=True)
     (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (venv / "python").chmod(0o755)
     if summary is not None:
-        (serve / "sampled-proofs-served" / "summary.json").write_text(
-            summary if isinstance(summary, str) else json.dumps(summary))
+        (serve / audit / "summary.json").write_text(summary if isinstance(summary, str) else json.dumps(summary))
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(serve),
            "OUT": str(tmp_path / "out"), **extra}
-    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "sampled-coins"],
-                        cwd=tmp_path, env=env, check=False).returncode
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"),
+                         *(args or ("sampled-coins",))], cwd=tmp_path, env=env, check=False).returncode
     said = tmp_path / "out" / "verdicts.txt"
     return rc, said.read_text().splitlines() if said.exists() else []
 
@@ -558,6 +559,57 @@ def test_the_main_run_checks_step_3s_coin_trees_right_after_its_line_and_stops_o
     assert '--challenger "$SP_CHALLENGER" --summary "$SP/summary.json"' in line
     after = script[script.index(line) + len(line):].splitlines()[0]
     assert after == "sampled_coins || stop sampled-proofs 20"
+
+
+@pytest.mark.parametrize("challenger, summary, said", [
+    (GATE, {"coin_trees": "window"}, "coins the gate's, the auditor's challenger, coin_trees window"),
+    ("local", {"coin_trees": "own"}, "coins a development challenger's (local), not the auditor's, coin_trees own"),
+    (GATE, None, "coins the gate's, the auditor's challenger, coin_trees none"),
+    (GATE, "{", "coins the gate's, the auditor's challenger, coin_trees unread: summary.json is not JSON"),
+])
+def test_v3cs_line_says_whose_coins_its_audit_took_and_its_coin_trees(tmp_path, capsys, challenger, summary, said):
+    path = tmp_path / "summary.json"
+    if summary is not None:
+        path.write_text(summary if isinstance(summary, str) else json.dumps(summary))
+    assert S.main(["coins", "--challenger", challenger, "--summary", str(path)]) == 0
+    assert capsys.readouterr().out == said + "\n" and "invalid" not in said
+
+
+V3C_AUDIT = "v3c-w7-4-32-4/audit"
+
+
+@pytest.mark.parametrize("summary, extra, rc", [
+    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": GATE}, 20),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE}, 20),
+    ("{", {"V3C_CHALLENGER": GATE}, 20),
+    ({"coin_trees": "window", "ok": True}, {"V3C_CHALLENGER": GATE}, 0),
+    (None, {"V3C_CHALLENGER": GATE}, 0),
+    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": "local", "DEVELOPMENT": "1"}, 0),
+    ({"coin_trees": "own", "ok": True}, {"DEVELOPMENT": "1"}, 0),
+], ids=["V3C_CHALLENGER the gate, own trees", "the gate by PP_CHALLENGER, own trees", "the gate, a summary that isn't JSON",
+        "the gate, the sample's session's trees",
+        "the gate, no summary", "local", "unset"])
+def test_v3cs_audit_on_the_gates_coins_fails_where_its_sessions_took_their_own_coin_trees(tmp_path, summary, extra, rc):
+    """V3c's audit, the sampled-proofs audit of record where it runs, is held as step 3's is: on the gate's coins, an
+    audit whose sessions each sampled a coin tree of their own, which the auditor's Lean verifier refuses, fails with
+    exit 20 and one line naming the fix; a development session's coins pass as before."""
+    got, lines = _sampled_coins(tmp_path, summary, "v3c-coins", "7", audit=V3C_AUDIT, **extra)
+    assert got == rc
+    if rc:
+        assert len(lines) == 1 and lines[0].startswith("V3C-AUDIT refused: "), lines
+        assert ("FLOCK_CHALLENGER unset" in lines[0]) is (summary != "{")
+    else:
+        assert lines == []
+
+
+def test_v3cs_audit_says_its_coins_and_fails_on_its_coin_trees_after_its_records_line():
+    """The audit's own run needs a records audit, which the V3c harnesses here stub without coin trees, so this reads
+    the script: v3c_audit's V3C-AUDIT line says its coins, and its last check before its exit is the coin trees'."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    body = script[script.index("\nv3c_audit() {"):]
+    body = body[:body.index("\n}\n")]
+    assert '"$PY" "$SV" coins --challenger "$V3C_CHALLENGER"' in body and '--summary "$VW/audit/summary.json"' in body
+    assert body.rstrip().splitlines()[-2:] == ["  v3c_trees || return 20", "  return $rc"]
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
