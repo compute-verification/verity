@@ -40666,25 +40666,10 @@
    }
   },
   "Definitions.Slowdown.Capability.Toy": {
-   "digest": "34aebf00272e8db276aae02a6aa44ce84731e460657f956d0c39369fe6f806e6",
+   "digest": "c6ed46634034f6a2e0fda11f64daf3a30bab84ea635c4877b5b5fcbbec8e4347",
    "definitions": {
-    "Slowdown.Capability.Toy.B": "f80efc165313e0a1c3474d8dc7055277ece3e7b586bd4919b76d3ba4827bc1de",
     "Slowdown.Capability.Toy.C": "8dfa38edf0b0058285ee8556f64d43a73730a6763a894973ee950fe834ac586d",
-    "Slowdown.Capability.Toy.D": "795843893e7a728e34ee7f06375e8c40d38cbe8fa810a22af887fd1858af2bd0",
-    "Slowdown.Capability.Toy.K": "18b917acc6fecb1c8bc3d1d063e1cf6b06a975f161d093f450948238133cf959",
-    "Slowdown.Capability.Toy.K2": "b8971cdc9f1851f6d2987960cddaa9bb4bc49206cfd5545de92d670faaaec74c",
-    "Slowdown.Capability.Toy.M": "c51a1b680d9e64b048695b4eace3e0d050054384d28cb4e8d56b967f2ad93671",
-    "Slowdown.Capability.Toy.P1": "2f7225b64bd4f02157469eed70038fcf5cde33fd2333ae20069d40d08ebb80ea",
-    "Slowdown.Capability.Toy.P2": "39e922b7eeca3cb254bc8abfe0d94d5956046de1d8ebc28a7d3186ebbe22c695",
-    "Slowdown.Capability.Toy.R1": "70e840a28e10a6b2355c7e602b7a5a09b4ac0226ee03adfc9e8ab60ced78ce74",
-    "Slowdown.Capability.Toy.R2": "1114d4351ac6419ff56e0a7cf5e3cc406c42d8207a526c5be441d7ebc036b5af",
-    "Slowdown.Capability.Toy.W2": "9764eb87f9bbe425c9f9e723fe7c3e2b53bb78f218f473658cfb99490c5c1cd5",
-    "Slowdown.Capability.Toy.Y": "1cd70bef77bd7015d7af58fc619ff7c855a33558a93aa28b471ea40b5ff1dab1",
-    "Slowdown.Capability.Toy.Y2": "e2a46b4a9615ecb056b8e99055d767732ddbad72b09199dd0589955eb0619ec4",
-    "Slowdown.Capability.Toy.decode": "cf81ca6a17c50f30cccafa273b814da978d52eabc484c4694432126ca96ccbe4",
-    "Slowdown.Capability.Toy.tok": "7b7fb49c608c1d9700f8a6c5d6d6aaccd1ee1f12787e1c8c94707c1fc9f1ff3f",
-    "Slowdown.Capability.Toy.z": "9c0d948cfe7325115d02f9c8668ea8761885563f7e9e8a703867f9f66d01a397",
-    "Slowdown.Capability.Toy.μ": "1b846a481b845336ce0865c2049a9915dc6a08b8a2ccae7db7e5385288378d63"
+    "Slowdown.Capability.Toy.D": "795843893e7a728e34ee7f06375e8c40d38cbe8fa810a22af887fd1858af2bd0"
    }
   },
   "Definitions.Slowdown.Cover": {
