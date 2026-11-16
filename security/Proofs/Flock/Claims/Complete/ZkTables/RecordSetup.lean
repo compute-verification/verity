@@ -46,7 +46,7 @@ theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, fun hz => by simpa [hz] using ‹¬ (_ && _) = true›⟩)
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩)
 
 /-- A masked setup's statement has the hm96 rows (`Ins.setup` refuses any other). -/
 theorem Ins.setup_hm96Rows {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p) :
@@ -63,25 +63,39 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockDeploy With FlockComplete JsonRT FlockSoundness.Discharge FlockComplete.Replay
 open Lean (Json)
 
+/-- Among the named tags, those with the hm96 rows commit with `hm96-sha512/v1`, but the plain-leaves ones. -/
+theorem tags_hm96_or : ∀ t ∈ Tags.all ++ Tags.templated, t.hm96Rows = true →
+    t.merkleLeaf = "hm96-sha512/v1" ∨ t.name = "verity/flock-circuit+plain-leaves" := by
+  decide +kernel
+
+theorem plainLeaves_circuitPlainLeaves : Tags.circuitPlainLeaves.plainLeaves = true := by
+  simp [Tags.plainLeaves, Tags.circuitPlainLeaves, Tags.withPlainLeaves]
+
 /-- A statement of `Tags.byName?` with the hm96 rows and no plain leaves commits with `hm96-sha512/v1`. -/
 theorem byName_hm96 {n : String} {t : Tags} (h : Tags.byName? n = some t) (hp : t.plainLeaves = false)
     (h9 : t.hm96Rows = true) : t.merkleLeaf = "hm96-sha512/v1" := by
-  have hall : ∀ t ∈ Tags.all, t.plainLeaves = false → t.hm96Rows = true → t.merkleLeaf = "hm96-sha512/v1" := by
-    decide +kernel
-  have htm : ∀ t ∈ Tags.templated, t.plainLeaves = false → t.hm96Rows = true → t.merkleLeaf = "hm96-sha512/v1" := by
-    decide +kernel
-  unfold Tags.byName? at h
-  cases hf : Tags.find? n with
-  | some t' =>
-    rw [hf] at h
-    change some t' = some t at h
-    cases h
-    unfold Tags.find? at hf
-    exact hall t' (List.mem_of_find?_eq_some hf) hp h9
-  | none =>
-    rw [hf] at h
-    change Tags.templated.find? (·.name == n) = some t at h
-    exact htm t (List.mem_of_find?_eq_some h) hp h9
+  have hmem : t ∈ Tags.all ++ Tags.templated := by
+    unfold Tags.byName? at h
+    cases hf : Tags.find? n with
+    | some t' =>
+      rw [hf] at h
+      change some t' = some t at h
+      cases h
+      unfold Tags.find? at hf
+      exact List.mem_append_left _ (List.mem_of_find?_eq_some hf)
+    | none =>
+      rw [hf] at h
+      change Tags.templated.find? (·.name == n) = some t at h
+      exact List.mem_append_right _ (List.mem_of_find?_eq_some h)
+  rcases tags_hm96_or t hmem h9 with h1 | h1
+  · exact h1
+  · exfalso
+    have hn : t.name = n := Tags.byName?_name h
+    have e : Tags.byName? "verity/flock-circuit+plain-leaves" = some Tags.circuitPlainLeaves := by rfl
+    rw [← hn, h1, e] at h
+    have : Tags.circuitPlainLeaves = t := Option.some.inj h
+    rw [← this, plainLeaves_circuitPlainLeaves] at hp
+    cases hp
 
 open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
