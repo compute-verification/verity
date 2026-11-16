@@ -18,7 +18,7 @@ import pytest
 VLLM = Path(__file__).resolve().parents[2]
 SCRIPT = VLLM / "verity_vllm" / "ops" / "serve_fresh.sh"
 BASH = shutil.which("bash") or "/bin/bash"
-TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir", "bash", "date", "setsid")
+TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir", "bash", "date", "setsid", "sleep")
 HOSTILE = {"WORK": "/workspace", "VENV": "/workspace/venv312", "HF_HOME": "/workspace/hf", "FA2": "/workspace/cp/fa2",
            "UV_CACHE_DIR": "/root/.cache/uv", "PIP_CACHE_DIR": "/root/.cache/pip", "HOME": "/root",
            "XDG_CACHE_HOME": "/root/.cache", "TRITON_CACHE_DIR": "/workspace/cache/triton"}
@@ -122,6 +122,32 @@ def test_a_signal_to_the_script_stops_the_step_it_is_running_and_everything_that
         assert held.read() == ""   # end of file: every holder of the FIFO, the grandchild included, is gone
     out, err = p.communicate()
     assert p.returncode == 143, (out, err)
+    assert out.strip().splitlines()[-1] == "SERVE-FRESH FAILED bootstrap: stopped by a signal"
+
+
+def test_a_step_that_ignores_term_is_killed_before_the_script_prints_its_last_line(tmp_path: Path) -> None:
+    """A server signalled mid-startup acted on TERM minutes later, after the script had exited and its caller had removed
+    the work directory: the script waits STOP_GRACE_S for the step's group, KILLs what is left, and only then says so."""
+    ops = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "ops"
+    ops.mkdir(parents=True)
+    (tmp_path / "tree" / "pyproject.toml").write_text("")
+    script = ops / SCRIPT.name
+    shutil.copy(SCRIPT, script)
+    fifo = tmp_path / "held"
+    os.mkfifo(fifo)
+    # the stand-in ignores TERM, as tail inherits: only KILL ends it
+    (ops / "pod_bootstrap.sh").write_text('trap "" TERM; exec 3>"$HELD"; echo up >&3; exec tail -f /dev/null\n')
+    env = {**_machine(tmp_path, "0, 9.0, NVIDIA H200"), "DISK_GB": "0", "HELD": str(fifo), "STOP_GRACE_S": "1"}
+    p = subprocess.Popen([BASH, str(script), "--work", str(tmp_path / "w")], cwd=tmp_path, env=env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    with open(fifo) as held:
+        assert held.readline() == "up\n"
+        p.send_signal(signal.SIGTERM)
+        out, err = p.communicate()
+        os.set_blocking(held.fileno(), False)
+        assert os.read(held.fileno(), 1) == b"", "the stand-in outlived the script"   # EOF, not EAGAIN: no writer is left
+    assert p.returncode == 143, (out, err)
+    assert "outlived TERM by 1 s; KILL" in err
     assert out.strip().splitlines()[-1] == "SERVE-FRESH FAILED bootstrap: stopped by a signal"
 
 
