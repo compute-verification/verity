@@ -213,7 +213,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
         assert f"| {title} |" in text
     assert "| Flock | not run |" in text and "- Flock: no number: not run" in text
     doc = json.loads(line)
-    assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["rows"]] == list(PL.LAYERS)
+    assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["results"]] == list(PL.LAYERS)
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
     written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
     assert [(m["name"], m.get("member")) for m in written] == [
@@ -224,7 +224,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
-    assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
+    assert doc["results"][3]["ran_with"] == "ran with: not stated" and doc["results"][3]["prover_s"] == 1202.0
     head = text.splitlines()
     assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
                          ("- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
@@ -263,8 +263,8 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
-    assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
+    kit.report(PL.REPORT, "text", {"results": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
+    assert capsys.readouterr().out == 'text\n{"results": []}\n' and not any(tmp_path.iterdir())
 
 
 def test_with_no_number_in_any_result_the_command_says_so_first_and_exits_1(tmp_path, monkeypatch, capsys):

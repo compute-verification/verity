@@ -34,7 +34,7 @@ from typing import Any
 
 from verity_bench import kit
 
-SCHEMA = "verity-bench/proof-layers/v1"
+SCHEMA = "verity-bench/proof-layers/v2"
 #: each layer's flag and its benchmark result's title, in the table's order
 LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with sampling", "recursion": "with recursion"}
 RECURSION, PROVE_PATH, A5, LAYERS_SH = "recursion_e2e", "prove_path", "a5", "layers.sh"
@@ -704,7 +704,7 @@ def render(results: Sequence[Result]) -> str:
 def document(results: Sequence[Result]) -> dict[str, Any]:
     """The table as JSON. ``audit`` is always false: the command checks no challenger's signature."""
 
-    return {"schema": SCHEMA, "audit": False, "rows": [{"title": LAYERS[r.layer], **asdict(r)} for r in results]}
+    return {"schema": SCHEMA, "audit": False, "results": [{"title": LAYERS[r.layer], **asdict(r)} for r in results]}
 
 
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
