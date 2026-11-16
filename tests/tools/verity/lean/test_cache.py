@@ -23,7 +23,7 @@ from xml.sax.saxutils import escape
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_cache", HERE.parent / "cache.py")
+spec = importlib.util.spec_from_file_location("lean_cache", HERE.parents[3] / "tools" / "verity" / "lean" / "cache.py")
 C = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(C)
 
@@ -649,7 +649,7 @@ def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
 def test_the_audit_runs_lake_with_the_cache_off():
     """Lake finds a module in a cache by its 64-bit input hash alone, so no Lake the audit runs reads the node's artifact
     cache: with `--artifacts`, only the build steps read a directory staged for them (`check.stage_build`)."""
-    spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "check.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parents[3] / "tools" / "verity" / "lean" / "check.py")
     A = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(A)
     e = A.lake_env()
@@ -676,7 +676,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
     would rebuild over half of `security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
-    LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"artifacts_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg,
                     ignore=shutil.ignore_patterns(".lake"))
@@ -750,7 +750,7 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
     from a build that never stored it (a run before this rule, or one killed before its `put`) is compiled once more
     and stored, where Lake would have kept it for that tree alone; one the tree holds in another version than the
     cache's is restored, not compiled. Each build is `check.py`'s: staged and settled, built in the sandbox, then put."""
-    LC, LA = (_load(f"two_trees_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"two_trees_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     store = tmp_path / "artifacts"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
@@ -807,7 +807,7 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
     assert {f.relative_to(lib[0]): f.read_bytes() for f in lib[0].rglob("*.olean")} == \
         {f.relative_to(lib[1]): f.read_bytes() for f in lib[1].rglob("*.olean")}
     assert not (store / MK.UNSTORED).exists()
-    damaged = _load("two_trees_lean_changed", HERE.parent / "lean_changed.py").damaged
+    damaged = _load("two_trees_lean_changed", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_changed.py").damaged
     assert [damaged(d) for d in lib] == [[], []], \
         "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
 
@@ -848,7 +848,7 @@ def test_a_tree_that_held_another_version_ends_with_every_output_object_and_exec
     the object's trace doesn't name, and links again. So each file of the build is, by digest, what a tree that compiled
     that version holds, the executable prints the new version, and the same holds for a version the cache lacks, which
     is compiled. An output kept from the earlier version under the new trace would differ here."""
-    LC, LA = (_load(f"exe_trees_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"exe_trees_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     store = tmp_path / "artifacts"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
@@ -938,7 +938,7 @@ def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_t
     that build. Named to the stage step as a package the run doesn't audit, the copy is settled with `top`'s own build:
     its modules are compiled once and indexed with `Top`, and a second tree with a fresh copy compiles nothing and
     leaves nothing unstored. Each build is `check.py`'s: staged and settled, built in the sandbox, then put."""
-    LC, LA = (_load(f"copied_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"copied_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     kept = pair(tmp_path / "kept")[1]
     subprocess.run(LC.in_sandbox(kept, ["lake", "build"]), cwd=kept, check=True, capture_output=True, env=LC.lake_env())
@@ -995,7 +995,7 @@ def _fold_builds(tmp_path: Path, monkeypatch, tag: str):
     """(check, lean_audit, the store, `build`): `build(pkg, edit)` is `check.py`'s build of ``pkg`` (staged and settled,
     built in the sandbox, then put), with ``edit`` run between Lake's build and `put`, and returns (the modules Lake
     compiled, the stage step's report, the module versions new in the cache, what `put` logged)."""
-    LC, LA = (_load(f"{tag}_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"{tag}_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     store = tmp_path / "artifacts"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
     n = iter(range(99))
@@ -1104,7 +1104,7 @@ def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_non
     runs the source the tree holds. A records build stages nothing there. Where one staged all the same, its restore by a
     link gave the C the cache file's time, older than the object compiled from the unpacked C: the repair kept that object
     and the executable ran the earlier source. With nothing unpacked, no build leaves such an object."""
-    LC, LA, LCH = (_load(f"no_cache_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    LC, LA, LCH = (_load(f"no_cache_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     if sandbox and not LC.sandboxed():
         pytest.skip("no sandbox here, so there is no build in the sandbox to test; the cases with no sandbox run")
     if not sandbox:
@@ -1215,7 +1215,7 @@ def test_outside_the_sandbox_a_lakefile_that_turns_lake_s_cache_on_finds_an_empt
     writes the cache the environment names, whatever `LAKE_ARTIFACT_CACHE` says. So outside the sandbox `build` also
     names a cache directory of its own, empty and removed after the command: Lake restores nothing an earlier build left,
     no file of the tree stays linked to another, and the cache the environment named is as it was."""
-    LC, LCH = (_load(f"cache_on_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_changed"))
+    LC, LCH = (_load(f"cache_on_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_changed"))
     no_unshare(tmp_path, monkeypatch)
     on = {**TOY, "lakefile.toml": TOY["lakefile.toml"].replace('name = "toy"\n', 'name = "toy"\nenableArtifactCache = true\n')}
     own = tmp_path / "lakes-own-cache"
@@ -1241,7 +1241,7 @@ def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the
     files, Lake unpacks the archive and hashes the outputs afresh, and the trace the archive holds is the publisher's
     own: the build holds nothing that tells the module from one it compiled. The index is for what this node compiled in
     the sandbox, so of such a build only the modules Lake said it built go in."""
-    LC, LA, LCH = (_load(f"unpacked_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    LC, LA, LCH = (_load(f"unpacked_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     own = tmp_path / "lakes-own-cache"
     tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
     publish(LC, publisher, tmp_path / "published", own)
@@ -1366,7 +1366,7 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
 
     The repair drops the object with the module, so the records run after it ends with every file of a tree built apart."""
-    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
 
 
@@ -1379,7 +1379,7 @@ def test_an_object_an_earlier_repair_kept_goes_for_being_older_than_the_c_restor
 
     The rule goes by the files' times, so it holds where a restored file is a copy, with the time of its restore: in the
     build sandbox, where a hard link from a cache into the package's `.lake` fails and Lake copies instead."""
-    LC, LA, LCH = (_load(f"kept_object_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    LC, LA, LCH = (_load(f"kept_object_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     if not LC.sandboxed():
         pytest.skip("no sandbox here, so Lake restores by a hard link and a restored file keeps the cache's time, which "
                     "the repair's rule by time does not expect")
@@ -1415,7 +1415,7 @@ def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restore
     `Modular.Secret` privately, so Lake hands `Modular`'s compile neither and its key reads neither. Every module of the
     build is stored all the same, and a second tree of the node compiles none. Held to the whole closure, `Modular`
     was never stored, nor any module that loads one like it."""
-    LC, LA = (_load(f"module_files_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    LC, LA = (_load(f"module_files_{n}", HERE.parents[3] / "tools" / "verity" / "lean" / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     store = tmp_path / "artifacts"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
@@ -1555,7 +1555,7 @@ def test_a_build_works_on_its_own_copy_of_dependencies_bound_read_only(tmp_path)
 
 # ---------------------------------------------------------------- node 1's daily run (run_daily.py)
 
-_spec = importlib.util.spec_from_file_location("lean_run_daily", HERE.parent / "run_daily.py")
+_spec = importlib.util.spec_from_file_location("lean_run_daily", HERE.parents[3] / "tools" / "verity" / "lean" / "run_daily.py")
 D = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(D)
 

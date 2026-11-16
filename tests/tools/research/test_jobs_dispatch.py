@@ -582,7 +582,7 @@ def test_a_lean_regen_is_keyed_on_the_files_the_audit_reads(tmp_path):
 
 
 @pytest.mark.parametrize("fixtures, line", [
-    ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE / "tests" / "fixtures"'),
+    ("tools/verity/lean/tests/fixtures", 'FIXTURES = HERE / "tests" / "fixtures"'),
     ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"'),
     ("tests/tools/verity/lean/fixtures", 'FIXTURES = ROOT / "tests/tools/verity/lean/fixtures"')])
 def test_a_lean_regen_is_keyed_on_the_controls_fixtures_wherever_check_puts_them(tmp_path, fixtures, line):

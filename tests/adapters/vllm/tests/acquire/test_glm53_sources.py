@@ -25,7 +25,7 @@ from verity_vllm.records import property_record as PR
 
 ROOT = (Path(__file__).parents[5] / "adapters" / "vllm")
 CMAP = CM.load(ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json")
-CONFIG = json.loads((ROOT / "tests" / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
+CONFIG = json.loads((ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests" / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
 E, TOPK, MIL, H = ENV["E"], ENV["K"], ENV["MIL"], ENV["H"]
@@ -331,7 +331,7 @@ def _module_text(module: str) -> str:
 def _property_text(name: str) -> str:
     """The text of the one file under tests/properties that writes the registered property's schema."""
     assert name in PR.REGISTRY, f"no property {name} is registered"
-    writers = [p for p in (ROOT / "tests" / "properties").glob("*.py") if f'"{PR.REGISTRY[name].schema}"' in p.read_text()]
+    writers = [p for p in (ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests" / "properties").glob("*.py") if f'"{PR.REGISTRY[name].schema}"' in p.read_text()]
     assert len(writers) == 1, f"{len(writers)} file(s) under tests/properties write the schema of the property {name}"
     return writers[0].read_text()
 
@@ -353,7 +353,7 @@ def test_the_evidence_names_a_check_the_tree_has_for_each_kernel_and_says_which_
             assert word.search(clause), f"the evidence does not give {kernel} to {words}"
             assert word.search(check), f"{words} does not name {kernel}, which the evidence gives it"
     assert f"nothing in the tree checks {MOE_UNCHECKED}" in clauses[0]
-    checks = [*(ROOT / "tests" / "properties").glob("*.py"), ROOT / "verity_vllm" / "program" / "moe_difftest.py"]
+    checks = [*(ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests" / "properties").glob("*.py"), ROOT / "verity_vllm" / "program" / "moe_difftest.py"]
     naming = sorted(p.name for p in checks if re.search(rf"\b{MOE_UNCHECKED}\b", p.read_text()))
     assert len(checks) > len(named) and not naming, f"{naming} name {MOE_UNCHECKED}: the evidence is to name its check"
 
