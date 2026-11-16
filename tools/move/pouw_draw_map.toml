@@ -548,6 +548,12 @@ files = ["adapters/vllm/verity_vllm/pipeline/serve_h1.py"]
 "drawn_units" = "sampled_blocks"
 "draw_k" = "sample_k"
 
+# adapters/vllm/verity_vllm/protocols/pouw/__init__.py: our names it uses
+[[words_in]]
+files = ["adapters/vllm/verity_vllm/protocols/pouw/__init__.py"]
+[words_in.words]
+"in_process_draw" = "in_process_sample"
+
 # adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py: our names it uses
 [[words_in]]
 files = ["adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py"]
