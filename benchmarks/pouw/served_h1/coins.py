@@ -9,7 +9,7 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`, which holds its
+  of record is vllm's H1 path, `verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`, which holds its
   salt, round-0 request table, R, session S and requests_root rules; serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
@@ -75,10 +75,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger_gate import (
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger_gate import (
     HEX_WITHHELD, SSH, gate_call, key_record, published, ssh_args)
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
@@ -456,7 +456,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     `env_draw`), opened on the sample root when the window asks for its sample (`Coins.draw`)."""
     if at is None:
         if entropy is None:
-            from verity.protocols.accounting.pouw.verifier import verifier
+            from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process", epoch=epoch, entropy=entropy)
     client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
@@ -573,7 +573,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

@@ -7,7 +7,7 @@
 #
 # One PoUB session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
 # only ever read), each pass one engine step's weight reads from it through kernels' staging decode on the card, its
-# receipts sketched from the rows the decode reads (`verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py session`), under a gpu-lease of
+# receipts sketched from the rows the decode reads (`verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
 # never a process on this node: the `p2_parties --listen` that the auditor device's gate starts for BW_PARTY, reached at
@@ -26,7 +26,7 @@
 # it; lake-build.log in DIR), and one that doesn't build runs no session. DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_store/store.py layout`), held to the store's setup.json; the lib is kernels' build
-# (`verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
+# (`verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
 # built lib/ directory. Both are written to scratch under DIR, which is removed: DIR keeps only records. A toy on the
 # CPU: BW_STORE, BW_LAYOUT, BW_REGISTRATION and BW_NODE name it, BW_DEVICE=cpu, BW_REF_DECODE=1 and BW_LEASE_MIN=0
 # (no lease, no lib). Exits 0 iff the session's answer is an accept; DIR/rc.txt has each step's exit code.
@@ -36,7 +36,7 @@ mkdir -p "$O"
 PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
-REG=${BW_REGISTRATION:-"verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"}
+REG=${BW_REGISTRATION:-"verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json"}
 PARTY_MIN=${BW_PARTY_MIN:-40}
 PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --fixture --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
@@ -53,7 +53,7 @@ step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 LAYOUT=${BW_LAYOUT:-}
 if [ -z "$LAYOUT" ]; then
   LAYOUT=$S/layout.json
-  "$PY" verity/protocols/accounting/pous/prover/p2/p2_store/store.py layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
+  "$PY" verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py layout --out "$LAYOUT" > "$O/layout.log" 2>&1 \
     && "$PY" - "$STORE/setup.json" "$LAYOUT" >> "$O/layout.log" 2>&1 <<'EOF'
 import hashlib, json, sys
 want, got = json.load(open(sys.argv[1]))["layout_sha512"], hashlib.sha512(open(sys.argv[2], "rb").read()).hexdigest()
@@ -63,7 +63,7 @@ EOF
 fi
 LIB=${BW_LIB:-unused}
 if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
-  bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1 \
+  bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1 \
     && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256)
   step lib $?
   cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null
@@ -71,7 +71,7 @@ if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
 fi
 CASE_EXE=${BW_CASE_EXE:-}
 if [ -z "$CASE_EXE" ]; then
-  LEAN=verity/protocols/accounting/poub/verifier/lean
+  LEAN=verity/protocols/resource_accounting/memory/poub/verifier/lean
   tar -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash tools/verity/lean/setup.sh "$S/$LEAN" > "$O/lake-setup.log" 2>&1
@@ -93,7 +93,7 @@ run() {
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/started.txt"
   nvidia-smi --query-gpu=index,uuid,name,memory.total ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} --format=csv,noheader \
     > "$O/gpu.txt" 2>/dev/null
-  "$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py "$@" > "$O/session.log" 2> "$O/session.err"
+  "$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py "$@" > "$O/session.log" 2> "$O/session.err"
   local rc=$?
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/ended.txt"
   return $rc

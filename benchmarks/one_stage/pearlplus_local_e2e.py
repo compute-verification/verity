@@ -1,4 +1,4 @@
-"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/device/live_challenger/auditor.py`)
+"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/verifier/live_challenger/auditor.py`)
 on a scratch auditor device: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier's (``spot-verifier``, built first).
 
@@ -60,7 +60,7 @@ WAIT_S = 300
 
 def _auditor():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -225,9 +225,9 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.protocols.accounting.pouw.verifier import salt as PS
+    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
     sys.path[:0] = [str(HERE), str(TREE / "benchmarks" / "pouw" / "tests")]
     import served_verdicts as S
@@ -242,7 +242,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (main := out / "main.txt").write_text(pin + "\n")
     piece, log = out / "pieces" / "pouw", []
     piece.mkdir(parents=True)
-    report: dict = {"gate": "verity/protocols/compose/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
+    report: dict = {"gate": "verity/protocols/compose/verifier/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "spot": "registration.json chained after W, a records-audit summary tied to W "
@@ -319,7 +319,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
-            pkg = TREE / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
+            pkg = TREE / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
             b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
             log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
             exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
@@ -358,7 +358,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.protocols.proofs.spot.device.challenger import CoinError
+    from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)

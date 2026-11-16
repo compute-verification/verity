@@ -60,7 +60,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SRW
 from verity_vllm import messages as M
@@ -106,7 +106,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
-#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
+#: request value (the network attester's users are request indexes, ``user-<i>``), so it can leave the node with
 #: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
@@ -200,7 +200,7 @@ class LiveRequest:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network attester's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None

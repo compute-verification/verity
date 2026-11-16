@@ -48,13 +48,13 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py").parent))
 
 import bandwidth as B
 
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.verifier import verifier as V
-from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
