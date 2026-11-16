@@ -34,7 +34,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-#: what ../opcode_probe/sm89/census.py reads, and the command
 __all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main"]
 
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
