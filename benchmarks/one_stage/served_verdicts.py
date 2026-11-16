@@ -25,7 +25,9 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
+    served_verdicts.py coin-trees --challenger C --summary FILE
+    served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -41,8 +43,11 @@ its place. The class's padded counts, the period's declared T and S, the bench B
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 docket (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
-scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+(`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
+its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
+audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
+V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
+``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -704,20 +709,57 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     return public_json({**out, "padded": list(PADDED)})
 
 
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+def challenger_coins(challenger: str) -> str:
+    """Whose coins a records audit's ``--challenger`` (run.sh's PP_CHALLENGER) are, as the SAMPLED-PROOFS line says
+    them: the auditor device's gate, or a development session (local or loopback), which no record of the auditor's takes.
+    No address: the gate is named by its kind alone."""
+    if challenger.startswith("gate:"):
+        return "the gate's, the auditor's challenger"
+    return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
+
+
+def coins_said(challenger: str, summary: Mapping[str, Any] | None) -> str:
+    """The V3C-AUDIT line's account of its audit's coins: whose they were (`challenger_coins`) and its ``summary``'s
+    ``coin_trees`` (none where the audit wrote no summary or reached no session)."""
+    return f"coins {challenger_coins(challenger)}, coin_trees {(summary or {}).get('coin_trees') or 'none'}"
+
+
+def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> str | None:
+    """Why a records audit on the gate's coins (``challenger`` ``gate:USER@HOST``) can't be accepted for its sessions'
+    coin trees, from its ``summary.json`` (``summary``), or None. The auditor's Lean verifier takes a `--zk` session's
+    coins only from the release log of the session that sampled the sampled proof blocks (`OneStageZk.treesHeld`), so
+    the summary must say the sessions took their trees from it (``coin_trees`` ``window``, `a5.window_trees`). A
+    development session's coins, a plain audit (whose one session runs on a tree of its own by design) and an audit that
+    reached no session (no summary, or one naming no ``coin_trees``, which its own verdict refuses) are None, as before."""
+    s = summary or {}
+    if not challenger.startswith("gate:") or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
+        return None
+    return (f"the audit's summary says coin_trees={s['coin_trees']!r}: the sampled proof blocks' sessions took their coin "
+            "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
+            "refuses (OneStageZk.treesHeld); serve from a tree whose a5.window_trees takes them from that session, "
+            "with FLOCK_CHALLENGER unset")
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, challenger: str | None = None,
+                 summary: Mapping[str, Any] | None = None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too."""
+    scope's ``steps``, the window's engine steps, stay on the node too. With the audit's ``challenger``, whose coins they
+    were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader takes a development session's
+    run for the auditor's."""
     row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+    if summary is not None:
+        row["coin_trees"] = summary.get("coin_trees")
     part = partition or {}
     scope = part.get("scope") or {}
     over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
             f"(law {part.get('law', '?')})")
     drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
+    coins = f", coins {challenger_coins(challenger)}" if challenger is not None else ""
+    return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -1770,6 +1812,15 @@ def _json(path: Path) -> Any:
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def _summary(path: Path) -> dict[str, Any] | None:
+    """A records audit's summary.json at ``path`` for the lines that say its coin trees: None where there's none, and one
+    that isn't JSON as a summary whose ``coin_trees`` says so."""
+    try:
+        return _json(path)
+    except ValueError:
+        return {"coin_trees": f"unread: {path.name} is not JSON"}
+
+
 def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """The reserve of `session` in the auditor's ledger `lines` and the ``period-open`` body of its prover's period it
     joined (`challenger.verify_periods`' rule: the prover's period open at the reserve), each None where there is none."""
@@ -2461,6 +2512,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
+    sl.add_argument("--challenger")
+    sl.add_argument("--summary", type=Path)
+    for name in ("coin-trees", "coins"):
+        ct = sub.add_parser(name)
+        ct.add_argument("--challenger", required=True)
+        ct.add_argument("--summary", type=Path, required=True)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -2539,8 +2596,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not rows:
             print("no RECORDS line")
             return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
+                           a.challenger, _summary(a.summary) if a.summary else None))
         return 0
+    if a.cmd == "coins":
+        print(coins_said(a.challenger, _summary(a.summary)))
+        return 0
+    if a.cmd == "coin-trees":
+        try:
+            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith("gate:") else None)
+        except ValueError:
+            why = f"the audit's {a.summary} is not JSON, so nothing says where its sessions' coin trees came from"
+        if why:
+            print(why)
+        return 1 if why else 0
     if a.cmd == "front-line":
         try:
             print(front_line(json.loads(a.session.read_text())))
