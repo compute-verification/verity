@@ -58,14 +58,22 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
 def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
     """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
     reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
-    declares that alone, and its memory line carries no error."""
-    lean_stands_in.unwritten(monkeypatch)
+    declares that alone, and its memory line carries no error. Each reading, and the declaration, carry the Python
+    ledger's apart (`python_ledger`), the one the Lean's answer would decide, which is the decided reading's whole."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    lean_stands_in.agree(monkeypatch)
+    (decided,), _ = run("honest")
+    lean_stands_in.unwritten(monkeypatch)
     (r,), _ = run("honest")
     lg, why = r["ledger"], coins.undecided("γ terms")
-    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
+    assert r["accepted"] and all({k: v for k, v in lg[n].items() if k != "python_ledger"}
+                                 == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
                                  for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
-    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
+    assert {k: v for k, v in lg["declared"].items() if k != "python_ledger"} == {"undecided": why}
+    assert verifier.memory_error(lg) is None
+    assert set(lg["spec"]["python_ledger"]) == set(decided["ledger"]["spec"])
+    assert set(lg["declared"]["python_ledger"]) == set(decided["ledger"]["declared"])
+    assert isinstance(lg["spec"]["python_ledger"]["gamma"], float)
 
 
 @pytest.mark.parametrize("outcome", ["rejected", None, "error"])

@@ -20,12 +20,16 @@ REGISTRY = Registry(
       "the session's plan under --loopback or --local: unset, the honest one (`honest`, `serve`); another plan, "
       "such as --loopback's `skip:0.0625`, is a cheat the verifier refuses, so the command prints no number"),
     S("LOCAL_WORK", str, "~/.cache/verity/bench-memory", VALUE,
-      "--local's working directory: the vLLM environment and the checkpoint the tree's bootstrap makes there, the "
-      "lease's lock files where no `gpu-lease` is installed, and each run's records under runs/"),
+      "--local's working directory, the only place it writes: the vLLM environment, the checkpoint, the package "
+      "caches and the tap builds the tree's bootstrap makes there, the lease's lock files where no `gpu-lease` is "
+      "installed, and each run's records under runs/"),
+    S("LOCAL_NODE", str, None, VALUE,
+      "--local's node sheet (`hardware/nodes/`), in place of the one for this machine's card (`LOCAL_SHEETS`); the "
+      "verifier's node is one card of it"),
     S("LOCAL_ROW", str, None, VALUE,
       "--local's served row, in place of the Llama 3.2 1B row for this machine's card (`LOCAL_ROWS`)"),
     S("VLLM_PY", str, None, VALUE,
       "--local's vLLM interpreter, a Python with vLLM and the `verity-vllm` launcher beside it; set, the bootstrap "
-      "does not run, and the checkpoint is the one under HF_HOME"),
+      "does not run, the checkpoint is the one under HF_HOME and the taps are the row's defaults or ROW_ARGS's"),
     S("GPU", str, None, VALUE, "--local's card, an index nvidia-smi gives; unset, the first"),
 )
