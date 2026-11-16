@@ -25,7 +25,8 @@
 # CMD reaches no unix socket it did not make (a read-only mount doesn't stop `connect`, and through the user's systemd
 # bus `systemd-run --user` would start anything outside every namespace): /run (and /var/run where it is no link to it)
 # and the job's TMPDIR get private read-only tmpfs, under /tmp's rule, and CMD runs under `sockets.py exec`, whose
-# seccomp filter refuses it every unix socket but a `SOCK_STREAM` `socketpair`. Before CMD runs, `sockets.py probe`,
+# seccomp filter refuses it every unix socket but a `SOCK_STREAM` `socketpair`. CMD's stdin is /dev/null, so a socket the
+# caller holds as its own stdin, which the filter never sees made, isn't CMD's. Before CMD runs, `sockets.py probe`,
 # run as CMD runs, tries every unix socket the kernel lists for a process the sandbox can see and the well-known ones:
 # the sandbox refuses (3) to run CMD if any connects. Where /etc/resolv.conf resolves into the hidden /run, its copy
 # stays (a fetch resolves names).
@@ -266,4 +267,4 @@ fi
 printf '%s\n' "$sockets" | "${as_cmd[@]}" "$py" -I -S "$tool/sockets.py" probe "${DBUS_SESSION_BUS_ADDRESS-}" \
   "${DBUS_SYSTEM_BUS_ADDRESS-}" "${SSH_AUTH_SOCK-}" || exit 3
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec "${as_cmd[@]}" "$@"
+exec "${as_cmd[@]}" "$@" </dev/null

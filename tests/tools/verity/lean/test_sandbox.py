@@ -811,6 +811,23 @@ def test_the_command_reaches_no_unix_socket_it_did_not_make(tmp_path, fetch):
     assert r.stdout.splitlines() == ["unseen", *(f"{n} refused" for n in names)]
 
 
+@needs_unshare
+@pytest.mark.parametrize("given", ["datagram socket", "pipe"])
+def test_the_command_s_stdin_is_dev_null_whatever_the_caller_s_is(tmp_path, given):
+    """The filter refuses making a unix socket, not using one the command was handed: a datagram socket given as the
+    caller's stdin would send to any datagram socket by its address. The command's fd 0 is /dev/null instead."""
+    held = ([os.fdopen(fd, mode) for fd, mode in zip(os.pipe(), ("rb", "wb"))] if given == "pipe"
+            else list(socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)))
+    try:
+        r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), str(tmp_path / ".lake"), "--", "readlink",
+                            "/proc/self/fd/0"], stdin=held[0].fileno(), capture_output=True, text=True)
+    finally:
+        for h in held:
+            h.close()
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "/dev/null\n"
+
+
 def test_the_probe_refuses_a_socket_the_command_could_reach_and_names_it(tmp_path):
     """The probe, run unconfined as a broken filter would leave the command: a listening socket of the inventory is
     reached and named, exit 3, and so is one only a D-Bus address names; a socket file no process listens on is not."""
