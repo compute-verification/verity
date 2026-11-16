@@ -43,9 +43,9 @@ from verity_vllm.definitions.registry.sampling import I64
 from verity_vllm.definitions.registry.torch_words import I64Le
 
 _CONF = ("model-untested: read from vLLM d9105ea80's _fused_eh_norm_kernel and the cc 9.0 PTX and SASS Triton 3.7.1 compiles from "
-         "it (the module docstring); adapters/vllm/tests/properties/glm53_mtp_eh_norm_capture_gpu.py is its hardware check")
+         "it (the module docstring); tests/adapters/vllm/tests/properties/glm53_mtp_eh_norm_capture_gpu.py is its hardware check")
 _CUT_CONF = ("model-untested: MtpEhNorm_v1 cut at the select and at each half's scale; the units return its words "
-             "(adapters/vllm/tests/program/test_mtp_draft.py)")
+             "(tests/adapters/vllm/tests/program/test_mtp_draft.py)")
 
 #: the columns of a half one apply unit takes, `dsa_norm`'s bound `DsaRMSNormApply_v1` width
 APPLY_G = 64

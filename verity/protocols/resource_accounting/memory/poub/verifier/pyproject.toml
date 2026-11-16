@@ -34,7 +34,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
           # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
           # periods, which `monitoring` reads
-          "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/resource_accounting/memory/poub/prover/__init__.py", "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's
           "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_prover.py",
@@ -46,7 +46,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
           "security/Proofs/ResourceAccounting/Gates.lean", "security/Definitions/ResourceAccounting/Gates/Ranges.lean",
           # main's first-parent history, spot' fixture, which test_remote_coins.py holds a session's pin to
-          "verity/protocols/proofs/spot/verifier/tests/fixtures/main-first-parent.txt",
+          "tests/verity/protocols/proofs/spot/verifier/fixtures/main-first-parent.txt",
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
           # canonical JSON, held to the circuits codec's
           "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",

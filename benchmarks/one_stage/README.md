@@ -41,7 +41,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every proof block of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
-  (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
+  (`tests/adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert proof blocks) is not a member. Each session's `circuit.txt` files and lookup tables
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
@@ -52,11 +52,11 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
-  yet: `adapters/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
+  yet: `tests/adapters/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_topp.py` (`a5_tp.sh` with `STANDIN=topp` or `topp:slots`): A5 on a window of top-p select rows cut into their stages,
-  which no served window has yet: `adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
+  which no served window has yet: `tests/adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
   to the proof block that wrote it, as rank 0 of a one-rank step on a local challenger's coins, run as `a5_sparse_mla.py` runs its
   window. `topp` names each stage on bits, the form Lean's `verify --zk` takes; `topp:slots` names the stages as words, whose
   table reads go in lookup slots, and Lean refuses each sampled proof block's statement. The window holds the stages whose
@@ -240,12 +240,12 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
-- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/proofs/flock/prover/tests/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`tests/verity/protocols/proofs/flock/prover/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 proof block (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
-  (`verity/protocols/proofs/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that proof block flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
