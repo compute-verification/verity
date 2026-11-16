@@ -907,7 +907,7 @@ def test_a_unit_in_the_sample_whose_key_reference_names_another_row_of_its_write
         body[at:at + 4] = int(r).to_bytes(4, "little")
         return {**publics, m.key: bytes(body)}
 
-    on_sample = WI.check_drawn
+    on_sample = WI.check_sampled
     assert on_sample(w.members, ref(writer[(0, 0, 0)] - wm.base), [u]) == {}
     w1 = next(x for x in w.members if x.base <= writer[(0, 0, 1)] < x.base + x.n)
     rewired = [replace(x, wired=tuple((q, o, tuple(writer[(0, 0, 1)] if k == i else v for k, v in enumerate(ws)) if q == "in1"

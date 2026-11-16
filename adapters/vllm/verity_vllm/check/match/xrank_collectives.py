@@ -246,15 +246,15 @@ def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int
         for s, _sz in sorted(lst):
             phase = "prefill" if (mx > mn and rows_of[s] == mx) else ("decode" if mx > mn else "all")
             groups.setdefault(phase, []).append(s)
-        draws = {f"{site}|{kind}|{phase}": (phase, fam, steps, _draw(seed, f"{site}|{kind}|{phase}", steps, rows_of, per_stratum, max_rows))
+        samples = {f"{site}|{kind}|{phase}": (phase, fam, steps, _sample(seed, f"{site}|{kind}|{phase}", steps, rows_of, per_stratum, max_rows))
                  for phase, steps in groups.items()}
         if call_family is not None:
             route_at = {s: call_family(site, kind, sz) for s, sz in sorted(lst)}
-            taken = {route_at[s] for d in draws.values() for s, _r in d[3]}
+            taken = {route_at[s] for d in samples.values() for s, _r in d[3]}
             for f in sorted({f for f in route_at.values() if f} - taken):
                 key, steps = f"{site}|{kind}|route={f}", [s for s, f_ in route_at.items() if f_ == f]
-                draws[key] = (f"route={f}", f, steps, _draw(seed, key, steps, rows_of, per_stratum, max_rows))
-        for key, (phase, family, steps, chosen) in draws.items():
+                samples[key] = (f"route={f}", f, steps, _sample(seed, key, steps, rows_of, per_stratum, max_rows))
+        for key, (phase, family, steps, chosen) in samples.items():
             strata[key] = {"site": site, "kind": kind, "phase": phase, "family": family, "steps_n": len(set(steps)), "picked": [s for s, _r in chosen]}
             for s, ridx in chosen:
                 picks.append({"step": s, "site": site, "kind": kind, "member": f"{site}/{'part' if kind == 'all_reduce' else 'shard'}_rank{rank}",
@@ -262,7 +262,7 @@ def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int
     return {"strata": strata, "picks": picks, "per_stratum": per_stratum, "max_rows": max_rows, "seed": seed.hex() if isinstance(seed, (bytes, bytearray)) else str(seed)}
 
 
-def _draw(seed: bytes, key: str, steps: list[int], rows_of: dict[int, int], per_stratum: int, max_rows: int) -> list[tuple[int, list[int]]]:
+def _sample(seed: bytes, key: str, steps: list[int], rows_of: dict[int, int], per_stratum: int, max_rows: int) -> list[tuple[int, list[int]]]:
     """A stratum's picks: up to `per_stratum` of its steps, each with at most `max_rows` of its rows, by the seed's hash of (key, step)."""
     steps = sorted(set(steps))
     # seeded choice without replacement: rank the steps by a hash of (seed, key, step)

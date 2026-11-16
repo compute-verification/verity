@@ -38,7 +38,7 @@ past 111 bytes, or past a Flock block of 2^27 bits). A Boolean-profile port's le
 `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-the wiring check holds on the sampled proof blocks (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
+the wiring check holds on the sampled proof blocks (`wiring.check_sampled`). A wire reads a row whole: a row gathered from several
 writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
 form, the wire cut (``cuts``, `Spot.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
@@ -1768,7 +1768,7 @@ def _reads_of(tid: str, lo: int, n: int, reads: _ReadIndex, rows: Mapping[str, i
     return out
 
 
-class _Drawn:
+class _Sampled:
     """A period's registered reads as `Window.close` commits them, each (value, position) the period reads sampled once: by
     parameter, the positions its members read (sorted), their salts (`rows.value_salts`, one pass where the value's salts
     sample many) and their paths' hex. Each member's salts and header entry are core's ``Registered.statement``'s for its
@@ -2626,7 +2626,7 @@ class Window:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
         tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
-        row that is neither. Each registered row the period reads has its salt sampled and its path made once (`_Drawn`).
+        row that is neither. Each registered row the period reads has its salt sampled and its path made once (`_Sampled`).
         An input row recorded in full is committed under its value's salt, and refused unless it is the value's row
         (`rows.commit`'s ``carried``): a salt hides one row. A supplied value's rows are left out, their salts being
         public (`supplied`)."""
@@ -2650,7 +2650,7 @@ class Window:
                     raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} {v.word_bits}-bit "
                                      f"leaves, not the port's {words[p]} 16-bit words")
                 wanted.setdefault(param, []).append(positions)
-        sampled, written = _Drawn(values, wanted), self._written(values)
+        sampled, written = _Sampled(values, wanted), self._written(values)
         data, salts_of, strings_of, self._entries = [], {}, {}, {}
         for m, reads in zip(self.window.members, read_by, strict=True):
             lay = by[m.template][1]

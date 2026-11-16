@@ -1196,19 +1196,19 @@ class TP2CaptureWorkerExtension:
         if rc is None or not pop or not bmap:
             return {"rank": st["rank"], "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
         rcv = self._claimed(rc, claimed_root_hex)
-        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(),
+        samples = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(),
                                         source=bytes.fromhex(source_hex))
-        unbound = [bd.identity_dict(i) for i, e, _l in draws if e is None]
-        positions = [(int(i[2]), int(leaf)) for i, e, leaf in draws if e is not None]
+        unbound = [bd.identity_dict(i) for i, e, _l in samples if e is None]
+        positions = [(int(i[2]), int(leaf)) for i, e, leaf in samples if e is not None]
         t0 = _t.perf_counter()
         ops = com.open(positions) if positions else []
         ok = [bool(com.verify(rcv, o)) for o in ops]
         ctx_ok, ctx_why = bd.map_context_check(bmap, rcv) if hasattr(bd, "map_context_check") else (None, "n/a")
         late = max(p[2] for p in pop)
-        fams = sorted({i[4].split(".")[-1].split("/")[0] if not i[4].startswith(bd.HIDDEN_FAMILIES) else i[4].split("/")[0] for i, e, _l in draws})
-        tp_draws = sum(1 for i, e, _l in draws if str(i[5]).startswith(("part_rank", "shard_rank")))
-        return _jsonable({"rank": st["rank"], "n": len(draws), "opened": len(ops), "verified": sum(ok), "unbound_n": len(unbound), "unbound": unbound[:5],
-                          "late_step_in_sample": any(i[2] == late for i, e, _l in draws), "families": fams, "tp_partial_identities_drawn": tp_draws,
+        fams = sorted({i[4].split(".")[-1].split("/")[0] if not i[4].startswith(bd.HIDDEN_FAMILIES) else i[4].split("/")[0] for i, e, _l in samples})
+        tp_samples = sum(1 for i, e, _l in samples if str(i[5]).startswith(("part_rank", "shard_rank")))
+        return _jsonable({"rank": st["rank"], "n": len(samples), "opened": len(ops), "verified": sum(ok), "unbound_n": len(unbound), "unbound": unbound[:5],
+                          "late_step_in_sample": any(i[2] == late for i, e, _l in samples), "families": fams, "tp_partial_identities_sampled": tp_samples,
                           "open_verify_s": _t.perf_counter() - t0, "map_digest": bmap["digest"],
                           "claimed_root": (claimed_root_hex or rc.run_root.hex()), "claimed_root_is_own": rcv is rc, "context": {"ok": ctx_ok, "why": ctx_why}})
 

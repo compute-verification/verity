@@ -4,7 +4,7 @@ producers of a partial, the units combining them and the calls that read a combi
 read of a combine's output is the output row of the unit that computes it.
 
 A wired row is committed under its writer's salt (`wiring.salts`), so a peer row and its writer's output are one public
-string. A peer row that isn't its writer's output is a wrong block of the window (`wiring.check`, and `check_drawn` on the
+string. A peer row that isn't its writer's output is a wrong block of the window (`wiring.check`, and `check_sampled` on the
 units a sample samples), never a free input: `interface.input_count` counts every peer row wired.
 
 **Units** (`grain.lower`). A site's units are:

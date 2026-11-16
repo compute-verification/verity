@@ -47,7 +47,7 @@ def case_vector(case: str, seed: bytes, epoch: int) -> dict:
         "transcript_root": transcript.hex(),
         "audit_key": derive(sample_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
         "records_root": records.hex(),
-        "pearl_c_sample_key": CW.sample_key(sample_coin.coin, transcript, records, salt).value.hex(),
+        "pearl_c_draw_key": CW.sample_key(sample_coin.coin, transcript, records, salt).value.hex(),
     }
 
 

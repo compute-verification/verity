@@ -24,7 +24,7 @@ committer that detaches no window is finalized at the close and frozen for its s
 in ``windows.jsonl``, written once its finalize has run and before its seal, names its row dir (``seal``); what its seal wrote
 is its line in ``seals.jsonl``, once written, in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`)
 writes only each seal's store files on its thread, and the rest of the seal runs in that spawned process. With ``release``
-(`serve_release.Draws`, ``--retain device --release-after``) a window's seal, on either path, first waits for its
+(`serve_release.Samples`, ``--retain device --release-after``) a window's seal, on either path, first waits for its
 sample-gated release (on the first thread), which keeps only the leaves its
 subprotocols' sampled blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
 where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
@@ -261,7 +261,7 @@ class CommitWindows:
         self._pool_out: dict[int, dict[str, Any]] = {}   # each window's pool row record (`_pool_row`), until its line
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
-        self.release = release                           # `serve_release.Draws`: each window's sample-gated release, before its seal
+        self.release = release                           # `serve_release.Samples`: each window's sample-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
@@ -543,7 +543,7 @@ class CommitWindows:
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
 
     def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
-        """A window that reaches no seal, so no sample-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
+        """A window that reaches no seal, so no sample-gated release: `serve_release.Samples.discard`, its device pool pieces freed,
         so the next windows' steps don't wait on them (``rec["release"]``); and the arm hears why (`_sealed`)."""
         if isinstance(job, tuple):
             return

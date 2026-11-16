@@ -5,7 +5,7 @@
 #  1. host: --retain host --seal; every window sealed; then `retain_device_gpu.py reads` picks each window's sample by hand from
 #     its sealed store and sizes the device pool at POOL_X (default 1.6) of the largest window, so a window's steps can't all fit
 #     while the window before still holds the pool.
-#  2. device: --retain device --retain-device-gb that --seal --release-after pouw --draws-dir; the drawer (`draw`) writes each
+#  2. device: --retain device --retain-device-gb that --seal --release-after pouw --draws-dir; the drawer (`sample`) writes each
 #     window's sample DELAY_S after its windows.jsonl line, so the next round's steps wait on the pool for that window's release.
 #  3. `retain_device_gpu.py compare`: each device-sealed window holds exactly its sample's leaves, byte-equal to the host bundle's,
 #     its sampled reads verify against its own run root, its unsampled read is refused by name; the pool's peak and waits.
@@ -89,7 +89,7 @@ serve() {  # NAME RETAIN-ARGS...: one endpoint, ROUNDS rounds of the fixed load,
 }
 
 serve host --retain host || { say "STOP at the host serve"; exit 11; }
-"$PY" "$HELP" reads "$BASE/host" "$OUT/reads" > "$OUT/reads.json" 2> "$OUT/reads.err" || { cat "$OUT/reads.err"; say "STOP: no draws from the host serve"; exit 12; }
+"$PY" "$HELP" reads "$BASE/host" "$OUT/reads" > "$OUT/reads.json" 2> "$OUT/reads.err" || { cat "$OUT/reads.err"; say "STOP: no samples from the host serve"; exit 12; }
 GB=$("$PY" -c 'import json, math, sys; r = json.load(open(sys.argv[1])); print(f"{math.ceil(r["max_window_bytes"] * float(sys.argv[2]) / 2**30 * 100) / 100:.2f}")' \
   "$OUT/reads.json" "$POOL_X")
 WGB=$("$PY" -c 'import sys; print(f"{float(sys.argv[1]) * 0.95:.2f}")' "$GB")
@@ -97,18 +97,18 @@ say "HOST windows and largest window's committed bytes: $(cat "$OUT/reads.json")
 
 DD=$BASE/device
 mkdir -p "$DD"
-( "$PY" "$HELP" draw "$DD" "$OUT/reads" --protocol pouw --delay-s "$DELAY_S" --draws-dir "$DD/draws" --stop "$DD/.stop" ) > "$OUT/drawer.log" 2>&1 &
+( "$PY" "$HELP" sample "$DD" "$OUT/reads" --protocol pouw --delay-s "$DELAY_S" --draws-dir "$DD/samples" --stop "$DD/.stop" ) > "$OUT/drawer.log" 2>&1 &
 DRAWER=$!
-serve device --retain device --retain-device-gb "$GB" --window-gb "$WGB" --release-after pouw --draws-dir "$DD/draws"; sr=$?
+serve device --retain device --retain-device-gb "$GB" --window-gb "$WGB" --release-after pouw --draws-dir "$DD/samples"; sr=$?
 kill "$DRAWER" 2>/dev/null; wait "$DRAWER" 2>/dev/null
-cp -r "$DD/draws" "$OUT/device/" 2>/dev/null
+cp -r "$DD/samples" "$OUT/device/" 2>/dev/null
 "$PY" "$HELP" compare "$DD" "$BASE/host" "$OUT/reads" > "$OUT/compare.json" 2> "$OUT/compare.err"; cr=$?
 tail -1 "$OUT/compare.json" | tee -a "$OUT/summary.txt"
 [ -s "$OUT/compare.err" ] && tail -5 "$OUT/compare.err"
 grep -h '"release"' "$DD/seals.jsonl" 2>/dev/null | "$PY" -c 'import json, sys
 for l in sys.stdin:
     s = json.loads(l); r = s.get("release") or {}
-    print("SEAL w%s: release %s" % (s["window"], json.dumps({k: r.get(k) for k in ("union_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "draw_wait_s", "discarded")})))' \
+    print("SEAL w%s: release %s" % (s["window"], json.dumps({k: r.get(k) for k in ("union_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "sample_wait_s", "discarded")})))' \
   | tee -a "$OUT/summary.txt"
 du -sh "$BASE"/host "$BASE"/device 2>/dev/null | tee -a "$OUT/summary.txt"
 say "device serve rc=$sr compare rc=$cr"

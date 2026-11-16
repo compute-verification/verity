@@ -25,10 +25,10 @@ window's rounds. Past T = `live.PIECE_ROWS` it is the piece's, `live.template_ro
 With ``--lanes K,...`` each listed K is committed in credit's lanes form (`credit.form_of`) instead of ``k<K>``: a sampled
 leaf at K is proved as its lanes and combine (`leaf_lanes.statements`), each statement on its own file, ``lane<K>`` and
 ``combine<K>``, the flat statement of `h1window.leaf_unit` of the declared window Program at K (rebuilt from the
-descriptor's layout, `rebuilt`, its templates held to the descriptor's) on `drawn.leaf_rows`, bound to that statement's
+descriptor's layout, `rebuilt`, its templates held to the descriptor's) on `sampled.leaf_rows`, bound to that statement's
 leaf Program and its partition (`h1window.leaf_program`, a population of one), which core's credit derives itself
 (`credit.leaf_of`, `credit.leaf_partition_of`). The manifest's ``files`` holds both files' SHA-512 and
-``leaf_programs`` each leaf Program's descriptor's (written beside the file, `drawn.LEAF_PROGRAM`), and its
+``leaf_programs`` each leaf Program's descriptor's (written beside the file, `sampled.LEAF_PROGRAM`), and its
 ``templates`` each statement's Definition id. An sm_90 window's Program is the sm_120 one's byte for byte
 (`h1device`), so the files serve either card.
 
@@ -135,7 +135,7 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -
 
 
 def stagers() -> ModuleType:
-    """`prover.lowering.stagers`: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``,
+    """`prover.lowering.stagers`: the stagers ``h1_prove/drawn.py`` hands sampled's ``stage`` (``recomposed``,
     ``file_stager``)."""
     from verity.protocols.resource_accounting.compute.pouw.prover.lowering import (
         stagers as S,
@@ -213,8 +213,8 @@ def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
 
 
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
-    """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
-    `drawn_rows.LEAF_OUT_ROWS`, staged by Flock's library and written to `path`."""
+    """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `sampled_rows.leaf_rows`, its output
+    `sampled_rows.LEAF_OUT_ROWS`, staged by Flock's library and written to `path`."""
     from verity_flock import class_statement as CS
 
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as D
@@ -229,7 +229,7 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
                lower_leaf: LowerLeaf = lower_leaf) -> tuple[dict, dict, dict]:
     """Each lanes-form K's ``lane<K>`` and ``combine<K>`` (`leaf_bound` of the rebuilt window Program), lowered by
     `lower_leaf` unless `kept` (the manifest so far) records the file under the same bind, each leaf Program's
-    descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
+    descriptor written beside it (`sampled_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR

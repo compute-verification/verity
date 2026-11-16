@@ -8,25 +8,25 @@ the leaves the sampled blocks open.
   block wrote them (the KV a sampled attention block attends to), so the kept set is the union of those leaves, not the sampled
   blocks' own rows. `leaves_of` takes them to the step's leaves (`leaf_span`); a read of a member the window didn't commit is
   refused by name.
-* **When.** `Draws.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
+* **When.** `Samples.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
   until every protocol of ``--release-after`` has sampled window k, then hands the union to the device pool's `release` (the
   window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. The step-input port's
   committed positions, which the seal holds to the rows the window ran (`serve_seal.positions_off_of`), are read just before
   (`served_record.committed_raw`'s ``read_before_release``); no bundle holds them. A release can't come before the last sample,
   and a window is released once: a second sample of a window by the same protocol is refused (a sample is never redrawn), as is
   any sample once the window was released. The sealed bundle then holds the kept set with its leaves' salts, every step's root
-  and the tree nodes an opening inside it reads (`store_dump.drawn`), so each kept leaf's opening path stays whole until the
+  and the tree nodes an opening inside it reads (`store_dump.sampled`), so each kept leaf's opening path stays whole until the
   last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
-* **Where samples come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
-  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
+* **Where samples come in.** `Samples.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
+  open: `serve_h1.H1Windows.sampled`), or `SampleDir`: ``--draws-dir`` (default ``OUT/samples``) holds one file a sample,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
 * **At the stop** the pending seals wait for their windows' samples as they wait for their sealer: a drawer must sample every window
   whose line was written before it stops the server, or the stop waits on it.
-* **Failures.** A window that reaches no release (its samples fail, or its close or seal job does) is discarded (`Draws.discard`):
+* **Failures.** A window that reaches no release (its samples fail, or its close or seal job does) is discarded (`Samples.discard`):
   its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later sample or read of it
-  is refused by name. A failed run (`Draws.fail`, serve-openai's engine loop failing) ends every waiting release and every step
+  is refused by name. A failed run (`Samples.fail`, serve-openai's engine loop failing) ends every waiting release and every step
   waiting on the device pool by name.
 """
 from __future__ import annotations
@@ -89,12 +89,12 @@ def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
     return out
 
 
-class Draws:
+class Samples:
     """Each window's samples by protocol, as they come in, and each window's release once all of ``protocols`` have sampled it."""
 
     def __init__(self, protocols: Sequence[str], pool: Any = None) -> None:
         if not protocols:
-            raise ValueError("a sample-gated release needs at least one protocol whose draw it waits for")
+            raise ValueError("a sample-gated release needs at least one protocol whose sample it waits for")
         self.protocols = tuple(protocols)
         self._got: dict[int, dict[str, list[Read]]] = {}
         self._kept: dict[int, dict[int, frozenset[int]]] = {}
@@ -186,7 +186,7 @@ class Draws:
             self._kept[window] = {s: frozenset(v) for s, v in union.items()}
             self._got.pop(window, None)
         line = {"window": window, "protocols": list(self.protocols), "leaves_by_protocol": by,
-                "union_leaves": sum(len(v) for v in union.values()), "draw_wait_s": round(waited, 6), **rec}
+                "union_leaves": sum(len(v) for v in union.values()), "sample_wait_s": round(waited, 6), **rec}
         self.releases.append(line)
         return line
 
@@ -211,22 +211,22 @@ class Draws:
         return {"protocols": list(self.protocols), "released": len(self.releases),
                 "kept_bytes": sum(r.get("kept_bytes", 0) for r in self.releases),
                 "dropped_bytes": sum(r.get("dropped_bytes", 0) for r in self.releases),
-                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
+                "sampled_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
                 "device_pool": self.pool.record() if self.pool is not None else None}
 
 
-class DrawDir:
-    """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Draws` once; `scan` reads what's new, `start` scans every
-    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`."""
+class SampleDir:
+    """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Samples` once; `scan` reads what's new, `start` scans every
+    ``period_s`` (default `VERITY_SAMPLES_POLL_S`) on a thread of its own until `stop`."""
 
-    def __init__(self, path: str | Path, draws: Draws, *, period_s: float | None = None,
+    def __init__(self, path: str | Path, samples: Samples, *, period_s: float | None = None,
                  sleep: Callable[[float], None] = time.sleep) -> None:
-        self.path, self.draws, self.sleep = Path(path), draws, sleep
-        self.period_s = settings.VERITY_DRAWS_POLL_S if period_s is None else float(period_s)
+        self.path, self.samples, self.sleep = Path(path), samples, sleep
+        self.period_s = settings.VERITY_SAMPLES_POLL_S if period_s is None else float(period_s)
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
         self._stop = threading.Event()
-        self.thread = threading.Thread(target=self._run, name="draws-dir", daemon=True)
+        self.thread = threading.Thread(target=self._run, name="samples-dir", daemon=True)
 
     def scan(self) -> int:
         """Put every sample file not yet seen; how many."""
@@ -242,13 +242,13 @@ class DrawDir:
                 if not isinstance(body, Mapping) or body.get("window") != window or body.get("protocol") != protocol:
                     raise ValueError(f"its body names window {body.get('window') if isinstance(body, Mapping) else None!r} and "
                                      f"protocol {body.get('protocol') if isinstance(body, Mapping) else None!r}, not its name's")
-                self.draws.put(window, protocol, body["reads"])
+                self.samples.put(window, protocol, body["reads"])
             except (OSError, ValueError, KeyError, TypeError) as e:
-                self.draws.refuse(window, f"draw file {f.name}: {type(e).__name__}: {e}"[:500])
+                self.samples.refuse(window, f"sample file {f.name}: {type(e).__name__}: {e}"[:500])
             n += 1
         return n
 
-    def start(self) -> DrawDir:
+    def start(self) -> SampleDir:
         self.thread.start()
         return self
 
@@ -260,7 +260,7 @@ class DrawDir:
             try:
                 self.scan()
             except OSError as e:
-                self.draws.fail(f"--draws-dir {self.path}: {e}")
+                self.samples.fail(f"--draws-dir {self.path}: {e}")
                 return
             self.sleep(self.period_s)
 
@@ -285,15 +285,15 @@ class RetentionOptions:
                                      "window its release waits for; the union of the leaves their sampled proof blocks open is kept "
                                      "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
                                      "through --draws-dir")
-    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
-                            help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/draws)")
+    samples_dir: str = option("--draws-dir", default="", metavar="DIR",
+                            help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/samples)")
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
     """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
     r = opts.retention
     return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
-            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
+            "release_after": r.release_after or None, "samples_dir": (r.samples_dir or "OUT/draws") if r.release_after else None}
 
 
 def retention_refusal(opts: Any) -> str | None:
@@ -330,16 +330,16 @@ def retention_refusal(opts: Any) -> str | None:
     return None
 
 
-def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Draws | None, DrawDir | None]:
-    """serve-openai's `Draws` over ``com``'s device pool and its `DrawDir` under ``--release-after`` (None, None without it)."""
+def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Samples | None, SampleDir | None]:
+    """serve-openai's `Samples` over ``com``'s device pool and its `SampleDir` under ``--release-after`` (None, None without it)."""
     r = opts.retention
     if not r.release_after:
         return None, None
-    draws = Draws(protocols_of(r.release_after), getattr(com, "device_pool", None))
-    return draws, DrawDir(Path(r.draws_dir) if r.draws_dir else Path(out) / "draws", draws)
+    samples = Samples(protocols_of(r.release_after), getattr(com, "device_pool", None))
+    return samples, SampleDir(Path(r.samples_dir) if r.samples_dir else Path(out) / "draws", samples)
 
 
-def fail(draws: Draws | None, error: BaseException | None) -> None:
-    """A failed engine loop's end for ``draws``: no sample is coming, so every waiting release and pool take ends by name."""
-    if draws is not None and error is not None:
-        draws.fail(f"the server failed: {error}")
+def fail(samples: Samples | None, error: BaseException | None) -> None:
+    """A failed engine loop's end for ``samples``: no sample is coming, so every waiting release and pool take ends by name."""
+    if samples is not None and error is not None:
+        samples.fail(f"the server failed: {error}")

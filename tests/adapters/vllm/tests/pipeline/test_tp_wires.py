@@ -240,7 +240,7 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     """The headline: a prover commits, as the parts row of rank 1 at an attention all-reduce's combine unit, rank 1's
     gathered row there with one bit of one coordinate flipped. In rank 0's window alone (today's per-rank form) the row is a
     free input: the window closes and its wiring check passes. In the TP window the honest prover refuses to commit it, and
-    the same committed string in the TP window's public body is caught by the verifier's wiring check, and by `check_drawn`
+    the same committed string in the TP window's public body is caught by the verifier's wiring check, and by `check_sampled`
     when the sample samples that combine unit, only then. The windows are of that site and the ``before`` sites before it,
     or (None) of the request's 45: three closes of the whole request's units, which only the slow tier pays for."""
     first = next(j for j, s in enumerate(toy[0].sites) if toy[0].fns[1][s.own[1][0][0]].id.startswith("Gemm_v2{K=32"))
@@ -253,7 +253,7 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     got = win.close(salt_key=bytes(32))
     ms = win.window.members
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
-    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(sum(m.n for m in ms))) == {}
+    assert WI.check(ms, publics) == {} and WI.check_sampled(ms, publics, range(sum(m.n for m in ms))) == {}
 
     site, q = request[0].sites[j], 5
     (tid, at, _), = tp.units[0, j, TW.COMBINE, TW.ALL]
@@ -279,14 +279,14 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     body[cell] = publics0[m0.key][cell0]
     assert bytes(body[cell]) != publics[m.key][cell]
     bad = {**publics, m.key: bytes(body)}
-    caught, drawn = WI.check(ms, bad), WI.check_drawn(ms, bad, [g])
-    assert list(caught) == list(drawn) == [m.key] and "parts#1 strings are not the o0 strings" in caught[m.key]
+    caught, sampled = WI.check(ms, bad), WI.check_sampled(ms, bad, [g])
+    assert list(caught) == list(sampled) == [m.key] and "parts#1 strings are not the o0 strings" in caught[m.key]
     others = [x for x in range(sum(m.n for m in ms)) if not m.base <= x < m.base + m.n]
-    assert WI.check_drawn(ms, bad, others) == {}
+    assert WI.check_sampled(ms, bad, others) == {}
     print(json.dumps({"site": [site.k, site.lo, site.hi], "coordinate": q,
                       "row": "the combine unit's parts#1 (rank 1's gathered row, one bit of the coordinate flipped)",
-                      "rank0_window": WI.check(ms0, publics0), "tp_window_check": caught, "tp_window_check_drawn": drawn,
-                      "drawn_without_it": WI.check_drawn(ms, bad, others)}))
+                      "rank0_window": WI.check(ms0, publics0), "tp_window_check": caught, "tp_window_check_sampled": sampled,
+                      "sampled_without_it": WI.check_sampled(ms, bad, others)}))
 
 
 def test_the_fused_all_reduce_is_chunk_units_reading_the_residual_row_whole():

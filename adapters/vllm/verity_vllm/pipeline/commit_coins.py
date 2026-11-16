@@ -208,13 +208,13 @@ def _key(rc: Any, family: str) -> bytes:
     return bytes.fromhex(rec["keys"][family])
 
 
-_DRAWN = object()
+_SAMPLED = object()
 
 
-def positions(rc: Any, session: Any = _DRAWN) -> dict[str, Any]:
+def positions(rc: Any, session: Any = _SAMPLED) -> dict[str, Any]:
     """`challenge.challenge_positions`' keywords for run `rc`: its `POSITIONS` coin; given `session` (None without a
     gate), the run's coins are flipped first (`draw`)."""
-    if session is not _DRAWN:
+    if session is not _SAMPLED:
         draw(session, rc)
     return {"source": _key(rc, POSITIONS)}
 
@@ -254,7 +254,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     from `pins` (every head published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
     of main (``git rev-list --first-parent origin/main``), which must hold the challenge phase's pin. Fails closed."""
     if not runs or len(runs) != len(roots):
-        return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
+        return f"the Commit's coins name {len(runs)} runs' samples, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
         return ("the Commit's coins were flipped in its own process, not by the auditor device's challenger: a measurement, "
                 "which credits nothing")

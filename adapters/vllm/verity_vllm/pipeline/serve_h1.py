@@ -24,7 +24,7 @@ own Commit.
   reserved withheld, beside it (`pouw_h1_challenger.sample_families`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
   device's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
-  the prover's commitment is in (`pouw_h1_window.DrawSession`), its coin commitment released only at its close; the
+  the prover's commitment is in (`pouw_h1_window.SampleSession`), its coin commitment released only at its close; the
   release waits for both end entries. The gate's open answers a port no session without an end entry holds, so a window
   whose session opens while the window before is still releasing takes a port of its own. A reserve joins its lane's
   open ``period``, if one is open, so one is opened before the server starts for window 0's to join; and a reserve made
@@ -47,7 +47,7 @@ own Commit.
   holds a window's bytes at most, and the window's release waits for its files: one not written is the window's error,
   ``kept`` in its outcome otherwise.
 * **Its sample, for the sample-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
-  window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.drawn`): the proof
+  window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.sampled`): the proof
   blocks core samples (`credit.sampled` over the window Program's layout, as `pouw_h1_challenger.sampled_of` samples them), each
   read as the Commit's values it opens (`sampled_reads`): its call's x_q and s_a rows of its row tile at the engine step its
   step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
@@ -147,7 +147,7 @@ class GateOptions:
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
                                          help="with --protocols: the auditor device's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
+                                              "session of its own there and flips its coins from it (serve_h1.GateSessions), "
                                               "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
@@ -230,7 +230,7 @@ def refusal(opts: Any) -> str | None:
     it refuses ``--protocols-config``."""
     after = getattr(getattr(opts, "retention", None), "release_after", "") or ""
     if DRAWER in (p.strip() for p in after.split(",")) and opts.protocols != ENTRY:
-        return (f"--release-after {DRAWER} waits for PoUW H1's draw of each window, which only its arm puts: it needs "
+        return (f"--release-after {DRAWER} waits for PoUW H1's sample of each window, which only its arm puts: it needs "
                 f"--protocols {ENTRY}")
     gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
@@ -292,15 +292,15 @@ class H1Windows:
     (`pouw_h1_prover.Writer.wait`); ``receipts`` each window's `Served` registers each call's ``receipt@<c>``
     (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``draws`` is serve-openai's sample-gated release (`serve_release.Draws`), into which each window's release puts its
-    sample under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
+    ``samples`` is serve-openai's sample-gated release (`serve_release.Samples`), into which each window's release puts its
+    sample under `DRAWER` (`sampled`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
     each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
     so its release runs on ``closer``. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
-                 draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
+                 samples: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             Writer,
@@ -324,7 +324,7 @@ class H1Windows:
         if tie is not None and closer is None:
             raise ValueError(f"{ENTRY}: a window's tie waits for its seal, which comes after its close: its release runs "
                              "off the loop, on closer")
-        self.draws: Any = None
+        self.samples: Any = None
         self._kept: dict[int, Any] = {}
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
@@ -416,7 +416,7 @@ class H1Windows:
                 "program_file": f"h1/{PROGRAM}",
                 "weights_root": self.weights.root().hex(), "weights_key": self.weights_key, **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
-                "draw": f"put as {DRAWER} into the sample-gated release" if self.draws is not None else None,
+                "draw": f"put as {DRAWER} into the sample-gated release" if self.samples is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
                 "prover_ring": None if self.writer is None else self.writer.bound,
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts,
@@ -504,8 +504,8 @@ class H1Windows:
         and the outcome itself; here too when its hooks refused to come off, so nothing off the loop patches the engine.
         None when no H1 window is open; then, if window ``window`` never opened one, its sample-gated release is refused."""
         if self.comp is None:
-            if self.draws is not None and window != self.window:
-                self.draws.refuse(window, f"{ENTRY}: window {window}'s H1 window never opened, so it has no draw")
+            if self.samples is not None and window != self.window:
+                self.samples.refuse(window, f"{ENTRY}: window {window}'s H1 window never opened, so it has no sample")
             return None
         comp, run, tap, held, opened = self.comp, self.run, self.tap, self.held, self.opened
         self.comp = self.run = self.tap = self.held = None
@@ -532,11 +532,11 @@ class H1Windows:
     def _release(self, window: int, comp: Any, run: Any, held: dict[str, Any] | None, seconds: dict[str, float],
                  error: str | None, queued: float, off: bool = False) -> dict[str, Any]:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the sampling coin
-        opened and its session closed), with ``draws`` its sample put (`drawn`), and, with ``sessions``, its end entry
+        opened and its session closed), with ``samples`` its sample put (`sampled`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
         one of the windows ``releasing``. A window on in-process coins that served no step is `UNSERVED`."""
         t0 = t1 = self.clock()
-        end = drawn = None
+        end = sampled = None
         unserved = held is None and error is None and run.step < 0
         try:
             try:
@@ -555,8 +555,8 @@ class H1Windows:
                 if self.tie is not None:
                     self.tie.bound(window, run)
                 t1 = self.clock()
-                if self.draws is not None and not unserved:
-                    drawn = self.drawn(window, run, held, error)
+                if self.samples is not None and not unserved:
+                    sampled = self.sampled(window, run, held, error)
                 if held:
                     assert self.sessions is not None, "a held session is a gate session"
                     end = self.sessions.ended(held["session"])
@@ -567,8 +567,8 @@ class H1Windows:
             out = self._outcome(window, run, held, end, seconds)
             if unserved:
                 out.update(steps_served=0, release=UNSERVED)
-            if drawn is not None:
-                out["draw"] = drawn
+            if sampled is not None:
+                out["draw"] = sampled
             if kept is not None:
                 out["kept"] = kept
             if error is not None:
@@ -581,25 +581,25 @@ class H1Windows:
                 with self._lock:
                     self.releasing -= 1
 
-    def drawing(self, draws: Any) -> None:
-        """Put each window's sample into ``draws`` (`serve_release.Draws`) from now on, when it waits for `DRAWER`'s."""
-        self.draws = draws if draws is not None and DRAWER in draws.protocols else None
+    def sampling(self, samples: Any) -> None:
+        """Put each window's sample into ``samples`` (`serve_release.Samples`) from now on, when it waits for `DRAWER`'s."""
+        self.samples = samples if samples is not None and DRAWER in samples.protocols else None
 
-    def drawn(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
-        """Window ``window``'s sample put into ``draws`` under `DRAWER` once its sampling coin is open: the units its coin samples
-        (`sampled_blocks`, at `draw_of`'s K and stream) and the Commit's values they open (`sampled_reads`). Its record for the
-        outcome's ``draw``; ``refused`` when the window's release was refused instead (its close failed, or the sample
+    def sampled(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
+        """Window ``window``'s sample put into ``samples`` under `DRAWER` once its sampling coin is open: the units its coin samples
+        (`sampled_blocks`, at `sample_of`'s K and stream) and the Commit's values they open (`sampled_reads`). Its record for the
+        outcome's ``sample``; ``refused`` when the window's release was refused instead (its close failed, or the sample
         can't be formed or put), naming why."""
         try:
             if error is not None:
                 raise ValueError(f"its close failed ({error})")
-            k, stream, source = self.draw_of(run, held)
+            k, stream, source = self.sample_of(run, held)
             units = sampled_blocks(run.commits, self.layout(), k, stream)
             reads = sampled_reads(run.served.tap, self.layout(), units, S_A_BYTES)
-            self.draws.put(window, DRAWER, reads)
+            self.samples.put(window, DRAWER, reads)
         except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a sample not coming
-            why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]
-            self.draws.refuse(window, why)
+            why = f"{ENTRY}: window {window}'s sample: {type(e).__name__}: {e}"[:500]
+            self.samples.refuse(window, why)
             return {"refused": why}
         return {"k": k, "k_from": source, "units": len(units), "reads": len(reads),
                 "bytes": sum(hi - lo for _s, _n, lo, hi in reads)}
@@ -618,7 +618,7 @@ class H1Windows:
             self._layout = layout
         return self._layout
 
-    def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
+    def sample_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
         """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.sample_k`) and its calls_root.
@@ -647,7 +647,7 @@ class H1Windows:
         session = run.commits.get("session")                # None: no gate session carried the run's coins
         if session is None or session.get("root") is None:
             raise ValueError(f"session {held.get('session')}'s window commits no gate session's open root, the stream its "
-                             "draw is taken on, so no draw can be formed")
+                             "sample is taken on, so no sample can be formed")
         return self._period_k[period], session["root"], f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,

@@ -1,7 +1,7 @@
 """serve-openai's tie of each PoUW H1 window to the audited window circuit (`serve_tie`, ``--h1-window-commit``): at the
 window's close, on its release thread and before its sample coin, the window's registration W (its tables' entries, chained
 after the log's last record) is written, the command (V3c's window-commit, a stand-in here) writes R reusing W's tables, and
-R is the window's Commit record, bound into calls_root before draw_root and the coin. The release waits for the window's
+R is the window's Commit record, bound into calls_root before sample_root and the coin. The release waits for the window's
 seal line; a window whose seal failed or never came, whose release runs on the loop, or whose command fails or writes no
 R that reuses W binds no record and opens no coin. With serve-openai's day (``--day``, `serve_day`) the window log
 registers the day's declaration first, each W names it, and an R of another program is refused at its close; without
@@ -74,7 +74,7 @@ def test_a_tied_window_names_r_reusing_its_tables_from_w_as_its_commit_record_be
     """Two windows released off the loop once sealed. Each writes W, a v2 record of its tables' entries chained after the
     log's last record (window 0's after none, window 1's after window 0's R), then runs the command, with the serve dir,
     the window, W's and R's files and the window's prover directory, once the advice trace is flushed and before calls_root,
-    draw_root or the commit are bound. R is the window's Commit record: its canonical JSON is the commitment's ``commit``,
+    sample_root or the commit are bound. R is the window's Commit record: its canonical JSON is the commitment's ``commit``,
     the sampling coin opens after it, the outcome records both digests, and the log names W then R, so a tie over the same
     serve dir chains after the last R."""
     serve = tmp_path / "serve"

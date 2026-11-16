@@ -128,7 +128,7 @@ def test_a_shared_row_readers_flipped_wired_row_is_its_sampled_proof_blocks_own(
     refs = np.tile(np.arange(n, dtype="<u4")[:, None], (1, 3))
     tables = [rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8), strings[:, 1], rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8)]
     publics = {"W": strings.tobytes(), "R": b"".join(t.tobytes() for t in tables) + refs.tobytes()}
-    assert WI.check_drawn((writer, reader), publics, range(2 * n)) == {}
+    assert WI.check_sampled((writer, reader), publics, range(2 * n)) == {}
     assert WI.string_at(reader, publics["R"], "cv", 0) == n * WI.BC_BYTES
     neg = a5.wiring_negatives((writer, reader), publics)
     assert neg["wired-row-not-its-writer-s-output (§16.13)"] == {"refused": True}

@@ -97,7 +97,7 @@ def answer(out: dict) -> dict:
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
-            "work": None if work is None else {"over_cap_draws": 0, **work},
+            "work": None if work is None else {"over_cap_samples": 0, **work},
             "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie")}
 
 
@@ -114,7 +114,7 @@ def same(exe: Path, paths: list[Path], samples: int = 3, source: bytes | None = 
     want = answer(VR.verify_passes(paths, samples, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), source,
                                    window=window, rounds=rounds, dropped=dropped, record=record,
                                    test_instance=test_instance, window_class=load, **rule,
-                                   **({} if sample is None else {"draw": sample})))
+                                   **({} if sample is None else {"sample": sample})))
     got = lean(exe, paths, samples, source, record, over_cap=over_cap, test_instance=test_instance, tie=tie,
                of_record=of_record, load=load)
     assert got == want

@@ -25,7 +25,7 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
 and otherwise by ``--draws`` work-weighted samples, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
-``--fresh-samples N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
+``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
 derived from ``--fresh-source`` (recorded OS randomness taken after the pass, fixed in the command), so that the trials
 are independent samples of the input's rate itself (`HonestTileInertBoundRate`'s oracle, salt and sample, the activations fixed) and
 Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestInertBound.lean`'s
@@ -550,7 +550,7 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
       Clopper–Pearson on the samples would bound the realized X, not p;
     - a census with failures: Bernstein on the weighted sum;
     - samples with failures: no bound here (1): such an input must be measured in full;
-    - fresh trials (``--fresh-samples``: each a work-weighted sample under a salt of its own, so independent Bernoulli trials of
+    - fresh trials (``--fresh-draws``: each a work-weighted sample under a salt of its own, so independent Bernoulli trials of
       p itself): Clopper–Pearson, with or without failures."""
     if row["method"] == "fresh":
         return clopper_pearson_upper(row["failures"], row["drawn"], delta), "fresh-salt samples, Clopper–Pearson"
@@ -572,7 +572,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, samples: int, s
     label = label or path.parent.name
     job = load(path, light=bool(opts.get("resumed_only")), coins=opts.get("coins"))
     inputs = pick_inputs(job, per_linear, census_max, samples, seed)
-    fresh = opts.get("fresh_samples")
+    fresh = opts.get("fresh_draws")
     if fresh:
         for row in inputs:
             row["method"], row["drawn"] = "fresh", fresh_trials(job, row, fresh, opts["fresh_source"])
@@ -600,7 +600,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, samples: int, s
 
 def write_inputs(rows: list[dict], seed: int, census_max: int, samples: int, out_dir: Path, fresh: dict | None = None) -> int:
     """Each input's bound at δ = 0.05/m, the cited maximum and the run's result, into ``<out>/inputs.json``; `fresh`
-    (``fresh_samples``, ``fresh_source``) when its inputs were measured by fresh trials."""
+    (``fresh_draws``, ``fresh_source``) when its inputs were measured by fresh trials."""
     delta = 0.05 / len(rows)
     for r in rows:
         r["upper"], r["bound_method"] = input_bound(r, delta)
@@ -659,7 +659,7 @@ def main(argv: list[str] | None = None) -> int:
                         "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or samples")
     p.add_argument("--fresh-source", default=None, metavar="HEX",
                    help="the 32-byte source the fresh samples and salts derive from: recorded OS randomness taken after the "
-                        "pass, fixed in the command before the run (required with --fresh-samples)")
+                        "pass, fixed in the command before the run (required with --fresh-draws)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (a pass with a salt coin)")
     p.add_argument("--out", type=Path, default=None)
@@ -669,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = a.out or a.rebound.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         return write_inputs(doc["inputs"], doc["seed"], doc["census_max"], doc["draws"], out_dir,
-                            {k: doc[k] for k in ("fresh_samples", "fresh_source") if k in doc} or None)
+                            {k: doc[k] for k in ("fresh_draws", "fresh_source") if k in doc} or None)
     if not a.manifests:
         p.error("give one or more manifests")
     if (a.tiles is None) == (a.per_input is None):
@@ -683,17 +683,17 @@ def main(argv: list[str] | None = None) -> int:
     if a.resumed_only and (a.per_input is None or not a.resume):
         p.error("--resumed-only takes --per-input and --resume")
     fresh = None
-    if a.fresh_samples:
+    if a.fresh_draws:
         if a.per_input is None:
-            p.error("--fresh-samples takes --per-input")
+            p.error("--fresh-draws takes --per-input")
         if a.fresh_source is None:
-            p.error("--fresh-samples takes --fresh-source HEX, fixed before the run (lean's condition on the fresh-trial ε)")
+            p.error("--fresh-draws takes --fresh-source HEX, fixed before the run (lean's condition on the fresh-trial ε)")
         source = bytes.fromhex(a.fresh_source)
         if len(source) != 32:
             p.error("--fresh-source is 32 bytes")
-        fresh = {"fresh_samples": a.fresh_samples, "fresh_source": source.hex()}
-        opts |= {"fresh_samples": a.fresh_samples, "fresh_source": source}
-        print(f"fresh samples: {a.fresh_samples} an input from source {source.hex()}", flush=True)
+        fresh = {"fresh_draws": a.fresh_draws, "fresh_source": source.hex()}
+        opts |= {"fresh_draws": a.fresh_draws, "fresh_source": source}
+        print(f"fresh samples: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
         CW._inert_work_and_bound, CW.D.tile_inert_work = _recorded, _tile_inert_work_recorded

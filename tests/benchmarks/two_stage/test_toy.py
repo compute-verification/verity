@@ -198,8 +198,8 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     body[0] ^= 1                                        # unit 0's x string, which the fold unit's output wires
     broken = {**pub, flip.key: bytes(body)}
     assert set(WI.check(it.window.members, broken)) == {flip.key}
-    assert set(WI.check_drawn(it.window.members, broken, [flip.base])) == {flip.key}
-    assert WI.check_drawn(it.window.members, broken, [flip.base + 1]) == {}
+    assert set(WI.check_sampled(it.window.members, broken, [flip.base])) == {flip.key}
+    assert WI.check_sampled(it.window.members, broken, [flip.base + 1]) == {}
 
 
 @pytest.mark.slow

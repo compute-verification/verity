@@ -314,7 +314,7 @@ def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(
         OC.OpenedReader(*SD.load(k / "store"))(1, "runner.sampler", 0, 4)
 
 
-def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
+def test_the_slim_keep_is_written_only_for_the_replay_s_own_sample(tmp_path):
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
     for bad in (dict(plan, picked=1), {k: v for k, v in plan.items() if k != "plan"}, dict(plan, picks=plan["picks"][:1])):
         assert CPU.keep(out, b, store, run, t, bad, c, opened=set()) is None
@@ -409,7 +409,7 @@ def test_a_record_not_decided_by_the_keep_s_bundle_is_refused(tmp_path):
         CPU.of_record(CPU.open_keep(CPU.slim_path(out, 1)), out)
 
 
-def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatch):
+def test_a_keep_replays_only_under_the_sample_it_was_kept_for(tmp_path, monkeypatch):
     from verity_vllm.pipeline import c2_replay as C2
 
     out, _ = _decided(tmp_path)
@@ -417,13 +417,13 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
     site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
                             manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
                             weights_check=None, tl=None)
-    drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
-    monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
+    sampled: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
+    monkeypatch.setattr(C2, "plan", lambda s: {"replay": sampled})
     CPU.kept_sample(site, slim)
-    drawn["picks"] = drawn["picks"][::-1]
+    sampled["picks"] = sampled["picks"][::-1]
     with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 sampled\); the record samples by 'uniform'"):
         CPU.kept_sample(site, slim)
-    drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
+    sampled["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
     with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
         CPU.kept_sample(site, slim)
 

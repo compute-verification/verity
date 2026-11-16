@@ -171,7 +171,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
 * **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
   that row's salt. Lean's links hold only inside a statement, so after the sample each sampled proof block's wires are held on the public
-  bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
+  bodies the leaf layer binds (`wiring.check_sampled`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
   sampled chunk's ``acc`` is then the committed output of the chunk that wrote it, sampled or not. A unit whose wired row is
   not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
   (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
@@ -549,7 +549,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
-    """The verifier's wiring check (`HmLinks`, `wiring.check_drawn`) on altered wires, each with the units it alters sampled: the first
+    """The verifier's wiring check (`HmLinks`, `wiring.check_sampled`) on altered wires, each with the units it alters sampled: the first
     wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
     else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
     flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 sampled."""
@@ -575,7 +575,7 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     other = same if same is not None else next(others(False), None)
     if other is not None:
         neg["chunk-wired-to-another-unit (§16.13)"] = {
-            "refused": bool(WI.check_drawn(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [me])),
+            "refused": bool(WI.check_sampled(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [me])),
             "words": "same" if same is not None else "other"}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
@@ -584,12 +584,12 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
         w = list(members[j].wired)
         w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
         neg["partial-wired-to-another-combine-slot (§16.13)"] = {
-            "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
+            "refused": bool(WI.check_sampled(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
     body = bytearray(publics[m.key])
     body[WI.string_at(m, body, p, 0)] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {
-        "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
+        "refused": bool(WI.check_sampled(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
 
 
@@ -1019,7 +1019,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / SAMPLE_FILE).write_text(json.dumps(union_sample, sort_keys=True))
     after: dict[str, dict] = {}
     if any(m.wired for m in mine.members):
-        bad = WI.check_drawn(mine.members, publics, union_sample["units"])
+        bad = WI.check_sampled(mine.members, publics, union_sample["units"])
         after["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
         if bad:
             summary.update(checks={**checks, **after})

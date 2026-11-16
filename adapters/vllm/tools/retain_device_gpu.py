@@ -7,8 +7,8 @@
 
 ``reads`` picks, for each window the host serve sealed, a sample by hand (no subprotocol's sample is wired in yet): the window's first
 and last steps, three members of each (the largest one's first two leaves, a middle member's middle leaf, the last member), and one
-member of a middle step that no read names (``undrawn``). It prints the largest window's committed bytes, which sizes the device
-pool. ``draw`` is the hand drawer: once a window's ``windows.jsonl`` line is out it waits ``--delay-s`` (so the next window's steps
+member of a middle step that no read names (``unsampled``). It prints the largest window's committed bytes, which sizes the device
+pool. ``sample`` is the hand drawer: once a window's ``windows.jsonl`` line is out it waits ``--delay-s`` (so the next window's steps
 fill the pool and wait on this window's release) and writes ``draws/w<k>.<P>.json`` whole, until ``--stop`` exists and every
 window's line has had its sample. ``compare`` holds each window the device serve sealed to the host serve's: the device bundle keeps
 exactly the leaves the sample opens (`serve_release.leaves_of`), each equal to the host bundle's leaf; every sampled read verifies
@@ -59,8 +59,8 @@ def pick(doc: dict[str, Any]) -> dict[str, Any]:
     u = len(steps) // 2
     metas = steps[u]["metas"]
     big = max(range(len(metas)), key=lambda i: metas[i][4])
-    undrawn = [u, _named(metas, big), 0, min(metas[big][4], C)] if 0 < u < len(steps) - 1 else None
-    return {"reads": [r for r in reads if r[3] > r[2]], "undrawn": undrawn}
+    unsampled = [u, _named(metas, big), 0, min(metas[big][4], C)] if 0 < u < len(steps) - 1 else None
+    return {"reads": [r for r in reads if r[3] > r[2]], "undrawn": unsampled}
 
 
 def reads(a: argparse.Namespace) -> int:
@@ -79,7 +79,7 @@ def reads(a: argparse.Namespace) -> int:
     return 0 if n else 1
 
 
-def draw(a: argparse.Namespace) -> int:
+def sample(a: argparse.Namespace) -> int:
     serve, rd = Path(a.serve), Path(a.reads)
     d = Path(a.draws_dir) if a.draws_dir else serve / "draws"
     d.mkdir(parents=True, exist_ok=True)
@@ -142,11 +142,11 @@ def window(dev: Path, host: Path, k: int, pk: dict[str, Any]) -> dict[str, Any]:
         u = tuple(pk["undrawn"])
         try:
             dr(*u)
-            bad.append(f"the undrawn read {list(u)} was answered from the device bundle")
+            bad.append(f"the unsampled read {list(u)} was answered from the device bundle")
         except RuntimeError as e:
             refusal = f"{type(e).__name__}: {e}"[:300]
         if not hr(*u):
-            bad.append(f"the undrawn read {list(u)} is not in the host bundle")
+            bad.append(f"the unsampled read {list(u)} is not in the host bundle")
     if [s["levels"] for s in ddoc["steps"]] != [s["levels"] for s in hdoc["steps"]]:
         bad.append("the device bundle's tree levels are not whole")
     return {"window": k, "steps": len(ddoc["steps"]), "reads": len(rd), "drawn_leaves": leaves,
@@ -175,7 +175,7 @@ def compare(a: argparse.Namespace) -> int:
         except (OSError, ValueError, KeyError, IndexError, TypeError, RuntimeError, AssertionError) as e:
             got = {"window": k, "ok": False, "bad": [f"{type(e).__name__}: {e}"[:400]]}
         got["release"] = {x: (s.get("release") or {}).get(x) for x in
-                          ("union_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "draw_wait_s", "discarded")}
+                          ("union_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "sample_wait_s", "discarded")}
         got["pre_coin_root_kept"] = (roots.get(k) or "")[:16] == got.get("run_root")
         got["ok"] = got["ok"] and got["pre_coin_root_kept"]
         out.append(got)
@@ -189,7 +189,7 @@ def compare(a: argparse.Namespace) -> int:
     what = ("each holding exactly its sample's leaves, byte-equal to --retain host's, the unsampled read refused" if ok
             else f"first problem: {first}"[:600])
     print(f"RETAIN-DEVICE {'PASS' if ok else 'FAIL'}: {len(out)} window(s) sealed from the device pool "
-          f"({sum(w.get('drawn_leaves', 0) for w in out)} drawn leaves), {what}; pool peak {pool.get('peak_bytes')} of "
+          f"({sum(w.get('drawn_leaves', 0) for w in out)} sampled leaves), {what}; pool peak {pool.get('peak_bytes')} of "
           f"{pool.get('capacity_bytes')} bytes, {pool.get('waits')} wait(s) ({pool.get('waited_s')} s); kept {rel.get('kept_bytes')} "
           f"dropped {rel.get('dropped_bytes')} bytes")
     return 0 if ok else 1
@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("host")
     p.add_argument("reads")
     a = ap.parse_args(argv)
-    return {"reads": reads, "draw": draw, "compare": compare}[a.cmd](a)
+    return {"reads": reads, "draw": sample, "compare": compare}[a.cmd](a)
 
 
 if __name__ == "__main__":

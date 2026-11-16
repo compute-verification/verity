@@ -10,7 +10,7 @@ measurement), so the limits are 95% simultaneous over the whole table.
 
 Writes ``<out>/table.json`` and ``<out>/table.md``.  A model's row is refused when its inputs name more than one run, when an
 input's openings failed, or when a verify given for it did not accept its pass (a negative control's, ``control*``, must
-reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-samples``) beside the pass-salt one; ``--pending``
+reject).  ``--fresh`` adds a model's ε from fresh-salt trials (``--fresh-draws``) beside the pass-salt one; ``--pending``
 counts trials still running in m, so a table published before them states the limits the finished table will.
 ``--window`` adds a salt-to-deadline window's replay diagnostic from its audit (refused unless the audit accepted), with its
 overhead over cuBLASLt beside the proving cost hidden-zk measures (``--proving-cost``; the cell points to hidden-zk until then).
@@ -68,7 +68,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
         if sorted((r["pass"], r["matmul"]) for r in fresh["inputs"]) != sorted((r["pass"], r["matmul"]) for r in rows):
             raise ValueError(f"{name}: the fresh trials are of other inputs than the committed list (served_inputs.sh)")
         fb, fw = _cite(fresh["inputs"], m)
-        out["fresh"] = {"draws": fresh["fresh_samples"], "source": fresh["fresh_source"], "m_model": fresh["m"],
+        out["fresh"] = {"draws": fresh["fresh_draws"], "source": fresh["fresh_source"], "m_model": fresh["m"],
                         "trials": sum(r["drawn"] for r in fresh["inputs"]), "failures": sum(r["failures"] for r in fresh["inputs"]),
                         "epsilon": fb[fw][0], "epsilon_input": {k: fresh["inputs"][fw][k] for k in ("pass", "matmul")}}
     return out

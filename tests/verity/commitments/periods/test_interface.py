@@ -484,12 +484,12 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
     assert set(WI.check(moved, publics)) == {m.key for m in moved if m.wired}
     everyone = range(sum(m.n for m in win.window.members))
-    assert WI.check_drawn(win.window.members, publics, everyone) == {}
-    assert set(WI.check_drawn(moved, publics, everyone)) == set(WI.check(moved, publics))
-    assert WI.check_drawn(moved, publics, []) == {}
-    assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
+    assert WI.check_sampled(win.window.members, publics, everyone) == {}
+    assert set(WI.check_sampled(moved, publics, everyone)) == set(WI.check(moved, publics))
+    assert WI.check_sampled(moved, publics, []) == {}
+    assert list(WI.check_sampled(moved, publics, [3])) == [moved[1].key]
     lacking = [replace(m, wired=(("x", "o1", m.wired[0][2]),)) if m.wired else m for m in win.window.members]
-    assert list(WI.check_drawn(lacking, publics, [3])) == [moved[1].key]
+    assert list(WI.check_sampled(lacking, publics, [3])) == [moved[1].key]
     bad = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
@@ -1052,7 +1052,7 @@ def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
     ms, y8 = win.window.members, outs8[0]
     assert np.array_equal(got.rows[ms[3].port("x#0")], y8[[0, 2]]) and np.array_equal(got.rows[ms[3].port("x#1")], y8[[1, 3]])
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
-    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(9)) == {}
+    assert WI.check(ms, publics) == {} and WI.check_sampled(ms, publics, range(9)) == {}
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert doc["cuts"] == {GID: {"x": 2}} and doc["statements"][GID]["in_rows"][1][:3] == ["x#1", V2, 128]
     assert I.window_of_record(doc, SAMPLING_DESIGN, {GID: GEMM, G8ID: G8}.__getitem__).members == ms
@@ -1934,14 +1934,14 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     win.record(GEMM, ins, outs)
     c = win.close(salt_key=bytes(32))
     publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
-    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(8)) == {}
+    assert WI.check(ms, publics) == {} and WI.check_sampled(ms, publics, range(8)) == {}
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert I.window_of_record(doc, SAMPLING_DESIGN, {GID: GEMM}.__getitem__).members == ms
     moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in ms]
     assert set(WI.check(moved, publics)) == {m.key for m in ms if m.wired}
     body, at = bytearray(publics[ms[1].key]), WI.BC_BYTES * sum(CS.port_leaves(ms[1]).values())
     body[at:at + 4] = (1).to_bytes(4, "little")
-    assert list(WI.check_drawn(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
+    assert list(WI.check_sampled(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
     with pytest.raises(ValueError, match="own rows"):
         CS.Binding(win.window.program, win.window.query, SAMPLING_DESIGN, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))

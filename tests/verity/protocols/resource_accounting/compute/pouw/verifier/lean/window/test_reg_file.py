@@ -200,7 +200,7 @@ FULL = D.Port(EXE, "full_draw", reference=lambda x: None, inputs=st.nothing(), p
 
 
 def _record(sample: dict | None) -> str:
-    return json.dumps({"format": "flock-session/v1"} | ({} if sample is None else {"unit_draw": sample}))
+    return json.dumps({"format": "flock-session/v1"} | ({} if sample is None else {"unit_sample": sample}))
 
 
 @pytest.mark.parametrize("n", [1, 3])

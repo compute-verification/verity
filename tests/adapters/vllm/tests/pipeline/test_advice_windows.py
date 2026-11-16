@@ -352,12 +352,12 @@ class _Coins:
         return out[:n]
 
 
-def _draw(rec: dict, sampling_design: dict) -> dict:
-    """A challenger's sample under the registration's expanded `sampling_design` (`service.select_draw` past its rule)."""
+def _sample(rec: dict, sampling_design: dict) -> dict:
+    """A challenger's sample under the registration's expanded `sampling_design` (`service.select_sample` past its rule)."""
     from verity.protocols.proofs.spot.verifier.challenger import coins as T
 
     n = rec["population"]
-    return {**sampling_design, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
+    return {**sampling_design, "population": n, "units": sorted(T.sample_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_rest(gated_tp):
@@ -377,23 +377,23 @@ def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_
     v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(_publics(c["gated"]["dir"], mine)),
                 work_table=mine.work_table)
     assert v.ok, v.codes
-    draw = _draw(rec, rec["law"])
-    assert set(range(32)) <= set(draw["units"]) and len(draw["units"]) == 34 and D.check_draw(draw, rec, rec["law"]).ok
+    sample = _sample(rec, rec["law"])
+    assert set(range(32)) <= set(sample["units"]) and len(sample["units"]) == 34 and D.check_sample(sample, rec, rec["law"]).ok
 
 
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
-    row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
+    row (`check_sample`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
     mine, _held = _gated_mine(c)
     rec = c["gated"]["rec"]
-    draw = _draw(rec, rec["law"])
-    left = [u for u in draw["units"] if u != 0]
-    assert not D.check_proved(draw, left, len(left)).ok and D.check_proved(draw, draw["units"], len(draw["units"])).ok
-    spare = next(u for u in range(32, 40) if u not in draw["units"])
-    v = D.check_draw({**draw, "units": sorted(set(draw["units"]) - {0} | {spare})}, rec, rec["law"])
+    sample = _sample(rec, rec["law"])
+    left = [u for u in sample["units"] if u != 0]
+    assert not D.check_proved(sample, left, len(left)).ok and D.check_proved(sample, sample["units"], len(sample["units"])).ok
+    spare = next(u for u in range(32, 40) if u not in sample["units"])
+    v = D.check_sample({**sample, "units": sorted(set(sample["units"]) - {0} | {spare})}, rec, rec["law"])
     assert (v.ok, list(v.codes)) == (False, ["strata-count"])
     sampled = {t: {"work": 1, "floor": 1} for t in mine.work_table}
     v = R.check({**rec, "law": D.derive(mine.program, mine.query, mine.law, sampled)}, mine.program, mine.query, mine.law, CS.SCHEME,
@@ -422,8 +422,8 @@ def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refu
     c = gated_tp
     comp, opening = c["gated"]["compiler"], c["gated"]["opening"]
     for doc, why in (({"templates": [SILU], "law": "work:2"}, "would be left out of the proved set"),
-                     ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's draw \(law work:K\)"),
-                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work law's draw \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's sample \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work law's sample \(law work:K\)"),
                      ({"templates": [ROPE], "law": "work:2"}, "its selection is all")):
         (pf := tmp_path / "partition.json").write_text(json.dumps(doc))
         with pytest.raises(ValueError, match=why):

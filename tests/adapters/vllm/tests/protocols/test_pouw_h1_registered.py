@@ -68,8 +68,8 @@ def test_a_value_is_what_core_commits(n, w, binding):
     assert all(G.verify_read(got.domain, ref.root, p, got.bcs[p], got.path(p), G.SCHEMA_V2) for p in range(n))
 
 
-def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
-    """A window's registered reads (`interface._Drawn`, `rows.value_salts` and `value_rows`): for this value and core's, at
+def test_a_windows_reads_are_cores_statement_sampled_once(monkeypatch):
+    """A window's registered reads (`interface._Sampled`, `rows.value_salts` and `value_rows`): for this value and core's, at
     rows in any order and repeated, the salts, rows and header entry core's ``statement`` gives, this value's salts sampled
     in one ChaCha20 pass, never one row at a time."""
     words = np.random.default_rng(4).integers(0, 1 << 16, (9, 40), dtype=np.uint16)
@@ -77,11 +77,11 @@ def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
     calls = []
     monkeypatch.setattr(NR, "hm96_salt", lambda *a: calls.append(a))
     ps, more = [7, 0, 3, 7], [8, 3]
-    drawn = I._Drawn({"core": ref, "h1": got}, {"core": [ps, more], "h1": [more, ps]})
+    sampled = I._Sampled({"core": ref, "h1": got}, {"core": [ps, more], "h1": [more, ps]})
     for name, v in (("core", ref), ("h1", got)):
         for at in (ps, more):
             rows, salts, head = ref.statement(at)
-            assert drawn.salts(name, at) == CS.value_salts(v, at) == b"".join(salts) and drawn.entry(name, at) == head
+            assert sampled.salts(name, at) == CS.value_salts(v, at) == b"".join(salts) and sampled.entry(name, at) == head
             assert CS.value_rows(v, at).tolist() == [list(r) for r in rows]
     assert calls == []
 

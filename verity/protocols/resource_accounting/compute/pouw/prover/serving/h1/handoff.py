@@ -53,7 +53,7 @@ STREAM, TAKEN = b"verity/pouw/h1/stream/v1", b"taken"
 #: the bytes of path a Unix socket's address holds on Linux (``sun_path`` is 108 with its NUL)
 PATH_BYTES = 107
 #: an H1Run's attributes saved as they are; the rest are rebuilt by `resume`
-_REBUILT = ("listeners", "_opener", "_recorded", "_tables", "_slot_tables", "_weights", "rounds", "draw", "served")
+_REBUILT = ("listeners", "_opener", "_recorded", "_tables", "_slot_tables", "_weights", "rounds", "sample", "served")
 
 
 class Resumed(remote.RemoteChallenger):

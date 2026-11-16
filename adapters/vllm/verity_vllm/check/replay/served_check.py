@@ -460,7 +460,7 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) 
     sampled = "GEMM, fused-MoE router and expert GEMM" if any("moe" in c for c in prog["calls"]) else "GEMM"
     scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam.items()))}): one per (engine step, request, "
              f"value) of the served Program; the exact replay reaches {n_reached} ({100.0 * n_reached / max(total, 1):.1f}%): every call "
-             f"on every row, each {sampled} and attention op on up to {rep.get('rows_per_request')} drawn rows of each request a step, "
+             f"on every row, each {sampled} and attention op on up to {rep.get('rows_per_request')} sampled rows of each request a step, "
              "the logits and the sampled id of every request")
     return {"query_total": {"source": "the served Build of record (acquire.served)", "query_id": qid, "identities": total,
                             "by_family": dict(sorted(fam.items())), "manifest_digest": build["manifest_digest"],

@@ -387,7 +387,7 @@ def test_a_planner_s_plan_is_made_from_its_programs_and_only_the_reads_are_made_
     assert set(request.pop("sr_kw")["executed_prefix"]) == {"r0", "r1"}
     assert request == {"binding_map": str(tmp_path / "binding_map_p0.json"), "arrivals": {"r0": 0, "r1": 1}, "seed": 7,
                        "seed_source": RC.PROVER_SEED_SOURCE, "seed_challenge": None}
-    sample_s, reads_s = sr.pop("draw_s"), sr.pop("reads_s")
+    sample_s, reads_s = sr.pop("sample_s"), sr.pop("reads_s")
     assert sr == {"picks": 4, "prepare_s": 1.5, "reads": 3} and sample_s >= 0 and reads_s >= 0 and lk == LINKAGE
 
 

@@ -410,17 +410,17 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     if sorted(roots) != list(range(len(shapes))):
         raise RuntimeError(f"{entry}: the ranks' weight roots cover {len(roots)} of {len(shapes)} linears")
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in enumerate(shapes)))
-    salt, draw, commits = None, None, {}
+    salt, sample, commits = None, None, {}
     if coins is not None:
         commitment, opening = coins.commitment, coins.open("salt", weights_root(roots))
         salt = program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = (LiveRecord(sample_challenger(rounds.challenger.commitment.epoch, verifier_coins), COIN_SAMPLE)
+        sample = (LiveRecord(sample_challenger(rounds.challenger.commitment.epoch, verifier_coins), COIN_SAMPLE)
                 if rounds is not None else None)
         commits = {"coins": commitment.to_json(), "salt_opening": opening.to_json(),
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = H1_CHALLENGER if opener is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
-                   sample=draw, admission=admission, coins_from=source, opener=opener, served=served)
+                   sample=sample, admission=admission, coins_from=source, opener=opener, served=served)
     if commit is not None:
         ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
         if len(ports) != 1:

@@ -192,12 +192,12 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
-#: where the window's sample's challenge phase is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
-DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
+#: where the window's sample's challenge phase is reached (`challenger_host.SAMPLE_PORT`, the gate's answer's ``port``)
+SAMPLE_AT = f"vy-challenger-1:{CH.SAMPLE_PORT}"
 #: the gate's reserve answer for the window's challenge phase, and the gate that opens it on the window's open root
 RESERVED = {"session": CH.session_id(1)}
 #: the gate's reserve answer for the window's sample's challenge phase, which the gate opens withheld on its sample root
-DRAW_RESERVED = {"session": CH.session_id(0xd)}
+SAMPLE_RESERVED = {"session": CH.session_id(0xd)}
 GATE: dict = {}
 
 
@@ -209,17 +209,17 @@ def _gate(session, root, withhold=False):
 
 
 def _reach(monkeypatch, host):
-    """Route `AUDITOR` to `host`'s challenge phase and `DRAW_AT` to its sample's, and make it the host `_gate` opens on."""
+    """Route `AUDITOR` to `host`'s challenge phase and `SAMPLE_AT` to its sample's, and make it the host `_gate` opens on."""
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
         lambda cls, at, secret=None: host.client if at == AUDITOR else
-        host.draw.client if at == DRAW_AT and host.draw is not None else None))
+        host.sample.client if at == SAMPLE_AT and host.sample is not None else None))
     monkeypatch.setitem(GATE, "host", host)
 
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
     """The auditor device's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
-    `RESERVED` and opened by `_gate`, which opens the window's sample's challenge phase (`DRAW_RESERVED`) withheld."""
+    `RESERVED` and opened by `_gate`, which opens the window's sample's challenge phase (`SAMPLE_RESERVED`) withheld."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
     _reach(monkeypatch, host)
     return host
@@ -296,12 +296,12 @@ def periodic(tmp_path, monkeypatch):
     """`auditor` with its challenge phase and its sample's reserved inside lane vllm's period `PERIOD` (cap 2, the one
     window's two challenge phases), whose open commits `_circuit` and (unless
     None) the sample K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
-    False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
+    False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(sample_k)`` is the host; close the period with
     ``host.ledger.period_close`` once the challenge phase has ended."""
-    def make(draw_k, model=True, files=None, registry=None):
+    def make(sample_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
-        ledger.period_open(PERIOD, circuit=_circuit(), cap=2, draw_k=draw_k, rows=ROWS, circuit_files=files,
+        ledger.period_open(PERIOD, circuit=_circuit(), cap=2, sample_k=sample_k, rows=ROWS, circuit_files=files,
                            model=CH.MODEL if model else None, length=LENGTH)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
@@ -332,7 +332,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         served.tap = CT.CommitTap(port=PORT)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
-        coins = {"challenger": AUDITOR, "session": RESERVED, "sample_session": DRAW_RESERVED, "gate": _gate}
+        coins = {"challenger": AUDITOR, "session": RESERVED, "sample_session": SAMPLE_RESERVED, "gate": _gate}
     else:
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
@@ -634,12 +634,12 @@ def _record(run):
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, sample_directory=_draw_dir(host))
+                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, sample_directory=_sample_dir(host))
 
 
-def _draw_dir(host):
+def _sample_dir(host):
     """The ``out/`` of the sample's challenge phase `host`'s gate opened for its window, None when it opened none."""
-    return None if host.draw is None else host.draw.directory
+    return None if host.sample is None else host.sample.directory
 
 
 def _live(d, rec):
@@ -887,8 +887,8 @@ def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path
                      served=_served(weights=SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, key)))
     assert auditor.ended() is None and not run.served.refused
     rec = _record(run)
-    drawn = _credit(auditor, rec)["drawn"]
-    out = _credit(auditor, rec, [_statement(tmp_path / "c0", 0, len(drawn))], run=_verifier(drawn))
+    sampled = _credit(auditor, rec)["drawn"]
+    out = _credit(auditor, rec, [_statement(tmp_path / "c0", 0, len(sampled))], run=_verifier(sampled))
     assert out["manifest"] is None and out["credit"] is None, out
     if edit == "unsigned":
         assert out["window"] == ("weights", CR.no_weights(PERIOD)), out
@@ -923,15 +923,15 @@ def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_pat
     own = SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, WKEY).root().hex()
     ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, registry=_registry())
     with pytest.raises(M.Refused, match="a period's weights' root is the auditor's registration"):
-        ledger.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=own)
+        ledger.period_open(PERIOD, circuit=_circuit(), sample_k=1, weights_root=own)
     assert ledger.lines == []
     private, key = CH.challenger_key(2)
     gate = CH.Gate(private, key, registry=_registry())
     with pytest.raises(M.Refused, match="never the prover's"):
-        gate.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=own)
+        gate.period_open(PERIOD, circuit=_circuit(), sample_k=1, weights_root=own)
     assert gate.lines == []
     W = _model_key().weights_root
-    body = gate.period_open(PERIOD, circuit=_circuit(), draw_k=1, weights_root=W)["body"]
+    body = gate.period_open(PERIOD, circuit=_circuit(), sample_k=1, weights_root=W)["body"]
     assert body["weights_root"] == W and body[CR.MODEL_FIELD]["name"] == CH.MODEL
 
 
@@ -953,7 +953,7 @@ def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
     ours = SV.register_weights(_circuit(), [(64, K)], {0: (codes, scales)}, mk.key)
     assert ours.root().hex() == reg["weights_root"]
     assert {str(k): r.root.hex() for k, r in ours.registered.items()} == reg["roots"]
-    body = gate.period_open(PERIOD, circuit=_circuit(), cap=1, draw_k=1, model=CH.MODEL)["body"]
+    body = gate.period_open(PERIOD, circuit=_circuit(), cap=1, sample_k=1, model=CH.MODEL)["body"]
     assert body["weights_root"] == reg["weights_root"]
     assert body[CR.MODEL_FIELD] == {"name": CH.MODEL, "checkpoint_sha512": CR.PINNED_MODELS[CH.MODEL]}
     assert CR.committed_weights(gate.lines, PERIOD) == (reg["weights_root"], None)
@@ -978,10 +978,10 @@ def test_a_sampled_session_that_opened_no_weights_is_refused(periodic, tmp_path)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
     rec = _record(run)
-    drawn = _credit(auditor, rec)["drawn"]
-    st = [_statement(tmp_path / "c0", 0, len(drawn))]
+    sampled = _credit(auditor, rec)["drawn"]
+    st = [_statement(tmp_path / "c0", 0, len(sampled))]
     seen: list[dict] = []
-    assert _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=_live(tmp_path, rec))["credit"] == [0]
+    assert _credit(auditor, rec, st, run=_verifier(sampled, seen=seen), live=_live(tmp_path, rec))["credit"] == [0]
     ports = seen[0]["registered"]["ports"]
     b = {p: e for p, e in ports.items() if p.startswith(f"b_k{K}_")}
     assert sorted(b) == sorted(f"b_k{K}_{j}" for j in range(32))
@@ -989,10 +989,10 @@ def test_a_sampled_session_that_opened_no_weights_is_refused(periodic, tmp_path)
     own = SV.register(run).files[0]["ports"]
     assert {p: {x: e[x] for x in ("value", "root", "domain", "reads")} for p, e in ports.items()} == {
         p: {x: e[x] for x in ("value", "root", "domain", "reads")} for p, e in own.items()}
-    no_b = _credit(auditor, rec, st, run=_verifier(drawn, opened=lambda p: not p.startswith("b_k")))
+    no_b = _credit(auditor, rec, st, run=_verifier(sampled, opened=lambda p: not p.startswith("b_k")))
     assert no_b["window"][0] == "registration" and f"opened no weights {SV.PREFIX}b/{K}" in no_b["window"][1], no_b
     assert no_b["credit"] is None
-    no_a = _credit(auditor, rec, st, run=_verifier(drawn, opened=lambda p: not p.startswith("a_k")))
+    no_a = _credit(auditor, rec, st, run=_verifier(sampled, opened=lambda p: not p.startswith("a_k")))
     assert no_a["window"][0] == "registration" and "opened no A value" in no_a["window"][1], no_a
 
 
@@ -1012,11 +1012,11 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     rec = _record(run)
     out = _credit(auditor, rec)
     assert out["window"][0] == "missing" and out["credit"] is None, out
-    drawn = out["drawn"]
-    st, live = [_statement(tmp_path / "c0", 0, len(drawn))], _live(tmp_path, rec)
+    sampled = out["drawn"]
+    st, live = [_statement(tmp_path / "c0", 0, len(sampled))], _live(tmp_path, rec)
     seen: list[dict] = []
-    assert _credit(auditor, rec, st, run=_verifier(drawn))["window"] == ("live", CR.LIVE_STATEMENTS_FORM)
-    out = _credit(auditor, rec, st, run=_verifier(drawn, seen=seen), live=live)
+    assert _credit(auditor, rec, st, run=_verifier(sampled))["window"] == ("live", CR.LIVE_STATEMENTS_FORM)
+    out = _credit(auditor, rec, st, run=_verifier(sampled, seen=seen), live=live)
     assert out["manifest"] is None and out["window"] is None, out
     served = [row[CR.SERVED_ROWS] for row in rec["calls"]]
     eps = CR.established(LAYOUT, [0], served, k)
@@ -1030,33 +1030,33 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
         held = CR.is_held(e["value"])
         assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
                                        ).domain_id.hex(), port
-    failed = _credit(auditor, rec, st, run=_verifier(drawn, reject=drawn[-1:]))
+    failed = _credit(auditor, rec, st, run=_verifier(sampled, reject=sampled[-1:]))
     assert failed["window"][0] == "failed" and failed["credit"] is None
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
-    assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
+    assert _credit(auditor, rec, st, descriptor=other, run=_verifier(sampled))["credit"] is None
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _draw_dir(auditor))
-    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _sample_dir(auditor))
+    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(sampled))
     assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
                                    "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
     unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
-    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(sampled))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
     off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
-    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(sampled))[1] == (
         "circuit", (f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
                     f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}"))
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
+    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(sampled))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
     forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
-    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
+    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(sampled))[1]
     assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "
                                                             "earns nothing: weights: "), refused
 
 
-def test_a_period_open_without_draw_k_is_refused(periodic):
+def test_a_period_open_without_sample_k_is_refused(periodic):
     """The proof system commits the sample's K in the period's open (`credit.K_FIELD`) before any sample; a period
     opened without one leaves its windows no K to be sampled with, so the window, the period's reading and its credit are
     each refused (``budget``), and a window in no period has no committed K either."""
@@ -1069,11 +1069,11 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id, auditor.draw.session_id],
+    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id, auditor.sample.session_id],
                                 [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
-                                   sample_directory=_draw_dir(auditor))
+                                   sample_directory=_sample_dir(auditor))
     assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.sample_k(None)
@@ -1088,7 +1088,7 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
     assert out["credit"] is None
 
 
-def test_the_drawn_set_from_a_fixed_coin_is_cores():
+def test_the_sampled_set_from_a_fixed_coin_is_cores():
     """The proof blocks vllm's verifier reads as sampled (`sampled_of`) are core's (`credit.sampled`, and
     `core_check.work_units` over `credit.strata` under the work sampling design at K), over the layout core reads from the declared
     Program's descriptor (`credit.layout_of`, which `pouw_h1_served.declared_layout` is without building it): the
@@ -1263,13 +1263,13 @@ def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_need
 
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
-    """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    """The proof system sizes the K a period's open commits (`sample_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `SAMPLE_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
     shapes, modules = RH.declaration()
     layout = SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps)
-    k = RH.declared_draw_k()
+    k = RH.declared_sample_k()
     assert k == PHC.sample_k(layout) == 31178
     work = sum(size * w for size, w in CR.call_work(layout))
     assert Wd.eps_at(k, CR.DELTA, work * 8 // 9, work, 1) <= PHC.SAMPLE_EPS
@@ -1282,7 +1282,7 @@ def _two_window_period(tmp_path):
     open's and end's), and their challenge phases and roots, in the close's order: window, sample, window, sample."""
     leaves = itertools.count()
     ledger = CH.Ledger(tmp_path / "w.jsonl", 1, leaves)
-    ledger.period_open(PERIOD, circuit=_circuit(), cap=4, draw_k=1)
+    ledger.period_open(PERIOD, circuit=_circuit(), cap=4, sample_k=1)
     sessions, roots = [], []
     for i in (1, 2):
         for s, root, withheld in ((CH.session_id(i), hashlib.sha512(bytes([i])).hexdigest(), False),
@@ -1320,8 +1320,8 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
         f"period: session {other[:16]}... is not one of period {PERIOD}'s sessions")
     stub = dict.fromkeys(CR.PERIOD_KEYS)
 
-    def window(root, draw):
-        return {**stub, "window": {"root": root}, "draw": {"root": draw}}
+    def window(root, sample):
+        return {**stub, "window": {"root": root}, "draw": {"root": sample}}
     got, refused = PHC.period_credit(ledger, PERIOD, [window(b, db), window(a, da)])
     assert got is None and refused[0] == "order"
     assert PHC.period_credit(ledger, PERIOD, [window(a, da)])[1][0] == "missing"

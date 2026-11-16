@@ -36,16 +36,16 @@ class _Waits(threading.Condition):
 
 def test_no_release_before_the_last_protocols_sample():
     _host, _rc, dev = committed()
-    draws = SL.Draws(PROTOCOLS)
-    draws._cv = _Waits()
+    samples = SL.Samples(PROTOCOLS)
+    samples._cv = _Waits()
     got: dict[str, Any] = {}
-    t = threading.Thread(target=lambda: got.update(rec=draws.release(0, dev)))
+    t = threading.Thread(target=lambda: got.update(rec=samples.release(0, dev)))
     t.start()
-    draws._cv.entered.acquire()
-    draws.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-    draws._cv.entered.acquire()                 # woken by the first sample, and waiting again for the second
+    samples._cv.entered.acquire()
+    samples.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
+    samples._cv.entered.acquire()                 # woken by the first sample, and waiting again for the second
     assert "rec" not in got and getattr(dev, "released", None) is None and dev.device_pool.held > 0
-    draws.put(0, "pouw_h1", [])
+    samples.put(0, "pouw_h1", [])
     t.join()
     assert got["rec"]["protocols"] == list(PROTOCOLS) and dev.released is not None and dev.device_pool.held == 0
 
@@ -56,10 +56,10 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
     down = (2, "model.layers.0.mlp.down_proj", 0, C)
     written_by_unsampled = (0, "model.embed_tokens", C, 2 * C)      # the sampled block's input, from a block nobody drew
     h1 = (0, "model.layers.0.self_attn.qkv_proj", 10, 20)
-    draws = SL.Draws(PROTOCOLS)
-    draws.put(0, "spot", [down, written_by_unsampled])
-    draws.put(0, "pouw_h1", [h1])
-    rec = draws.release(0, dev)
+    samples = SL.Samples(PROTOCOLS)
+    samples.put(0, "spot", [down, written_by_unsampled])
+    samples.put(0, "pouw_h1", [h1])
+    rec = samples.release(0, dev)
     want = SL.leaves_of(dev, [down, written_by_unsampled, h1])
     assert rec["union_leaves"] == sum(len(v) for v in want.values()) and rec["kept_bytes"] == rec["union_leaves"] * C
     assert rec["leaves_by_protocol"] == {"spot": 2, "pouw_h1": 1}
@@ -90,9 +90,9 @@ def test_the_seal_reads_the_port_positions_of_a_step_no_sample_named(tmp_path):
     _host, rc, dev = committed(extra={1: [(PORT_NAMES[1], pos)]})
     before = committed_raw(dev, 1, PORT_NAMES[1])
     assert before is not None and before[0] == pos
-    draws = SL.Draws(("pouw",))
-    draws.put(0, "pouw", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-    draws.release(0, dev)
+    samples = SL.Samples(("pouw",))
+    samples.put(0, "pouw", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
+    samples.release(0, dev)
     assert committed_raw(dev, 1, PORT_NAMES[1]) == before
     with pytest.raises(RuntimeError, match="sample-gated release"):
         dev.open_range(1, 0, 1)
@@ -114,9 +114,9 @@ def test_a_released_window_seals_and_its_bundle_holds_exactly_the_samples_leaves
     host, rc, dev = committed()
     dev.weights_tree, dev.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     down = (2, "model.layers.0.mlp.down_proj", 0, dev.chunk)
-    draws = SL.Draws(("pouw",))
-    draws.put(0, "pouw", [down])
-    draws.release(0, dev)
+    samples = SL.Samples(("pouw",))
+    samples.put(0, "pouw", [down])
+    samples.release(0, dev)
     leds = _ledgers()
     reqs, rows = SS.window_requests(ROWS, NAMES.get, leds.get)
     d = tmp_path / "windows" / "w0"
@@ -133,60 +133,60 @@ def test_a_released_window_seals_and_its_bundle_holds_exactly_the_samples_leaves
 
 def test_a_later_sample_or_a_read_of_a_dropped_leaf_is_refused_by_name():
     _host, rc, dev = committed()
-    draws = SL.Draws(("spot",))
-    draws.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-    draws.release(0, dev)
-    assert draws.refused(0, [(2, "model.layers.0.mlp.down_proj", 0, 1)], dev) == []
-    lost = draws.refused(0, [(1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 0, 1)], dev)
+    samples = SL.Samples(("spot",))
+    samples.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
+    samples.release(0, dev)
+    assert samples.refused(0, [(2, "model.layers.0.mlp.down_proj", 0, 1)], dev) == []
+    lost = samples.refused(0, [(1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 0, 1)], dev)
     assert len(lost) == 1 and lost[0].startswith("runner.sampler [0, 4) at step 1") and DROPPED in lost[0]
     with pytest.raises(SL.Refused, match="was released"):
-        draws.put(0, "spot", [(1, "runner.sampler", 0, 4)])
+        samples.put(0, "spot", [(1, "runner.sampler", 0, 4)])
     with pytest.raises(RuntimeError, match="sample-gated release"):
         OpenedReader(dev, rc)(1, "runner.sampler", 0, 4)
 
 
 def test_a_protocol_samples_a_window_once_names_only_its_protocols_and_reads_only_what_was_committed():
     _host, _rc, dev = committed()
-    draws = SL.Draws(PROTOCOLS)
-    draws.put(0, "pouw_h1", [])
+    samples = SL.Samples(PROTOCOLS)
+    samples.put(0, "pouw_h1", [])
     with pytest.raises(SL.Refused, match="sampled by pouw_h1 already"):
-        draws.put(0, "pouw_h1", [])
+        samples.put(0, "pouw_h1", [])
     with pytest.raises(SL.Refused, match="not a protocol the release waits for"):
-        draws.put(0, "pous", [])
+        samples.put(0, "pous", [])
     with pytest.raises(ValueError, match="0 <= lo < hi"):
-        draws.put(0, "spot", [(0, "model.embed_tokens", 4, 4)])
-    draws.put(0, "spot", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
+        samples.put(0, "spot", [(0, "model.embed_tokens", 4, 4)])
+    samples.put(0, "spot", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
     with pytest.raises(KeyError, match="no committed member by that name"):
-        draws.release(0, dev)
+        samples.release(0, dev)
     assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose samples can't
     assert dev.device_pool.held == 0                       # be read keeps nothing: never redrawn, so it would hold the pool forever
     with pytest.raises(KeyError, match="did not commit"):
         SL.leaves_of(dev, [(9, "model.embed_tokens", 0, 1)])
 
 
-def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_name(tmp_path):
+def test_the_samples_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_name(tmp_path):
     _host, _rc, dev = committed()
-    draws = SL.Draws(PROTOCOLS)
-    d = SL.DrawDir(tmp_path / "draws", draws)
+    samples = SL.Samples(PROTOCOLS)
+    d = SL.SampleDir(tmp_path / "draws", samples)
     for p, reads in (("spot", [[2, "model.layers.0.mlp.down_proj", 0, 1]]), ("pouw_h1", [])):
         (d.path / f"w0.{p}.json").write_text(json.dumps({"window": 0, "protocol": p, "reads": reads}))
     (d.path / "w1.spot.json").write_text(json.dumps({"window": 0, "protocol": "spot", "reads": []}))
     (d.path / "w0.pouw_h1.json.tmp").write_text("{")
     assert d.scan() == 3 and d.scan() == 0
-    assert draws.release(0, dev)["union_leaves"] == 1
+    assert samples.release(0, dev)["union_leaves"] == 1
     with pytest.raises(SL.Refused, match="w1.spot.json: ValueError: its body names window 0"):
-        draws.release(1, dev)
-    assert draws.summary()["refused"] == {1: draws._refused[1]}
+        samples.release(1, dev)
+    assert samples.summary()["refused"] == {1: samples._refused[1]}
 
 
 def test_a_failed_run_ends_every_waiting_release():
-    draws = SL.Draws(PROTOCOLS)
-    draws._cv = _Waits()
+    samples = SL.Samples(PROTOCOLS)
+    samples._cv = _Waits()
     got: dict[str, Any] = {}
-    t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.Refused, draws.wait, 3)))
+    t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.Refused, samples.wait, 3)))
     t.start()
-    draws._cv.entered.acquire()
-    draws.fail("the server stopped")
+    samples._cv.entered.acquire()
+    samples.fail("the server stopped")
     t.join()
     assert "window 3: no release: the server stopped" in str(got["e"].value)
 
@@ -211,45 +211,45 @@ def _waiting_take(pool, nbytes, key):
 
 def test_a_failed_run_ends_every_step_waiting_on_the_pool_by_name():
     _host, _rc, dev = committed()
-    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    samples = SL.Samples(PROTOCOLS, dev.device_pool)
     t, got = _waiting_take(dev.device_pool, dev.device_pool.capacity, "next window")
-    draws.fail("the server failed: RuntimeError: boom")
+    samples.fail("the server failed: RuntimeError: boom")
     t.join()
     assert "device pool: no release is coming: the server failed: RuntimeError: boom" in str(got["e"])
     with pytest.raises(SL.Refused, match="the server failed"):
-        draws.release(0, dev)
-    assert draws.discarded == {0: "Refused: window 0: no release: the server failed: RuntimeError: boom"}
+        samples.release(0, dev)
+    assert samples.discarded == {0: "Refused: window 0: no release: the server failed: RuntimeError: boom"}
     assert dev.device_pool.held == 0 and dev.released["discarded"].startswith("Refused")
 
 
 def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name():
     _host, _rc, dev = committed()
-    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    samples = SL.Samples(PROTOCOLS, dev.device_pool)
     held, cap = dev.device_pool.held, dev.device_pool.capacity
     t, got = _waiting_take(dev.device_pool, cap, "next window")
-    draws.refuse(0, "--draws-dir: w0.pouw_h1.json: ValueError: not JSON")
+    samples.refuse(0, "--draws-dir: w0.pouw_h1.json: ValueError: not JSON")
     with pytest.raises(SL.Refused, match="not JSON"):
-        draws.release(0, dev)
+        samples.release(0, dev)
     t.join()
     assert got["v"][0].numel() == cap and dev.device_pool.held_by("next window") == cap
     assert dev.released["kept_bytes"] == 0 and dev.released["device_freed_bytes"] == held
     with pytest.raises(RuntimeError, match="sample-gated release"):
         dev.open_range(0, 0, 1)
     with pytest.raises(SL.Refused, match="reached no release"):
-        draws.put(0, "spot", [])
+        samples.put(0, "spot", [])
     reads = [(2, "model.layers.0.mlp.down_proj", 0, 1)]
-    assert len(draws.refused(0, reads, dev)) == 1 and DROPPED in draws.refused(0, reads, dev)[0]
-    assert draws.summary()["discarded"] == {0: draws.discarded[0]}
-    assert draws.summary()["device_pool"]["waits"] == 1 and draws.summary()["device_pool"]["peak_bytes"] == cap
-    assert draws.discard(0, dev, "again") is None
+    assert len(samples.refused(0, reads, dev)) == 1 and DROPPED in samples.refused(0, reads, dev)[0]
+    assert samples.summary()["discarded"] == {0: samples.discarded[0]}
+    assert samples.summary()["device_pool"]["waits"] == 1 and samples.summary()["device_pool"]["peak_bytes"] == cap
+    assert samples.discard(0, dev, "again") is None
 
 
 def test_a_window_whose_close_fails_is_discarded_not_waited_on():
     from verity_vllm.pipeline.serve_commit import CommitWindows
 
     _host, _rc, dev = committed()
-    draws, heard = SL.Draws(PROTOCOLS, dev.device_pool), []
-    windows = SimpleNamespace(release=draws, _sealed=heard.append)
+    samples, heard = SL.Samples(PROTOCOLS, dev.device_pool), []
+    windows = SimpleNamespace(release=samples, _sealed=heard.append)
     rec = {"window": 4, "error": "RuntimeError: finalize failed"}
     CommitWindows._no_release(windows, rec, dev, None)
     assert rec["release"]["discarded"] == "not sealed: RuntimeError: finalize failed" and dev.device_pool.held == 0
@@ -260,7 +260,7 @@ def test_a_window_whose_close_fails_is_discarded_not_waited_on():
 
 
 def opts(**retention):
-    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "spot,pouw_h1", "draws_dir": "",
+    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "spot,pouw_h1", "samples_dir": "",
          **retention}
     return SimpleNamespace(retention=SimpleNamespace(**r), commit=True, scheme=R.NAME, window_gb=32.0, seal=True)
 
@@ -272,9 +272,9 @@ def test_serve_openai_gates_every_device_held_seal_on_named_samples(tmp_path):
     assert "distinct protocol names" in SL.retention_refusal(opts(release_after="spot,spot"))
     assert "distinct protocol names" in SL.retention_refusal(opts(release_after="a/b"))
     rec = SL.retention_record(opts(), SimpleNamespace())
-    assert rec["release_after"] == "spot,pouw_h1" and rec["draws_dir"] == "OUT/draws"
-    draws, d = SL.release_of(opts(), tmp_path)
-    assert draws.protocols == ("spot", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
+    assert rec["release_after"] == "spot,pouw_h1" and rec["samples_dir"] == "OUT/draws"
+    samples, d = SL.release_of(opts(), tmp_path)
+    assert samples.protocols == ("spot", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
     assert SL.release_of(opts(retain="host", release_after=""), tmp_path) == (None, None)
     assert SL.release_of(opts(), tmp_path, SimpleNamespace(device_pool="the pool"))[0].pool == "the pool"
     unsealed = opts()

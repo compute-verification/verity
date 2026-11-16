@@ -276,7 +276,7 @@ class PearlWindows:
                "coin_source": doc["coins"]["source"], "served": str(d.relative_to(self.out) / "served.json")}
         return out if error is None else {**out, "error": error[:500]}
 
-    def drawing(self, draws: Any) -> None:
+    def sampling(self, samples: Any) -> None:
         """Pearl+ puts no sample into serve-openai's sample-gated release (`refusal` refuses ``--release-after pouw``): its
         verifier's coin is flipped after W."""
 

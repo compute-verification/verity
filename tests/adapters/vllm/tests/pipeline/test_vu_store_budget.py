@@ -89,7 +89,7 @@ def test_a_spent_sample_budget_leaves_the_units_after_it_unsampled_and_counted_b
     assert len(e.replayed) == 3 and [u["vu"] for u in e.units] == [u["vu"] for u in e.listed] == [0, 1, 2]
     assert set(e.summary["by_family"]) == set(families) and sum(left.values()) == len(families) - 3 > 3
     for family, c in e.summary["by_family"].items():
-        assert {k: v for k, v in c.items() if k.endswith("_time_budget")} == ({"not_drawn_time_budget": left[family]} if left[family] else {})
+        assert {k: v for k, v in c.items() if k.endswith("_time_budget")} == ({"not_sampled_time_budget": left[family]} if left[family] else {})
         assert c.get("replayed_equal", 0) == c.get("stored", 0) == sampled[family] and c["seconds"] == round(sampled[family] * EACH, 3)
         assert len(c) == 1 + (4 if sampled[family] else 0) + (1 if left[family] else 0)
 

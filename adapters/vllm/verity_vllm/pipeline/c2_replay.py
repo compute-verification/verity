@@ -500,7 +500,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                             "seed_challenge": _seed_chal, "sr_kw": _sr_kw})
         t1 = time.perf_counter()
         SD.touch(s.com, got["reads"])
-        return got["plan"] | {"prepare_s": facts.get("prepare_s"), "reads": len(got["reads"]), "draw_s": round(t1 - t0, 3),
+        return got["plan"] | {"prepare_s": facts.get("prepare_s"), "reads": len(got["reads"]), "sample_s": round(t1 - t0, 3),
                               "reads_s": round(time.perf_counter() - t1, 3)}, lk
     sr = (lambda f: f() if plan or s.protocols is None else replayed(s.protocols, f))(lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, plan=plan, **_kw))
     if plan:

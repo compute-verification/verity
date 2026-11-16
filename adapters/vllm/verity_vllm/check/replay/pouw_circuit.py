@@ -26,7 +26,7 @@ its served y and its weight side). `replay` checks:
 
 K is `RECORD_K` (27,713) by default, each call's share capped at its units. At Qwen2.5-0.5B's shapes that proves every
 tile and its closure, about 26 CPU-hours of IR evaluation per forward at 16 rows. A caller may pass a smaller K (the
-option's ``draws`` setting), and the report names it.
+option's ``samples`` setting), and the report names it.
 
 `linked` installs the delegate for the model Program's `NcpLinearRow_v1` and `NcpLinearRowBias_v1` rows (`delegate`) for
 the length of a sampled replay. It evaluates a sampled row as the int7 linear on the row's committed input and registered
@@ -233,7 +233,7 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
             ledger.sent()
             record = ledger.record()
         except (DomainError, ValueError) as e:
-            why.append(f"the window's draw is refused: {e}")
+            why.append(f"the window's sample is refused: {e}")
             plans = []
     wrong: list[list[Any]] = []
     roles: Counter[str] = Counter()
@@ -264,7 +264,7 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
     return {"schema": POUW_CIRCUIT_REPLAY_SCHEMA, "result": not why, "why": why[:12], "why_n": len(why),
             "law": f"work K={k}" if plans else None, "record_k": CPL.RECORD_K, "sizes": dict(sizes), "calls": len(records),
             "weights": len(sides), "units": sum(r.units for r in records) + sum(s.units for s in sides),
-            "drawn": sum(len(p.drawn) for p in plans), "proved_units": sum(roles.values()), "proved_by_role": dict(roles),
+            "drawn": sum(len(p.sampled) for p in plans), "proved_units": sum(roles.values()), "proved_by_role": dict(roles),
             "wrong_units": wrong, "draw": record, "seconds": round(time.monotonic() - t0, 3),
             "not_of_record": "the quantizer and the int7 linear of the model rows are evaluated natively (no registered Definition yet)"}
 
@@ -354,7 +354,7 @@ def linked(records: Sequence[PC.CallRecord], sites: Mapping[str, int]) -> Iterat
 def around(comp: Any) -> Iterator[dict[str, Any] | None]:
     """The Commit's sampled replay under a composition with ``pouw:ncp-v2``: the rows answered by the live run's calls for
     the length of the block. On exit the yielded dict is filled with the circuit replay, whose ``result`` is False when a
-    call's plan, its anchors or its linkage to the model rows fails. The window's budget K is the run's ``draws`` setting
+    call's plan, its anchors or its linkage to the model rows fails. The window's budget K is the run's ``samples`` setting
     when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as `tamper_tiles`
     commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None without such an entry."""
     entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
@@ -372,7 +372,7 @@ def around(comp: Any) -> Iterator[dict[str, Any] | None]:
         yield out
     commitment = dict(run.commits, calls_root=PC.calls_root(run.salt, bytes.fromhex(run.commits["weights_root"]), records).hex()
                       if records else None)
-    out.update(replay(records, commitment, run.settings.draws), linkage=issues[:12], linkage_n=len(issues))
+    out.update(replay(records, commitment, run.settings.samples), linkage=issues[:12], linkage_n=len(issues))
     if issues:
         out["result"] = False
         out["why"] = issues[:12] + out["why"]

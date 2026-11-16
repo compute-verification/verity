@@ -92,7 +92,7 @@ def test_the_period_open_commits_each_stratums_circuit_file_sha512(program, tmp_
     assert _auditor(monkeypatch).circuit_files_of(argv[argv.index("--circuit-files") + 1]) == files
     assert _auditor(monkeypatch).length_of(argv[argv.index("--length") + 1]) == RH.fill_length()
     ledger = CH.Ledger(tmp_path / "windows.jsonl", 1)
-    ledger.period_open("vllm-h1-p", circuit=_sha(raw), draw_k=2, circuit_files=files)
+    ledger.period_open("vllm-h1-p", circuit=_sha(raw), sample_k=2, circuit_files=files)
     assert json.loads(ledger.lines[0])["body"]["circuit_files"] == files
     if hasattr(CR, "committed_files"):
         assert CR.committed_files(ledger.lines, "vllm-h1-p") == (files, None)
@@ -115,7 +115,7 @@ def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, m
     assert length == GPU.fixed_length(decl) == {"max_tokens": [3] * 32, "stop": "fixed"}
     assert _auditor(monkeypatch).circuit_files_of(argv[argv.index("--circuit-files") + 1]) == files
     ledger = CH.Ledger(tmp_path / "windows.jsonl", 1)
-    ledger.period_open("o1", circuit="a" * 128, draw_k=7, rows=32, length=length, circuit_files=files)
+    ledger.period_open("o1", circuit="a" * 128, sample_k=7, rows=32, length=length, circuit_files=files)
     assert CR.committed_length(ledger.lines, "o1") == ([3] * 32, None)
     assert CR.committed_files(ledger.lines, "o1") == (files, None)
 

@@ -87,7 +87,7 @@ writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, 
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
-`serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
+`serve_h1.H1Windows.sampled`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
 beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -648,7 +648,7 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
-    draws, draws_dir = RL.release_of(opts, out, com)
+    samples, samples_dir = RL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
@@ -676,11 +676,11 @@ def main(opts: Options) -> int:
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)),
                                 no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws, pool=pool, pool_block=pool_block)
+                                request_cap=opts.window_requests, arm=arm, release=samples, pool=pool, pool_block=pool_block)
         if arm is not None:
-            arm.drawing(draws)
-    if draws_dir is not None:
-        draws_dir.start()
+            arm.sampling(samples)
+    if samples_dir is not None:
+        samples_dir.start()
     if session is not None:
         session.begin(windows)
     loop = EngineLoop(session.paced(engine) if session is not None else engine, windows, cap=opts.window_requests)
@@ -755,7 +755,7 @@ def main(opts: Options) -> int:
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "tick": loop.gate.summary() if loop.gate is not None else None,
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
-                   "release": draws.summary() if draws is not None else None,
+                   "release": samples.summary() if samples is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
             M.write(out / "summary.json", "RunTotals", json.dumps(got, indent=1).encode())
@@ -763,13 +763,13 @@ def main(opts: Options) -> int:
                 mirror()
             return got
 
-        RL.fail(draws, loop.error)
+        RL.fail(samples, loop.error)
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
-        if draws_dir is not None:                        # the pending seals have had their windows' samples
-            draws_dir.stop()
+        if samples_dir is not None:                        # the pending seals have had their windows' samples
+            samples_dir.stop()
         if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()
         watchdog.stop()

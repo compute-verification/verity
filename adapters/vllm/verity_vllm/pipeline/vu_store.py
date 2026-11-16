@@ -109,7 +109,7 @@ def _one_vu(k: int) -> tuple[dict[str, Any], dict[str, tuple[str, bytes]], float
     return unit, blobs, time.perf_counter() - tv
 
 
-def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tuple[dict, dict, float] | None]:
+def _run_sample(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tuple[dict, dict, float] | None]:
     """The sample's results in order; None for a VU the spent time budget left unsampled.  `workers` > 1: a forked pool in chunks (the
     replay's pattern: weights and twin libraries pre-warmed in the parent, the heap frozen before the fork, children never touch CUDA)."""
     if workers <= 1:
@@ -174,9 +174,9 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
         pool, _not_exec = split_not_executed(all_vus, executed_prefix)
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
-    t_draw = time.perf_counter()                                             # the sampling budget starts here, never inside the build
+    t_sample = time.perf_counter()                                             # the sampling budget starts here, never inside the build
     logger.info("[vu-export] population: %d/%d request Programs, %d VUs, %d sampled, %.0f s%s%s", len(indices), len(programs), len(all_vus),
-                len(picked), t_draw - t0, " (the replay's own)" if reuse else "",
+                len(picked), t_sample - t0, " (the replay's own)" if reuse else "",
                 f"; {len(skipped)} Programs past the population budget" if skipped else "")
     _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
@@ -185,10 +185,10 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     fam_time: dict[str, float] = {}
     units: dict[str, list[dict]] = {}
     try:
-        for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t_draw)):
+        for k, res in enumerate(_run_sample(len(picked), int(limits.workers), float(limits.max_seconds), t_sample)):
             st = fam_stats.setdefault(picked[k]["family"], Counter())
             if res is None:
-                st["not_drawn_time_budget"] += 1
+                st["not_sampled_time_budget"] += 1
                 continue
             unit, blobs, dt = res
             st["drawn"] += 1
@@ -204,7 +204,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                     blob.write_bytes(b)
             units.setdefault(digest_of[unit["request"]], []).append(unit)
             if k % 100 == 0:
-                logger.info("[vu-export] %d/%d VUs, %.0f s", k, len(picked), time.perf_counter() - t_draw)
+                logger.info("[vu-export] %d/%d VUs, %.0f s", k, len(picked), time.perf_counter() - t_sample)
     finally:
         _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
@@ -240,8 +240,8 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                "by_family": {f: dict(c) | {"seconds": round(fam_time.get(f, 0), 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
                "sets": sets, "wall_s": round(time.perf_counter() - t0, 3),
-               "timing": {"population_s": round(t_draw - t0, 3), "draw_s": round(t_extract - t_draw, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
-                          "rule": "max_seconds budgets the draw from after the population is built; max_population_seconds budgets the build"}}
+               "timing": {"population_s": round(t_sample - t0, 3), "sample_s": round(t_extract - t_sample, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
+                          "rule": "max_seconds budgets the sample from after the population is built; max_population_seconds budgets the build"}}
     (out / "export.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
     return summary
 

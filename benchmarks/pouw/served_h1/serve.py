@@ -309,7 +309,7 @@ def coins_expect(manifest: dict) -> dict:
         got = {c.get("salt") for c in cs}
         salts[s] = got.pop() if len(got) == 1 else "the step's calls read more than one salt"
     return {"rounds": [step_roots(window, s, by_step[s])["root"] for s in sorted(by_step)], "salts": salts,
-            "draw_after": receipts_root(window, calls) if manifest.get("coins", {}).get("draw_coin") else None}
+            "flip_after": receipts_root(window, calls) if manifest.get("coins", {}).get("draw_coin") else None}
 
 
 def schedule_tap(runner: Any) -> tuple[list, dict, Any]:

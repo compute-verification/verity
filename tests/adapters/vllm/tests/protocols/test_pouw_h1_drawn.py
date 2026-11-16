@@ -1,4 +1,4 @@
-"""`drawn` (``benchmarks/pouw/h1_prove/drawn.py``'s method) on a window serve-openai's H1 arm served over J10-R units at one K (the pouw
+"""`sampled` (``benchmarks/pouw/h1_prove/drawn.py``'s method) on a window serve-openai's H1 arm served over J10-R units at one K (the pouw
 setting ``unit`` j10r, over a stand-in tile with J10-R's signature, `StandInJ10R`, or under `REAL` J10-R's own), on a
 gate session whose period opened its sample K: ``stage`` rebuilds every value a sampled call's statement reads from the
 prover's state and the served weights at the roots the window registered, stages the call on the circuit file
@@ -109,7 +109,7 @@ def _ok_body(signature):
 
 
 #: the leaf statements' signatures (`h1zy.PouwH1LaneZy`'s and `h1zy.PouwH1Combine`'s over the leaf's TILE), each ok 1: the
-#: lane and combine files a lanes-form K commits, a circuit of a few gates on `drawn.leaf_rows`
+#: lane and combine files a lanes-form K commits, a circuit of a few gates on `sampled.leaf_rows`
 StandInLane = CompositeDefinition("H1DrawnTestLane", 0, ("TILE",), Z._lane_signature, _ok_body(Z._lane_signature),
                                   register=False, ports=Z._lane_ports)
 StandInCombine = CompositeDefinition("H1DrawnTestCombine", 0, ("TILE",), Z._combine_signature,
@@ -134,7 +134,7 @@ def _v1_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, ij, k):
 
 
 def _j10r_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, ij, k):
-    """J10-R's word reference's receipt (`h1zy.reference` with ``j10r``), what `drawn.call_receipts` rebuilds."""
+    """J10-R's word reference's receipt (`h1zy.reference` with ``j10r``), what `sampled.call_receipts` rebuilds."""
     blocks = PCC.j10r_blocks(served.m, k, (32, 32), *ij)
     rc, ok = Z.reference(ta, tb, tsa, tsw, zy, salt, position, roots, j10r=(u0, blocks))
     assert ok == 1
@@ -147,7 +147,7 @@ def _stand_in_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, i
 
 
 def _stand_in_receipts(z, win, k, roots):
-    """`drawn.call_receipts` under `StandInJ10R`: each unit's receipt its record row's leading u16 words."""
+    """`sampled.call_receipts` under `StandInJ10R`: each unit's receipt its record row's leading u16 words."""
     return np.asarray(z["w_zy"], np.uint16)[:, :CR.shape_of(win["raw"])["tiles"][k]["receipt"]]
 
 
@@ -181,7 +181,7 @@ def _with_receipts(commit, receipt=_v1_receipt):
 
 
 #: VERITY_VLLM_H1_SAMPLED_J10R=1: the window served over J10-R's own tile unit (`served.unit_of` ``j10r``), so ``--recompose``
-#: holds its lowered outputs to the word reference sampled stages without composing (`drawn.unit_outputs`); run remotely
+#: holds its lowered outputs to the word reference sampled stages without composing (`sampled.unit_outputs`); run remotely
 REAL = os.environ.get("VERITY_VLLM_H1_SAMPLED_J10R") == "1"
 WKEY = bytes(range(32))
 FAKE = f"""#!{sys.executable}
@@ -342,7 +342,7 @@ def _prove_leaves(plan: dict, win: dict) -> None:
 
 
 def _verified(monkeypatch):
-    """`drawn.check`'s verifier as ``benchmarks/pouw/h1_prove/drawn.py`` binds it: `credit._verified` with the Lean
+    """`sampled.check`'s verifier as ``benchmarks/pouw/h1_prove/drawn.py`` binds it: `credit._verified` with the Lean
     verifier at ``--lean`` under the window's sample, then `credit._proved`."""
     def verified(statements, files, win, units, lean):
         monkeypatch.setattr(PF, "executable", lambda: lean)
@@ -456,7 +456,7 @@ def test_a_windows_calls_are_staged_only_on_the_circuit_files_its_period_committ
         f"REFUSED: K = {K}'s statement circuit (SHA-512 {pin[:16]}...) is not --circuits' k{K} file ({'00' * 8}...), "
         "the one the period-open committed\n")
     v1 = {**win, "shape": {**win["shape"], "tiles": {**tiles, K: {**tiles[K], "j10r": False}}}}
-    assert refusal(window=v1) == (f"REFUSED: K = {K}'s template is not J10-R's: drawn stages J10-R units on a k<K> "
+    assert refusal(window=v1) == (f"REFUSED: K = {K}'s template is not J10-R's: sampled stages J10-R units on a k<K> "
                                   f"file, and a v1 unit as its lanes (pouw_h1_circuits --lanes {K})\n")
     call = min(DR.sampled_calls(win, _PeriodAuditor.K))
     _file, why = CR.registered_file(win["program"], win["layout"], win["shape"], call, {}, win["root"], win["steps"],
@@ -466,7 +466,7 @@ def test_a_windows_calls_are_staged_only_on_the_circuit_files_its_period_committ
 
 
 def test_a_call_statements_port_that_is_no_registered_read_is_refused_by_name():
-    """`drawn.complete` is the Lean verifier's ``registered reads (complete)``: every port of the statement's circuit is
+    """`sampled.complete` is the Lean verifier's ``registered reads (complete)``: every port of the statement's circuit is
     a port of credit's ``--registered`` file. o0, the receipt, is refused with the serving flag that registers it."""
     ports = ["a_k64_0", "b_k64_0", "zy", "pub", "o0", "o1"]
     SAMPLED.complete(ports, {"ports": dict.fromkeys(ports, {})}, 3)
@@ -517,14 +517,14 @@ def test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_comb
     it."""
     DR, d, tmp = lanes_served
     win = DR.window_of(d, 0)
-    drawn = sorted(u for us in DR.sampled_calls(win, _PeriodAuditor.K).values() for u in us)
+    sampled = sorted(u for us in DR.sampled_calls(win, _PeriodAuditor.K).values() for u in us)
     assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
-    assert plan["calls"] == [] and sorted({x["unit"] for x in plan["leaves"]}) == drawn
-    for u in drawn:
+    assert plan["calls"] == [] and sorted({x["unit"] for x in plan["leaves"]}) == sampled
+    for u in sampled:
         assert [x["statement"] for x in plan["leaves"] if x["unit"] == u] == [list(s) for s in LL.statements(32, 32)]
     assert sorted(e["value"] for e in plan["produced"]["produced"]) == sorted(
-        LL.served(win["shape"]["prefix"], LL.PARTIALS, u) for u in drawn)
+        LL.served(win["shape"]["prefix"], LL.PARTIALS, u) for u in sampled)
     _prove_leaves(plan, win)
     st = tmp / "statements.json"
     assert DR.run("statements", SimpleNamespace(work=tmp / "work", out=st)) == 0
@@ -533,10 +533,10 @@ def test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_comb
     capsys.readouterr()
     assert _check(DR, d, tmp, st, monkeypatch) == 0
     got = capsys.readouterr().out
-    assert got.startswith("PROVED ") and json.loads(got.split(" ", 1)[1])["units"] == drawn, got
+    assert got.startswith("PROVED ") and json.loads(got.split(" ", 1)[1])["units"] == sampled, got
 
-    partial = plan["produced"]["openings"][LL.served(win["shape"]["prefix"], LL.PARTIALS, drawn[0])][0][1]
-    lane0 = next(x for x in plan["leaves"] if x["unit"] == drawn[0] and x["statement"] == [LL.LANE, 0])
+    partial = plan["produced"]["openings"][LL.served(win["shape"]["prefix"], LL.PARTIALS, sampled[0])][0][1]
+    lane0 = next(x for x in plan["leaves"] if x["unit"] == sampled[0] and x["statement"] == [LL.LANE, 0])
     rec = Path(lane0["dir"]) / "sessions" / "s0" / "session.json"
     honest = rec.read_text()
     tampered = json.loads(honest)

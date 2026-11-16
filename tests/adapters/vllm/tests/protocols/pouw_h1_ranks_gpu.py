@@ -47,13 +47,13 @@ def entropy(label: str) -> Callable[[int], bytes]:
     """A fixed SHA-512 counter stream for `label`: the same coins in every run, so no verifier trusts them."""
     state: dict[str, Any] = {"i": 0, "buf": b""}
 
-    def draw(n: int) -> bytes:
+    def sample(n: int) -> bytes:
         while len(state["buf"]) < n:
             state["buf"] += hashlib.sha512(f"verity/pouw-h1-ranks-gpu/{label}/{state['i']}".encode()).digest()
             state["i"] += 1
         out, state["buf"] = state["buf"][:n], state["buf"][n:]
         return out
-    return draw
+    return sample
 
 
 def coins(steps: int) -> tuple[Any, Any]:

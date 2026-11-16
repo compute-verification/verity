@@ -127,7 +127,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "multiply, and every output word of every launch, and of every accepted forced config on an input whose summation "
              "orders show, equals MarlinMoeExpertGemm_v1 (w13) or MarlinMoeExpertGemmW_v1 (w2) at the launch's statics and its "
              "run's recorded (pair -> moe block, expert) assignment, bit for bit; a launch replayed at its recorded call writes "
-             "the same words, and the record's two runs agree on every pair their align draws placed in the same moe block (the "
+             "the same words, and the record's two runs agree on every pair their align samples placed in the same moe block (the "
              "within-expert placement of vLLM's moe_align_block_size is atomic-order, and a moved pair's words follow its own "
              "block's k-slice schedule, which the Programs take as input)."),
     Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",

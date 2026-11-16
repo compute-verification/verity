@@ -71,7 +71,7 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
     assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
-    assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform draw unless the row asks for family"
+    assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform sample unless the row asks for family"
     fam = _row(tmp_path / "fam", "--config-run", "1", "--replay-draw", "family")
     fam.hidden_so, fam.B = "/x/verity_fa2_matReqG.so", 1
     assert fam.commit_cmd([])[fam.commit_cmd([]).index("--replay-draw") + 1] == "family"
@@ -667,7 +667,7 @@ def test_the_uniform_sample_is_k_units_from_one_stratum_of_every_unit():
     assert picked != sample(keyed, per, seed=12)[0]
 
 
-def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_is_refused():
+def test_a_record_that_names_no_sample_keeps_the_family_sample_and_an_unknown_sample_is_refused():
     from types import SimpleNamespace
 
     from verity_vllm.pipeline.c2_replay import sampling_design_of

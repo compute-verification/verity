@@ -168,7 +168,7 @@ def test_a_commit_whose_openings_come_from_a_session_opened_on_its_own_root_pass
     assert "secret" not in records[0]["session"]
 
 
-def test_openings_drawn_before_their_runs_root_are_refused(tmp_path, monkeypatch):
+def test_openings_sampled_before_their_runs_root_are_refused(tmp_path, monkeypatch):
     """Run 1's coins opened after run 0's root (before run 1's existed), then recorded against run 1's: the release log
     shows the challenger never received run 1's root."""
     auditor = _Auditor(tmp_path, monkeypatch)
@@ -298,7 +298,7 @@ def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
     assert "not trusted" in _reason(auditor, records, roots, sid, heads=[*auditor.heads(forked), *auditor.heads()])
 
 
-def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
+def test_the_commits_options_and_samples_refuse_by_name(tmp_path, monkeypatch):
     """The gate and the peer go together, the gate is one source of the C2 replay's challenge, a Commit with no
     instrumented run reserves nothing, a vllm-v1 root flips no coins, the challenge phase flips one coin of each family a run
     and no more, a run's samples read only coins flipped after its own root, and a gate refusal names itself. The gate's

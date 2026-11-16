@@ -15,7 +15,7 @@ and a file past zip's 32-bit sizes written by ``np.savez`` (`pouw_h1_prover.save
 And what a window's own parts refuse with no GPU: its sessions (`pouw_h1_window`: a lane's open period, a salt coin
 that doesn't open, the gate's withheld open, a sample session's reserve, open and layout, a second open), a receipt
 producer's launches, run, codes, weight and roots (`pouw_h1_receipts.Receipts`), the sampled statements' window,
-weights, weights' key and sessions (`drawn.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a
+weights, weights' key and sessions (`sampled.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a
 multiprocess window's ranks (`pouw_h1_ranks.install`, `ingest`, `RankExtension`), a call that committed nothing
 (`pouw_h1_served.Served.close`, `pouw_h1_kept.kept_row`), and the host's libraries and table roots
 (`pouw_h1_registered_device.host_lib`, `zy_host_lib`, `pouw_h1_tables_device.host_roots`).
@@ -24,7 +24,7 @@ And what is left of those parts where no test went: a compiled call shape off it
 (`pouw_h1.check_tiles`, `H1Run.check`), a linear of a window that commits nothing (`pouw_h1_hooks.traced`), a saved
 window's sampling coin (`pouw_h1_handoff.suspend`, `resume`), a call's rows of the Commit and a table a named record
 reuses (`pouw_h1_commit.CommitTap.arow`, `reused`), a value's rows in a host tensor (`pouw_h1_registered.commit`), the
-tables of a call that served no rows and a port that reads no row (`drawn.zy_value`, `a_value`, `call_rows`), the
+tables of a call that served no rows and a port that reads no row (`sampled.zy_value`, `a_value`, `call_rows`), the
 host's salts (`pouw_h1_registered_device.host_commit`), and records that say they are on a CUDA device
 (`pouw_h1_words.zy_words`, `pouw_h1_tables_device.take_z`).
 
@@ -33,7 +33,7 @@ kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_sal
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
 it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
 (`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
-and its record's root (`drawn.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
+and its record's root (`sampled.leaf_stagers`, `prover.lowering.stagers`' `FileStager.stage`, `stage_leaves`), and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
@@ -47,7 +47,7 @@ call tables whose kernels don't build (`pouw_h1_tables_device.available`,
 `pouw_h1_registered_device.zy_available`).
 
 And two things beside those: a row of the window's grid read several times (`pouw_h1._repeat`), and a window that
-core samples nothing from or whose --circuits are another Program's (`drawn.stage`)."""
+core samples nothing from or whose --circuits are another Program's (`sampled.stage`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -338,7 +338,7 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     period = {"period": "p1", "lane": "vllm"}
     for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
         assert refused(entry, settings) == ()
-        no_window = (f"{entry}: the pouw setting 'sample_session' is the draw session of H1's window "
+        no_window = (f"{entry}: the pouw setting 'sample_session' is the sample session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "sample_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
         no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
@@ -598,7 +598,7 @@ def test_a_statements_port_reads_one_registered_value_and_each_position_as_one_r
 
 
 def test_the_samples_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
-    """`draw_k` is ``--k`` when given, else the ``draw_k`` the serve dir's period file holds; with neither, a period
+    """`sample_k` is ``--k`` when given, else the ``draw_k`` the serve dir's period file holds; with neither, a period
     file without one, or one that is no integer, it refuses and says where a K comes from."""
     period = tmp_path / DN.PERIOD
     assert DN.sample_k(tmp_path, 7) == 7
@@ -621,13 +621,13 @@ def served(tmp_path, monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     host = _host(tmp_path, monkeypatch)
     commitment, _run = _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
-    assert host.draw.ended() is None and host.ended() is None
+    assert host.sample.ended() is None and host.ended() is None
     return host, commitment, json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
 
 
 def _trusted(host, commits):
     return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN, sample_directory=host.draw.directory)
+                                     pins=[host.ledger.pins_path], main=CH.MAIN, sample_directory=host.sample.directory)
 
 
 def test_a_windows_coins_that_are_no_commitment_and_rounds_out_of_order_are_refused(served):
@@ -658,11 +658,11 @@ def test_a_windows_sample_is_held_to_its_root_its_parts_and_its_coin(served):
     for coin in ({"bad": 1}, None):
         assert _trusted(host, {**honest, "draw": {**sample, "coin": coin}}) == (
             f"the window's sampling coin is malformed ({NO_OPENING})")
-    signed, root = host.draw.challenger.commitment, bytes.fromhex(sample["root"])
+    signed, root = host.sample.challenger.commitment, bytes.fromhex(sample["root"])
     assert PHD.sample_reason(honest, signed, (root,)) is None
     for received in ((bytes(64),), (root, root), (bytes(64), root)):
         assert PHD.sample_reason(honest, signed, received) == (
-            "the challenger's log does not show the window's draw root as the one root its draw coin followed: a draw "
+            "the challenger's log does not show the window's sample root as the one root its sampling coin followed: a sample "
             "opened before the window's rounds, or after another root")
 
 
@@ -683,8 +683,8 @@ def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, fa
     opens = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]),
                                 CH.session_id(seed))
     commits, host = _salted(tmp_path, monkeypatch, "wide", seed, honest, opens, opens)
-    assert host.draw.challenger.commitment.families == families
-    assert _trusted(host, commits) == ("the window's sample session's signed coins: the coin commitment's coins are not a "
+    assert host.sample.challenger.commitment.families == families
+    assert _trusted(host, commits) == ("the window's draw session's signed coins: the coin commitment's coins are not a "
                                        "live window's draw session's: its draw coin alone")
 
 
@@ -694,7 +694,7 @@ def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_sess
     refuses naming it; no files at all (None) it refuses as `NO_SAMPLE_SESSION`."""
     host, honest, _record = served
     (tmp_path / "tree").mkdir()
-    (tmp_path / "tree" / "out").symlink_to(host.draw.directory, target_is_directory=True)
+    (tmp_path / "tree" / "out").symlink_to(host.sample.directory, target_is_directory=True)
     asked = []
 
     def fetch(session):
@@ -702,13 +702,13 @@ def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_sess
         return tmp_path / "tree"
     ledger = PHC.Ledger.load([host.ledger.path], host.key, pins=[host.ledger.pins_path], main=CH.MAIN)
     files = PHD.sample_files(honest, ledger, fetch, PHC.lms_verify)
-    assert files is not None and asked == [host.draw.session_id]
+    assert files is not None and asked == [host.sample.session_id]
     assert PHD.sample_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), files,
                                    PHC.lms_verify) is None
     assert isinstance(PHD.sample_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify), CoinError)
     unpinned = PHC.Ledger.load([host.ledger.path], host.key, main=CH.MAIN)
     refused = PHD.sample_files(honest, unpinned, fetch, PHC.lms_verify)
-    assert isinstance(refused, CoinError) and asked == [host.draw.session_id]
+    assert isinstance(refused, CoinError) and asked == [host.sample.session_id]
     assert PHD.sample_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), refused,
                                    PHC.lms_verify) == ("the window's sample session is not one the ledger opens on its sample "
                                                        f"root: {refused}")
@@ -1306,7 +1306,7 @@ def test_a_sample_session_is_opened_once_on_the_windows_sample_root_and_a_retry_
     assert sample.session is None and sample.commitment is None
 
 
-SHOWN = ("draw session {sid}'s challenger answered its hello with a coin commitment: a draw session is withheld, its "
+SHOWN = ("sample session {sid}'s challenger answered its hello with a coin commitment: a sample session is withheld, its "
          "commitment released only at its close")
 ANOTHER_LAYOUT = "sample session {sid}'s layout is not a sample session's, its sampling coin alone"
 
@@ -1606,7 +1606,7 @@ def test_a_calls_statement_is_listed_with_the_one_session_that_proved_it_and_che
         with pytest.raises(Refused) as refused:
             DN.statements(a)
         return str(refused.value)
-    once = "not one: a drawn statement is proved once, every instance drawn (session's subset:N)"
+    once = "not one: a sampled statement is proved once, every instance sampled (session's subset:N)"
     assert refusal() == f"call 0: 0 sessions in {proved}/sessions, {once}"
     first = session("s1")
     assert DN.statements(a) == 0
@@ -2584,7 +2584,7 @@ def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circui
     assert DN.run("stage", a) == 1
     said = capsys.readouterr().err
     assert said.startswith("REFUSED: core ") and said.endswith(
-        f" nothing from the window: draw: the window's sampling coin is malformed ({NO_OPENING})\n"), said
+        f" nothing from the window: sample: the window's sampling coin is malformed ({NO_OPENING})\n"), said
     win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
     assert DN.run("stage", a) == 1
     assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "

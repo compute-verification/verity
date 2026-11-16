@@ -133,8 +133,8 @@ def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no
 
     srv, closer = _Server(monkeypatch), Later()
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
-    draws = RL.Draws((SH.DRAWER, "other"))
-    arm.drawing(draws)
+    samples = RL.Samples((SH.DRAWER, "other"))
+    arm.sampling(samples)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     pending = [arm.close(0)]
@@ -149,8 +149,8 @@ def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no
     assert "draw" not in unserved and "error" not in unserved
     assert set(unserved["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
     assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file() and not (tmp_path / "h1" / "w1").exists()
-    summary = draws.summary()
-    assert 1 not in summary["drawn_not_released"] and 1 not in summary["refused"], summary
+    summary = samples.summary()
+    assert 1 not in summary["sampled_not_released"] and 1 not in summary["refused"], summary
     srv.src.uninstall()
 
 
@@ -227,11 +227,11 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
             raise OSError(28, "No space left on device")
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
-    monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
-    srv, draws = _Server(monkeypatch), SL.Draws((SH.DRAWER,))
+    monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
+    srv, samples = _Server(monkeypatch), SL.Samples((SH.DRAWER,))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
                        prover=tmp_path / "prover")
-    arm.drawing(draws)
+    arm.sampling(samples)
     outs = []
     for w, prompts in enumerate(PROMPTS):
         arm.open(w)
@@ -240,7 +240,7 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
     assert outs[0]["error"].startswith("close: its prover state: ") and "No space left on device" in outs[0]["error"]
     assert "kept" not in outs[0] and "its close failed" in outs[0]["draw"]["refused"], outs[0]
     with pytest.raises(SL.Refused, match="its close failed"):
-        draws.wait(window=0)
+        samples.wait(window=0)
     assert "error" not in outs[1] and outs[1]["kept"]["calls"] > 0 and "refused" not in outs[1]["draw"], outs[1]
     srv.src.uninstall()
     arm.drain()
@@ -350,7 +350,7 @@ class _GateAuditor(_Auditor):
                 s["ended"] = True
 
 
-def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
+def test_each_window_flips_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
     """``--challenger-gate`` and ``--challenger-peer``: each window reserves a session of its own (H1's scheme and
     families for S rounds, as this peer) and a sample session (the sampling coin's family alone), round 0 opens the session on
     the window's open root once its port listens, the sample opens the sample session withheld on the window's sample root,
@@ -380,16 +380,16 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         assert {k: out["session"][k] for k in ("window", "peer", "port", "listen_polls", "unopened", "closed", "end")} == {
             "window": w, "peer": PEER, "port": 7811, "listen_polls": 0, "unopened": None, "closed": {"closed": True},
             "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
-        draw = out["session"]["draw"]
-        assert {k: draw[k] for k in ("port", "listen_polls", "end")} == {
+        sample = out["session"]["draw"]
+        assert {k: sample[k] for k in ("port", "listen_polls", "end")} == {
             "port": 7811, "listen_polls": 0, "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
-        assert auditor.gate._opens[draw["session"]]["withheld"] is True
+        assert auditor.gate._opens[sample["session"]]["withheld"] is True
         record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
-        given, drawn = record["commitment"]["session"], record["commitment"]["sample_session"]
-        assert given["session"] == sid and drawn["session"] == draw["session"] and "secret" not in given | drawn
+        given, sampled = record["commitment"]["session"], record["commitment"]["sample_session"]
+        assert given["session"] == sid and sampled["session"] == sample["session"] and "secret" not in given | sampled
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
-        mine = {sid, draw["session"]}
+        mine = {sid, sample["session"]}
         assert PHC.session_reason(record["commitment"], ledger, lambda s, mine=mine: tmp_path / s if s in mine else None) is None
         assert run.details["challenger"] == {"closed": True}
     assert len(set(sids)) == 2 and ports == [7811] * 4
@@ -700,19 +700,19 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
     def acquire(self: Any, name: str, t: Any, job: Any) -> None:
         acquired.setdefault(int(job.step), []).append((name, t.detach().cpu().contiguous().numpy().tobytes()))
     monkeypatch.setattr(Committer, "_acquire", acquire)
-    srv, closer, draws = _Server(monkeypatch), Later(), SL.Draws((SH.DRAWER,))
-    draws._cv = _Waits()
+    srv, closer, samples = _Server(monkeypatch), Later(), SL.Samples((SH.DRAWER,))
+    samples._cv = _Waits()
     sessions = None
     if coins == "gate":
         auditor = _PeriodAuditor(tmp_path, monkeypatch)
         sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
-        monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
+        monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
         k = 1
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
-    arm.drawing(draws)
+    arm.sampling(samples)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     pending = arm.close(0)
@@ -721,12 +721,12 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
 
     def seal() -> None:
         try:
-            released.append(draws.release(0, dev))
+            released.append(samples.release(0, dev))
         except SL.Refused as e:
             released.append(e)
     sealer = threading.Thread(target=seal)
     sealer.start()
-    draws._cv.entered.acquire()
+    samples._cv.entered.acquire()
     assert not released and dev.device_pool.held > 0 and not pending.done(), "no release before the window's sampling coin"
     assert not (tmp_path / "h1" / "w0" / PH.CALLS_FILE).exists()
     closer.run()
@@ -755,14 +755,14 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
 
     kept = SL.leaves_of(dev, sorted(want))
     assert rec["union_leaves"] == rec["drawn_leaves"] == sum(len(v) for v in kept.values()) > 0
-    assert draws.refused(0, sorted(want), dev) == []
+    assert samples.refused(0, sorted(want), dev) == []
     for s, leaves in kept.items():
         for i in leaves:
             assert bytes(dev.open_range(s, i, i + 1).value) == host[s][i * dev.chunk:(i + 1) * dev.chunk]
-    drawn = {(s, n) for s, n, _lo, _hi in want}
-    others = [(s, n, 0, len(raw)) for (s, n), raw in values.items() if (s, n) not in drawn]
+    sampled = {(s, n) for s, n, _lo, _hi in want}
+    others = [(s, n, 0, len(raw)) for (s, n), raw in values.items() if (s, n) not in sampled]
     assert any(n.endswith("/0") for _s, n, _lo, _hi in others), "some call's rows were not sampled"
-    assert len(draws.refused(0, others, dev)) == len(others), "every value no sampled proof block opens is dropped"
+    assert len(samples.refused(0, others, dev)) == len(others), "every value no sampled proof block opens is dropped"
     srv.src.uninstall()
 
 
@@ -772,19 +772,19 @@ def test_a_window_with_no_sample_refuses_its_release_by_name(tmp_path, monkeypat
     release by name, and the outcome says why."""
     from verity_vllm.pipeline import serve_release as SL
 
-    srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
+    srv, auditor, samples = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Samples((SH.DRAWER,))
     sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
-    arm.drawing(draws)
+    arm.sampling(samples)
     assert arm.close(3) is None
     with pytest.raises(SL.Refused, match="window 3's H1 window never opened"):
-        draws.wait(window=3)
+        samples.wait(window=3)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     assert out["tied"] and "joined no period" in out["draw"]["refused"], out
     with pytest.raises(SL.Refused, match="joined no period"):
-        draws.wait(window=0)
+        samples.wait(window=0)
     assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the sample-gated release"
     srv.src.uninstall()
 
@@ -796,9 +796,9 @@ def test_a_gate_window_that_commits_no_session_root_refuses_its_sample_by_name()
     held = {"session": "s/7", "period": "p1"}
     for commits in ({}, {"session": {"session": "s/7"}}):
         with pytest.raises(ValueError, match="^session s/7's window commits no gate session's open root"):
-            SH.H1Windows.draw_of(arm, SimpleNamespace(commits=commits), held)
+            SH.H1Windows.sample_of(arm, SimpleNamespace(commits=commits), held)
     root = "ab" * 64
-    assert SH.H1Windows.draw_of(arm, SimpleNamespace(commits={"session": {"root": root}}), held) == (
+    assert SH.H1Windows.sample_of(arm, SimpleNamespace(commits={"session": {"root": root}}), held) == (
         4, root, "period p1's open")
 
 
@@ -954,7 +954,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
 
     device = ("--retain", "device", "--retain-device-gb", "64", "--seal", "--release-after", SH.DRAWER)
     assert h1_refusal(*h1, *device) is None
-    assert f"--release-after {SH.DRAWER} waits for PoUW H1's draw" in h1_refused(*device)
+    assert f"--release-after {SH.DRAWER} waits for PoUW H1's sample" in h1_refused(*device)
     assert h1_refusal(*device[:-1], "other") is None, "a drawer other than H1's comes in through --draws-dir"
     tie = ("--h1-window-commit", "bash commit.sh \"$@\"")
     sealed = ("--seal", "--h1-prover", str(tmp_path / "p"))

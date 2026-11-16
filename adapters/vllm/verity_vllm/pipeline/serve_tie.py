@@ -14,7 +14,7 @@ from the window's registration W, so one record is H1's Commit record and the au
   row dir (``SERVE_DIR/windows/w<K>``), its advice, the weights registration and H1's prover state, which writes to R_FILE
   (``h1/w<k>/record.json``) R, a registration chained right after W that registers each of the window's A tables and
   input-ids tables as its outputs from W (`pouw_h1_commit.reused`).
-* **Then.** `pouw_h1_commit.bind` holds R to W and binds it into calls_root, and only then come draw_root and the sample
+* **Then.** `pouw_h1_commit.bind` holds R to W and binds it into calls_root, and only then come sample_root and the sample
   coin. The log (``h1/log.jsonl``) names W once written and R once bound, so the next window's W chains after R.
 * **The day** (``--day``, `serve_day`). The log's first line is the day's declaration (kind ``declaration``), each W
   names it in its window (``day``, ``declaration``), and an R whose ``program`` isn't the day's declared one is refused

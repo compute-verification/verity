@@ -104,7 +104,7 @@ WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn
          "uint8": (8, np.uint8), "int8": (8, np.uint8), "int32": (32, np.uint32)}
 SLIM_SCHEMA = REPLAY_SLIM_SCHEMA
 SLIM_DOC = "slim.json"
-PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
+PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in sample order"
 
 
 @dataclass(frozen=True, kw_only=True)

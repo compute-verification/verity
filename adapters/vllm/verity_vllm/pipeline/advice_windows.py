@@ -33,7 +33,7 @@ proved with selection All, never sampled; every other unit is sampled as before.
 templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
 `window_sampling_design.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
 floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
-(`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's sampling design is expanded
+(`sample.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's sampling design is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another sampling design,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
 Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).

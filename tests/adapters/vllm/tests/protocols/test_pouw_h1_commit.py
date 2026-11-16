@@ -1049,7 +1049,7 @@ def _live(gate, sessions, name):
 
     def settings(eng, kw):
         reserved = sessions(name)
-        return GPU.h1_settings(eng, ROWS, STEPS, AUDITOR, reserved, gate, sessions.draws[name], **kw)
+        return GPU.h1_settings(eng, ROWS, STEPS, AUDITOR, reserved, gate, sessions.samples[name], **kw)
     return settings
 
 
@@ -1064,11 +1064,11 @@ def _summary_row(gate, sessions, name, record, run):
     ends = {}
     if name in getattr(sessions, "held", {}):
         ends = {"session": GPU.session_end(gate, sessions.held[name]),
-                "sample_session": GPU.session_end(gate, sessions.draws[name])}
+                "sample_session": GPU.session_end(gate, sessions.samples[name])}
     return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **ends}
 
 
-def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
+def test_each_commit_window_flips_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit --challenger --gate --peer`: the honest Commit window and a negative each reserve their own
     challenge phase at the gate (`window_sessions`), opened on that window's open root, and a sampling challenge phase
     beside it, opened withheld on its sample root; the salt and each round's coin are the window's challenge phase's and
@@ -1091,10 +1091,10 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
         else:
             doc["negatives"]["a-zero"] = {"window": row}
     assert [s["session"] for s in sessions.held.values()] == [CH.session_id(1), CH.session_id(3)]
-    assert [s["session"] for s in sessions.draws.values()] == [CH.session_id(2), CH.session_id(4)]
+    assert [s["session"] for s in sessions.samples.values()] == [CH.session_id(2), CH.session_id(4)]
     for name, (record, run, row) in runs.items():
-        c, sid, dsid = record["commitment"], sessions.held[name]["session"], sessions.draws[name]["session"]
-        host, drawn = gate.hosts[sid], gate.hosts[dsid]
+        c, sid, dsid = record["commitment"], sessions.held[name]["session"], sessions.samples[name]["session"]
+        host, sampled = gate.hosts[sid], gate.hosts[dsid]
         assert c["coin_source"] == PH.CHALLENGER and run.details["challenger"] == {"closed": True}
         assert c["session"]["session"] == sid and c["coins"] == c["round_coins"] == host.challenger.commitment.to_json()
         assert c["sample_session"]["session"] == dsid
@@ -1102,13 +1102,13 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
         assert row["sample_session"]["ok"] and row["sample_session"]["end"]["complete"]
         assert PHC.trusted_rounds_reason(c, host.directory, [gate.ledger.path], host.window, host.key,
                                          pins=[gate.ledger.pins_path], main=CH.MAIN,
-                                         sample_directory=drawn.directory) is None
+                                         sample_directory=sampled.directory) is None
         received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
         assert received[Wd.SALT] == (bytes.fromhex(c["session"]["root"]),)
         assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in c["rounds"]) and len(c["rounds"]) == STEPS
         assert Wd.SAMPLE not in received
-        draws = R.released_roots(drawn.directory / R.RELEASES, drawn.challenger.commitment)
-        assert draws[Wd.SAMPLE] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
+        samples = R.released_roots(sampled.directory / R.RELEASES, sampled.challenger.commitment)
+        assert samples[Wd.SAMPLE] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
     honest, zero = runs["commit"][2]["gate"], runs["commit-a-zero"][2]["gate"]
     served = sum(len(runs["commit"][1].owners[s]) for s in range(STEPS)) * 2
     assert honest["refused"]["calls"] == 0 and honest["gate_passed"]["rows"] == served and honest["coins"] == PH.CHALLENGER
@@ -1173,17 +1173,17 @@ def test_a_refused_reserve_or_a_reused_session_serves_no_window():
         GPU.window_sessions(Refusing(), "vy-nebius-1", STEPS)("commit")
 
     class Same:
-        def __init__(self, draw):
-            self.draw = draw
+        def __init__(self, sample):
+            self.sample = sample
 
         def reserve(self, peer, steps):
-            return {"session": CH.session_id(1 if steps is not None else self.draw), "seq": 0, "peer": peer, "by": "vllm"}
+            return {"session": CH.session_id(1 if steps is not None else self.sample), "seq": 0, "peer": peer, "by": "vllm"}
 
     sessions = GPU.window_sessions(Same(0xd), "vy-nebius-1", STEPS)
-    assert sessions("commit")["session"] == CH.session_id(1) and sessions.draws["commit"]["session"] == CH.session_id(0xd)
+    assert sessions("commit")["session"] == CH.session_id(1) and sessions.samples["commit"]["session"] == CH.session_id(0xd)
     with pytest.raises(ValueError, match="no fresh session"):
         sessions("fill")
-    with pytest.raises(ValueError, match="no fresh draw session"):
+    with pytest.raises(ValueError, match="no fresh sample session"):
         GPU.window_sessions(Same(1), "vy-nebius-1", STEPS)("commit")
 
 

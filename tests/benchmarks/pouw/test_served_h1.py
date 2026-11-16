@@ -671,7 +671,7 @@ def test_an_off_node_sampling_coin_comes_only_from_a_withheld_sample_session(tmp
     gateless = CO.Coins(CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("prover").randbytes), "off-node",
                         CO.Endpoint("s", "127.0.0.1:1"), EPOCH)
     with pytest.raises(CO.Ch.CoinError, match="names no gate to open it at"):
-        gateless.sample(after)
+        gateless.flip(after)
     host = _Host(tmp_path)
     cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_sample=lambda root: host.open_sample(root, withhold=False))
     with pytest.raises(CO.Ch.CoinError, match="answered its hello with a commitment"):

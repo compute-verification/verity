@@ -61,7 +61,7 @@ COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
 #: two H1 windows' challenge phases, reserved on the gate before it opens them
 SA, SB = CH.session_id(0xa), CH.session_id(0xb)
 #: a window's sample challenge phase (`_Session.open` with ``withhold``)
-DRAW_NAME = CH.session_id(0xd)
+SAMPLE_NAME = CH.session_id(0xd)
 #: the gate's v2 head (31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
 #: c's and d's windows two-step) and seven of its challenge phases' trees as the gate's ``fetch`` gave them; registered
 #: (artifacts.json), fetched by `research data fetch-fixtures`
@@ -85,16 +85,16 @@ class _Session:
     names while it is reached; `open` is the gate's open of it on a window's open root, and `window` the window
     ``{root}`` its ledger then opens it for (`CH.WINDOW` until then). A `reserved` challenge phase (its name a gate
     challenge phase id, `CH.session_id`) is reserved in `audited`'s ledger before its open, as the gate's two-step open
-    does. A `withhold` challenge phase is withheld (`remote.open_session`) and reached at `T.DRAW_AT`: the window's
-    sample's, which `open` with ``withhold`` makes (`draw`, `DRAW_NAME` in this one's `tree`, its leaves ten past this
+    does. A `withhold` challenge phase is withheld (`remote.open_session`) and reached at `T.SAMPLE_AT`: the window's
+    sample's, which `open` with ``withhold`` makes (`sample`, `SAMPLE_NAME` in this one's `tree`, its leaves ten past this
     one's)."""
 
     def __init__(self, tmp_path, monkeypatch, name: str, leaf: int, seed: int, challenger=None, close=None,
                  reserved: bool = False, withhold: bool = False) -> None:
         self.name, self.tree, self.directory = name, tmp_path / name, tmp_path / name / "out"
         self.leaf, self.reserved, self.withhold, self.seed = leaf, reserved, withhold, seed
-        self._monkeypatch, self.at = monkeypatch, T.DRAW_AT if withhold else T.AUDITOR
-        self.draw: _Session | None = None
+        self._monkeypatch, self.at = monkeypatch, T.SAMPLE_AT if withhold else T.AUDITOR
+        self.sample: _Session | None = None
         self.challenger = challenger or Wd.live_challenger(0, 3, CH.entropy(seed))
         self.directory.mkdir(parents=True)
         (self.directory / R.HELLOS).write_text("")
@@ -120,24 +120,24 @@ class _Session:
 
     def open(self, session: str, root: str, withhold: bool = False) -> dict:
         if withhold:
-            assert session == DRAW_NAME
-            self.draw = _Session(self.tree, self._monkeypatch, session, self.leaf + 10, self.seed + 100,
+            assert session == SAMPLE_NAME
+            self.sample = _Session(self.tree, self._monkeypatch, session, self.leaf + 10, self.seed + 100,
                                  challenger=Wd.sample_challenger(0, CH.entropy(self.seed + 100)), reserved=True,
                                  withhold=True)
-            self.draw.window = {"root": root}
-            return {"session": session, "seq": 0, "root": root, "port": CH.DRAW_PORT}
+            self.sample.window = {"root": root}
+            return {"session": session, "seq": 0, "root": root, "port": CH.SAMPLE_PORT}
         assert session == self.name
         self.window = {"root": root}
         return {"session": session, "seq": 0, "root": root, "commitment": self.commitment}
 
     def remote(self, **kw) -> dict:
-        """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its sample's (`DRAW_NAME`)
+        """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its sample's (`SAMPLE_NAME`)
         and opening them through `open`."""
-        return T._remote(session={"session": self.name}, sample_session={"session": DRAW_NAME}, gate=self.open, **kw)
+        return T._remote(session={"session": self.name}, sample_session={"session": SAMPLE_NAME}, gate=self.open, **kw)
 
     def _reach(self, at, secret):
-        if self.draw is not None and at == self.draw.at:
-            return self.draw._reach(at, secret)
+        if self.sample is not None and at == self.sample.at:
+            return self.sample._reach(at, secret)
         self.secrets.append(secret)
         return self.client if at == self.at else None
 
@@ -149,15 +149,15 @@ class _Session:
         self._thread.join()
         return self.reason
 
-    def audited(self, name: str = "windows", withheld: bool = True, draw_root: str | None = None) -> Path:
+    def audited(self, name: str = "windows", withheld: bool = True, sample_root: str | None = None) -> Path:
         """The auditor's signed ledger (`CH.Ledger`, one head, ``<name>.jsonl`` in `tree`) under `KEY`, reserving this
         challenge phase at the leaf two before its record's when it is `reserved`, opening it for `window` at the leaf
         before its record's and ending it over its ``out/`` at the key's last leaf once it has ended (closed when its
-        client closed it); its sample's (`draw`) reserved, opened (withheld unless not `withheld`, on its sample root or
-        `draw_root`) and ended between them the same way, ended at the key's last leaf but one."""
+        client closed it); its sample's (`sample`) reserved, opened (withheld unless not `withheld`, on its sample root or
+        `sample_root`) and ended between them the same way, ended at the key's last leaf but one."""
         if name == "windows" and self._ledger is not None:
             return self._ledger
-        d = self.draw
+        d = self.sample
         leaves = ((self.leaf - 2,) * self.reserved + (self.leaf - 1,)
                   + ((d.leaf - 2, d.leaf - 1, (1 << KEY.H) - 2) if d is not None else ()) + ((1 << KEY.H) - 1,))
         ledger = CH.Ledger(self.tree / f"{name}.jsonl", 1, iter(leaves), H=KEY.H)
@@ -166,7 +166,7 @@ class _Session:
         ledger.open(self.name, self.window)
         if d is not None:
             ledger.reserve(d.name, withheld=withheld)
-            ledger.open(d.name, d.window if draw_root is None else {"root": draw_root}, withheld=withheld)
+            ledger.open(d.name, d.window if sample_root is None else {"root": sample_root}, withheld=withheld)
             ledger.end(d.name, d.directory, d.ended() is None)
         ledger.end(self.name, self.directory, self.ended() is None)
         if name == "windows":
@@ -179,7 +179,7 @@ class _Session:
         path = self.audited(**({"name": "variant", **ledger} if ledger else {}))
         return PHC.trusted_rounds_reason(commits, self.directory, [path], self.window, KEY,
                                          pins=[path.with_name(f"{path.stem}.pins.jsonl")], main=CH.MAIN,
-                                         sample_directory=None if self.draw is None else self.draw.directory)
+                                         sample_directory=None if self.sample is None else self.sample.directory)
 
 
 def _serve(settings, seed: int = 9, prompt: int = 5, run: bool = False):
@@ -207,39 +207,39 @@ def _coins(commitment):
 def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
     """A window served in challenge phase `name` (a gate challenge phase id), which `gate` reserved and then opened on the
     window's open root once round 0 was admitted (its answer's commitment, ``status SESSION``'s, once the challenge
-    phase's record is signed) and ended over its ``out/``, then its sample's challenge phase (`draw_name`), which `gate`
-    reserved and opened withheld on the window's sample root (the `_Session.draw`), ended after it: its commitment and its
+    phase's record is signed) and ended over its ``out/``, then its sample's challenge phase (`sample_name`), which `gate`
+    reserved and opened withheld on the window's sample root (the `_Session.sample`), ended after it: its commitment and its
     challenge phase."""
     made: dict[str, Any] = {}
-    draw = draw_name(name)
+    sample = sample_name(name)
     gate.reserve(name, Wd.live_families(3))
 
     def opened(session: str, root: str, withhold: bool = False) -> dict:
         if withhold:
-            assert session == draw
-            gate.reserve(draw, Wd.SAMPLE_FAMILIES, withheld=True)
-            reply = gate.open(draw, root)
+            assert session == sample
+            gate.reserve(sample, Wd.SAMPLE_FAMILIES, withheld=True)
+            reply = gate.open(sample, root)
             assert (reply["withheld"], reply["signed"], reply["commitment"]) == (True, True, None)
-            d = made["session"].draw = _Session(tmp_path, monkeypatch, draw, gate.take(), seed + 100,
+            d = made["session"].draw = _Session(tmp_path, monkeypatch, sample, gate.take(), seed + 100,
                                                 challenger=Wd.sample_challenger(0, CH.entropy(seed + 100)),
                                                 close=gate.take, reserved=True, withhold=True)
             d.window = {"root": root}
-            return {**reply, "port": CH.DRAW_PORT}
+            return {**reply, "port": CH.SAMPLE_PORT}
         assert session == name
         made["reply"] = gate.open(session, root)
         made["session"] = _Session(tmp_path, monkeypatch, name, gate.take(), seed, close=gate.take, reserved=True)
         made["session"].window = {"root": root}
         return {**made["reply"], "commitment": made["session"].commitment}
-    served = _serve(T._remote(session={"session": name}, sample_session={"session": draw}, gate=opened))
+    served = _serve(T._remote(session={"session": name}, sample_session={"session": sample}, gate=opened))
     session = made["session"]
     assert session.ended() is None and session.secrets == [bytes.fromhex(made["reply"]["secret"])]
-    assert session.draw.ended() is None
+    assert session.sample.ended() is None
     gate.end(name, session.directory)
-    gate.end(draw, session.draw.directory)
+    gate.end(sample, session.sample.directory)
     return served, session
 
 
-def draw_name(name: str) -> str:
+def sample_name(name: str) -> str:
     """The gate session id of window session `name`'s sample session."""
     return CH.session_id(0xd00 + int(name.rsplit("-", 1)[1], 16))
 
@@ -248,28 +248,28 @@ def _gate():
     return CH.Gate(PRIVATE, KEY)
 
 
-def _regate(g, name: str, root: str, out, draw=None, end: bool = True, closed: bool = True, opened=None, **ended):
+def _regate(g, name: str, root: str, out, sample=None, end: bool = True, closed: bool = True, opened=None, **ended):
     """`g` (a gate) reserving window session `name` and opening it on `root` (its open's fields replaced by `opened`),
-    then with `draw` (the window's sample session, `_Session.draw`) reserving that and opening it withheld on its sample
+    then with `sample` (the window's sample session, `_Session.sample`) reserving that and opening it withheld on its sample
     root, at the leaves `_window` gave them, and ending each, the window's over `out` (unless not `end`; `closed` and
     its fields replaced by `ended`)."""
     g.reserve(name, Wd.live_families(3))
     g.open(name, root, **(opened or {}))
     g.take()
-    if draw is not None:
-        g.reserve(draw.name, Wd.SAMPLE_FAMILIES, withheld=True)
-        g.open(draw.name, draw.window["root"])
+    if sample is not None:
+        g.reserve(sample.name, Wd.SAMPLE_FAMILIES, withheld=True)
+        g.open(sample.name, sample.window["root"])
         g.take()
     if end:
         g.end(name, out, closed, **ended)
-    if draw is not None:
-        g.end(draw.name, draw.directory)
+    if sample is not None:
+        g.end(sample.name, sample.directory)
     return g
 
 
 def _fetch(*sessions):
     """The gate's ``fetch`` of each of `sessions` and its sample session."""
-    return {k: v for s in sessions for k, v in ((s.name, s.tree), *(((s.draw.name, s.draw.tree),) if s.draw else ()))}.get
+    return {k: v for s in sessions for k, v in ((s.name, s.tree), *(((s.sample.name, s.sample.tree),) if s.sample else ()))}.get
 
 
 def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_commits_root(tmp_path, monkeypatch):
@@ -314,7 +314,7 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     assert PHC.session_reason({**first, "session": {**first["session"], "commitment": b.commitment}}, ledger, fetch) == (
         f"session {SA}'s end entry records coin commitment {a.commitment[:16]}..., not {b.commitment[:16]}..., the "
         "window's (the gate's answer): a refused window")
-    assert PHC.session_reason(first, ledger, {SA: b.tree, a.draw.name: a.draw.tree}.get) == (
+    assert PHC.session_reason(first, ledger, {SA: b.tree, a.sample.name: a.sample.tree}.get) == (
         f"session {SA} is not trusted: the challenger's session is {SB}, not {SA}, the one the auditor's ledger opens "
         "for this window")
     assert PHC.session_reason(first, ledger, {}.get) == (
@@ -323,13 +323,13 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     shutil.copytree(a.tree, rewritten)
     (rewritten / "out" / R.RELEASES).write_text((a.directory / R.RELEASES).read_text().replace(
         first["rounds"][0]["root"], "ee" * 64))
-    assert PHC.session_reason(first, ledger, {SA: rewritten, a.draw.name: a.draw.tree}.get) == (
+    assert PHC.session_reason(first, ledger, {SA: rewritten, a.sample.name: a.sample.tree}.get) == (
         f"session {SA} is not trusted: the challenger's release log is not the one its close record signs")
 
     def ended_over(out, closed=True, end=True, **override):
-        return _regate(_gate(), SA, ra, out, a.draw, end, closed, **override).ledger()
+        return _regate(_gate(), SA, ra, out, a.sample, end, closed, **override).ledger()
     assert PHC.session_reason({**first, "session": {**first["session"], "commitment": b.commitment}},
-                              ended_over(b.directory), {SA: b.tree, a.draw.name: a.draw.tree}.get) == (
+                              ended_over(b.directory), {SA: b.tree, a.sample.name: a.sample.tree}.get) == (
         f"session {SA} is not trusted: the challenger's session is {SB}, not {SA}, the one the auditor's ledger opens "
         "for this window")
     other_private, other = CH.challenger_key(2)
@@ -339,7 +339,7 @@ def test_a_window_is_held_to_the_one_session_the_auditors_ledger_opened_for_its_
     c = LiveCommitment.from_json(doc["commitment"])
     doc["signature"] = lms.sign_at(other_private, 2, record_message(other.public[:16], doc["host"], c)).encode().hex()
     (keyed / "out" / R.RECORD).write_text(json.dumps(doc))
-    assert PHC.session_reason(first, ended_over(keyed / "out"), {SA: keyed, a.draw.name: a.draw.tree}.get) == (
+    assert PHC.session_reason(first, ended_over(keyed / "out"), {SA: keyed, a.sample.name: a.sample.tree}.get) == (
         f"session {SA} is not trusted: the challenger record's signature does not verify under the verifier's "
         "challenger key")
     assert PHC.session_reason(first, ended_over(a.directory, end=False), fetch) == (
@@ -372,7 +372,7 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     def opened(log=CH.PINS, **override):
         g = _gate()
         g.pins = list(log)
-        return _regate(g, SA, ra, a.directory, a.draw, opened=override)
+        return _regate(g, SA, ra, a.directory, a.sample, opened=override)
     other = "ab" * 20
     unpinned = f"session {SA} is not trusted: session {SA} ran commit {other}, which the host's pins log doesn't record"
     assert PHC.session_reason(first, opened(pinned=other).ledger(), fetch).startswith(unpinned)
@@ -489,7 +489,7 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
     beside its window."""
     families = Wd.live_families(3)
     sk, si, sn, so = (CH.session_id(n) for n in (0xe1, 0xe2, 0xe3, 0xe4))
-    da, db = draw_name(SA), draw_name(SB)
+    da, db = sample_name(SA), sample_name(SB)
 
     def opened(session, root, by="vllm"):
         gate.reserve(session, families, by=by)
@@ -758,21 +758,21 @@ def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_i
         early.client.open(Wd.SAMPLE, 0, probe)
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=14, reserved=True)
     honest = _serve(host.remote())
-    sample = host.draw
+    sample = host.sample
     assert sample is not None
     assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
-    assert sample.window == {"root": honest["draw"]["root"]} and honest["sample_session"]["session"] == DRAW_NAME
-    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
+    assert sample.window == {"root": honest["draw"]["root"]} and honest["sample_session"]["session"] == SAMPLE_NAME
+    assert (host.trusted(honest, sample_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
     assert host.trusted(honest, withheld=False) == f"the window's sample session: {LC.WITHHELD}"
 
 
 def _sample_of(host, root: bytes) -> LC.LiveOpening:
     """The sampling coin `host`'s sample session (`_Session.open` with ``withhold``) opens after `root`, its full opening once
     the session has closed."""
-    host.open(DRAW_NAME, root.hex(), withhold=True)
-    with host.draw.client as client:
+    host.open(SAMPLE_NAME, root.hex(), withhold=True)
+    with host.sample.client as client:
         client.open(Wd.SAMPLE, 0, root)
-    assert host.draw.ended() is None
+    assert host.sample.ended() is None
     return client.opened[(Wd.SAMPLE, 0)]
 
 
@@ -787,7 +787,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
         honest["draw"]["receipts"]), honest["rounds"]).hex()
     swapped = {**honest, "draw": {**honest["draw"], "coin": honest["rounds"][0]["coin"]}}
     assert host.trusted(swapped) == (
-        f"the window's draw coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.SAMPLE} coin 0")
+        f"the window's sampling coin: coin is the epoch's {Wd.ROUND} coin 0, not its {Wd.SAMPLE} coin 0")
     bent = {**honest, "draw": {**honest["draw"], "receipts": "ee" * 64}}
     assert host.trusted(bent) == (
         "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin")
@@ -798,8 +798,8 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
     rounds = [quiet.client.open(Wd.ROUND, s, bytes.fromhex(r["root"])) for s, r in enumerate(honest["rounds"])]
     quiet.client.close()
     assert quiet.ended() is None
-    quiet.open(DRAW_NAME, honest["draw"]["root"], withhold=True)
-    sample = quiet.draw
+    quiet.open(SAMPLE_NAME, honest["draw"]["root"], withhold=True)
+    sample = quiet.sample
     assert sample is not None
     sample.client.close()
     assert sample.ended() is None
@@ -947,15 +947,15 @@ def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_r
     log = [{"round": s, "root": late[s].hex(), "coin": {**coins[s].to_json(), "after": late[s].hex()}} for s in range(3)]
     log[0]["requests"] = requests.hex()
     calls_root = hashlib.sha512(b"the manifest").digest()
-    draw_root = RQ.sample_root(calls_root, RQ.NO_RECEIPTS, log)
+    sample_root = RQ.sample_root(calls_root, RQ.NO_RECEIPTS, log)
     host.client.close()
     assert host.ended() is None
-    draw = _sample_of(host, draw_root)
+    sample = _sample_of(host, sample_root)
     c = host.challenger.commitment.to_json()
     commits = {"coins": c, "round_coins": c, "weights_root": weights.hex(), "requests_root": requests.hex(),
                "session": session, "salt_opening": salt.to_json(), "steps": 3,
                "rounds": log, "calls_root": calls_root.hex(),
-               "draw": {"root": draw_root.hex(), "receipts": RQ.NO_RECEIPTS.hex(), "coin": draw.to_json()}}
+               "draw": {"root": sample_root.hex(), "receipts": RQ.NO_RECEIPTS.hex(), "coin": sample.to_json()}}
     assert host.trusted(commits) == (
         "the window's rounds: the round roots are not the roots the challenger's log shows it received, in order")
     path = host.directory / R.RELEASES

@@ -559,9 +559,9 @@ def _replayed(world, monkeypatch, **settings):
 
 @pytest.mark.slow
 def test_the_row_commits_tile_tamper_is_tile_words_committed_and_opened_wrong_and_rejected(world, monkeypatch):
-    honest = _replayed(world, monkeypatch, draws=2)
+    honest = _replayed(world, monkeypatch, samples=2)
     assert honest["result"] is True and honest["pouw_ncp_v2"]["result"] is True and honest["pouw_ncp_v2"]["tampered"] is None
-    sr = _replayed(world, monkeypatch, draws=2, tamper="tile")
+    sr = _replayed(world, monkeypatch, samples=2, tamper="tile")
     t = sr["pouw_ncp_v2"]["tampered"]
     assert sr["result"] is False and sr["grade"] == "mismatch" and t["what"] == "tile" and t["leaf"] == 7
     assert any(f"unit {u} (tile" in sr["why"] for u in t["units"]) and "does not hold" in sr["why"], sr["why"]

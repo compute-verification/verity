@@ -206,7 +206,7 @@ class Gate:
             return {"refused": str(e)}
 
     def period_open(self, name: str, lane: str = "vllm", *, by: str = "vllm", cap: int | None = None,
-                    circuit: str | None = None, draw_k: int | None = None, rows: int | None = None,
+                    circuit: str | None = None, sample_k: int | None = None, rows: int | None = None,
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
@@ -218,7 +218,7 @@ class Gate:
         signed = self.registry.opened(circuit, model, weights_root)
         body = {"period": name, "lane": lane, "by": by, **({"cap": cap} if cap is not None else {}),
                 **({"circuit": circuit} if circuit is not None else {}),
-                **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
+                **({CR.K_FIELD: sample_k} if sample_k is not None else {}),
                 **({CR.ROWS_FIELD: rows} if rows is not None else {}),
                 **({CR.LENGTH_FIELD: length} if length is not None else {}), **signed, "pinned": PINNED,
                 "key_sha512": self.pin, "opened_utc": "2026-10-20T11:00:00Z", **override}
@@ -351,7 +351,7 @@ class Ledger:
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
-    def period_open(self, name: str, *, circuit: str, cap: int = 1, draw_k: int | None = None, rows: int | None = None,
+    def period_open(self, name: str, *, circuit: str, cap: int = 1, sample_k: int | None = None, rows: int | None = None,
                     model: str | None = None, weights_root: str | None = None, circuit_files: dict | None = None,
                     length: dict | None = None, leaf: int | None = None) -> None:
         """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
@@ -363,7 +363,7 @@ class Ledger:
         signed = self.registry.opened(circuit, model, weights_root)
         self._period, self._windows = name, []
         self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,
-                                          **({CR.K_FIELD: draw_k} if draw_k is not None else {}),
+                                          **({CR.K_FIELD: sample_k} if sample_k is not None else {}),
                                           **({CR.ROWS_FIELD: rows} if rows is not None else {}), **signed,
                                           **({"circuit_files": circuit_files} if circuit_files is not None else {}),
                                           **({CR.LENGTH_FIELD: length} if length is not None else {}),
@@ -404,7 +404,7 @@ class Ledger:
 
 
 #: the port the gate's answer names for a window's sample session (`Host.open_sample`)
-DRAW_PORT = 7812
+SAMPLE_PORT = 7812
 
 
 class Host:
@@ -416,14 +416,14 @@ class Host:
     `pouw_h1_window.Window`), at the leaf held before the record's, since the ledger's check wants a record's leaf between
     its session's open's and end's. With `withhold` the session is withheld (`remote.open_session`), and the ledger's
     open says so (``withheld: true``). `open_sample` opens the window's sample session, a `Host` of its own under the same
-    key, leaves and ledger, withheld on the window's sample root (`draw`)."""
+    key, leaves and ledger, withheld on the window's sample root (`sample`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = session_id(1),
                  leaves: Iterator[int] | None = None, ledger: Ledger | None = None, window: dict | None = None,
                  gated: bool = False, reserved: bool = True, withhold: bool = False) -> None:
         self.directory, self.challenger, self.session_id = directory, challenger, session
         self.seed, self.withhold = seed, withhold
-        self.draw: Host | None = None
+        self.sample: Host | None = None
         directory.mkdir()
         private, self.key = challenger_key(seed)
         leaves = self.leaves = itertools.count() if leaves is None else leaves
@@ -460,19 +460,19 @@ class Host:
 
     def open_sample(self, session: str, root: str, withhold: bool = True) -> dict:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
-        `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
-        (`window.sample_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
-        host = self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
+        `withhold`: reserved in this host's ledger, served by a `Host` of its own (`sample`) over a sample session's coins
+        (`window.sample_challenger`), and reached at `SAMPLE_PORT` (the answer's ``port``)."""
+        host = self.sample = Host(self.directory.parent / f"{self.directory.name}-sample",
                                 Wd.sample_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
                                 self.ledger, gated=True, withhold=withhold)
-        return {**host.open(session, root), "port": DRAW_PORT}
+        return {**host.open(session, root), "port": SAMPLE_PORT}
 
     def ended(self) -> str | None:
-        """Join the session once its client has ended it, and the ledger ends it, then its sample session's (`draw`), if
+        """Join the session once its client has ended it, and the ledger ends it, then its sample session's (`sample`), if
         it opened one: None when each client closed its session, else why the first didn't."""
         self._thread.join()
         if not self._ended:
             self._ended = True
             self.ledger.end(self.session_id, self.directory, self.reason is None)
-        drawn = None if self.draw is None else self.draw.ended()
-        return self.reason if self.reason is not None else drawn
+        sampled = None if self.sample is None else self.sample.ended()
+        return self.reason if self.reason is not None else sampled

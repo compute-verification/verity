@@ -416,7 +416,7 @@ def test_a_repeated_call_index_is_refused_before_any_sample(monkeypatch):
         Receipt(((first, t.shape, hashlib.sha512(b"1").digest()), (twin, t.shape, hashlib.sha512(b"2").digest())))
     _receipt, window = _window(t, [first, _anchors(call, forward=call.forward + 1)])
     sampled, real = [], plan_module.sample
-    monkeypatch.setattr(plan_module, "draw", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
+    monkeypatch.setattr(plan_module, "sample", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
     t.sample(sampling_design, first, window)
     for again in (first, twin):
         with pytest.raises(DomainError, match="repeated|not on the window's receipt"):
@@ -443,7 +443,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     receipt, window = _window(t, [a, b], source)
     assert window.key == derive(source, PL.SAMPLE_DOMAIN, {"receipt": receipt.digest()})
     sampled, real = [], plan_module.sample
-    monkeypatch.setattr(plan_module, "draw", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
+    monkeypatch.setattr(plan_module, "sample", lambda key, lay, sampling_design, index: sampled.append(index) or real(key, lay, sampling_design, index))
     other_shape = ncp2.Shape(32, 128, 32)
     twin = dataclasses.replace(a, weight=a.weight + 1)
     refusals = [(lambda: t.sample(sampling_design, a, A.Ledger()), "opened from its complete receipt"),

@@ -222,9 +222,9 @@ def spans(world):
 def _first(world, spans, unit=UNIT, block=BLOCK, n_rho: int = N_RHO):
     """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage sampled (spans 0
     and 2)."""
-    draws = iter([[0, 2]])
+    samples = iter([[0, 2]])
     stream = S.Stream(_spec(spans["r0"].member, unit, block, n_rho), unit, replay=block, budget=1, delta=DELTA,
-                      challenger="challenger-test", clock=_Clock(), sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset"
+                      challenger="challenger-test", clock=_Clock(), sampler=lambda sampling_design, n: next(samples) if sampling_design["law"] == "subset"
                       else [i * n_rho for i in range(len(sampling_design["strata"]))])
     rec, ports, layer = _boundary(world, block)
     reg = stream.register(rec, ports, leaf_layer=layer)

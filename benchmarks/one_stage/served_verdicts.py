@@ -1349,7 +1349,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
                                                   remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         if not Ch.withheld_on(lines, c):
-            raise ValueError(f"the run's sample session: {Ch.WITHHELD}")
+            raise ValueError(f"the run's draw session: {Ch.WITHHELD}")
         if (why := Wd.sample_epoch_reason(trusted)) is not None:
             raise ValueError(f"the draw session's signed coins: {why}")
         if trusted.to_json() != draw.get("commitment"):

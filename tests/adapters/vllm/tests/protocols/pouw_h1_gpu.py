@@ -324,7 +324,7 @@ class WindowSessions:
     ``held`` maps each window served so far to that answer, and the other map each to its sample session's."""
     answer: Callable[[str], dict[str, Any]]
     held: dict[str, dict[str, Any]]
-    draws: dict[str, dict[str, Any]]
+    samples: dict[str, dict[str, Any]]
 
     def __call__(self, name: str) -> dict[str, Any]:
         return self.answer(name)
@@ -335,18 +335,18 @@ def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     before the window is installed, since the auditor device's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
     is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
-    (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
+    (``gate.reserve(peer, None)``), ``sessions.samples[name]`` its answer. ``sessions.held`` maps each window to its
     answer."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
         window as PHW,
     )
     held: dict[str, dict[str, Any]] = {}
-    draws: dict[str, dict[str, Any]] = {}
+    samples: dict[str, dict[str, Any]] = {}
 
     def fresh(name: str, rounds: int | None, what: str) -> dict[str, Any]:
         answer = gate.reserve(peer, rounds)
         reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
-        if reserved is None or reserved["session"] in {r["session"] for r in (*held.values(), *draws.values())}:
+        if reserved is None or reserved["session"] in {r["session"] for r in (*held.values(), *samples.values())}:
             raise ValueError(f"window {name}: the gate's reserve answer {answer!r} is no fresh {what}")
         print(f"[gate] window {name}: reserved {what} {reserved['session']} on {peer}", flush=True)
         return reserved
@@ -355,9 +355,9 @@ def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
         if name in held:
             raise ValueError(f"window {name} has its session ({held[name]['session']}) already: one session a window")
         held[name] = fresh(name, steps, "session")
-        draws[name] = fresh(name, None, "draw session")
+        samples[name] = fresh(name, None, "draw session")
         return held[name]
-    return WindowSessions(sessions, held, draws)
+    return WindowSessions(sessions, held, samples)
 
 
 def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
@@ -377,14 +377,14 @@ def fixed_length(decl: Any) -> dict[str, Any]:
     return {"max_tokens": [decl.max_tokens] * decl.slots, "stop": "fixed"}
 
 
-def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
+def period_open_argv(name: str, circuit: str, sample_k: int, decl: Any, files: dict[str, str]) -> list[str]:
     """``period-open`` of the Commit window's period `name`: cap 2 (the Commit's window and its sampling session alone, so
     a negative's refused window, which ends complete, is never one of it), its circuit (the period's declared Program's
     digest), its sample K
     (`pouw_h1_challenger.sample_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
-    return ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(draw_k),
+    return ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(sample_k),
             "--rows", str(decl.rows), "--circuit-files", json.dumps(files, sort_keys=True, separators=(",", ":")),
             "--length", json.dumps(fixed_length(decl), sort_keys=True, separators=(",", ":"))]
 
@@ -736,7 +736,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         from verity_vllm.engine.hooks import Hooks
         rss0 = rss_gib()
         reserved = sessions(name) if sessions is not None else a.session
-        drawn = sessions.draws[name] if sessions is not None else a.sample_session
+        sampled = sessions.samples[name] if sessions is not None else a.sample_session
         layers = layers or PHK.layers(eng.model, pouw.linear_types(), a.ks)
         com = tap = None
         if commit:
@@ -784,7 +784,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             served.commit = timed
             SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, drawn,
+                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, sampled,
                                               retain_steps=a.retain, transcript_dir=str(tdir), admission="round-0",
                                               served=served, **({"ks": list(a.ks)} if a.ks else {})))
         t0 = time.monotonic()
@@ -879,7 +879,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if sessions is not None:
             out["session"] = session_end(a.gate, reserved)
-            out["sample_session"] = session_end(a.gate, drawn)
+            out["sample_session"] = session_end(a.gate, sampled)
             out["ok"] = bool(out["ok"] and out["session"]["ok"] and out["sample_session"]["ok"])
             print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
@@ -901,9 +901,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
             layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
-            draw_k, files = PHC.sample_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
-            doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k, "circuit_files": files,
-                                  "open": period_verb(a.gate, period_open_argv(a.period, period[1], draw_k, decl, files))}
+            sample_k, files = PHC.sample_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
+            doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": sample_k, "circuit_files": files,
+                                  "open": period_verb(a.gate, period_open_argv(a.period, period[1], sample_k, decl, files))}
             print(f"[gate] period {json.dumps(doc['period_gate'], default=str)}", flush=True)
         doc["h1_commit"] = window("commit", plain, outdir / "commit", commit=True)
         if a.period:
@@ -1295,7 +1295,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
         passed, refused = g.get("gate_passed") or {}, g.get("refused") or {}
         served = (passed.get("macs") or 0) + (refused.get("macs") or 0)
         rows[name] = {"coin_source": w.get("coin_source"), "session": s.get("session"), "session_ok": s.get("ok"),
-                      "sample_session": ds.get("session"), "draw_session_ok": ds.get("ok"),
+                      "sample_session": ds.get("session"), "sample_session_ok": ds.get("ok"),
                       "gate_passed_rows": passed.get("rows"), "refused_calls": refused.get("calls"),
                       "credited_share": round((passed.get("macs") or 0) / served, 6) if served else None,
                       "reasons": refused.get("reasons")}
@@ -1303,7 +1303,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     c = rows.get("commit") or {}
     ok = not challenger or bool(rows and all(r["coin_source"] == "challenger" and r["session_ok"] for r in rows.values())
                                 and None not in sessions and len(set(sessions)) == len(sessions)
-                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows") and c.get("draw_session_ok"))
+                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows") and c.get("sample_session_ok"))
     return {"windows": rows, "ok": ok}
 
 
@@ -1504,11 +1504,11 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
-    draw_tree = None if sample_directory is None else Path(sample_directory)
-    sample_out = None if draw_tree is None else draw_tree if window_file is not None else draw_tree / "out"
+    sample_tree = None if sample_directory is None else Path(sample_directory)
+    sample_out = None if sample_tree is None else sample_tree if window_file is not None else sample_tree / "out"
     sid = (rec["commitment"].get("session") or {}).get("session")
     dsid = (rec["commitment"].get("sample_session") or {}).get("session")
-    draw_root = (rec["commitment"].get("draw") or {}).get("root")
+    sample_root = (rec["commitment"].get("draw") or {}).get("root")
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "ledger": ledger, "pins": pins,
                            "window_file": window_file,
@@ -1523,7 +1523,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
                                                       main=main, sample_directory=sample_out)
         else:
             newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
-            trees = {sid: tree, **({dsid: draw_tree} if dsid and draw_tree is not None else {})}
+            trees = {sid: tree, **({dsid: sample_tree} if dsid and sample_tree is not None else {})}
             doc["reason"] = PHC.session_reason(rec["commitment"], newest, trees.get)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
@@ -1543,7 +1543,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
             root = (doc.get("window") or {}).get("root") or (rec["commitment"].get("session") or {}).get("root")
             accepted = [sid, dsid] if doc["reason"] is None else []
-            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root, draw_root])}
+            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root, sample_root])}
         except Exception as e:  # noqa: BLE001
             doc["period"] = {"name": period, "reasons": [f"{type(e).__name__}: {e}"]}
     for name in (remote.RECORD, remote.CLOSE):
@@ -1594,7 +1594,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
                     help="no GPU: a served window's coins against the challenger run's out/ (with --window) or the "
                          "session's tree (needs --key-sha512 and --ledger)")
-    ap.add_argument("--draw-dir", metavar="DRAW_DIR",
+    ap.add_argument("--draw-dir", metavar="SAMPLE_DIR",
                     help="with --check-challenger: the window's sampling session as CHALLENGER_DIR is its session (its "
                          "out/ with --window, else its tree), whose sampling coin the window's sample is")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
@@ -1611,8 +1611,8 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                     help="with --challenger: the challenger gate's reserve answer, {\"session\", \"seq\", \"peer\", "
                          "\"by\", \"expires_utc\", \"period\"}")
     ap.add_argument("--sample-session", type=json.loads, metavar="JSON",
-                    help="with --session: the gate's reserve answer for the window's draw session (families "
-                         "pouw_h1_challenger.sample_families), which the window opens withheld on its draw root")
+                    help="with --session: the gate's reserve answer for the window's sample session (families "
+                         "pouw_h1_challenger.draw_families), which the window opens withheld on its draw root")
     ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
                     help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
                          "research@HOST), which opens the reserved session on the window's open root")
@@ -1630,7 +1630,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
     ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
                                                             "(the rehearsal's window-program.json.gz), whose bytes core's "
                                                             "credit reads the window's layout from")
-    ap.add_argument("--statements", metavar="FILE", help="with --check-challenger: the drawn calls' statements, a JSON list "
+    ap.add_argument("--statements", metavar="FILE", help="with --check-challenger: the sampled calls' statements, a JSON list "
                                                          "of pouw_h1_challenger.statement's {call, circuit, public, sessions}")
     ap.add_argument("--live-evidence", metavar="FILE", help="with --check-challenger: the window's live evidence, "
                                                             "h1_prove/live.py evidence's {descriptor, statements}")

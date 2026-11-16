@@ -167,7 +167,7 @@ def test_a_spent_time_budget_stops_the_sampling_by_name(attn_world, tmp_path):
     """The forked pool's check of the budget (`Limits.workers` is 8 unless set); `test_vu_store_budget` holds the serial one's."""
     s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, max_seconds=0.0))
     assert s["sets"] == [] and s["by_family"]
-    assert all(c.get("drawn", 0) == 0 and c["not_drawn_time_budget"] > 0 for c in s["by_family"].values())
+    assert all(c.get("drawn", 0) == 0 and c["not_sampled_time_budget"] > 0 for c in s["by_family"].values())
 
 
 def test_families_are_interleaved_in_the_sample(attn_world):
