@@ -1,7 +1,7 @@
 """certifier_piece: the front sends one group of the window circuit's class through the gate's scan rehearsal and keeps
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
 and its outcome. The piece, on a serve dir whose window was the network attester's synthetic run's certified requests
-(the run `test_network_attester_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
+(the run `attester_runs.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
@@ -61,7 +61,8 @@ import served_verdicts as S  # noqa: E402
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.prover.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
-from test_network_attester_chain import WC, gate_run  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC  # noqa: E402
+from tests.verity.protocols.resource_accounting.network.prover.attester_runs import gate_run  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import network_attester as W  # noqa: E402
