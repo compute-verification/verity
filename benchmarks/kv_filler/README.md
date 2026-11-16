@@ -7,7 +7,7 @@ R·T) when a top-up reads idle registered memory beside the serving workload, an
 under a bursty trace with it.
 `green.py` is the SM partition, and `lag.py` and `analyze.py` price the conversion lag.
 
-**Status: active.** `benchmarks/stacked_share/share.py` and `benchmarks/vllm_encoded/bench_arm.py` import it (`green.py`,
+**Status: active.** `benchmarks/vllm_encoded/bench_arm.py` imports it (`green.py`,
 the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`,
 `demos/`, `tests/` and `adapters/`.
 
