@@ -6,12 +6,13 @@
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, refusing any set of subprotocols that is no composite's (``composite``,
-`verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
-soundness covers; H1's development composite is refused), then runs
+`verity run` checks the configuration, refusing any set of subprotocols that is neither a composite's nor one of
+onsite's smaller sets (``composite``, `verity.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict,
+the only two protocol soundness covers; `verity.config.UNACCEPTED`; H1's development composite is refused), then runs
 the parties it places on the machines this host stands for (``--on``, once for each, default ``local``), or only the
-``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
-parties are those of the static table `REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
+``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default a new directory under
+the system's temporary one). The parties are those of the static table `REGISTRY` names: the served window's
+(`tools/verity/cli/verity_cli/served_table.py`);
 `verity_cli`'s tests also run the toy's (`tests/tools/verity/cli/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 
@@ -37,7 +38,8 @@ this process when all of them are here, else meeting the rest over TCP at the co
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
 When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
-onsite, its id the line's ``product``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
+onsite, its id the line's ``product``), or for one of onsite's smaller sets ``undecided`` under that set's id, since no
+composite takes it, printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
@@ -436,6 +438,9 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     if sharing(cfg, reg, machines):
         lines = [{**x, "coins": "simulated"} for x in lines]
+    if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
+        lines = [{**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
+                 for x in lines]
     for line in lines:
         say("VERDICT", line)
     (state / "record").mkdir(parents=True, exist_ok=True)
@@ -467,9 +472,6 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
     try:
         reg = reg or registry()
         cfg = load(Path(a.config), reg)
-        if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
-            raise NotImplementedError(f"verity run doesn't run {cid} ({', '.join(K.UNACCEPTED[cid])}) yet: "
-                                      "goal demos/onsite-demo")
         bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
         machines = list(dict.fromkeys(a.machines)) or [K.LOCAL]
         if a.dry_run:
