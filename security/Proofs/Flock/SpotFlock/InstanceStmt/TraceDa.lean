@@ -89,7 +89,7 @@ theorem dA_cO : (dA (cO ls lh H C A B A' B' s1) 246784).toList = EX := by
   simp only [FlockDeploy.Concrete.Φ, FlockDeploy.Concrete.φ, List.reverse_inj] at h
   exact h
 
-theorem outPairs_cO : (outPairs (cO ls lh H C A B A' B' s1)).toList = OX := by kernel_rfl'
+theorem outPairs_cO : (SpotFlock.InstanceStmt.outPairs (cO ls lh H C A B A' B' s1)).toList = OX := by kernel_rfl'
 
 /-- **The statement's Δ is `EX ++ OX`.** -/
 theorem da_stX : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da.toList = EX ++ OX := by
