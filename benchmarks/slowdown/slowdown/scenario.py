@@ -1,24 +1,24 @@
-"""A scenario: one choice from every layer, and what overhead it gives.
+"""A scenario: one choice from every layer, and what slowdown it gives.
 
 A scenario names a fleet (with its location and unregistered share), a regime, the inference-only policy, a monitoring period (its
-`horizon`), a run (the target and its model), the algorithm families the adversary may use, and the bounds and attacks
+`horizon`), a run (the target and its model), the algorithm families the malicious developer may use, and the bounds and attacks
 to apply (all of them unless it lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep
 can vary a choice like any number.
 
-`evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
+`evaluate` gives, for each family, the slowdown under each bound alone and under every bound it meets at once (`lo`,
 the lower bound: each block gets the least of the yields whose premises aren't refuted at its bits, under the union of
 those bounds' premises), and under each attack (`best_attack`: the best known construction, reported beside the bound,
 not as an end of it). The lower bound takes only the bounds a lock states (`bounds.lock_only`): a bound one of whose own
 citations is a `draft:` statement sets it at no block size, and is still reported alone, labeled draft. The cuts'
-premises and the structure's are not the bound's own. The adversary picks its family, so the scenario's overhead is at
+premises and the structure's are not the bound's own. The malicious developer picks its family, so the scenario's slowdown is at
 least `min_A lo_A`. A bound above an attack is a contradiction: one of the bound's premises is false for that
 algorithm, and `contradictions` names it.
 
-The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
+The slowdown is the GPU-hours over the reference training algorithm's at its MFU, `MFU₀` (the scenario's `mfu`),
 at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds
 (`theorem.Slowdown`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
-the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
-beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
+the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the task, wall-clock, is reported
+beside the slowdown: at least the slowdown times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
 A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary free-compute
 yield's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
@@ -80,14 +80,14 @@ class Scenario:
 
     @property
     def mfu(self) -> float:
-        """The inventory's share of capacity a construction trains with, the monitored fleet's and the unregistered leaves':
-        `MFU₀`, the reference training algorithm's, which the overhead is a multiple against."""
+        """The inventory's share of capacity a construction trains with, the registered fleet's and the unregistered leaves':
+        `MFU₀`, the reference training algorithm's, which the slowdown is a multiple against."""
         f = self.context.fleet
         return f.eps_unreg * f.unreg_mfu + (1 - f.eps_unreg) * f.mfu_train
 
     @property
     def total_phi(self) -> float:
-        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the unregistered leaves' (`ε_unreg` of it)."""
+        """`Φ_total`: the inventory's gates per second, the registered fleet's and the unregistered leaves' (`ε_unreg` of it)."""
         f = self.context.fleet
         return f.count * self.context.location.phi / (1 - f.eps_unreg)
 
@@ -97,7 +97,7 @@ class Scenario:
         return self.context.units.gates(self.run.target(self.model))
 
     def seconds(self, overhead: float) -> float:
-        """`overhead T_0 / (MFU₀ Φ_total)`: the time to the run's target at `overhead`, a multiple of the reference's."""
+        """`overhead T_0 / (MFU₀ Φ_total)`: the time to the task at slowdown `overhead`, a multiple of the reference's."""
         return overhead * self.reference / (self.mfu * self.total_phi)
 
     def years(self, overhead: float) -> float:
@@ -141,7 +141,7 @@ class Estimate:
 
     @property
     def slowdown(self) -> float:
-        """The overhead: the hardware multiple over the reference at its MFU."""
+        """The slowdown: the GPU-hours over the reference's at its MFU."""
         return self.parts.value if self.parts else math.nan
 
     @property
@@ -160,17 +160,17 @@ class FamilyResult:
 
     @property
     def lo(self) -> float:
-        """The overhead's lower bound: every bound met at once."""
+        """The slowdown's lower bound: every bound met at once."""
         return self.combined.slowdown
 
     @property
     def best_attack(self) -> Estimate | None:
-        """The best known attack: the construction with the least overhead (None: none applies)."""
+        """The best known attack: the construction with the least slowdown (None: none applies)."""
         return min((a for a in self.attacks if a.parts), key=lambda a: (a.slowdown, a.padded), default=None)
 
     @property
     def attack(self) -> float:
-        """The best known attack's overhead (∞: none applies), beside the lower bound and not an end of it."""
+        """The best known attack's slowdown (∞: none applies), beside the lower bound and not an end of it."""
         best = self.best_attack
         return best.slowdown if best else math.inf
 
@@ -189,12 +189,12 @@ class Result:
 
     @property
     def lo(self) -> float:
-        """The overhead's lower bound, at the family the adversary picks."""
+        """The slowdown's lower bound, at the family the malicious developer picks."""
         return min((f.lo for f in self.families), default=math.inf)
 
     @property
     def attack(self) -> float:
-        """The best known attack's overhead over every family."""
+        """The best known attack's slowdown over every family."""
         return min((f.attack for f in self.families), default=math.inf)
 
 
@@ -307,7 +307,7 @@ def evaluate(s: Scenario) -> Result:
 
 
 def reads(registry: Registry, name: str) -> frozenset[str]:
-    """The registry keys scenario `name` reads: the parameters its overhead can depend on."""
+    """The registry keys scenario `name` reads: the parameters its slowdown can depend on."""
     tracked = registry.tracked()
     build(tracked, name)
     return frozenset(tracked.seen or ())

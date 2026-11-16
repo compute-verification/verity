@@ -1,7 +1,7 @@
 """The counted share of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
-multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
-"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
+multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow
+ARCHITECTURE.md's Glossary.
 
 counted share <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which
 steps are proved.
@@ -243,7 +243,7 @@ def chord(p: dict, bits: float = math.inf) -> float:
     """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` fresh input bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
-    on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
+    on few blocks is the malicious developer's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
     Gamma)``, on the (1, 0) piece, so d and e below ``thread_bits`` don't move it."""
     K, tb, reach = p["K"], p["thread_bits"], p["K"] + bits
     base = block_cap(p, K, K <= tb)

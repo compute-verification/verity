@@ -256,9 +256,9 @@ def test_ran_with_is_one_line_in_the_fixed_words_and_its_object():
     assert kit.ran_with("deployed challenger", "deployed", verified=True) == (
         "ran with: coins deployed challenger; parameters deployed",
         {"coins": "deployed challenger", "parameters": "deployed", "detail": None, "verified": True})
-    line, said = kit.ran_with("in-process", "development", "2^-40 at 64 draws")
-    assert line == "ran with: coins in-process; parameters development (2^-40 at 64 draws)"
-    assert said["detail"] == "2^-40 at 64 draws" and kit.COINS == ("deployed challenger", "local challenger", "in-process")
+    line, said = kit.ran_with("in-process", "development", "2^-40 at 64 sampled proof blocks")
+    assert line == "ran with: coins in-process; parameters development (2^-40 at 64 sampled proof blocks)"
+    assert said["detail"] == "2^-40 at 64 sampled proof blocks" and kit.COINS == ("deployed challenger", "local challenger", "in-process")
     with pytest.raises(ValueError, match="'deployed challenger', 'local challenger', 'in-process'"):
         kit.ran_with("challenger, local", "deployed")
     with pytest.raises(ValueError, match="'deployed', 'development'"):
@@ -308,7 +308,7 @@ def said(capsys, out: Path) -> tuple[list[str], dict, dict]:
                                                                         ("in-process", "development", False, False)])
 def test_the_ran_with_line_follows_the_first_and_the_kit_says_where_it_is_not_an_audit(
         coins, parameters, verified, audit, out, capsys):
-    pair = kit.ran_with(coins, parameters, "64 draws", verified=verified)
+    pair = kit.ran_with(coins, parameters, "64 sampled proof blocks", verified=verified)
     assert kit.report("x", "x: 0.25\n  more", DOC, MEASURED, ran_with=pair, accepted=True) == 0
     text, doc, got = said(capsys, out)
     own = ["coins by the record's own word, not checked"] if coins == "deployed challenger" and not verified else []
