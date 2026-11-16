@@ -27,10 +27,13 @@ are built again without them in the same tick.
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes on its merge onto `main`'s tip
                                                    (`onto_main`): as a run on MACHINE in a check slot
-                                                   (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
+                                                   (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot, with twins
+                                                   on the others as check.py's `twins` places a check's, the first to take a
+                                                   slot running; a tier for a newer head stops the PR's older heads' tiers
+                                                   from this VM, waiting or running), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
-                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
-                                                   once it ends); or, with
+                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN
+                                                   [TWIN...]` marks it once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
                                                    organization's or one of `AUTHORS` (`PR.outside`), as admission does; it
@@ -79,9 +82,10 @@ are built again without them in the same tick.
                                                    land verdicts as LANE for N days (default 7, at most 14); LANE is also a
                                                    name the caller's handle staffs in the registry (a PR reader's, as
                                                    `review-36`), which registers AGENT as that reader: see Signed verdicts
-    research queue judge RUN [--on MACHINE] [--by LANE]
+    research queue judge RUN [TWIN...] [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
-                                                   (its caller gone), for the open PR at the head the tier ran at, or at its tree
+                                                   (its caller gone), or the twin of it that ran, for the open PR at the head
+                                                   the tier ran at, or at its tree
     research queue open --head BRANCH --title T --body-file F --issue KEY|none:REASON [--sha SHA] [--base main] [--draft]
                                                    open a PR for any pushed branch through gh (the repo's broker wrapper when the
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
@@ -3912,6 +3916,9 @@ REMOTE_GRACE_S = 1800
 REMOTE_POLL_S = 30
 #: slot.py's exit when no check slot came within --wait-max (its NOT_STARTED): the tier never ran
 SLOT_NOT_STARTED = 75
+#: the quick tiers `ready --on` launched from this VM, by PR: the head each ran for and its runs, so one for a newer head stops them
+#: (a directory under its `root`, holding them as tiers.json and its lock, apart from the worktrees' locks)
+TIERS = "quick-tiers"
 #: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
 #: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
 SLOT = ("python3", "tools/check/slot.py")
@@ -3932,15 +3939,17 @@ class NotStarted(str):
 
 class StillGoing(str):
     """`ready --on`'s caller stopped waiting at research.waitcap's limit with the tier's run still going: nothing failed or was
-    cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
+    cancelled, and `research queue judge RUN [TWIN...]` marks the PR once the run has ended."""
 
 
 def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None,
-          spill: Callable[[Path], tuple[tuple[str, str] | None, str]] | None = None) -> tuple[str | None, str]:
+          spill: Callable[[Path], tuple[tuple[str, str] | None, str]] | None = None) -> tuple[str | None, str, list[str], float]:
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none.
     With `--on auto` and none of AUTO readable (node 2 stopped), a CPU node's research pool as `research run --on auto` spills to
-    (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped."""
+    (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped; and
+    the machines to launch twins of the tier on with the seconds those off the pick wait first, as `check.py --on` launches a
+    check's (check.py's `twins`: every machine that can run it, at once, when the pick has no slot free; none for a pool)."""
     from .store import tools_registry
 
     path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
@@ -3955,9 +3964,10 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     if got is None and spec == "auto":
         target, how = (spill or _spill)(repo)
         if target is not None:
-            return f"{target[0]}:{target[1]}", f"{how}, as none of {', '.join(names)} could be read ({why})"
+            return f"{target[0]}:{target[1]}", f"{how}, as none of {', '.join(names)} could be read ({why})", [], 0
         why += f"; no research pool either: {how}"
-    return got, why
+    twins = getattr(check, "twins", None)
+    return got, why, *(twins(names, docs, got) if got is not None and twins else ([], 0))
 
 
 def _spill(repo: Path) -> tuple[tuple[str, str] | None, str]:
@@ -3977,18 +3987,20 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
 
 def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
               by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
-              pool: str = "", priority: bool = False) -> list[str]:
+              pool: str = "", priority: bool = False, twin: str = "", twin_after: float = 0, note: str = "") -> list[str]:
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
     ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
-    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`); ``twin``, its `slot.py --twin` (PAIR on the pair's home,
+    PAIR@HOME elsewhere, joining the line after ``twin_after``); ``note``, the line its log starts with."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
     job = Path(quick_tier.__file__)
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
             *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
-            "--", *QUICK_TIER]
-    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
-            "--run-max", f"{timeout_s:g}"]
+            *(["--note", note] if note else []), "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []),
+            *(["--twin", twin] if twin else []), *(["--twin-after", f"{twin_after:g}"] if twin and twin_after else []),
+            "--wait-max", f"{wait_s:g}", "--run-max", f"{timeout_s:g}"]
     return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
             "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
             "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
@@ -4016,78 +4028,169 @@ class RemoteQuickTier(QuickTier):
                  timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_LIMIT_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
-                 clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
+                 clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple] = place,
+                 stop: Callable[[Path, str], str | None] | None = None):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
         self.timeout_s, self.wait_s, self.max_wait_s = timeout_s, wait_s, max_wait_s
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
+        self.stop = stop or self._cancel
 
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
 
-        on, pool = self.on, ""
+        on, pool, twins, after = self.on, "", [], 0
         if on == "auto" or "," in on:
-            got, why = self.place(on, self.repo)
+            got, why, *plan = self.place(on, self.repo)
             if got is None:
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        rid = R.new_run_id()
+            twins, after = plan or ([], 0)
+        runs = [(R.new_run_id(), m) for m in twins or [on]]
+        if len(runs) > 1:
+            print(f"research queue: twins of the quick tier on {', '.join(twins)}: the first to take a check slot runs, and the others "
+                  f"leave their lines (exit {SLOT_NOT_STARTED}, not started)" + (
+                      f"; {on} has a slot free, so the others join their lines after {after:g} s, and only if it hasn't started by "
+                      "then" if after else ""), flush=True)
+        note = self._supersede(pr, runs)
         try:
             with self._checkout(pr) as (wt, at, base):
-                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
-                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
-                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
+                audit = lean_audit(self.repo, base, at)
+
+                def launch(i: int) -> subprocess.CompletedProcess:
+                    rid, m = runs[i]
+                    twin = "" if len(runs) == 1 else runs[0][0] if i == 0 else f"{runs[0][0]}@{on}"
+                    return self.launch(quick_run(rid, m, wt, at, base, merged=None if at == pr.head else pr.head, audit=audit,
+                                                 by=self.by, project=self.project, wait_s=self.wait_s, timeout_s=self.timeout_s,
+                                                 pool=pool, twin=twin, twin_after=after if i else 0, note=note), wt)
+
+                if (r := launch(0)).returncode:
+                    return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
+                with concurrent.futures.ThreadPoolExecutor(max(1, len(runs) - 1)) as ex:
+                    rest = list(ex.map(launch, range(1, len(runs))))
         except TierRefused as e:
             return str(e)
-        if r.returncode:
-            return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
-        print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}; waiting for it to end "
-              f"(`research inspect {rid}`)", flush=True)
-        d = R.runs_root() / rid
-        status, why = self._wait(d, on)
-        return why or judge_run(d, rid, on, at, status, allowed(self.repo, base))
+        launched = [runs[0]]
+        for (rid, m), r in zip(runs[1:], rest):
+            if r.returncode:
+                print(f"research queue: the twin {rid} on {m} wasn't launched (`research run` exit {r.returncode}): "
+                      f"{(r.stderr or r.stdout or '').strip()[-200:]}", flush=True)
+            else:
+                launched.append((rid, m))
+        rid = runs[0][0]
+        print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}"
+              + "".join(f", or as its twin {t} on {m}" for t, m in launched[1:]) + f"; waiting for it to end (`research inspect {rid}`)",
+              flush=True)
+        d, on, status, why = self._wait([(R.runs_root() / t, m) for t, m in launched])
+        if status.get("state") == "cancelled" and (newer := self._tiers().get(self._key(pr), {}).get("head")) not in (None, pr.head):
+            return NotStarted(f"#{pr.number}'s quick tier at its newer head {newer[:12]} stopped run {d.name} on {on}")
+        return why or judge_run(d, d.name, on, at, status, allowed(self.repo, base))
 
-    def _wait(self, d: Path, on: str) -> tuple[dict, str | None]:
-        """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
-        the wait gave up."""
+    def _key(self, pr: PR) -> str:
+        return f"{self.remote}#{pr.number}"
+
+    def _tiers(self) -> dict:
+        return _json_file(self.root / TIERS / "tiers.json")
+
+    def _supersede(self, pr: PR, runs: list[tuple[str, str]]) -> str:
+        """Stop the quick tiers this VM's `ready --on` launched for ``pr`` at another head, waiting or running (``stop``, `research
+        cancel` by default), and record ``runs`` (its tier at its head now, twins and all) in TIERS, so a tier at a
+        newer head stops them in turn; a tier at the same head stops nothing.  What it stopped, said for the new run's log, or ''."""
+        from . import runs as R
+
+        (d := self.root / TIERS).mkdir(parents=True, exist_ok=True)
+        with open(d / "lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            doc = self._tiers()
+            old = doc.get(self._key(pr)) or {}
+            older = (old.get("runs") or []) if old.get("head") not in (None, pr.head) else []
+            kept = [] if older else old.get("runs") or []
+            doc[self._key(pr)] = {"head": pr.head, "runs": [*kept, *map(list, runs)]}
+            (d / "tiers.json.tmp").write_text(json.dumps(doc, indent=1) + "\n")
+            os.replace(d / "tiers.json.tmp", d / "tiers.json")
+        said = []
+        for rid, m in older:
+            why = self.stop(R.runs_root() / rid, f"#{pr.number}'s quick tier at its newer head {pr.head[:12]} supersedes it")
+            said.append(f"stopped {rid} on {m}" if why is None else f"left {rid} on {m}: {why}")
+        if not said:
+            return ""
+        note = f"#{pr.number}'s quick tier at its older head {old['head'][:12]}: {'; '.join(said)}"
+        print(f"research queue: {note}", flush=True)
+        return note
+
+    def _cancel(self, d: Path, reason: str) -> str | None:
+        """`research cancel` of the run in ``d``: None once it is stopped, else why not (it had ended, its machine is gone)."""
+        from . import remote
+
+        try:
+            remote.cancel(d, reason=reason, by=self.by or "merge-queue")
+        except (remote.Refused, OSError, KeyError) as e:
+            return str(e)
+        return None
+
+    def _wait(self, runs: list[tuple[Path, str]]) -> tuple[Path, str, dict, str | None]:
+        """The run of ``runs`` (a tier's twins, its home first, each a run dir and its machine) that took a check slot, its machine
+        and status.json once it says the run ended, from their records fetched every `poll_s` until the wait's deadline; the
+        first one, once every one ended without taking one (`SLOT_NOT_STARTED`) or one's runner is gone; and why the wait gave
+        up.  A twin that left its line never ran, so the wait goes on for the one that runs."""
         from . import remote
         from . import runs as R
 
-        status: dict = {}
         bound = self.wait_s + self.timeout_s + REMOTE_GRACE_S
         limit = min(bound, self.max_wait_s)
         deadline = self.clock() + limit
         fetch = self.fetch or (lambda d: remote.fetch(d, timeout=deadline - self.clock()))
+        ended: dict[int, tuple[dict, str | None]] = {}
+        seen: dict[int, dict] = {}
         while self.clock() < deadline:
             self.sleep(min(self.poll_s, deadline - self.clock()))
+            for i, (d, on) in enumerate(runs):
+                if i not in ended:
+                    seen[i], gone = self._poll(d, on, fetch)
+                    if gone or seen[i].get("state") in R.TERMINAL:
+                        ended[i] = seen[i], gone
+            ran = [i for i, (st, gone) in ended.items() if not gone and st.get("rc") != SLOT_NOT_STARTED]
+            if ran or len(ended) == len(runs):
+                i = min(ran or [i for i, (_, gone) in ended.items() if gone] or [0])
+                return (*runs[i], *ended[i])
+        d, on = runs[0]
+        status = seen.get(0, {})
+        twins = f" (or its twins {', '.join(x.name for x, _ in runs[1:])})" if len(runs) > 1 else ""
+        if limit < bound:
+            return d, on, status, StillGoing(waitcap.still_going(
+                f"the quick tier's run {d.name} on {on}{twins} ({status.get('state') or 'without a status'})",
+                f"research queue judge {' '.join(x.name for x, _ in runs)} --by {self.by or 'LANE'}", limit))
+        return d, on, status, (f"run {d.name} on {on}{twins} didn't end within {bound:g} s (last seen "
+                               f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
+
+    @staticmethod
+    def _poll(d: Path, on: str, fetch: Callable[[Path], dict]) -> tuple[dict, str | None]:
+        """Run ``d``'s status.json from its records fetched now, and why it is lost when its runner is gone."""
+        from . import runs as R
+
+        try:
+            rec = fetch(d)
+        except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
+            rec = {"last_fetch_error": {"stderr": f"{type(e).__name__}: {e}"}}
+        status = _json_file(d / "status.json")
+        if status.get("state") in R.TERMINAL:
+            return status, None
+        if rec.get("launcher_exited") or rec.get("runner_gone"):
+            # a fetch copies status.json before it probes the runner, which can record its end and exit in between
+            # (a run that passed can read as gone): fetch once more before calling the run lost
             try:
-                rec = fetch(d)
-            except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
-                rec = {"last_fetch_error": {"stderr": f"{type(e).__name__}: {e}"}}
+                fetch(d)
+            except Exception:  # noqa: BLE001
+                pass
             status = _json_file(d / "status.json")
             if status.get("state") in R.TERMINAL:
                 return status, None
-            if rec.get("launcher_exited") or rec.get("runner_gone"):
-                # a fetch copies status.json before it probes the runner, which can record its end and exit in between
-                # (a run that passed can read as gone): fetch once more before calling the run lost
-                try:
-                    fetch(d)
-                except Exception:  # noqa: BLE001
-                    pass
-                status = _json_file(d / "status.json")
-                if status.get("state") in R.TERMINAL:
-                    return status, None
-            if gone := rec.get("launcher_exited"):
-                return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
-            if gone := rec.get("runner_gone"):
-                return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
-        if limit < bound:
-            return status, StillGoing(waitcap.still_going(
-                f"the quick tier's run {d.name} on {on} ({status.get('state') or 'without a status'})",
-                f"research queue judge {d.name} --by {self.by or 'LANE'}", limit))
-        return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
-                        f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
+        if gone := rec.get("launcher_exited"):
+            return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
+        if gone := rec.get("runner_gone"):
+            return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
+        return status, None
 
 
 def tier_report(d: Path, rid: str, on: str, status: dict):
@@ -6299,10 +6402,11 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
           runs_root: Path | None = None, repo: Path | None = None, url: str | None = None,
-          goals: Callable[[PR], str | None] | None = None) -> int:
-    """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
-    client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
-    them as `RemoteQuickTier` does, at the commit the tier ran at, and mark the open PR at the head it ran for (the head it merged
+          goals: Callable[[PR], str | None] | None = None, twins: Iterable[str] = ()) -> int:
+    """`research queue judge RUN [TWIN...]`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its
+    waiting client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or
+    each), and its ``twins``', of which the one that took a check slot is judged (the first when none did), as `RemoteQuickTier`
+    does, at the commit the tier ran at, and mark the open PR at the head it ran for (the head it merged
     onto `main`'s tip, the facts' `merged`, else that commit) ready, or, when none is there now
     and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
     Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now;
@@ -6314,12 +6418,16 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
         print(f"research queue judge: {why}", file=sys.stderr)
         return 1
 
-    try:
-        d = cli._run_dir(R.runs_root(runs_root), ref, on)
-        rec = (fetch or remote.fetch)(d)
-    except (FileNotFoundError, LookupError, remote.Refused) as e:
-        return refuse(str(e))
-    rid, machine, status = d.name, rec.get("machine") or "its machine", _json_file(d / "status.json")
+    seen = []
+    for one in (ref, *twins):
+        try:
+            d = cli._run_dir(R.runs_root(runs_root), one, on)
+            seen.append((d, (fetch or remote.fetch)(d), _json_file(d / "status.json")))
+        except (FileNotFoundError, LookupError, remote.Refused) as e:
+            return refuse(str(e))
+    ran = [x for x in seen if x[2].get("state") in R.TERMINAL and x[2].get("rc") != SLOT_NOT_STARTED]
+    d, rec, status = (ran or [x for x in seen if x[2].get("state") not in R.TERMINAL] or seen)[0]
+    rid, machine = d.name, rec.get("machine") or "its machine"
     if status.get("state") not in R.TERMINAL:
         err = (rec.get("last_fetch_error") or {}).get("stderr")
         return refuse(f"run {rid} hasn't ended (last seen {status.get('state') or 'without a status'}"
@@ -7007,7 +7115,7 @@ def main(argv: list[str]) -> int:
                                             "cross", "stranded"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
-    ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads")
+    ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads; judge: the run's twins")
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="map-moves: the heads mapped at once, each running a move's "
                     "script on a whole tree in a worktree of its own under --preflight-root; cross: the stacks crossed at once "
                     "(default 1)")
@@ -7042,9 +7150,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true", help="status: as JSON; ready: one JSON object on stdout (pr, head, base, exit, "
                     "warning), the rest on stderr")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
-                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
+                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks, with twins as "
+                                                    "it launches a check's), waiting for it "
                                                     f"{waitcap.WAIT_LIMIT_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
-                                                    "on: `judge RUN` marks the PR once it ends); judge: look "
+                                                    "on: `judge RUN [TWIN...]` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (its candidate's check tests it)")
@@ -7241,7 +7350,7 @@ def main(argv: list[str]) -> int:
             store = label_signer(store, Path(here) if here else None)
         if a.command == "judge":
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote,
-                         goals=goal_gate)
+                         goals=goal_gate, twins=a.shard_run)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
