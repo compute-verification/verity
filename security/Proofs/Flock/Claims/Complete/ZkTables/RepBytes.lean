@@ -102,8 +102,11 @@ theorem capBytes_le (h64 : Claims.Out64 H) {wideLeaf : Bool} {m : ℕ} (h25 : 25
   have h64' := JsonRT.hOf_size h64
   obtain ⟨-, -, -, hcap8⟩ := L0.zkSchedule_sizes h25 h35 hv
   obtain ⟨-, -, hL, -, -, -, -, -, -, -, hcapd, -⟩ := L0.zkSch_facts h25 h35 hv
-  obtain ⟨-, -, -, -, -, hcs0, hcw0⟩ := L0.commitPZk_shape (fun _ _ _ e => hm96_node h64' _ _ e)
-    (fun _ _ _ e => hm96_leaf h64' _ _ e) (hcapd 0 (by omega)) hcm
+  have hnode : ∀ l r v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r =
+      .ok v → v.size = MerkleScheme.hm96Sha512.digestLen := fun _ _ _ e => hm96_node h64' _ _ e
+  have hleaf : ∀ row s v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).leaf row s =
+      .ok v → v.size = MerkleScheme.hm96Sha512.digestLen := fun _ _ _ e => hm96_leaf h64' _ _ e
+  obtain ⟨-, -, -, -, -, hcs0, hcw0⟩ := L0.commitPZk_shape hnode hleaf (hcapd 0 (by omega)) hcm
   rw [Lg.capBytes_size hcw0, hcs0]
   exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
     (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))).trans (by decide)
