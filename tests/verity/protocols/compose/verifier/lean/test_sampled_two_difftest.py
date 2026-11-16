@@ -291,7 +291,7 @@ def test_the_descriptor_check_reads_each_member_s_own_tables() -> None:
     d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
     assert (d / "params.json").is_file(), (
         f"{d} is not fetched: `uv run research data fetch-fixtures "
-        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
+        "tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case`")
     blobs = sorted((d / "blobs").iterdir())
     files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")] + [str(b) for b in blobs]
     out = subprocess.run([str(D.build(PORT.package, "sampled-two-desc")), "check", *files],
