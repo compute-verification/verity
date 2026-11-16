@@ -1,11 +1,11 @@
 """A window circuit (`window_circuit`) cut at its linears, given Pearl+'s tables (`PearlTables`, `window_class`): PoUW
 credits each linear's product, so the circuit computes none but the LM head's. Each `Gemm_v2{K, N}` but an LM head (a GEMM
 a token select reads, which stays computed) is round s's call c, the c-th cut linear of its position's forward, and is one
-unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_cut`), reading its x as its writers' R rows, its output held to
-its row of the call's A rows, and one unit `LinearOut_v1{N, W, ROUND, CALL}` reading its row of the call's y and handing it
-on as N / W rows of W words (`linears`), which its readers read as they would its slices (`cut_linear`). Each call's
-readers of each of its tables are a template of their own (ROUND and CALL bound), the circuit's program takes the tables
-as its values (`cut_values`), and `census` counts the cut linears by shape.
+unit `LinearARow_v3{K, R}` (`registry.linear_cut`), reading its x as its writers' R rows, its output held to its row of
+the call's A rows, and one unit `LinearOut_v3{N, W}` reading its row of the call's y and handing it on as N / W rows of W
+words (`linears`), which its readers read as they would its slices (`cut_linear`). A template is a shape, every call of it
+its members, and a member's registered read names its call's table; the circuit's program takes the tables as its values
+(`cut_values`), and `census` counts the cut linears by shape.
 
 Refused by name (`Unexpressible`): a class Program with an int8 linear or no linear but its LM heads, a position whose
 linears aren't the first position's, and a linear whose y no rows of ``words`` doubled hand on in one unit.
@@ -35,12 +35,12 @@ class Linears:
 
 
 def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
-    """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
+    """Whether `LinearOut_v3{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
     if rows < N // W + 1:
         return False
     if provable:
         try:
-            IF.check_proof_block(bind(LC.LinearOut, N=N, W=W, ROUND=0, CALL=0))
+            IF.check_proof_block(bind(LC.LinearOut, N=N, W=W))
         except ValueError:
             return False
     return True
@@ -48,7 +48,7 @@ def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
 
 def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
     """The class Program ``fn``'s `Linears`, each call's W the least of ``words`` doubled that divides its N and leaves its
-    `LinearOut_v1` within ``rows`` rows and, unless not ``provable``, a proof block Flock's composer proves
+    `LinearOut_v3` within ``rows`` rows and, unless not ``provable``, a proof block Flock's composer proves
     (`interface.check_proof_block`; a call's y row is read whole). Refused where it has an int8 linear, a position's
     linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
@@ -82,9 +82,8 @@ def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
 def cut_linear(P: Any, j: int, node: Any) -> None:
     """Node ``j`` of the slot's lowered Program ``P`` (`window_circuit`'s, its ``cut`` the `Linears`), a linear
     `Gemm_v2{K, N}` cut at: round s's call c, c its index among its position's cut linears (``P.linears[-1]``), one unit
-    `LinearARow_v1{K, R, ROUND, CALL}` reading its x as the R rows its writers hold it in, its A row (``P.arows[j]``, x
-    widened, which no reader reads) held to row i of the call's A rows, and one unit `LinearOut_v1{N, W, ROUND, CALL}`
-    reading row i of the call's y (``P.ys[j]``, y widened, which the window commits by reference from the call's y), which
+    `LinearARow_v3{K, R}` reading its x as the R rows its writers hold it in, its A row (``P.arows[j]``, x widened, which
+    no reader reads) held to row i of the call's A rows, and one unit `LinearOut_v3{N, W}` reading row i of the call's y (``P.ys[j]``, y widened, which the window commits by reference from the call's y), which
     its readers read as its N / W output rows of W words: i its position's row (`FixedLoad.at`). Its weights are read
     nowhere."""
     t, calls, K, N = P.tables, P.cut.calls, node.fn.bindings["K"], node.fn.bindings["N"]
@@ -96,11 +95,11 @@ def cut_linear(P: Any, j: int, node: Any) -> None:
                             f"(K, N) {[call[:2] for call in calls]}")
     P.linears[-1], W = c + 1, calls[c][2]
     s, i = t.at(P.cls, P.slot_index, P.position - 1)
-    tid, u = P.b.unit(bind(LC.LinearARow, K=K, R=len(xs), ROUND=s, CALL=c))
+    tid, u = P.b.unit(bind(LC.LinearARow, K=K, R=len(xs)))
     P.b.feed(tid, "x", u, 1, xs)
     P.b.value(tid, "o0", u, t.a(s, c), i, t.a_rows(P.cls, s))
     P.arows[j] = Row(tid, u, "o0", 2 * K)
-    ytid, yu = P.b.unit(bind(LC.LinearOut, N=N, W=W, ROUND=s, CALL=c))
+    ytid, yu = P.b.unit(bind(LC.LinearOut, N=N, W=W))
     P.b.value(ytid, "y", yu, t.y(s, c), i, t.rows(P.cls, s))
     P.ys[j] = Row(ytid, yu, "y", 2 * N)
     P.outs[j] = [(k * W, (k + 1) * W, Row(ytid, yu, f"o{k}", W)) for k in range(N // W)]
@@ -128,9 +127,7 @@ def census(lowered: Any) -> list[dict[str, Any]]:
     """The cut linears of ``lowered``'s class (`window_circuit.Lowered`), a row a round's call: its round and call (its
     index among a position's cut linears), its K, N and W, its rows (the round's, `PearlTables.rows`) and multiply-adds, its
     A rows' value and rows (`PearlTables.a_rows`) and its y's, PoUW's scheme whose credited product a tie would hold y to,
-    and whether one does (none yet: `UNTIED`). Empty for a circuit not cut. A circuit's own description gives the same
-    multiply-adds: each call's `LinearARow_v1{K, R, ROUND, CALL}` units times K and its `LinearOut_v1{N, W, ROUND, CALL}`'s
-    N."""
+    and whether one does (none yet: `UNTIED`). Empty for a circuit not cut."""
     P = lowered.programs[0]
     if P.cut is None:
         return []
