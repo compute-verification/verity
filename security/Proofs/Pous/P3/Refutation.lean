@@ -182,6 +182,21 @@ noncomputable def A₁ (ω : (p3Model 8 64).Ω) : Bits 512 := codeEquiv 8 64 (to
 noncomputable def A₂ (σ : Bits 512) (v : Fin 8) : OracleAlgorithm (p3Model 8 64) (Lab 8 64) :=
   if v = 0 then .ret ((codeEquiv 8 64).symm σ) else if v = 1 then prog1 ((codeEquiv 8 64).symm σ) else .ret zLab
 
+theorem A₂_bounded (σ : Bits 512) (v : Fin 8) : (A₂ σ v).Bounded 3 4 := by
+  intro ω
+  unfold A₂
+  split_ifs
+  · exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+  · exact ⟨le_of_eq rfl, le_of_eq rfl⟩
+  · exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+
+theorem A₂_invBounded (σ : Bits 512) (v : Fin 8) : InvBounded 0 (A₂ σ v) := by
+  intro ω
+  unfold A₂
+  split_ifs
+  · exact le_of_eq rfl
+  · exact le_of_eq rfl
+  · exact le_of_eq rfl
 
 /-! ### The event: the guess is right whenever `c¹_u[1] = 0` for `u = 1..7` -/
 

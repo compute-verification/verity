@@ -219,6 +219,8 @@ theorem band_meets_rounds (hepf : ChainExPostFactoG) (D k : ℕ) (r₁ r₂ : �
 
 /-! ## `D = 2`, `k = 97` and `D = 1`, `k = 93` -/
 
+/-- The certificate's numbers at `D = 2`, `k = 97`, `r = 9535/10000`. -/
+theorem βOne_2_97 : βOne 2 97 = 266826399 := rfl
 
 theorem cert_d2_one : (1 - (9535 / 10000 : ℝ)) * 2 ^ 28 + 18 / 19 * 2 ^ 28 + 512 ≤ ((βOne 2 97 : ℕ) : ℝ) := by
   rw [βOne_2_97]; norm_num
@@ -229,6 +231,8 @@ theorem cert_d2_fam :
 
 theorem cert_d2_pow : (9535 / 10000 : ℝ) ^ 97 ≤ 1 / 100 := by norm_num
 
+/-- The certificate's numbers at `D = 1`, `k = 93`, `r = 9515/10000`. -/
+theorem βOne_1_93 : βOne 1 93 = 267350654 := rfl
 
 theorem cert_d1_one : (1 - (9515 / 10000 : ℝ)) * 2 ^ 28 + 18 / 19 * 2 ^ 28 + 512 ≤ ((βOne 1 93 : ℕ) : ℝ) := by
   rw [βOne_1_93]; norm_num
@@ -285,6 +289,8 @@ in-degree (every `d ≥ 0`). The same recipe gives `k = 89`, which `N = 1` (`p�
 `BandMultiMeetsFamily` with `D = 0`, `k = 89` and no bound on `d`; it is `Pous.Guarantees.BandMultiMeetsFamilyD0`,
 pinned. -/
 
+/-- The certificate's numbers at `D = 0`, `k = 89`, `r = 9495/10000`. -/
+theorem βOne_0_89 : βOne 0 89 = 267874909 := rfl
 
 theorem cert_d0_one : (1 - (9495 / 10000 : ℝ)) * 2 ^ 28 + 18 / 19 * 2 ^ 28 + 512 ≤ ((βOne 0 89 : ℕ) : ℝ) := by
   rw [βOne_0_89]; norm_num

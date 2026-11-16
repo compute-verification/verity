@@ -133,6 +133,23 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
 
 /-! ### The threshold `p₀` -/
 
+/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
+theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
+    (g : ℝ) ≤ p₀ β S B ℓ * B := by
+  unfold p₀
+  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
+  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
+    exact_mod_cast (by omega : g ≤ B)
+  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
+    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
+    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
+    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
+    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
+      field_simp
+    rw [key]
+    have : ((β : ℝ) - S - B) / ℓ < b := by
+      rw [div_lt_iff₀ hℓ']; linarith
+    linarith
 
 open Classical in
 /-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/

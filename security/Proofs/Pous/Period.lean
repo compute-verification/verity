@@ -56,6 +56,13 @@ theorem onTime_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
   have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.ChallengePhaseCommitment.limitNs hc
   exact ⟨run, hrun, hc, hl.trans_le haud.2.2.2.2.1, hot⟩
 
+theorem δ_nonneg : (0 : ℝ) ≤ (Params.δ : ℝ) := by
+  have : (0 : ℚ) ≤ Params.δ := by norm_num [Params.δ]
+  exact_mod_cast this
+
+theorem εMax_ne_top : Params.εMax ≠ ⊤ := by
+  unfold Params.εMax
+  exact ENNReal.pow_ne_top (ENNReal.inv_ne_top.2 two_ne_zero)
 
 /-! ## The extractor -/
 

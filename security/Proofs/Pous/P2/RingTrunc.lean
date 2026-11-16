@@ -81,6 +81,13 @@ theorem countP_ring_mulMap (l : List ℕ) (g₁ g₂ : ℕ → Bits w) :
     (l.map fun e => (RingQry.mul (g₁ e) (g₂ e) : RingQry B w)).countP (fun q => !q.isKey) = l.length := by
   induction l <;> simp_all [RingQry.isKey]
 
+theorem countP_key_sqQs₂ (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ : List (Bits w)) :
+    (sqQs₂ (B := B) p t h r₀ r₁).countP RingQry.isKey = 0 :=
+  countP_key_mulMap _ _ _
+
+theorem countP_ring_sqQs₂ (p t : ℕ) (h : Bits (w - t)) (r₀ r₁ : List (Bits w)) :
+    (sqQs₂ (B := B) p t h r₀ r₁).countP (fun q => !q.isKey) = 2 ^ t :=
+  (countP_ring_mulMap _ _ _).trans List.length_range
 
 /-- No multiplication in the key round, then two rounds with one: two key queries, `2^(t+1)` ring queries. -/
 theorem truncProg_bounded (t : ℕ) (i : Fin B) (h : Bits (w - t)) :

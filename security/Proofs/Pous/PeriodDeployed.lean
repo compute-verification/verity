@@ -115,6 +115,8 @@ theorem periodHeldHonest : PeriodHeldHonest := by
   · rw [limit_ns]
     norm_num [RING_D, ROUND_NS]
 
+theorem εMax_toReal : Params.εMax.toReal = (2⁻¹ : ℝ) ^ 128 := by
+  simp [Params.εMax, Params.secParam, ENNReal.toReal_pow, ENNReal.toReal_inv]
 
 theorem periodHeldNontrivial : PeriodHeldNontrivial := by
   refine ⟨fun P o hb h => ?_, fun P o x ⟨_, _, hh⟩ => ?_⟩

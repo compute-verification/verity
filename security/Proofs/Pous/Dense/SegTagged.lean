@@ -294,6 +294,9 @@ theorem segTag_auditSecure {N B ℓ : ℕ} [NeZero (N * B)] (salt : Bits 192)
 
 /-! ### The 14 GB theorem, tagged -/
 
+/-- **Satisfiability witness** for the query map's hypotheses at 14 GB: segments `0 ≠ 1`, `448 ≤ 2^64` tags and
+`256 ≤ 524288`-bit labels. -/
+theorem tagEmbed_hyps_14 : (1 : Fin 448) ≠ 0 ∧ 448 ≤ 2 ^ 64 ∧ 192 + 64 ≤ 524288 := by decide
 
 /-- The query map at 14 GB is injective. -/
 theorem tagEmbed_14_injective (salt : Bits 192) :

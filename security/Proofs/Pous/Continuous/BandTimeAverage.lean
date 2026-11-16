@@ -143,6 +143,7 @@ theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuo
 
 /-! ## `ε_proof` at one segment -/
 
+theorem βOne_5_111 : βOne 5 111 = 265253616 := rfl
 
 /-- `ε_proof` at one segment and `β = βOne D k`: `1 − (β − 512)/2^28`. -/
 theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :

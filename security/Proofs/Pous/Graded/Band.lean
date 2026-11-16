@@ -142,6 +142,12 @@ theorem binTail_ofReal (k t : ℕ) {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     ← ENNReal.ofReal_mul (Nat.cast_nonneg _),
     ← ENNReal.ofReal_mul (mul_nonneg (Nat.cast_nonneg _) (pow_nonneg h1r _))]
 
+theorem binTail_le_δ {k t : ℕ}
+    (h : ∑ j ∈ Finset.range (t + 1), (k.choose j : ℝ) * (1 - 95923 / 100000) ^ j * (95923 / 100000) ^ (k - j) ≤
+      1 / 100) :
+    binTail k t (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ) := by
+  rw [binTail_ofReal k t (by norm_num) (by norm_num)]
+  exact ENNReal.ofReal_le_ofReal (by norm_num [Params.δ]; linarith)
 
 theorem choose_203_2 : Nat.choose 203 2 = 20503 := by
   rw [Nat.choose_eq_descFactorial_div_factorial]; rfl

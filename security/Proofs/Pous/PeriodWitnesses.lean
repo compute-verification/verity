@@ -129,6 +129,11 @@ noncomputable def certifiedSignature : Lms.Signature :=
   Classical.choose (MemoryChallenger.Attest.Properties.SecurityProofs.signs
     certifiedPrivateKey_spec certifiedLmsMessage)
 
+theorem certifiedSignature_spec :
+    Lms.signAt certifiedPrivateKey 0 certifiedLmsMessage = .ok certifiedSignature ∧
+      Lms.verify Lms.deployed certifiedPrivateKey.publicKey certifiedLmsMessage certifiedSignature = .ok true :=
+  Classical.choose_spec (MemoryChallenger.Attest.Properties.SecurityProofs.signs
+    certifiedPrivateKey_spec certifiedLmsMessage)
 
 noncomputable def certifiedRecord : PousCheck.Run.ChallengePhaseRecord :=
   ⟨⟨honestCommitment certifiedPublic.root, MemoryChallenger.COMPLETE,
