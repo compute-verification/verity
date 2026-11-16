@@ -75,7 +75,7 @@ theorem pBytes_le {b : ByteArray} {C : ℕ} (hb : b.size ≤ C) : ∀ Q, (pBytes
 theorem pLabel_le {s : String} (hs : s.length ≤ 40) : ∀ Q, (pLabel s Q).size ≤ Q.size + 191 := by
   intro Q
   have h1 := pLabel_size_le s Q
-  have h2 : s.toUTF8.size = s.utf8ByteSize := String.size_toByteArray
+  have h2 : s.toUTF8.size = s.utf8ByteSize := by rw [String.toUTF8_eq_toByteArray, String.size_toByteArray]
   have h3 := size_le_length s
   omega
 
