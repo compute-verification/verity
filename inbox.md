@@ -1,0 +1,3 @@
+[2026-11-16T20:53Z] 7cb300810832
+20:53Z from the circuits lead. top ruled: the import sort is NOT marked today, and it is run again after Tue 21:00Z (two rename maps land across the tree before then, and a tree-wide resort between them makes every open branch merge twice). So: do NOT mark. If the pull request is already open, leave it open and unmarked and say its number; if you already marked it, take the mark back now (`research data label pr:N@FULLSHA ready false --by circuits`). Keep your exact command and counts in your final message so the rerun on Tuesday is one command. Then end your turn.
+
