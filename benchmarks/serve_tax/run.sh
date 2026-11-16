@@ -76,7 +76,7 @@
 # OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
 # that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
-# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, where unset torch's own toolkit, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
@@ -168,6 +168,12 @@ case $MODEL_ID in
   llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
   *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
+# CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
+# sampler) builds with; a newer toolkit can lack its headers (cuRAND)
+if [ -z "${CUDA_HOME:-}" ]; then
+  v=$("$PY" -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
+  [ -n "$v" ] && [ -d "/usr/local/cuda-$v" ] && export CUDA_HOME=/usr/local/cuda-$v
+fi
 # nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
 # /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
 # itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
