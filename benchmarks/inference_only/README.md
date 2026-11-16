@@ -87,7 +87,7 @@ run on. A malicious developer who gives up credit raises the uncredited share `s
 1/slowdown)`. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting other MACs
 than the class's linears, is refused; so are a verdict tied to another record than the check's, a record holding
 counts of two classes with no `--served-class`, and a record missing a file, which is named. The coins line never
-says the deployed challenger from a record's own word. `tests/test_served_record.py` holds each.
+says the deployed challenger from a record's own word. `tests/benchmarks/inference_only/test_served_record.py` holds each.
 
 ## What it prints
 

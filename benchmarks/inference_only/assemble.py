@@ -27,7 +27,9 @@ A refusal of the serve's files exits 2 with its reason, before anything is writt
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import shutil
 import sys
@@ -98,8 +100,11 @@ def count(circuit: Path, roots: Path | None, pins: Path | None, policy: Path, da
     (`block_counts`), the public judgment to ``out`` and the exact counts to ``private``."""
     from verity_vllm.program.predict import block_counts as BC
 
-    if BC.main(BC.Options(day=day, declaration=policy, private=private, window=[[str(circuit), str(roots or "-")]],
-                          pins=pins, out=out)) != 0:
+    # the count prints its judgment, which goes to ``out``; only its one line on stderr is kept
+    with contextlib.redirect_stdout(io.StringIO()):
+        code = BC.main(BC.Options(day=day, declaration=policy, private=private,
+                                  window=[[str(circuit), str(roots or "-")]], pins=pins, out=out))
+    if code != 0:
         raise Refused(f"the count wrote no judgment of {circuit}")
 
 
