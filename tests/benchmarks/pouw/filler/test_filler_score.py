@@ -13,7 +13,7 @@ import score
 import scoring as S
 
 share = S.share
-PFILL = "benchmarks/pouw/filler/pfill_arm.py:PFillRam"  # an arm with a split filler at every decode point
+PFILL = "benchmarks/pouw/filler/pfill_arm.py:PFillRam"
 
 
 def row(kind, b, l, place, *, alone_ms, arm_ms, rounds=4, mhz=2000.0, watt=300.0, chunks=10, window_ms=None,
