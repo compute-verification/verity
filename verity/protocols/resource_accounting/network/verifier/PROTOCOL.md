@@ -415,9 +415,9 @@ of leaking it.
 
 ## The I/O tie (`io_tie`, a design)
 
-N2 holds a window's counts but says nothing of its frames, nor that they carry the tokens the served computation
+N2 holds an execution phase's counts but says nothing of its frames, nor that they carry the tokens the served computation
 produced. The I/O tie closes that on the egress. It is one proof block per egress execution phase at
-selection `All`. It opens every cell of the window and holds each to the output the advice's map names there, and that
+selection `All`. It opens every cell of the execution phase and holds each to the output the advice's map names there, and that
 output's id to the id the Commit sampled. It is a design with a prototype on the network attester's own egress
 (`io_tie`, its cells cut by `network_attester.NetworkCertifier._egress`), in no Spec and unproved. The execution phase's tie is T proof
 blocks, one a bucket row of the network attester's registration (`network_attester.py`'s v2, a row a bucket), and each outputs 1
@@ -434,8 +434,8 @@ the proof block.
 
 So a duplicated, dropped, reordered, moved or altered cell, a byte anywhere outside the id, a cell on another request's
 stream or in another connection's slots, an output in the wrong bucket, a fabricated output, an early, late or missing
-`END`, a `FAIL`, a wrong id and a port row that isn't the Commit's each refuse the window. Nothing is sampled within the
-window, so there is no ε: the verdict covers every cell. In the sampled-audit statement (`SampledAuditAccepted`),
+`END`, a `FAIL`, a wrong id and a port row that isn't the Commit's each refuse the execution phase. Nothing is sampled within
+it, so there is no ε: the verdict covers every cell. In the sampled-audit statement (`SampledAuditAccepted`),
 a class sampled `All` has error 0. That statement doesn't yet model the transfer gates' tie to the network attester's
 signed rows, so this proof block's place in it is still to state.
 
@@ -500,22 +500,22 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
   the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
-  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: a window's 8N
-  bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile slice's proof block holds the
-  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows
+  `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: an execution phase's 8N
+  bytes of records and 4S a bucket of steps, at a place aligned to execution phases in a link-day's map. The compile slice's proof block holds the
+  map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The execution phase reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
   of v3's table (9.86 × 10^9), at 8 bytes a cell over N cells against 16 bytes a slot over M. The steps then come from
   the map's rows, so the port's reads are at hidden positions. `FrameV3Read` already takes its position as a value, so
-  they cost what they cost now. The served window is 1.466 × 10^11, 3.4% more than v4.
-- **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served window, which the verifier
-  computes in time linear in the window's capacity. At the target it goes away: the verifier reads the roots, the
-  domain ids and the statics, which are O(1) a window.
+  they cost what they cost now. The served execution phase is 1.466 × 10^11, 3.4% more than v4.
+- **The verifier's cost.** v4's map is a public input of 8 bytes a cell, 8.09 MB a served execution phase, which the verifier
+  computes in time linear in the execution phase's capacity. At the target it goes away: the verifier reads the roots, the
+  domain ids and the statics, which are O(1) an execution phase.
 - **Complete:** every cell is opened and held to its place in the map, so the data cells are exactly the outputs the
-  advice releases in the window, with no duplicate and no drop, and responses are of any length. The tie needs none of
-  FIXLEN, the window-local arithmetic map or the K samples (FIXLEN stays a premise of N2's served profile, "A served
-  link"). Nor does it need a window to start at a request boundary or end idle: a request's outputs fall in the
-  windows their release buckets name.
+  advice releases in the execution phase, with no duplicate and no drop, and responses are of any length. The tie needs none of
+  FIXLEN, the arithmetic map local to an execution phase or the K samples (FIXLEN stays a premise of N2's served profile, "A served
+  link"). Nor does it need an execution phase to start at a request boundary or end idle: a request's outputs fall in the
+  execution phases their release buckets name.
 - **The routing** brings each data cell its entry: in each bucket, a Beneš network over M = 2^D ≥ max(R, E)
   positions carries each of the bucket's E = S·P port entries, its id and its index e (W = 32 + D bits), and its
   (2D − 1)·2^(D − 1) switches are witness. Every setting is a permutation, and `IoTieMatch` holds each data cell's
@@ -536,8 +536,8 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   as the network attester's FIFO makes them in arrival order. So the map puts advice request i on stream order[i] + 1, through
   the permutation advice v1 decodes against the certified record (the replay's requests in arrival order,
   the derived fields' walk, its misses sent as `order` and charged as advice: 2,194 bits on the corpus's heavy
-  trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every window of the
-  heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 windows
+  trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every execution phase of the
+  heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 execution phases
   of 16 buckets, `test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
   `verity/protocols/resource_accounting/network/verifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
   attester's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
@@ -578,9 +578,9 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   row (`advice` validates it), and the map's q for request i is order[i] + 1 ((b), (c)). The network attester writes the stream
   of every cell in a connection's slots (its pads, its data cells and its `END`) as its request's ingress ordinal on
   the link, from 1, and the proof block holds it to q. Every request's `END` is released in one of the session's
-  windows. So on a link whose every egress window is accepted, advice request i is the link's arrival order[i] (from 0;
+  execution phases. So on a link whose every egress execution phase is accepted, advice request i is the link's arrival order[i] (from 0;
   ordinal order[i] + 1 on the wire). An order other than the network attester's, or a server that admits a later arrival first
-  under v0's identity, puts cells on a stream the map doesn't name there (or leaves no map at all), and the window
+  under v0's identity, puts cells on a stream the map doesn't name there (or leaves no map at all), and the execution phase
   refuses
   (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise is the network attester's numbering: the
   proxy forwards whole requests, one connection each, in the order the network attester numbers them.
@@ -639,16 +639,16 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
 - **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
-  its ingress windows' registrations (each one's `registration.digest`, in order), the advice's digest
+  its ingress execution phases' registrations (each one's `registration.digest`, in order), the advice's digest
   (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. It
   is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
   lengths and order and the network attester's release) and given only by the verifier's own tie source
   (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
-  window says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
+  execution phase says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
   tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
-  attack delivered a verdict built for the forged advice's digest, every window accepted.
+  attack delivered a verdict built for the forged advice's digest, every execution phase accepted.
 - **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
-  network attester's salted root of its T bucket rows, held to the window's order, and T proof blocks, proof block t bucket
+  network attester's salted root of its T bucket rows, held to the execution phase's order, and T proof blocks, proof block t bucket
   row t. The proof block is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network attester's root by
   the verifier's own registered read (`network_attester_rows.bucket_port`). The statement is a shared-row file every port of
@@ -656,11 +656,11 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   attester's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
   proof block's lanes (`io_request.lanes`, from the advice it holds and the network attester's release, taken in the clear)
   and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
-  decides each window on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the advice's
+  decides each execution phase on the proof alone, each proof block's `pub` row opened to its own lanes, and reports the advice's
   digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
-  alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
-  for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
-  the release is the network attester's schedule for the advice and puts `received`'s request cells in each window,
+  alone, on the link and the stream's registrations. Execution phase w is accepted when its outcome is, decided on the proof
+  for the advice's digest. Every one is refused unless the stream registers exactly the advice's execution phases in order,
+  the release is the network attester's schedule for the advice and puts `received`'s request cells in each,
   and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
   lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
@@ -729,7 +729,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
     (`test_the_unit_is_its_reference`, slow).
 
 **The proof block,** `IoTieBucket{B, R, P, S}`, one a bucket row (R = lanes·r slots):
-- **The cells** are the network attester's per-window value, as `network_attester.py`'s registration v2 commits them: each bucket's R cells are
+- **The cells** are the network attester's value for each execution phase, as `network_attester.py`'s registration v2 commits them: each bucket's R cells are
   one `hm96-sha512/row/v2` row of R·B bytes under a fresh salt, in a `frame-v3-sha512` tree of T rows (a dense
   domain, its pads to a power of two). The proof block's `row` input is the registered port (`network_attester_rows.bucket_port`:
   proof block t reads row t, every slot held or not, with no wiring), so the proof system's registered read checks it
@@ -755,7 +755,7 @@ j·B to (j + 1)·B: `network_attester.py`'s row (t − w·T)·S + j becomes word
 row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row and its S Commit step rows as registered ports,
 S + 1 reads a proof block, and recomputes no root and hashes no row.
 
-**What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the window
+**What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the execution phase
 (`release[k] // T = w`):
 - q is order[`request`] + 1, its request's ingress ordinal on the wire under advice v1's order permutation, which
   the proof block holds to the network attester's stream ("The two ingress ties");
@@ -793,14 +793,14 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   each row: 192 bytes of the network attester's own randomness.
 - **The tree** is the dense `frame-v3-sha512` domain of T rows, `io_tie.domain(binding, T)`, which is
   `CommitmentDomain(binding, -1, RangeIndexedDomain(0, T), hash="sha512")`. The binding is a 64-byte digest naming the
-  link, the window and the cells, which the network attester's registration fixes; the tie reads the domain id as public. Under
+  link, the execution phase and the cells, which the network attester's registration fixes; the tie reads the domain id as public. Under
   that domain:
   - leaf t is `leaf_ref(domain_id, "hm96-sha512/row/v2", value_t, t)`;
   - the pads are `_hash(b"pad", domain_id, uint(t))` for t in T … 2^⌈log2 T⌉ − 1;
   - each node is `node_ref(domain_id, level, index, left, right)`.
 
   This equals `tree_levels` over the domain's `row_leaf`s.
-- **Registered:** the root and the domain id, with the window w; bucket t is session bucket w·T + t. The T salts go
+- **Registered:** the root and the domain id, with the execution phase w (`window` in the registration); bucket t is session bucket w·T + t. The T salts go
   to the prover, privately: they are its witness, and it rebuilds the cells from the map and the port.
 - **The port's rows** (the fake upstream's; the real ones are vLLM's) are the same leaves and tree over the session's
   2^DS steps: row s is `port_row` of step s's sampled ids, each under a fresh salt (`rows_levels`, `open_port`:
@@ -808,14 +808,14 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   (`port_reads`).
 - **Not needed by the All tie:** a per-stream sequence number in the header.
 
-**What the prover keeps,** from the window's registration until the tie's outcome of record, by `proof_deadline`: the network
-attester's T salts, and the port rows' salts and paths at the window's steps, which the Commit's prover keeps for its own
+**What the prover keeps,** from the execution phase's registration until the tie's outcome of record, by `proof_deadline`: the network
+attester's T salts, and the port rows' salts and paths at the execution phase's steps, which the Commit's prover keeps for its own
 openings. At the target, it also keeps the map's rows, salts and paths, which the advice's prover registers. The cells
 are a function of the map and the port, so the prover rebuilds them, and it computes the switches when it proves.
 
 **Composition.**
 - **N2** (`All`) holds the head's fields and counts and the certificate that signs them.
-- **The cells' root** is the network attester's own per-window value, registered by the auditor's device
+- **The cells' root** is the network attester's own value for each execution phase, registered by the auditor's device
   (`trusted-device`). It isn't the head's frames root, which is an unsalted tree that can't be opened outside a
   proof. The head's counts and the cells come from one grid of the network attester's: bucket t holds n_t data cells. The tie
   doesn't read the head; tying the cells' root into it (a record v3 field) is open.
@@ -845,7 +845,7 @@ tie (`io_ids`) reads.
   switches are witness, which only finds entries, since the match checks each routed entry's index. At the target the
   port's reads are at hidden positions, the steps the private map gives, and the map's rows stay at public ones.
 
-What this establishes, once built: on an egress link whose every window is accepted, every cell the user received is
+What this establishes, once built: on an egress link whose every execution phase is accepted, every cell the user received is
 a pad, `event(id)` or its response's `END`. That id is the Commit's sampled id at the step and batch row advice v0
 names for that cell's output. The cell is on its request's stream, at the release bucket and the slot in it that the
 advice names, and each request's number in the advice is its arrival ordinal. This holds for every cell with no ε
