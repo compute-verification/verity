@@ -28,7 +28,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The projection's bound at the form's accept**: `joined` at the form's acceptance, `JoinGood` with no collision
 of the play's blobs with the registered files, and the run's locator, at the cut's terms at the deployed two-session

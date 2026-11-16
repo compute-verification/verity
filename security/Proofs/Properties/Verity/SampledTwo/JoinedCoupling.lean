@@ -130,7 +130,7 @@ theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening) (dColl : ℕ)
     (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
     (h : CouplesAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl)
-    (hI : ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε) :
+    (hI : ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε) :
     CouplingTwoAt V k A θ F c σ
       (joinCRBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
         bindBound V A x θ F c σ
