@@ -608,6 +608,38 @@ theorem pooledCount_checked_lt {L S m : ℕ} (lay : AuditStatement → BoundaryG
     (fun i _ => Nat.mul_le_mul_right _ (Nat.pow_le_pow_right two_pos (hle i))) ⟨i₀, mem_univ _, ?_⟩
   exact Nat.mul_lt_mul_of_pos_right (Nat.pow_lt_pow_right (by norm_num) hlt) (hD i₀)
 
+/-- An event of a prover's tape and coins has its probability with the extractor's coins drawn beside them. -/
+theorem pr_lift_ext {Ω β γ : Type} [Fintype Ω] [Fintype β] [Fintype γ] [Nonempty γ] (p : Ω × β → Prop) :
+    Pr p = Pr fun r : Ω × β × γ => p (r.1, r.2.1) := by
+  rw [← Claims.Pr_fst (β := γ) p]
+  exact (Claims.Sampling.Pr_equiv (Equiv.prodAssoc Ω β γ).symm fun r => p r.1).symm
+
+/-- **`PhaseChecks`'s miss from `CheckedWitness`'s, at one prover**: the check's miss at the trace with the registered
+openings (`PrCheckMissR`) is at most its miss at the extracted witness (`PrCheckMiss`) on the run `regRunR`, plus the
+probability that the run accepts while the extraction gives no witness, or one whose incorrect set meets a class
+sampled `all`. One direction only, and not at the same `εchk`: `CheckedWitness` bounds `PrCheckMiss` at runs fixed
+before the prover, and `regRunR` reads the prover's strategy, so `CheckedWitness` at `regRunR` needs its runs read at
+the prover; and the second term, the extraction's failure on an accepted run, is bounded by no premise here. -/
+theorem prCheckMissR_le_prCheckMiss (H : Msg → Msg) (D : Compiled Coin A) {L S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
+    (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (ops : AuditStatement → List (Opening Bool))
+    [Nonempty (D.E.C x)] :
+    PrCheckMissR H D lay k valid x P ops ≤
+      PrCheckMiss H D (fun s Pt _ => {regRunR H D P x ops lay k s Pt}) valid x P +
+        Pr fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => (run H P D.V x r.1 r.2.1).out = .acc ∧
+          ¬∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧ D.partition s = some Pt ∧
+            Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt) := by
+  unfold PrCheckMissR PrCheckMiss
+  refine le_trans (pr_lift_ext (γ := D.E.C x) _).le (Claims.Sampling.Pr_or_le (fun r hr => ?_) le_rfl le_rfl)
+  by_cases he : ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧
+      D.partition s = some Pt ∧ Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt)
+  · obtain ⟨w, s, Pt, hw, hs, hPt, hd⟩ := he
+    obtain ⟨hacc, s', Pt', hs', hPt', -, hv⟩ := hr
+    obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
+    obtain rfl : Pt' = Pt := Option.some.inj (hPt'.symm.trans hPt)
+    exact Or.inl ⟨hacc, w, s', Pt', hw, hs, hPt, hd, _, Set.mem_singleton _, hv⟩
+  · exact Or.inr ⟨hr.1, he⟩
+
 end NetTiming
 
 namespace NetTiming.SecurityProofs

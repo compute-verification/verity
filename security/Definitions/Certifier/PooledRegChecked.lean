@@ -72,7 +72,9 @@ It and `CheckedWitness` each say the check holds on an accepted run except with 
 and provers, and neither gives the other yet. `CheckedWitness` is at the runs of the extracted witness (`certifierRun`),
 over the extractor's coins as well, for every prover, its runs fixed before the prover; `PhaseChecks` is at `regRunR`,
 which reads the prover's strategy, for the period's own provers. So `CheckedWitness` cannot be stated at `regRunR`'s
-run, and a check that discharges one does not yet discharge the other. -/
+run, and a check that discharges one does not yet discharge the other. At one prover, `prCheckMissR_le_prCheckMiss`
+bounds this miss by `PrCheckMiss` on `regRunR`'s run plus the probability that an accepted run's extraction fails or
+meets a class sampled `all`, which no premise bounds. -/
 def PhaseChecks [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) {L S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (sw : Fin m → AuditStatement) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
