@@ -6,7 +6,7 @@ benchmark reaches only through its public names.
   what it measures; the vLLM adapter's export of a served forward runs no backward.
 - No tracked source outside the adapter and outside tests describes a training step as a circuit by hand: builds a Definition
   whose name starts with `Train`.
-- `ALLOWED` names the one file that does either today, with why. It only shrinks: a file in it that no longer does fails.
+- `ALLOWED` names the one file that does either today, with why. It only shrinks: a file in it that no longer does warns (`BOOKKEEPING`).
 - No source of the training benchmark outside its tests reads a name of an adapter module that the module's `__all__` doesn't
   list: one it imports, or one it reads off a module of the adapter it imports.
 
@@ -108,7 +108,8 @@ def private_reads(source: str) -> list[str]:
                     if a.name not in public and _public(f"{n.module}.{a.name}") is None]
     modules = {name: m for name, m in _bound(tree).items() if m.split(".")[0] == PACKAGE and _public(m) is not None}
     for n in ast.walk(tree):
-        if isinstance(n, ast.Attribute) and (m := _dotted(n.value, modules)) is not None and n.attr not in (_public(m) or set()):
+        if (isinstance(n, ast.Attribute) and (m := _dotted(n.value, modules)) is not None
+                and (public := _public(m)) is not None and n.attr not in public):
             out.append(f"{n.lineno}: {m}.{n.attr}")
     return out
 
@@ -158,3 +159,4 @@ def test_a_second_translator_and_a_private_read_are_found() -> None:
         "2: verity_torch.frontend.train_trace._marked_attention"]
     assert private_reads("import verity_torch.frontend.train_step as ts\nts.export_steps\nts._written\n") == [
         "3: verity_torch.frontend.train_step._written"]
+    assert private_reads("import verity_torch.frontend.train_step as ts\nts.export_steps.__name__\nts.StepLayout.x\n") == []
