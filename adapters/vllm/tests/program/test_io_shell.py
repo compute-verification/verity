@@ -20,7 +20,7 @@ from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.registry import boolean_io_shell as BX
 from verity_vllm.definitions.registry import io_shell as X
 from verity_vllm.definitions.registry.dead_free import TokenSelectCombineV2
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from verity_vllm.program.predict import scan_state as SS
 

@@ -6,7 +6,7 @@ concatenated by rows; ``o_proj``; ``gate_up_proj``, gate then up; ``down_proj``)
 ``weight_scale`` of the registered int8 pin (`engine.int8_checkpoint`, ``LLAMA32_1B_INT8``) that
 `engine.int8_vllm.Int8PlainLinearMethod` holds, applied by that method's product (`engine.int8_exact.plain_linear`).  The
 option is installed through `protocols.install` with `pous.linear_types` the stand-in's type, ``p2_lib`` the
-`verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` library and the salt source a public test coin (no salt of record).
+`verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` library and the salt source a public test coin (no salt of record).
 
     PYTHONPATH=<root>:<root>/adapters/vllm:<root>/tools/config:<root>/tools/research/src \\
       python tests/protocols/pous_gpu.py --snapshot SNAP --lib LIB --out DIR [--m 1,256] [--reps 5]

@@ -19,19 +19,19 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/lean/check/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests"))
 import composite as C
 import pouw_check_cases
 import pouw_period_cases
 import pouw_piece as P
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import credit as Cr
-from verity.protocols.accounting.pouw.verifier import period_check as PC
-from verity.protocols.accounting.pouw.verifier import verifier as V
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
+from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
-STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit_statements.py"
+STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit_statements.py"
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def period_exe(tmp_path) -> Path:
     exe.write_text(f"""#!{sys.executable}
 import json, sys
 from pathlib import Path
-from verity.protocols.accounting.pouw.verifier import period_check as PC
+from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
 _, params, commitment, evidence = sys.argv[1:]
 a = PC.case_twin({{"params": json.loads(Path(params).read_text()), "commitment": Path(commitment).read_bytes().hex(),
              "evidence": Path(evidence).read_bytes().hex()}})

@@ -6,7 +6,7 @@ check that refuses it by its refusal code, and the advice and Commit tamperings 
         [--model M] [--T 50] [--R 32]
     python benchmarks/network_traces/negatives.py warden --run DIR
 
-The advice is I1's (`verity.protocols.accounting.certifier.verifier.advice`, its `encode` bytes) and the Commit record
+The advice is I1's (`verity.protocols.resource_accounting.network.verifier.advice`, its `encode` bytes) and the Commit record
 I3's (serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
@@ -78,18 +78,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import (DATA, HEADER,  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import record_files as RF  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.link_frame import (DATA, HEADER,  # noqa: E402
                                                                        )
-from verity.protocols.accounting.certifier.verifier.id_form import ID_NAME_BYTES, id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import tie_service as TS, network_certifier as W  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.id_form import ID_NAME_BYTES, id_request  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_certifier as W  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
-ADVICE_MODULE = "verity.protocols.accounting.certifier.verifier.advice"
-IO_TIE_MODULE = "verity.protocols.accounting.certifier.verifier.io_tie"
-IO_REQUEST_MODULE = "verity.protocols.accounting.certifier.verifier.io_request"
-NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.accounting.certifier.verifier.network_certifier_rows"
+ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
+IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
+IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
+NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_certifier_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
@@ -142,7 +142,7 @@ def network_certifier_frame(run: Path, at: int | None = None) -> dict:
     signed root and the changed one's doesn't (`NETWORK_CERTIFIER_READ`)."""
     try:
         WR = importlib.import_module(NETWORK_CERTIFIER_ROWS_MODULE)
-        WS = importlib.import_module("verity.protocols.accounting.certifier.device.network_certifier_serve")
+        WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_certifier_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no network certifier cells: {err.name} isn't in this tree") from None
     link, direction = RC.CERTIFIED[RC.EGRESS]
@@ -176,7 +176,7 @@ def network_certifier_frame(run: Path, at: int | None = None) -> dict:
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
-# On I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`): Advice(requests, steps, release),
+# On I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`): Advice(requests, steps, release),
 # RequestAdvice(id, prompt_len, output_len, finish), StepAdvice(rows), Row(request, kind, start, n, cache_hit,
 # preempted, sources), Source(request, n), and `release` one egress bucket a kept output. Each tampering returns new advice and
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed

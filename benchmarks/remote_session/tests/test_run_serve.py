@@ -411,7 +411,7 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
     # the registration is encoded on the card: kv.cu built for it at the session's codec, handed to the Commit
     assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1" in nvcc
-    kv = "verity/protocols/accounting/poub/prover/word_codec/kv.cu"
+    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
     assert nvcc.endswith(kv) and (ROOT / kv).is_file()
     assert commit["env"]["EXTRA_COMMIT_ARGS"].split() == [
         "--remote-plan", "serve", "--remote-kv-pages", "24", "--remote-weight-blocks", "4096", "--remote-kv-lib",
@@ -659,10 +659,10 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     """The same against the verifier's own process, started as by hand with the Lean verifier built: the connection
     `run.sh` opens and drops is the one it accepts, and it ends red at the closed stream rather than listening on.
     The verifier's output is read to its end, so one that listened on would hang here."""
-    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 
     port = str(free_port())
-    line = [sys.executable, str(ROOT / "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py"),
+    line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
             "--lean-exe", str(lv.build())]

@@ -14,7 +14,7 @@ from typing import Any, Mapping, Sequence
 
 from verity.circuits.program import Program
 
-from verity.protocols.proofs.spot.device.coins import sampling_design_problem
+from verity.protocols.proofs.spot.verifier.challenger.coins import sampling_design_problem
 from . import draw as D, partition as P
 
 Member = tuple[Sequence[Sequence[int]], int]
