@@ -376,7 +376,9 @@ owner = "infra"
 # ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin). The list
 # is made from the register of machines at each install (`register`: its template names the machines by pattern, and holds no
 # address), so every node's is the same, and each node takes the vy-cluster key from the address of every machine its list
-# names (`accept`). A machine that joined is put into every node's list by `research deploy roll /etc/vy/peers`
+# names (`accept`). A machine that joined is put into every node's list by `research deploy roll /etc/vy/peers`. vy-nebius-2
+# is neither a list's node nor a line of the template while its machine is stopped: the address its register file gives is
+# no longer its own. It goes back into both when it runs again at an address of its own.
 
 [[file]]
 path = "/etc/vy/peers"
@@ -384,8 +386,7 @@ template = "tools/research/src/research/pods/nebius/peers"
 register = true
 by = "research deploy, from the template and the register of machines"
 accept = "/home/research/.ssh/vy-cluster.pub"
-nodes = ["vy-nebius-2",
-         "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
          "vy-nebius-cpu-13", "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 owner = "infra"
