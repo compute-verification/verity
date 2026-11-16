@@ -24,13 +24,13 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
-                                  step_test, suite_kind, traced_reads, unnamed)
+                                  step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
@@ -1512,15 +1512,15 @@ E       OSError: could not create numbered dir with prefix host in /workspace/tm
 
 ../../../../tools/verity/check/guard/verity_suite_guard.py:232: OSError
 =========================== short test summary info ============================
-ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]
+ERROR tests/test_network_attester_compile_slice_v6.py::test_random_chains[synth]
 """
 
 
 def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_by_its_machine():
     """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
     directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
-    row = _row("verity/protocols/accounting/certifier/verifier", "verity/protocols/accounting/certifier/verifier",
-               "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
+    row = _row("verity/protocols/resource_accounting/network/verifier", "verity/protocols/resource_accounting/network/verifier",
+               "tests/test_network_attester_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
 
@@ -1763,7 +1763,7 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
     `include_str`, as pouw's `check/models.json`, a script, the vectors its tests read, and those of a package nested in it.
     Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
     above the package or in a directory named like it."""
-    pouw, rand, pous = ("verity/protocols/accounting/pouw/verifier/lean/check", "verity/commitments/randomness",
+    pouw, rand, pous = ("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "tools/pous_grader")
     lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
             f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
@@ -1771,8 +1771,8 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
             f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
     other = [f"{pouw}/README.md", f"{pouw}/tests/test_pouw_check.py", f"{pouw}/tests/conftest.py", f"{pouw}/pyproject.toml",
              f"{pouw}/.gitignore", f"{pouw}/inner/README.md", f"{rand}/tests/test_vectors.py", f"{pous}/DESIGN.md",
-             "verity/protocols/README.md", "verity/protocols/accounting/pouw/models.json", "verity/commitments/randomness2/x.py",
-             "verity/protocols/accounting/pous/leaner/x.json", "a.txt"]
+             "verity/protocols/README.md", "verity/protocols/resource_accounting/compute/pouw/models.json", "verity/commitments/randomness2/x.py",
+             "verity/protocols/resource_accounting/memory/pous/leaner/x.json", "a.txt"]
     assert _lean([*lean, *other], [*lean, *other]) == lean
     assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
 
@@ -1793,7 +1793,7 @@ def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
     """The audit's declaration says of a path what it says of a file there, and the tree a change leaves no longer lists a
     file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
     a deleted README of it still isn't."""
-    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
+    pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
     left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
     gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
     assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]
@@ -1997,3 +1997,17 @@ def test_combine_takes_the_candidates_state_from_its_table_with_both_verdicts_fa
 def test_combine_refuses_a_state_it_has_no_rule_for():
     with pytest.raises(ValueError, match="no verdict has state 'passed'"):
         combine(Verdict(PASS), Verdict("passed"))
+
+
+def test_a_suite_may_read_the_tests_of_each_path_it_reads_where_they_mirror_the_tree(world):
+    """`suite_reads` is what `suites.inputs_of` lets the suite's guard allow: its directory, its declared inputs and what the
+    members it depends on ship, each with its tests at `tests/X` where the commit has them (`suite_layout.mirrors`)."""
+    sha = world.change(MIRRORED)
+    reads, dirs = suite_reads(world.dev, sha, "tests/adapters/vllm/tests")
+    own = {"tests/adapters/vllm/tests", "hardware", "tools/config/x.py", "adapters/vllm", "tools/research"}
+    assert reads == frozenset(own | {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "pyproject.toml",
+                                     *SUITE_RUNNER, *ENV})
+    assert {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "hardware"} <= dirs
+    assert "tools/config/x.py" not in dirs and "tests/tools/config/x.py" not in reads
+    assert suite_reads(world.dev, sha, "tests/verity")[0] == frozenset({"tests/verity", "pyproject.toml", *SUITE_RUNNER, *ENV})
+    assert suite_reads(world.dev, sha, ".") == (None, frozenset())

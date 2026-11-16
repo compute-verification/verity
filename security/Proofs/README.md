@@ -29,7 +29,7 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
   - `benchmarks/two_stage/tests/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
     `Proofs.Flock.SamplingGeneric.TwoAt` and runs `TwoGuard.lean` beside it, which imports them.
-  - `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
+  - `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
 
 ## Areas
 
@@ -38,8 +38,8 @@ registry, path by path: `research msg owners PATH`.
 
 | Area | What it holds |
 |---|---|
-| `Accounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
-| `Certifier` | The network certifier's proofs ([README](Certifier/README.md)) |
+| `ResourceAccounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
+| `Certifier` | The network attester's proofs ([README](Certifier/README.md)) |
 | `Core` | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
 | `Flock` | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |
 | `Hash` | The hash area's proofs |

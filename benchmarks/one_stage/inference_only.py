@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -95,7 +95,7 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
@@ -253,7 +253,7 @@ def kind_of(param: str) -> str | None:
     """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
     linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
     from verity_vllm.program.predict import scan_state
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     if param == scan_state.SCAN_STATE:
         return "scan_state"

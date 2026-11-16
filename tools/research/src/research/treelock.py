@@ -5,6 +5,11 @@ the commit; two Lean builds there write one `.lake` at once, truncating each oth
 INF-641).  The runner puts a workload that builds Lean there (`builds_lean`) behind this, one lock per tree, so such runs take the
 tree in turn.  The wait is the workload's own time, so the run's --timeout bounds it too.  CMD inherits the lock (exec), and so
 do the processes it starts.  Stdlib only: it runs by path, without the research package on its path.
+
+The tree's lock is the last thing a run waits for.  A workload whose argv begins with wrappers that wait for a machine's
+resource (a GPU lease, then a check slot: slot.py) gets this after them (`cli._past_waits`), so a run in a slot's line or a
+lease's holds no tree, and the run a tree waits on is one that is building in it.  Every run takes them in that one order, so
+no two wait on each other; a waiter here that gives up exits, which lets go of the slot and the lease its process held.
 """
 from __future__ import annotations
 
@@ -35,9 +40,9 @@ def lock_path(runs_root: Path, tree: Path) -> Path:
     return runs_root / f".lean-tree-{hashlib.sha256(os.fsencode(os.path.realpath(tree))).hexdigest()[:16]}.lock"
 
 
-def wrap(lock: Path, tree: Path, wait_s: float = WAIT_S) -> list[str]:
+def wrap(lock: Path, tree: Path, wait_s: float | None = None) -> list[str]:
     # -P: this file's directory, the research package, would shadow the standard library's modules (its queue.py)
-    return [sys.executable, "-P", str(Path(__file__).resolve()), str(lock), f"{wait_s:g}", str(tree), "--"]
+    return [sys.executable, "-P", str(Path(__file__).resolve()), str(lock), f"{WAIT_S if wait_s is None else wait_s:g}", str(tree), "--"]
 
 
 def acquire(lock: str, wait_s: float, tree: str, *, clock=time.monotonic, sleep=time.sleep) -> int | None:

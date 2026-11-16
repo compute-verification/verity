@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.TS
-public import Definitions.Accounting.Gates.Model
+public import Definitions.ResourceAccounting.Gates.Model
 public import Definitions.Registration.Device
 public import Definitions.Pouw.Window
 
@@ -28,7 +28,7 @@ data sheet, which prices those words as time on a declared device.
 
 The logical layer:
 
-* `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.IntDag` (memory accounting's form, with its
+* `CoinMode`, `Declared`: the circuit as the IR gives it, a `ResourceAccounting.Gates.IntDag` (memory accounting's form, with its
   wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round),
   each round's coin mode (live or seeded), the coin before which the service commits each value under
   a root (`Declared.commitRound`, where the proofs' layer cuts it, and `LayerCommitted` holds it to the IR's cut, or
@@ -64,7 +64,7 @@ The logical layer:
   seeded gains are proved at: its template's folded one (GRIND) and its whole skip's (from a whole-tile luck a seed
   query, which no ruling grants); no credited
   kind reading two activations (H1 + fx1's attention) under seeded coins. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at `μ = ¾`, `r_B = ½`,
-  `Accounting.Guarantees.TS.LuckOfReceipt`).
+  `ResourceAccounting.Guarantees.TS.LuckOfReceipt`).
 * `creditedWords`, `wordsOf`, `floorOf`, `kindCount`: the circuit's credited words, `N_w` (W3: from the IR, not a
   parameter), its floor `♭ = Σ_words ♭_{kind}` and its words per kind.
 * `tileWords`, `tileWeight`, `tileStage`, `tileKind`, `tileLuck`, `tileLuck0`: the service's `N_p` grid-padded tiles
@@ -74,7 +74,7 @@ The logical layer:
   (W4, `0` for every Program COMPILE accepts), and `F` per kind: the most tiles one late cone of a kind holds (`1` for
   every kind served: its units hold whole K).
 * `SplitStages`, `modeAt`, `sameAt`, `SplitStages.LuckAt`, `EveryStage`, `share`, `stageShare`, `tileMode`: a window's
-  stages, one a round, with a unit's mode `Accounting.TS.Mode` (paid; folded, its product skipped and its
+  stages, one a round, with a unit's mode `ResourceAccounting.TS.Mode` (paid; folded, its product skipped and its
   committed words folded; or whole, product and fold skipped), each stage's tiles' deficient words right or not
   (`right`) and their checked values honest or not (`same`, which a receipt-lucky skipped tile meets); and the modes as
   the window's proofs read them, which `SampledLayer.Good` and `UnitFixed` take.
@@ -88,7 +88,7 @@ The logical layer:
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
   `Ξ`. Its share is `a·(folded weight) + b·(whole weight)` at the weights it is given, and it passes when every sampled
   tile's checked value is honest; `serviceGame` is it at a split-stage window's joint run.
-* `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `Accounting.TS.SampledLayer` over the IR's
+* `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `ResourceAccounting.TS.SampledLayer` over the IR's
   gates as positions, its static half defined from the IR (each tile's slots its unit's gates and their operands, each
   position's writer the unit of its gate, each position's cut its IR cut or the service's commit coin, whichever is
   later, each tile's coin its round's, the sample the
@@ -122,7 +122,7 @@ The physical layer:
   `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
 * `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
 * `CreditCertificate`, `CreditCertificate.Holds`, `certOf`: the interface the physical layer's ledger consumes:
-  work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ`, `γ_♭ = T(H)/T_cred`
+  work of each kind in a device window (`ResourceAccounting.Window`, its ticks), its credit, `ε`, `δ`, `γ_♭ = T(H)/T_cred`
   (W1: `♭` reported, not pinned) and the coin mode `ε` is for (`live` from `CircuitCredit`, `seeded` from
   `CircuitCreditSeeded`), so the issuer of composed certificates, which doesn't exist yet, can refuse the live `ε`
   for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
@@ -131,9 +131,9 @@ The physical layer:
 
 @[expose] public section
 
-namespace Accounting.Compose
+namespace ResourceAccounting.Compose
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-! ## The registered circuit: its rounds, its proof blocks and its words -/
 
@@ -145,7 +145,7 @@ inductive CoinMode
   | seeded
   deriving DecidableEq, Repr
 
-/-- **A registered circuit**: its gates in the IR's canonical order (`Accounting.Gates.IntDag`: each gate's operation,
+/-- **A registered circuit**: its gates in the IR's canonical order (`ResourceAccounting.Gates.IntDag`: each gate's operation,
 operands, interval, primitive, place and whether it is committed), and as the IR binds them:
 * `call i`: the Definition call site, of `calls`, that made gate `i`, numbered in the circuit's order;
 * `round c`: call site `c`'s round, of `rounds`: its noise reads that round's coin, released after the round's operands
@@ -324,7 +324,7 @@ def Declared.UnitLate {ι : Type} (Cd : Declared ι) (u v : ℕ) : Prop :=
   ∃ i j, Cd.Writes i ∧ Cd.unit i = u ∧ Cd.unit j = v ∧ Cd.Late i j
 
 /-- **Unit `u'` is in unit `u`'s late cone**: `u` itself, and every unit reached from it along late
-writes (`Declared.UnitLate`, transitively). It is closed per unit, as `Accounting.TS.SampledLayer.Late` is: a skipped unit
+writes (`Declared.UnitLate`, transitively). It is closed per unit, as `ResourceAccounting.TS.SampledLayer.Late` is: a skipped unit
 can leave every gate of it wrong, so a late read of any one of them reaches the reader's whole unit. -/
 def Declared.Reaches {ι : Type} (Cd : Declared ι) : ℕ → ℕ → Prop := Relation.ReflTransGen Cd.UnitLate
 
@@ -417,12 +417,12 @@ def SeedNamed {ι : Type} (Cd : Declared ι) : Prop :=
 /-! ## Schemes: floors and luck per kind -/
 
 /-- **The form of a template's proved operand luck**, at a skip pattern's word span:
-* `cube bind`: `¾` while the span is within the receipt's binding `bind` (`Accounting.Guarantees.TS.LuckCaseACube`,
+* `cube bind`: `¾` while the span is within the receipt's binding `bind` (`ResourceAccounting.Guarantees.TS.LuckCaseACube`,
   `OperandLuckCube`, for degree-2 cube operands; `Pouw.Guarantees.Receipt.DuoWindowNoKernel` binds four
   words), and `1` past it (`DuoLongRunKernel`: no receipt binds every length);
 * `coins b Z`: `Z(span)·C(b, ⌊b/2⌋)/2^b` for `b` fresh bits at the fibre `Z(span)` the receipt has at that span
-  (`Accounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`);
-* `pinned`: `0`, a value the proof pins (`Accounting.Guarantees.FillerLuck.PinnedFillLuckAt`);
+  (`ResourceAccounting.Guarantees.HMu.CoinPointMass`, `ReceiptLuckOfCoins`);
+* `pinned`: `0`, a value the proof pins (`ResourceAccounting.Guarantees.FillerLuck.PinnedFillLuckAt`);
 * `unproved`: `1`. -/
 inductive LuckForm
   | cube (bind : ℕ)
@@ -447,7 +447,7 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
   (`Assumptions.Compose.GuessLuckAt`, a condition at this value: `½`, B′'s, for the live line as ruled,
   where `2^-64` for a 64-bit state was proposed and isn't granted);
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
-  `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
+  `κ = 4` has moment at most `1` over its seed (GRIND's `ResourceAccounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight;
 * `wholeRate`: the rate `θ₀_k`, per committed word, at which a seed group of kind `k`'s whole-skip gain at `κ₀` has
   moment at most `1` over its seed. From the guess bound it is `x₀/w_k`, `x₀` the largest per-tile rate with
@@ -490,7 +490,7 @@ def Scheme.SeedPriced {K : Type} (Sc : Scheme K) : Prop :=
   ∀ k, Sc.credited k = true → ¬(k.actA = true ∧ k.actB = true)
 
 /-- **A folded unit's luck**: `μ + (1 − μ)·r_B`, its deficient words right at `μ` or, when not, its receipt kept at
-`r_B` (`Accounting.Guarantees.TS.LuckOfReceipt`): `7/8` at `μ = ¾`, `r_B = ½`. -/
+`r_B` (`ResourceAccounting.Guarantees.TS.LuckOfReceipt`): `7/8` at `μ = ¾`, `r_B = ½`. -/
 noncomputable def Scheme.foldLuck {K : Type} (Sc : Scheme K) (k : Kind) : ℝ := Sc.mu k + (1 - Sc.mu k) * Sc.rB k
 
 /-- The circuit's credited words: its committed words of a credited kind, in order. -/
@@ -572,7 +572,7 @@ noncomputable def kindF {ι : Type} (Cd : Declared ι) (Np : ℕ) (k : Kind) : �
 
 /-! ## The window: stages, one a round, with B1's split, and the service's sample -/
 
-/-- **A window's stages, one a round**: per stage, each unit's mode (`Accounting.TS.Mode`: paid, folded or whole),
+/-- **A window's stages, one a round**: per stage, each unit's mode (`ResourceAccounting.TS.Mode`: paid, folded or whole),
 whether its deficient words are all right (`right`) and whether its checked values (the values its proof pins: a warp
 checkpoint, a fold state) are the honest ones (`same`), as functions of the stage's coin `C` (the stage's outputs are
 committed after it is released), then the rest of the window, which may depend on it. A unit belongs to one stage,
@@ -635,7 +635,7 @@ def SplitStages.joint {C V : Type} {M : ℕ} (stg : V → ℕ) (W : SplitStages 
   ⟨W.modeAt stg, W.sameAt stg⟩
 
 /-- **A joint run's modes as the window's proofs read them**: on a path of the window's one service round, tile `u`'s
-mode at the rounds' coins. `Accounting.TS.SampledLayer.Good` and `Accounting.Assumptions.TS.UnitFixed` read these. -/
+mode at the rounds' coins. `ResourceAccounting.TS.SampledLayer.Good` and `ResourceAccounting.Assumptions.TS.UnitFixed` read these. -/
 def jointMode {A B : Type} {Np : ℕ} (R : JointRun A (Fin Np)) (x : Paths (A × B) 1) (u : Fin 1 × Fin Np) : Mode :=
   R.mode (coinAt x 0).1 u.2
 
@@ -955,7 +955,7 @@ def ModelScope (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam
 end Credit
 
 /-- **A credit certificate** (the interface the physical layer's ledger consumes): the prover system
-did work `units k` of each kind `k` in the device window `window` (`Accounting.Window`: `len` ticks from `start`),
+did work `units k` of each kind `k` in the device window `window` (`ResourceAccounting.Window`: `len` ticks from `start`),
 worth `credit` seconds on the declared machine, short by at most `eps` of it except with probability `delta`; `gamma` is
 honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor `♭` is against the honest kernel (W1);
 `coins` is the coin mode `eps` is for: `live` from `CircuitCredit`, every round holding a credited tile live, and
@@ -964,7 +964,7 @@ yet, refuses a live `eps` for a seeded window.
 It is what the physical layer's ledger consumes, never a credit by itself: the ledger admits a set of certificates on
 one device only if the credit inside every interval of its ticks fits in it, so one device's time is credited once. -/
 structure CreditCertificate where
-  window : Accounting.Window
+  window : ResourceAccounting.Window
   units : Kind → ℕ
   credit : ℝ
   eps : ℝ
@@ -983,7 +983,7 @@ bound `r`, the given `δ`, `γ_♭` against honest kernel `H`, and the coin mode
 `CircuitCredit`, `.seeded` in `CircuitCreditSeeded`). -/
 noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) (coins : CoinMode) : CreditCertificate where
+    (lam : R → ℝ) (r δ : ℝ) (win : ResourceAccounting.Window) (coins : CoinMode) : CreditCertificate where
   window := win
   units := kindCount Cd
   credit := creditOf Sc Cd Z
@@ -992,4 +992,4 @@ noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fint
   gamma := Z.gammaFloor H (floorOf Sc Cd)
   coins := coins
 
-end Accounting.Compose
+end ResourceAccounting.Compose

@@ -4,8 +4,8 @@ Each PR drive landed in the window is split into five steps, read from drive's l
 and `landed #.. on main at TIP (check RID)` lines), the landing check's own records (`slot.json`'s `took`, `steps.jsonl`'s step
 ends) and the PR's newest `ready` label at the head that landed:
 
-  queue     ready mark -> the first check of a train with the PR in it, at that head
-  rework    that first check -> the check the PR landed with (trains thrown away by rebuilds, failures, ejections)
+  queue     ready mark -> the first check of a candidate with the PR in it, at that head
+  rework    that first check -> the check the PR landed with (candidates thrown away by rebuilds, failures, ejections)
   machine   that check's launch -> its check slot
   check     its slot -> the last of its steps that ended before the landing (a deferred step ends after it)
   land      that verdict -> the tick that landed it"""
@@ -114,7 +114,7 @@ def _each(fn, items: list) -> dict:
 
 def rows(launches: list[Launch], landings: list[Landing], start: datetime, end: datetime,
          marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path]) -> list[dict]:
-    """One row per PR landed in [start, end]: each step's start, and how many trains with the PR were checked."""
+    """One row per PR landed in [start, end]: each step's start, and how many candidates with the PR were checked."""
     out = []
     todo = [ld for ld in landings if start <= ld.at <= end]
     dirs = _each(run_dir, list(dict.fromkeys(ld.check for ld in todo)))
@@ -171,7 +171,7 @@ def render(s: dict, start: datetime, end: datetime) -> str:
         lines.append(f"{name:48} " + (f"median {v['median_h']:5.2f} h  p90 {v['p90_h']:5.2f} h  {v['pr_h']:7.1f} PR-h  (n={v['n']})"
                                       if v["n"] else "no data"))
     if s["prs"]:
-        lines.append(f"trains checked with each landed PR: median {s['trains_median']:g}; {s['rechecked']} PR(s) in more than one")
+        lines.append(f"candidates checked with each landed PR: median {s['trains_median']:g}; {s['rechecked']} PR(s) in more than one")
     return "\n".join(lines)
 
 

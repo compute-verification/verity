@@ -233,8 +233,9 @@ def scratch(cache: Path, now: float) -> list[dict[str, Any]]:
     for d in sorted(Path(cache).glob("lean-audit-scratch-*")):
         try:
             out.append({"path": str(d), "age_h": round((now - d.stat().st_mtime) / 3600, 1)})
-        except OSError:
-            continue
+        except OSError as e:
+            if d.exists():
+                print(f"resource_probe: {d} unread, so not listed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 

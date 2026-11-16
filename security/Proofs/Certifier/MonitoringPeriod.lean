@@ -36,14 +36,14 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The leak through the network certifier over a monitoring period of sampled audits
+# The leak through the network attester over a monitoring period of sampled audits
 
 `Guarantees.MonitoringPeriodLeakAccepted` is the instance of `Guarantees.MonitoringPeriodLeakChecked` at no checked input, at a check every
 run passes (`monitoringPeriodLeak_of_checked`); `monitoringPeriodLeak` is that at `monitoringPeriodLeakChecked`.
 
 **Each window's bound** is the checked statement's at the period of no windows, whose first part reads none of the
 period: the check misses with probability `0` (`checkedWitness_true`), and the leak relation at the network
-certifier's rows with a valid run gives the leak relation there (`rLeakCertifier_of_rLeakCertifierChecked`).
+attester's rows with a valid run gives the leak relation there (`rLeakCertifier_of_rLeakCertifierChecked`).
 
 **The count.** At a check every run passes, a window that meets `ExecutionPhaseGood` meets `ExecutionPhaseGoodChecked`
 (`executionPhaseGoodChecked_of_executionPhaseGood`), and with no checked input every check pins the rows where the layout fits
@@ -139,7 +139,7 @@ theorem monitoringPeriodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakC
     · simp only [executionPhasesCount, Finset.union_empty]
       exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
-/-- **The leak through the network certifier over a monitoring period**: `Guarantees.MonitoringPeriodLeakAccepted`, the instance
+/-- **The leak through the network attester over a monitoring period**: `Guarantees.MonitoringPeriodLeakAccepted`, the instance
 of `monitoringPeriodLeakChecked` at no checked input (`monitoringPeriodLeak_of_checked`). -/
 theorem monitoringPeriodLeak : Guarantees.MonitoringPeriodLeakAccepted := monitoringPeriodLeak_of_checked monitoringPeriodLeakChecked
 

@@ -42,7 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 
 Every protocol decides on its own coins, and the coins of a period, or of a monitoring period's periods, are their
 product: a uniform `ξ : (i : I) → Ω i`. A protocol's guarantee bounds its failure event by `δ` over its own coordinate,
-at every value of the others (`Accounting.PeriodRun.Sound`'s form), or over its own and the later coordinates, at every
+at every value of the others (`ResourceAccounting.PeriodRun.Sound`'s form), or over its own and the later coordinates, at every
 value of the earlier ones. Either way the event may read every coin, so the protocols may adapt to each other's coins.
 The probability over the product that some protocol fails is then at most the sum of the `δ`s.
 

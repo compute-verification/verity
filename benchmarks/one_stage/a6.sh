@@ -5,7 +5,8 @@
 #   A6_MEM_GB=96 bash benchmarks/one_stage/a6.sh
 #   (a job run from a clone of the tree, 96 GB)
 # env: A6_MEM_GB (the job's memory, GB)  A6_MEMBERS (a6.py's --members)  A6_K (its --k)  A6_CHUNK (its --chunk)
-#      A6_CACHE (the build cache)
+#      A6_ARGS (more of a6.py's: --gpu, --lease-min M, --plain)  A6_CACHE (the build cache)  FLOCK_PROVE (a prebuilt
+#      flock-circuit: --gpu's, built with its CUDA prover, as benchmarks/one_stage/layers.sh builds it)
 # Kept in $OUT/a6: a6's records and logs, the public files and the sessions (their proofs and records); never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive (copies of the circuit and public file).
 set -uo pipefail
@@ -19,7 +20,7 @@ setup
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 log "a6: members ${A6_MEMBERS:-default}, k ${A6_K:-default}"
 "$PY" benchmarks/one_stage/a6.py --bin "$BIN" --lean "$LEAN" --out "$W/a6" ${A6_MEMBERS:+--members "$A6_MEMBERS"} \
-  ${A6_K:+--k "$A6_K"} ${A6_CHUNK:+--chunk "$A6_CHUNK"} 2>&1 | tee -a "$OUT/a6.log" | cut -c1-4000
+  ${A6_K:+--k "$A6_K"} ${A6_CHUNK:+--chunk "$A6_CHUNK"} ${A6_ARGS:-} 2>&1 | tee -a "$OUT/a6.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/a6"
 (cd "$W/a6" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a6/")

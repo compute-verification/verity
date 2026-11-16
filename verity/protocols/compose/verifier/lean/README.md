@@ -1,6 +1,6 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
-Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
+Compose's two configurations, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
 hold them, each on the core interface (`../../../interface`) by path, with no Mathlib: `core_composition` also on the base
 package (`core_base`: canonical JSON, bytes and SHA-512), onsite and remote also on Flock's verifier and their
 subprotocols' packages:
@@ -11,7 +11,7 @@ subprotocols' packages:
   ss ties components`, `same` whose subprotocols of each tie must name one value (`Tie.lean`); all over blobs
   (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rules (`Guards.lean`).
 - `core_onsite` (`verity/protocols/compose/verifier/onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): SPOT, the inference-only policy,
-  PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory challenger's
+  PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory attester's
   wipe, the policy and SPOT on one registration record and every window of the period on it, as at remote,
   and PoUS and PoUB-P2 on one store (a `tiedSameB`).
 - `core_remote` (`..`): the composite of record `Core.Remote.V1.protocol` (`verity/remote/v1`): SPOT,
@@ -70,13 +70,13 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
-| network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../accounting/certifier/verifier/lean`) | `verity/certifier/v0` |
-| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../../../accounting/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../resource_accounting/network/verifier/lean`) | `verity/certifier/v0` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../../../resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read, checked and refused last while its switch is off) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proofs/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
-| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../policy/inference_only/verifier/lean`) | `verity/inference-only/v0` |
-| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../accounting/pous/verifier/check`) | `verity/pous/p2/v4/run` |
-| PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../accounting/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
-| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../accounting/pous/device/lean`) | `verity/wipe/v0` |
+| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
+| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../resource_accounting/memory/pous/verifier/check`) | `verity/pous/p2/v4/run` |
+| PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../resource_accounting/memory/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
+| the wipe (the memory attester's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../resource_accounting/memory/pous/attester/lean`) | `verity/wipe/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`.
 
@@ -164,7 +164,7 @@ Lean to:
 - PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period_prover.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
-  those verifiers (`../../../accounting/pous/verifier/check/tests/test_run_protocol.py`, `../../../accounting/poub/verifier/lean/tests/test_p2_case.py`).
+  those verifiers (`../../../resource_accounting/memory/pous/verifier/check/tests/test_run_protocol.py`, `../../../resource_accounting/memory/poub/verifier/lean/tests/test_p2_case.py`).
 
 Hypothesis samples 1000 cases a product (seed 0), and fewer in the short form each thousand-case test has (`FEWER`),
 which a check that leaves the test out still runs: each subprotocol's case accepts, rejects, is undecided or fails to decode

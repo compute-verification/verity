@@ -20,31 +20,31 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/protocols/accounting/pouw/verifier/lean/window"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/protocols/accounting/pouw/verifier/lean/check"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
 
 [[require]]
 name = "pouw_commit"
-path = "../../verity/protocols/accounting/pouw/verifier/lean/commit"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit"
 
 [[require]]
 name = "pouw_pearlplus"
-path = "../../verity/protocols/accounting/pouw/verifier/lean/pearlplus"
+path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus"
 
 [[require]]
 name = "inference_only_check"
-path = "../../verity/protocols/policy/inference_only/verifier/lean"
+path = "../../verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 
 [[require]]
 name = "pous_check"
-path = "../../verity/protocols/accounting/pous/verifier/check"
+path = "../../verity/protocols/resource_accounting/memory/pous/verifier/check"
 
 [[require]]
 name = "core_memory_challenger"
-path = "../../verity/protocols/accounting/pous/device/lean"
+path = "../../verity/protocols/resource_accounting/memory/pous/attester/lean"
 
 [[require]]
 name = "core_zk_server"
@@ -52,7 +52,7 @@ path = "../../verity/protocols/proofs/recursion/verifier/zk_server"
 
 [[require]]
 name = "network_check"
-path = "../../verity/protocols/accounting/certifier/verifier/lean"
+path = "../../verity/protocols/resource_accounting/network/verifier/lean"
 
 [[require]]
 name = "core_spot"
@@ -64,7 +64,7 @@ path = "../../verity/circuits/evaluate"
 
 [[require]]
 name = "poub"
-path = "../../verity/protocols/accounting/poub/verifier/lean"
+path = "../../verity/protocols/resource_accounting/memory/poub/verifier/lean"
 
 [[require]]
 name = "core_requirement"
@@ -80,7 +80,7 @@ path = "../../verity/protocols/compose/verifier/onsite"
 
 [[require]]
 name = "core_registration"
-path = "../../verity/protocols/accounting/registration/verifier/lean"
+path = "../../verity/protocols/registration/verifier/lean"
 
 [[require]]
 name = "flock_verifier"
@@ -109,10 +109,10 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Spot.Rate", "Properties.Spot.MonitoringPeriod", "Properties.Spot.MonitoringPeriodLedger",
   "Properties.Core.Evaluate", "Properties.Certifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
   "Properties.Certifier.Registered",
-  "Properties.Core.Period", "Properties.NetworkScan", "Properties.Accounting.Requirement",
+  "Properties.Core.Period", "Properties.NetworkScan", "Properties.ResourceAccounting.Requirement",
   "Properties.Compose.Compose", "Properties.Poub.Remote",
-  "Properties.Poub.Remote.Coins", "Properties.Poub.Remote.Pooled", "Properties.Accounting.Served",
-  "Properties.Accounting.RegisteredCircuit", "Properties.Poub.Remote.Line",
+  "Properties.Poub.Remote.Coins", "Properties.Poub.Remote.Pooled", "Properties.ResourceAccounting.Served",
+  "Properties.ResourceAccounting.RegisteredCircuit", "Properties.Poub.Remote.Line",
   "Properties.Poub.Remote.Schedule", "Properties.Poub.Remote.Shared", "Properties.Poub.Remote.Live",
   "Properties.Poub.Remote.Subprotocol", "Properties.Poub.Remote.SubprotocolDeployed",
   "Properties.Poub.Remote.InProofs",
@@ -123,6 +123,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Committed", "Properties.Verity.GateARow", "Properties.Ties", "Properties.Flock.Nets", "Properties.Remote",
   "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned", "Properties.Pous.WipeCount", "Properties.Challenger",
   "Properties.ZkServer", "Properties.Core.Site",
-  "Properties.Accounting.Registration.Premises",
+  "Properties.Registration.Premises",
   "Properties.Assumptions", "Properties.Verity.ExecutionPhaseFiles", "Properties.InferenceOnly.Opening",
   "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm", "Properties.Verity.LedgerPinned"]
