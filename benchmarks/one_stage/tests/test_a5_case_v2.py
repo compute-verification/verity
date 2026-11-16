@@ -76,7 +76,7 @@ def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its
     done = [{"mm": {"k": k, "m": SimpleNamespace(base=2 * k, n=2), "pin": "cc" * 64, "st": {"dir": d, "public": sha(d / "pub-2.bin")}},
              "sdir": s} for k, (d, s) in enumerate(((m0, s0), (m1, s1)))]
     assert a5.v2_proof(done, zk=True) == ("v2 verifies one table's session on its circuit and public file; this audit "
-                                          "drew 2 members")
+                                          "sampled 2 members")
     evidence = {"draw": {"units": [1, 2]}, "sessions": names[1:], "verdicts": {"m1": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, names[1:], **a5.v2_proof(done[1:], zk=True))
@@ -149,8 +149,8 @@ def test_v2_hands_v2_the_tables_its_circuit_looks_up_alone(tmp_path):
 
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False)
-    assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)
-    assert "drew 0 members" in a5.v2_proof([], zk=True)
+    assert "sampled 2 members" in a5.v2_proof([{}, {}], zk=True)
+    assert "sampled 0 members" in a5.v2_proof([], zk=True)
 
 
 @pytest.fixture
@@ -520,7 +520,7 @@ def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_writt
     write(two, a5.v2_proof([{}, {}], zk=True))
     assert a5.case_written(two) == {
         "written": False,
-        "why": "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"}
+        "why": "ValueError: v2 verifies one table's session on its circuit and public file; this audit sampled 2 members"}
     (plain := tmp_path / "plain").mkdir()
     write(plain, a5.v2_proof([{}], zk=False))
     assert a5.case_written(plain) == {"written": False, "why": "ValueError: v2 verifies --zk sessions; this audit's are plain"}

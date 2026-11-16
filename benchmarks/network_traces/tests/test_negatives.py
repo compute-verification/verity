@@ -5,8 +5,8 @@ The advice's tamperings run on I1 v0 (the advice module's classes when they're
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
-Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network certifier's own
-committed cells (`network_certifier_rows`, when importable), by the verifier's registered read."""
+Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network attester's own
+committed cells (`network_attester_rows`, when importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 
 HERE = Path(__file__).resolve().parents[1]
 SESSION = bytes(range(32))
@@ -55,8 +55,8 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
 def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root():
     """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes."""
-    from verity.protocols.accounting.certifier.verifier.certificate import frames_root, open_frame, verify_frame
-    from verity.protocols.accounting.certifier.verifier.grid import GridParams
+    from verity.protocols.resource_accounting.network.verifier.certificate import frames_root, open_frame, verify_frame
+    from verity.protocols.resource_accounting.network.verifier.grid import GridParams
 
     params = GridParams(buckets=4, allocation=2, frame_bytes=64, bucket_ms=100, queue_capacity=8)
     frames = [bytes([k]) * 64 for k in range(5)]
@@ -365,7 +365,7 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
     request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
     record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.protocols.accounting.certifier.verifier.id_form import id_request
+    from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 
     brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
@@ -388,7 +388,7 @@ def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_ti
     """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
     then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
     the first request's end a cell earlier, so no count of the link's frames refuses it; IoTieRequest's reference on the
-    network certifier's ingress does."""
+    network attester's ingress does."""
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
@@ -448,11 +448,11 @@ def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index
 
 def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     """`io_tie`'s reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
-    Commit port of the advice served through a network certifier of r = 2 slots a connection (r0's last output released
-    at bucket 4, the network certifier's, not 5), one shape for every advice: the honest window passes; the changed cell
+    Commit port of the advice served through a network attester of r = 2 slots a connection (r0's last output released
+    at bucket 4, the network attester's, not 5), one shape for every advice: the honest window passes; the changed cell
     under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified
     cell of another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
-    request, which no connection carries, and a release the network certifier didn't make fail the map; start and chunk,
+    request, which no connection carries, and a release the network attester didn't make fail the map; start and chunk,
     whose outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0
     and r1 live together; one lane can't."""
     pytest.importorskip(NG.IO_TIE_MODULE)
@@ -473,7 +473,7 @@ def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_
     """With no chunked prefill, chunk splits a prefill row in two, so every later step moves one on: the map the
     verifier computes from that advice names port entries of other steps than the Commit sampled each output in, and the
     content refuses it; a map the verifier can't compute (a request no connection carries) refuses every window, by
-    `map`, and an advice the network certifier can't serve in R slots (two connections live in one lane) has no tie at
+    `map`, and an advice the network attester can't serve in R slots (two connections live in one lane) has no tie at
     all."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     a = _advice([[(0, "prefill", 0, 5), (1, "prefill", 0, 2)], [(0, "decode", 5, 1), (1, "decode", 2, 1)],
@@ -504,11 +504,11 @@ def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
-    from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
-    from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
-    from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams, cell
+    from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
+    from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, BlockGrid
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams, cell
 
-    params = NetworkCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    params = NetworkAttesterParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
@@ -522,24 +522,24 @@ def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under
     assert not NG.cell_reads(WR, cells, 1, row)
 
 
-def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`network_certifier_frame` on a network-certifier-serve run driven tick by tick (`relay_runs._run`): its egress registration
-    (v2) is read under the network certifier's key and the schedule, its bucket rows and signed wiring are committed
+def test_frame_on_a_network_attester_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
+    """`network_attester_frame` on a network-certifier-serve run driven tick by tick (`relay_runs._run`): its egress registration
+    (v2) is read under the network attester's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+    from verity.protocols.resource_accounting.network.attester.tests import relay_runs as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()
     tws._run(run, key, [tws.ws.http_request({"prompt": "x" * 10}, "h:1")], [tws._response([" word"] * 8)])
-    got = NG.network_certifier_frame(run)
+    got = NG.network_attester_frame(run)
     p = tws.PARAMS
     assert got["ok"] and got["honest_reads"] and not got["tampered_reads"]
     assert got["rows"] == p.window and got["row_bytes"] == p.grid.allocation * p.cell_bytes
     assert got["cell_bytes"] == p.cell_bytes and 0 <= got["slot"] < p.grid.allocation
-    assert NG.network_certifier_frame(run, at=-1)["ok"]
+    assert NG.network_attester_frame(run, at=-1)["ok"]
     (run / "cells.salts").unlink()
     with pytest.raises(NG.NotApplicable, match="cells.salts"):
-        NG.network_certifier_frame(run)
+        NG.network_attester_frame(run)

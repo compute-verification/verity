@@ -1,6 +1,6 @@
 # Mark to `main`
 
-How long a PR waits from its ready mark to `main`: for each PR the verified queue landed on `main` in a window, the hours
+How long a PR waits from its ready mark to `main`: for each PR the verified queue landed on `main` in a period, the hours
 from its ready mark at the head that landed to the move of `main` that holds it. The PRs are split as the queue splits its
 batches, plain and Lean, and each class gives four measurements:
 
@@ -15,7 +15,7 @@ The two p90s are the metrics of the goals that a plain PR, and one that changes 
 (`benchmarks/landing/metrics.toml`). `landing.json`, beside the result, holds every landing's row: the PR, its head, the `main` it
 landed on, its mark, its hours and its class.
 
-- **The window**: the 7 days before the run (`--days N`, `--until TIME` for another).
+- **The period**: the 7 days before the run (`--days N`, `--until TIME` for another).
 - **A landing** is an `advance` of `main` that the loop's decision log on the control pod records as done and not the
   shadow's, at its time; a PR is counted once a head, at its first landing.
 - **The mark** is the `ready` label in force when `main` moved, at the head that landed or at a head a restack across a move

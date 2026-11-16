@@ -51,9 +51,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 @[expose] public section
 
-namespace Accounting.HMuProofs
+namespace ResourceAccounting.HMuProofs
 
-open Accounting.HMu Pouw.RelativeSecurity Finset
+open ResourceAccounting.HMu Pouw.RelativeSecurity Finset
 
 /-- One fresh bit as the skipped value, a view that reads it, a skip exactly when it is `1`, and the receipt for `1`
 committed. -/
@@ -82,4 +82,4 @@ theorem twoCopies :
   have := @h 0 1 (by simp [chain, persist]; decide)
   exact absurd this (by decide)
 
-end Accounting.HMuProofs
+end ResourceAccounting.HMuProofs

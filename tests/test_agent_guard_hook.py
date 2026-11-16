@@ -1,6 +1,8 @@
-"""`tools/agent-guard/hook.sh` runs origin/main's hooks and Slack registry whatever the branch has: a branch that tracks
-`.cursor/hooks.json` runs hooks from its own tree, so without it a branch cut before a guard landed would never run that
-guard (a cloud agent on such a branch could write Linear through the MCP connector under its connecting user's name)."""
+"""`tools/agent-guard/hook.sh`, run by a relative path (as a hooks.json from before the guard ran from /opt/agent-guard runs
+it, and as `.cursor/hooks.json` runs origin/main's text of it on a laptop), runs origin/main's hooks and Slack registry
+whatever the branch has, and never the branch's own copy: without origin/main it refuses. So a branch cut before a guard
+landed still runs that guard (a cloud agent on such a branch could otherwise write Linear through the MCP connector under its
+connecting user's name), and a branch's own guard code never runs."""
 import json
 import os
 import shutil
@@ -15,7 +17,7 @@ REGISTRY = ".agents/skills/using-slack/registry.json"
 ALLOW_ALL = 'import json\nprint(json.dumps({"permission": "allow"}))\n'
 
 
-def test_an_old_branch_runs_main_s_hooks_and_registry_and_its_own_without_main(tmp_path):
+def test_an_old_branch_runs_main_s_hooks_and_registry_and_is_refused_without_main(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")}
     env.update(GIT_ENV, AGENT_GUARD_CACHE=str(tmp_path / "cache"), AGENT_GUARD_TASK_LOG=str(tmp_path / "task.jsonl"),
                AGENT_GUARD_EVENT_LOG=str(tmp_path / "events.jsonl"), AGENT_GUARD_MIN_AVAIL="0")
@@ -54,4 +56,4 @@ def test_an_old_branch_runs_main_s_hooks_and_registry_and_its_own_without_main(t
     assert len([d for d in (tmp_path / "cache").iterdir() if d.is_dir() and not d.name.startswith(".")]) == 1
 
     git("update-ref", "-d", "refs/remotes/origin/main")
-    assert [hook("task_hook.py", linear), hook("shell_hook.py", shell)] == ["allow"] * 2
+    assert [hook("task_hook.py", linear), hook("shell_hook.py", {**shell, "command": "ls"})] == ["deny"] * 2

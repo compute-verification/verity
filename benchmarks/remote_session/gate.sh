@@ -81,7 +81,7 @@ circuit() {
   local head tree
   head=$(git rev-parse HEAD) || return 3
   [ "$head" = "${COMMIT:?}" ] || { echo "this clone is $head, not COMMIT $COMMIT" >&2; return 3; }
-  tree=$(git rev-parse "$COMMIT:verity/protocols/accounting/poub/verifier") || return 3
+  tree=$(git rev-parse "$COMMIT:verity/protocols/resource_accounting/memory/poub/verifier") || return 3
   printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
 }
 

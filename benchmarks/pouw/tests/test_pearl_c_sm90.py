@@ -1,4 +1,4 @@
-"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
@@ -23,10 +23,10 @@ import pytest
 from conftest import load
 from verity_config.settings import of
 
-from verity.protocols.accounting.pouw.verifier.audit import weights_root
-from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
@@ -170,9 +170,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)

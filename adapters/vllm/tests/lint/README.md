@@ -161,7 +161,6 @@ commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epo
 `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing
 (`tools/check/post_train.py`). Read by path: from each lint the gate reads `NAME`, its `test_no_new*` tests and its
-list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; the public export rewrites each lint's list,
-`tests/census_roots.txt` and `tests/dead_code_keep.json` (`tools/check/public_export.py`); and
-`benchmarks/census/workloads.json` names files of `tests/regression/expected/`. A change to one of these names, commands
-or formats changes its reader in the same PR.
+list, and for P9 `_imports.LAYER` and `test_p09_layering.PACKAGE_OF`; and `benchmarks/census/workloads.json` names
+files of `tests/regression/expected/`. A change to one of these names, commands or formats changes its reader in the
+same PR.

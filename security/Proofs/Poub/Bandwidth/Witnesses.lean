@@ -36,7 +36,7 @@ theorem blank_ingress {N b h S c G q : ℕ} (E : Store N b) (O : Oracle N b h) :
 
 end Bandwidth
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -47,7 +47,7 @@ theorem AuditRO_honest :
     ∃ A : Bandwidth.Device 1 1 1 0 0 0 1,
       pr (fun x : Bandwidth.Store 1 1 × Bandwidth.Oracle 1 1 1 × (Fin 1 → Fin 1) =>
           Bandwidth.Accepts A x.1 x.2.1 x.2.2 ∧ ¬ A.ingress x.1 x.2.1 + 0 + 0 + 0 * 1 + 0 < 1 * 1) = 1 :=
-  ⟨Bandwidth.Completeness.honest 1 1 1, Accounting.SecurityProofs.pr_one fun x => by
+  ⟨Bandwidth.Completeness.honest 1 1 1, ResourceAccounting.SecurityProofs.pr_one fun x => by
     obtain ⟨ha, hi⟩ := Bandwidth.Completeness.honest_accepts x.1 x.2.1 x.2.2
     refine ⟨ha, ?_⟩
     rw [hi]
@@ -65,7 +65,7 @@ theorem AuditRO_nontrivial :
   have hev : ∀ x : Bandwidth.Store 1 1 × Bandwidth.Oracle 1 1 1 × (Fin 1 → Fin 1),
       True ∧ (Bandwidth.blank 1 1 1 0 0 0 0).ingress x.1 x.2.1 + 0 + 0 + 0 * 1 + 0 < 1 * 1 := fun x =>
     ⟨trivial, by rw [Bandwidth.blank_ingress]; omega⟩
-  rw [Accounting.SecurityProofs.pr_one hev, not_le]
-  exact Accounting.SecurityProofs.error_one_lt
+  rw [ResourceAccounting.SecurityProofs.pr_one hev, not_le]
+  exact ResourceAccounting.SecurityProofs.error_one_lt
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

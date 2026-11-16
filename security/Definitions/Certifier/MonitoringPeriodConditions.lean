@@ -41,7 +41,7 @@ Definitions only. A statement over a monitoring period of sampled audits takes t
 
 * each window's statement has its partition, and each of its possible incorrect sets commits a bounded number of bits
   (`ExecutionPhasesPlaced`);
-* the network certifier's record reads back under a registered parameter (`RecordFormat.ReadsBy`): the client's view
+* the network attester's record reads back under a registered parameter (`RecordFormat.ReadsBy`): the client's view
   is a function of the record and of a parameter fixed at registration, in place of the whole schedule, so a count
   over the records pays for the parameters and not for the schedules;
 * a covert sender's channel over registered parameters (`MonitoringPeriodChannelReg`): each secret's schedule is one the record
@@ -65,13 +65,13 @@ def ExecutionPhasesPlaced {n : ℕ} (partition : AuditStatement → Option Parti
 
 /-- **The record reads back under a registered parameter.** `rd θ` reads the client's cells from the record given the
 parameter `θ` alone, and `allows θ s` says the schedule `s` is one of `θ`'s: on every schedule a parameter allows and
-the format holds, `rd θ` of the record of the cells the network certifier's code sends is those cells. The format's own
+the format holds, `rd θ` of the record of the cells the network attester's code sends is those cells. The format's own
 `read` takes the whole schedule (`RecordFormat.read_record`): this at each schedule as its own parameter. -/
 def RecordFormat.ReadsBy {κ Cell Ob Par : Type} (f : RecordFormat κ Cell Ob)
     (rd : Par → Ob → κ → List (ℕ × CellView Cell)) (allows : Par → CertifierSchedule κ → Prop) : Prop :=
   ∀ θ s, allows θ s → f.fits s → ∀ a, rd θ (f.record s a (certifierCode s a)) = certifierCode s a
 
-/-- **A covert sender's channel over registered parameters**: the schedule the network certifier runs for each secret
+/-- **A covert sender's channel over registered parameters**: the schedule the network attester runs for each secret
 `z` of `Zs` (`schedOf z`) is one the record format `f` holds and some registered parameter of `Θ` allows, and the
 decoder `dec` recovers `z` from the cells the client receives on that schedule and the server behavior `srvOf z`
 (`cells`). These are the count's own terms: a hypothesis on the sender's strategy (its secrets, schedules, server

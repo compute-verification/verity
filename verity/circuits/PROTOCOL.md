@@ -677,7 +677,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/accounting/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
@@ -686,7 +686,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   a noise instance has at most one reader. So each coin bit feeds one noise of one instance, no receipt key shares a noise
   bit's coin, and no noise has two copies or is shared across rows, matmuls, batch members or scan steps. A coin only
   receipt folds read may key any number of them. With coin flow this gives the
-  view independence of `Accounting.Guarantees.CoinFlow` (`security/`): every value outside a noise's forward cone is a
+  view independence of `ResourceAccounting.Guarantees.CoinFlow` (`security/`): every value outside a noise's forward cone is a
   function of the coins it does not read. Also refused (seeds): an input leaf of origin `coin` that a seed reads is read by
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
   coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct

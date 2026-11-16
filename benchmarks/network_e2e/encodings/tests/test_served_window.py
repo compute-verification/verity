@@ -16,7 +16,7 @@ import pytest
 HERE = Path(__file__).parent
 REPO = HERE.parents[3]
 RUN = HERE / "fixtures" / "vllm-8eb1"
-SLICE = REPO / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_w212.json"
+SLICE = REPO / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "compile_slice_w212.json"
 CLASS = SLICE.with_name("compile_slice_w212_class.json")
 ARITH = SLICE.with_name("arith_encode_vectors.json")
 
@@ -92,7 +92,7 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""
-    from verity.protocols.accounting.certifier.verifier import charge_chain as CC
+    from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]
                 if s["source"].startswith("async-light"))["decisions"]["book"]
@@ -127,7 +127,7 @@ at each power of two to 2^32 − 1."""
 
     from verity_vllm.compiler import served_rows as SR
     from verity_vllm.compiler import compile_slice_v7 as V7
-    from verity.protocols.accounting.certifier.prover import window_charge as WC
+    from verity.protocols.resource_accounting.network.prover import window_charge as WC
     from verity_vllm.pipeline.advice_code.arith import width
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]

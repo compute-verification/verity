@@ -26,7 +26,7 @@ The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
 (`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
 (`uncertifiedLinkCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
-(`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`Accounting.SecurityProofs.Actual.ingress_le`,
+(`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`ResourceAccounting.SecurityProofs.Actual.ingress_le`,
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
 `CausalStrategy`, `DeclaredLinks` and `Secrets` bundle, one named premise each, a constraint's strategy-level and
@@ -44,7 +44,7 @@ run that name its gates; `TrustedUnits` takes each run's `Spec`.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Verity Finset
 
@@ -63,7 +63,7 @@ def Causal (ℓ : L → L → ℕ) : Prop :=
 /-- **A latency ceiling** (the listed claim `latency-ceiling`) of `ℓ⁺` from `X` to `Y`: a gate placed in `Y` reads a
 gate placed in `X` at most `ℓ⁺` ticks after it. `Causal` bounds latency from below only, so without a ceiling a value
 sent before a tick can be read at any later one, and what a device sees arrive says nothing about when it was sent.
-One physical premise on a run: `X`'s links into `Y` (a server's egress links into the network certifier on them, which
+One physical premise on a run: `X`'s links into `Y` (a server's egress links into the network attester on them, which
 the auditor places) deliver within `ℓ⁺`, measured on those links, and nothing between them holds a value longer: a
 delay outside `X` is a leaf of its own, whose wires into `Y` don't come from `X`. -/
 def LatencyAtMost (X Y : Finset L) (ℓmax : ℕ) : Prop :=
@@ -233,4 +233,4 @@ def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (usage : Usage A E)
   A.Causal H.ℓ ∧ A.ComputeRate H.units usage.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
     A.Memory H.units H.M ∧ A.Links H.ends H.β usage.link
 
-end Accounting
+end ResourceAccounting

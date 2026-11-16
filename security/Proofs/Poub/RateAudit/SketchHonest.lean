@@ -9,12 +9,12 @@ public import Proofs.Poub.Lemmas.RateAuditSketch
 A device that holds nothing on chip takes the certified stream's `ρ` sectors in over the link, reads every sector of
 the store from device memory once, and queries the oracle at each tile's digest under the stream. It is accepted at
 every signs, oracle, data and sample; its footprint is the store, `N·m·w` bits, its link carries exactly the stream, and
-its compute is `N` tags (`honest_accepts`; the guarantee `Accounting.SecurityProofs.RateSketchHonest`).
+its compute is `N` tags (`honest_accepts`; the guarantee `ResourceAccounting.SecurityProofs.RateSketchHonest`).
 -/
 
 @[expose] public section
 
-namespace Accounting.RateSketch.Completeness
+namespace ResourceAccounting.RateSketch.Completeness
 
 open Pous (Bits)
 
@@ -141,9 +141,9 @@ theorem honest_accepts (w : ℕ) {Sig : Type} [Inhabited X] (dig : Sig → (Fin 
   · simp only [Prover.compute, Prover.prog, honest]
     rw [h2, h5, zero_mul, add_zero]
 
-end Accounting.RateSketch.Completeness
+end ResourceAccounting.RateSketch.Completeness
 
-/-- **Completeness of the sketch rate audit** (`Accounting.Guarantees.RateSketchHonest`). -/
-theorem Accounting.SecurityProofs.RateSketchHonest : Accounting.Guarantees.RateSketchHonest :=
-  fun N m ρ h w X Sig Dg _ dig => ⟨Accounting.RateSketch.Completeness.honest N m ρ h w X Sig Dg dig,
-    fun cTag cEnc σ O D _ I => Accounting.RateSketch.Completeness.honest_accepts w dig cTag cEnc σ O D I⟩
+/-- **Completeness of the sketch rate audit** (`ResourceAccounting.Guarantees.RateSketchHonest`). -/
+theorem ResourceAccounting.SecurityProofs.RateSketchHonest : ResourceAccounting.Guarantees.RateSketchHonest :=
+  fun N m ρ h w X Sig Dg _ dig => ⟨ResourceAccounting.RateSketch.Completeness.honest N m ρ h w X Sig Dg dig,
+    fun cTag cEnc σ O D _ I => ResourceAccounting.RateSketch.Completeness.honest_accepts w dig cTag cEnc σ O D I⟩

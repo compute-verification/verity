@@ -1,4 +1,4 @@
-"""`sampled_accepted.py`: the share of a served run's drawn units whose proofs the Lean verifier accepted on the
+"""`sampled_accepted.py`: the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the
 auditor's machine, 100 only for SPOT's accept recomputed there off the served node on a commit of main, else 0 with the
 first condition it fails."""
 from __future__ import annotations
@@ -36,8 +36,8 @@ def repo(tmp_path: Path) -> tuple[Path, str, str]:
 LEAN = M.LEAN_HERE + " (vstar-recursive sampled check) from the proofs"
 
 
-def spot(verdict: str = "accept", answer_from: str = LEAN, drawn: int | None = 6) -> dict:
-    profile = {"levels": [{"name": "blocks"}, {"name": "units"}], "drawn": {"blocks": 2, "units": drawn}}
+def spot(verdict: str = "accept", answer_from: str = LEAN, sampled: int | None = 6) -> dict:
+    profile = {"levels": [{"name": "blocks"}, {"name": "units"}], "drawn": {"blocks": 2, "units": sampled}}
     return {"verdict": verdict, "answer_from": answer_from,
             "answer": {"verdict": verdict, "profile": profile if verdict == "accept" else None}}
 
@@ -65,7 +65,7 @@ def test_lean_here_is_the_head_of_served_verdicts_own():
     assert whole.startswith(M.LEAN_HERE)
 
 
-def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_drawn_unit(tmp_path, repo, monkeypatch, capsys):
+def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled_proof_block(tmp_path, repo, monkeypatch, capsys):
     r, on, _ = repo
     runs = demo(tmp_path / "runs", on, spot())
     out = tmp_path / "me"
@@ -76,9 +76,9 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_drawn_u
     assert M.main([*runs, "--runs-dir", str(tmp_path / "runs"), "--main", "main"]) == 0
     doc = json.loads((out / "result.json").read_text())
     (m,) = doc["measurements"]
-    assert (m["name"], m["value"], m["target"], m["drawn"], m["accepted"], m["reason"]) == (M.METRIC, 100, 100, 6, 6, None)
+    assert (m["name"], m["value"], m["target"], m["sampled"], m["accepted"], m["reason"]) == (M.METRIC, 100, 100, 6, 6, None)
     assert m["inputs"][0].startswith("measured: ") and m["mark"] == "measured"
-    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed", "6 of 6 drawn units accepted")
+    assert (doc["validation"]["status"], doc["validation"]["detail"]) == ("passed", "6 of 6 sampled proof blocks accepted")
     assert capsys.readouterr().out.startswith("ACCEPTED {")
 
 
@@ -97,19 +97,20 @@ def test_anything_short_of_that_accepts_no_unit_and_says_why(tmp_path, repo, row
 
 @pytest.mark.parametrize("report, why", [
     ({"protocols": {}, "composed_on": {"host": "auditor", "served_node": False}}, "holds no SPOT row"),
+    ({"protocols": {"integrity": {}}, "composed_on": {"host": "auditor", "served_node": False}}, "holds no SPOT row"),
     ({"protocols": {"integrity": spot()}}, "names no composed_on.served_node"),
     ({"protocols": {"integrity": spot()}, "composed_on": {"host": "auditor", "served_node": None}}, "names no composed_on"),
 ])
 def test_a_partial_record_is_refused_not_measured_as_0(tmp_path, repo, report, why):
-    """A record without SPOT's row or without where it was composed is no measurement, not a run that failed."""
+    """A record whose SPOT row is missing or empty, or without where it was composed is no measurement, not a run that failed."""
     r, on, _ = repo
     with pytest.raises(M.R.Refused, match=why):
         M.share(demo(tmp_path / "runs", on, None, report=report), tmp_path / "runs", "main", r)
 
 
-def test_no_record_or_an_accept_drawing_nothing_is_refused(tmp_path, repo):
+def test_no_record_or_an_accept_sampling_nothing_is_refused(tmp_path, repo):
     r, on, _ = repo
     with pytest.raises(M.R.Refused, match="no out/record/verdicts.json"):
         M.share(demo(tmp_path / "a", on, None), tmp_path / "a", "main", r)
-    with pytest.raises(M.R.Refused, match="names no drawn unit"):
-        M.share(demo(tmp_path / "b", on, spot(drawn=None)), tmp_path / "b", "main", r)
+    with pytest.raises(M.R.Refused, match="names no sampled proof block"):
+        M.share(demo(tmp_path / "b", on, spot(sampled=None)), tmp_path / "b", "main", r)

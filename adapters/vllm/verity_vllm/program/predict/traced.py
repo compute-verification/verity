@@ -23,11 +23,13 @@ NO_PARTIAL_TRACE = ("no trace: the Build's chunked request wrapper computes each
 def trace_dir(u: Any) -> str:
     """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`, in class G then `_l` and
     the first 12 hex digits of the SHA-256 of its launch context's compact JSON (with its chunks, `{"batch": …, "chunks": …}`, and
-    its entries, `"entries": …`), and with a length rule `_s` and the first 12 of its config's (`RequestUnit.stop`). `u`: a
+    its entries, `"entries": …`; batch invariant, its launches' max_seqlen_q, `[n0, n1, …]`), and with a length rule `_s` and the
+    first 12 of its config's (`RequestUnit.stop`). `u`: a
     `steps.RequestUnit` or its summary."""
-    LP, T, C, policy, launch, chunks, stop, rows = (
-        (u["LP"], u["T"], u.get("C") or 0, u["policy"], u.get("launch"), u.get("chunks"), u.get("stop"), u.get("entries"))
-        if isinstance(u, Mapping) else (u.LP, u.T, u.C, u.policy, u.batch(), list(u.chunks), u.stop, list(u.entries)))
+    LP, T, C, policy, launch, chunks, stop, rows, seqlen_q = (
+        (u["LP"], u["T"], u.get("C") or 0, u["policy"], u.get("launch"), u.get("chunks"), u.get("stop"), u.get("entries"), u.get("seqlen_q"))
+        if isinstance(u, Mapping) else (u.LP, u.T, u.C, u.policy, u.batch(), list(u.chunks), u.stop, list(u.entries), list(u.seqlen_q)))
+    launch = launch or seqlen_q
     ctx = {"batch": launch, "chunks": chunks, **({"entries": rows} if rows else {})} if chunks else launch
     tail = f"_l{hashlib.sha256(json.dumps(ctx, separators=(',', ':')).encode()).hexdigest()[:12]}" if launch else ""
     tail += f"_s{hashlib.sha256(json.dumps(stop, sort_keys=True, separators=(',', ':')).encode()).hexdigest()[:12]}" if stop else ""
@@ -39,7 +41,8 @@ def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: 
     `registered` (`steps.Registered`), on the pinned vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of
     at least its LP + T, under φ's GPU's name where φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads);
     at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`); in class G batched (`--batched`, with
-    `--dsa-table-reads` under `Registered.dsa_table_reads`) at the unit's launch context (`--launch-context '{"batch": ...}'`), with
+    `--dsa-table-reads` under `Registered.dsa_table_reads`) at the unit's launch context (`--launch-context '{"batch": ...}'`; batch
+    invariant, at its launches' max_seqlen_q where it has them, `--launch-context '[n0, n1, ...]'`), with
     its prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
     `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`. A Program with a window's edge rows has none (`NO_EDGE_TRACE`),
     nor one with a chunk of fewer rows than its launch ran (`NO_PARTIAL_TRACE`), so `steps.compare` counts it `no_trace`."""
@@ -60,6 +63,7 @@ def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: 
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
+                     *(["--launch-context", json.dumps(u["seqlen_q"], separators=(",", ":"))] if u.get("seqlen_q") else []),
                      *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),

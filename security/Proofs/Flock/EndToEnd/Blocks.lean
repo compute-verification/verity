@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Game
   that every sampling block of `I` is accepted and `I`'s incorrect proof blocks total at least `M` is at most
   `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + ε_bind,t)`. It is `IntegrityPooled`'s proof with every sampling block outside `I`
   weighing nothing: `monitoringPeriod_union` over the sampling blocks of `I` accepted with a sampled proof block incorrect, and
-  `monitoringPeriod_monitoringPeriod` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
+  `monitoringPeriod_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
   probability `≤ 1 = (1 − q)^0`.
 * `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
 * `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
@@ -72,7 +72,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
       · rw [ite_eq_right_of_eq_false _ _ (eq_false ht)]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
   -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
-  have hB := monitoringPeriod_monitoringPeriod (fun t => (W t).game) (fun t => (W t).record t)
+  have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.incorrect else 0)
     (fun t τ => (W t).CR τ) x hx
     (fun t τ _ => by

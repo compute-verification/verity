@@ -26,8 +26,8 @@ SITES = {
     "auditor_line.UNBOUND": ("benchmarks/remote_session/auditor_line.py", "", "=UNBOUND"),
     "auditor_line.analyse.no_credit": ("benchmarks/remote_session/auditor_line.py", "analyse", "(no_credit"),
     "auditor_line.analyse.skipped": ("benchmarks/remote_session/auditor_line.py", "analyse", "=skipped"),
-    "replay.recorded": ("verity/protocols/accounting/poub/verifier/lean/tests/replay.py", "recorded", "^"),
-    "replay.held.passing": ("verity/protocols/accounting/poub/verifier/lean/tests/replay.py", "held", "^True"),
+    "replay.recorded": ("verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py", "recorded", "^"),
+    "replay.held.passing": ("verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py", "held", "^True"),
     "squaring.plans.keys": ("benchmarks/property_redteam/squaring.py", "main", "{seam_limb"),
 }
 

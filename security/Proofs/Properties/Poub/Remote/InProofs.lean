@@ -3,7 +3,7 @@ module
 public import Properties.Poub.Remote
 public import Definitions.Core.InProofs
 public import Mathlib.Probability.ProbabilityMassFunction.Monad
-public import Proofs.Properties.Accounting.InProofs
+public import Proofs.Properties.ResourceAccounting.InProofs
 public import Proofs.Properties.Poub.Remote.Schedule
 
 /-!
@@ -95,7 +95,7 @@ open Poub
 namespace Properties.Poub.InProofs.SecurityProofs
 
 open Properties.Poub Properties.Poub.InProofs
-open Verity.InProofs Properties.Accounting.InProofs Verity.Game
+open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
 
 /-- Openings every one of which `checkOpening` passes at its sampled position make `checkWindow` accept. -/
 theorem checkWindow_ofFn_accept (reg : Registration) (digest : ByteArray) (appends : Array Append)

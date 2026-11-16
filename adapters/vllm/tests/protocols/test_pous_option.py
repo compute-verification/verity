@@ -3,7 +3,7 @@
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
 segment (`weight_store.geometry`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
-period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `verity/protocols/accounting/pous/prover/p2/p2_store/store.py`'s own; the
+period's audit and the memory challenger are `verity.protocols.resource_accounting.memory.pous.verifier`'s and `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py`'s own; the
 memory challenger's key is the PoUS tests' test signer, its clock a counter.
 """
 from __future__ import annotations
@@ -19,14 +19,24 @@ from concurrent import futures
 
 import pytest
 import torch
-from verity.protocols.accounting.pous.device import challenger_party as CP
-from verity.protocols.accounting.pous.device import challenger_session as CS
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.prover import challenger_prover as CR
-from verity.protocols.accounting.pous.prover import period_prover
-from verity.protocols.accounting.pous.prover import weight_store as ws
-from verity.protocols.accounting.pous.verifier import period, setup
-from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    challenger_party as CP,
+)
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    challenger_session as CS,
+)
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_challenger as mc,
+)
+from verity.protocols.resource_accounting.memory.pous.prover import (
+    challenger_prover as CR,
+)
+from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    P2Params,
+)
 from verity.runtime.stream import Side
 
 from verity_vllm import config
@@ -44,7 +54,7 @@ SMALL = P2Params(period.W, period.C0, 8)
 
 
 def _signer_module():
-    path = config.ROOT.parent.parent / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
+    path = config.ROOT.parent.parent / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
     assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)
