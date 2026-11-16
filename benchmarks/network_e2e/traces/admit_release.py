@@ -272,7 +272,7 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
     if w:
         tau, o, D = w["params"]["bucket_ms"] / 1000, float(w["origin_unix"]), int(w["params"]["delay"])
         if not str(w.get("egress_base", "")).startswith("release"):
-            raise ValueError(f"{d}: the network certifier's egress counts from {w.get('egress_base')!r}, not the release")
+            raise ValueError(f"{d}: the network attester's egress counts from {w.get('egress_base')!r}, not the release")
         a = [int(reqs[i]["warden"]["released"]) for i in ids]
         return Release(o, tau, a, [int(reqs[i]["warden"]["ordinal"]) for i in ids],
                        [float(reqs[i]["engine_add_unix"]) for i in ids],
@@ -492,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("traces", nargs="+", help="NAME=TRACE_DIR[:ORDER_DIR]")
     ap.add_argument("--replay", type=Path, default=REPLAY, help="the scheduler replay, replay.py")
-    ap.add_argument("--add-lag-ms", action="append", default=[], help="NAME=MS: a trace without a network certifier's frontend-to-engine lag")
+    ap.add_argument("--add-lag-ms", action="append", default=[], help="NAME=MS: a trace without a network attester's frontend-to-engine lag")
     ap.add_argument("--residual", action="store_true",
                     help="also the replay's order bits and residual advice on each simulated run (`replay.table`)")
     ap.add_argument("--out", type=Path, required=True)

@@ -1,4 +1,4 @@
-"""`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the certifier front kept
+"""`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the attester front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_attester_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
@@ -13,7 +13,7 @@ is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as the
 still finds one_stage's where it did before. `prove_path.place_slots` places the window's
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
-served request's. SPOT imports neither the certifier nor a benchmark: `kept_scan` reads the kept run by the reader its
+served request's. SPOT imports neither the attester nor a benchmark: `kept_scan` reads the kept run by the reader its
 caller passes (here `certifier_piece.kept_ingress`), and refuses by name when none is passed."""
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = kept_scan(serve_dir, CLASS, USERS[3:])
-    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another network certifier run or execution phase"):
+    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another network attester run or execution phase"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
@@ -188,7 +188,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
         kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
     with pytest.raises(ValueError, match="execution phases are 32 buckets, not a window of class .*'s 16"):
         kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
-    with pytest.raises(ValueError, match="doesn't serve the network certifier at these parameters"):
+    with pytest.raises(ValueError, match="doesn't serve the network attester at these parameters"):
         kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
@@ -197,7 +197,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
 
 def test_a_scan_with_no_reader_of_the_kept_run_is_refused_by_name(serve_dir, tmp_path):
     for d in (serve_dir, tmp_path):
-        with pytest.raises(ValueError, match="by the caller's reader, since SPOT imports neither the certifier nor a benchmark"):
+        with pytest.raises(ValueError, match="by the caller's reader, since SPOT imports neither the attester nor a benchmark"):
             PP.kept_scan(d, CLASS, USERS[:3])
 
 

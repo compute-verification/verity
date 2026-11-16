@@ -2,9 +2,9 @@
 
 `verity bench certifier_term` prints the network attester's term for GLM-5.3: the bits its accepted transcripts can
 carry over a monitoring period, at the load of a node, the census's reference datacenter and the world, in bits and
-GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
-the monitoring-period check charges it (`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/`,
-`rowsTerms` and `terms`). Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py`, whose docstring
+GB, beside a target and one copy of the weights. Each row counts all its scope serves by the rule
+network attestation's verifier charges a monitoring period by
+(`verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`). Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py`, whose docstring
 has the rows, the terms, the tables and where the scale comes from; `run.py`'s has the result `--out` writes; and
 `verity/protocols/resource_accounting/network/prover/stop_verdicts.py` and the verifier's `class_charge.charge` have how
 the stop class's verdict records are read.
@@ -21,7 +21,9 @@ verity bench certifier_term --scan-delta D               each execution phase's 
 verity bench certifier_term --help                       every parameter and its default
 ```
 
-It reads files and computes, so it needs no GPU and no run. Under `research run`, give the document its run and
+From a fresh clone, `uv sync --all-packages --extra torch-cpu` and then
+`uv run --extra torch-cpu verity bench certifier_term`. It reads files of the tree and computes: it needs no GPU, no
+key and no access to the evidence store, and writes nothing into the tree. Under `research run`, give the document its run and
 commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--commit` it names the checkout's HEAD.
 
 The term of record is the scan's term over the world's year, charged at two release schedules (D_j = 2), in GB. The

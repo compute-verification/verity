@@ -75,7 +75,7 @@ class LinkEntry:
 
 @dataclass(frozen=True)
 class Port:
-    """One direction of a certifier: what leaves its block (`egress`) or enters it (`ingress`). The certifier keeps one
+    """One direction of a certifier: what leaves its block (`egress`) or enters it (`ingress`). The attester keeps one
     grid per port (`NetTiming.Grid`) and signs one record per port and window."""
 
     certifier: str
@@ -87,7 +87,7 @@ class Port:
 
 @dataclass(frozen=True)
 class Cadence:
-    """The certifiers' fixed parameters (W1) and the trusted clock. Frames are `frame_bits` long (Lean's B), a bucket is
+    """The attesters' fixed parameters (W1) and the trusted clock. Frames are `frame_bits` long (Lean's B), a bucket is
     `bucket_ticks` ticks (`Hardware.bucket` maps a tick to its bucket), and a record covers a window of `buckets`
     buckets (T: a window's `NetTiming.Grid` is T buckets of slots). Each window picks one of `jitter_classes` public
     clock-sync values (the real certifier's sync set, Lean's jitter classes), and `tick` is one tick's real duration."""
@@ -124,15 +124,15 @@ class Zone:
 @dataclass
 class Datacenter:
     """Blocks, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
-    the certifiers' cadence, and whether they seal their pair links."""
+    the attesters' cadence, and whether they seal their pair links."""
 
     name: str
     blocks: list[Zone]
     fabric: list[DeviceEntry] = field(default_factory=list)
     links: list[LinkEntry] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
-    #: every link between two blocks' certifiers is a sealed pair link (the network attester's
-    #: `Proxy(pair=…)`), so what crosses from one block to another is ciphertext off the two certifiers, and the
+    #: every link between two blocks' network attesters is a sealed pair link (the network attester's
+    #: `Proxy(pair=…)`), so what crosses from one block to another is ciphertext off the two network attesters, and the
     #: export is charged at the facility boundary only (`Placed._exported`). Off by default.
     sealed: bool = False
 
@@ -163,7 +163,7 @@ class Datacenter:
                 and not any(devices[e].trusted for e in (l.a, l.b) if e in devices)]
 
     def port(self, a: str, b: str) -> Port | None:
-        """The certifier port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
+        """The attester port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
         devices = self.devices
         if self.zone_of(a) is self.zone_of(b):
             return None

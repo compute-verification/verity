@@ -1,9 +1,9 @@
 """Advice v0: what serving decided, as one canonical bit string per network attester session.
 
-The precommitted AOT compiler turns the advice into each executed engine step's circuit; the certifier certifies the
+The precommitted AOT compiler turns the advice into each executed engine step's circuit; the attester certifies the
 I/O; SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is the committed
 form (hm96 hiding rows), private, and `bits` splits its length among egress windows. The charge, the content advice
-`A_c` of the certifier's accepted-runs bound, is `code_v1`'s compressed length of the advice, not v0's.
+`A_c` of the attester's accepted-runs bound, is `code_v1`'s compressed length of the advice, not v0's.
 
 **What it says** (vLLM v1, the pinned 0.28.1rc1.dev472's `Scheduler.schedule` and `SchedulerOutput`):
 - `requests`, in order of their first row: each request's id (the body's `user`), prompt and output lengths and how it
