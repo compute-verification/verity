@@ -482,14 +482,15 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
     (("lean-agreement",), 460),
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
-    # thirds and the rest of lean-suites (105 + 15%)
+    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's second
+    # third and the rest of lean-suites
     (("circuit-check",), 340),
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
     (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
+    # beside lean-build, Flock's other four sixths (115) and vLLM's last third on 7 workers at its worker_gb (56)
+    (("lean-suites:verity-flock:3/6",), 400),
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
