@@ -96,8 +96,8 @@ Implementations:
     reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
-    sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
-    (the interface is `poub`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
+    sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt.
+    It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
     `tests/test_pous_p2_serve.py` regenerates it.
   - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
     starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a

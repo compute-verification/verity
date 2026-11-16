@@ -1,8 +1,7 @@
 # PoUB (`verity.protocols.resource_accounting.memory.poub.verifier`)
 
 PoUB v0: a verifier with no hardware at the site certifies, window by window, how many reads of a node's registered
-store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record; this file is the outline and
-the interface.
+store the node made. This file is the outline and the interface.
 
 ## What runs today
 
@@ -13,10 +12,9 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
   and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
-  proof block proves (`PROTOCOL.md` §8), but no session proves them: `opening.py` evaluates the opening unit on the
+  proof block proves, but no session proves them: `opening.py` evaluates the opening unit on the
   honest witness, and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
-- **Plans are in the clear.** The verifier sees which blocks each pass covers (`PROTOCOL.md` §8, "What the plan
-  shows").
+- **Plans are in the clear.** The verifier sees which blocks each pass covers.
 - **The requirement's units and the stacking property are inputs, not proofs.** The ledger credits the served
   circuit's reads only on the plan and memory-map units' verdict (`audit.RequirementLink`), and blocks appended after
   the seed only on the stacking property's (`audit.PostSeedVerdict`); without them it credits the node's reads of its
@@ -141,10 +139,10 @@ A transcript that doesn't name its session's pace replays only with the pace its
   window's samples after its roots; and, once the session has its outcome and no root can follow, the commitment and
   every released coin's opening (`audit.AuditRun.disclose`; the remote session's `coins` after `ended`), which it
   checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
-  prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
+  prover holds none of it while the session runs, and no guarantee takes a hiding premise on it.
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
-- `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
+- `p2.py`: the audit over PoUS's P2-encoded weights store: the registration from PoUS's setup,
   receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
   reference), and openings checked on PoUS's `vk`. Its Lean is `lean/Poub/P2.lean`, held to it by
   `lean/tests/test_p2.py`, and its session's is `lean/Poub/P2Session.lean`, of record.
