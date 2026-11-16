@@ -21,7 +21,6 @@ from verity.commitments import history as HT
 
 from verity_vllm.pipeline import boundary_logits as BL, boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
-    FINISH,
     FORMAT,
     ONE_RETURN,
     TABLES_UNDER_A_RULE,
@@ -30,11 +29,11 @@ from verity_vllm.pipeline.boundary_rows import (
     check_template,
     commit,
     run_root,
-    sampling_of,
     table_roots,
     write,
 )
 from verity_vllm.pipeline.boundary_stop import Stop, filed
+from verity_vllm.pipeline.boundary_span import FINISH, sampling_of
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}
@@ -103,7 +102,7 @@ class BoundaryWindows:
     class of ``ids`` also waits for the root of the logits its ids were selected from (`boundary_rows.Layout.logits`),
     which rank 0 commits once the class sends it its spans in slot order (`boundary_logits.assignment`). ``stop``: the serve's registered stop rule, with no tables; the spans it ends as
     they were served are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
-    ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network certifier, a request's release by its engine
+    ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network attester, a request's release by its engine
     id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
     keeps it); each span keeps its own, and one without is in no stop class. Under a rule every line of a window says
     how many of its spans were filed with a stop block and how many without (``filed``), so a rule that ends no response

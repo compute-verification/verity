@@ -8,7 +8,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/capfillc.XXXXXX); trap 'rm -rf "$B"' EXIT
 export CP_POINTS=${CP_POINTS:-"1:2048 32:2048 128:2048 256:2048"}
 export CP_CO=${CP_CO:-"c1duo:2:256:4 c1duo:2:256:24 c1duo:2:32:4 c1xin13:4:256:4 c1xin13:4:32:4 c2duo:2:32:0"}

@@ -37,29 +37,29 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
-from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import weights as Wt
-from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops as OPS
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity_torch.pouw.h1 import registered_device as D
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 TILE = PH.TILE
 T, STEPS, SERVED = 64, 2, 5

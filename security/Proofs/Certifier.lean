@@ -83,7 +83,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Proofs of the network certifier's guarantees
+# Proofs of the network attester's guarantees
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
@@ -97,18 +97,18 @@ registration's values
 nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two more instances of the pooled
 monitoring period's guarantee, at the instances of `Definitions.Certifier.Witness`, from what `WitnessToys`
 proves there. `Code` proves the certifier's program
-(`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
+(`certifier_program`, `NetworkAttester`), which the difftest runs against the Python audit, equal to these definitions.
 
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
-`TapRows` fills an extracted trace in with the network certifier's values and reduces a disagreement between the two
+`TapRows` fills an extracted trace in with the network attester's values and reduces a disagreement between the two
 to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
-certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
-certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
+attester's registered rows outside the incorrect proof blocks, unless its openings collide with the network
+attester's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
 advice bits, and `WitnessesChecked` gives its nontrivial lemma.
 `MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
-at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
+at the network attester's rows with a valid run, and the count of the period's records through `Carried`'s at the
 empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
 checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
 the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.

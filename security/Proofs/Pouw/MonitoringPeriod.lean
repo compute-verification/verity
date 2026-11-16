@@ -4,7 +4,7 @@ public import Properties.Pouw.MonitoringPeriod
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.MonitoringPeriod`)
@@ -31,7 +31,7 @@ builds a period of those windows, the salt each window's live coin, that meets e
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs
 
 open PouwCheck Properties.Pouw.MonitoringPeriod
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **A window is credited under the check exactly when it and every earlier one are accepted**, at `K_d > 0`. -/
 theorem credited_iff {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0 < Kd) (p : Params)
@@ -86,7 +86,7 @@ theorem checkedWorkMonitoringPeriod : CheckedWorkMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,
@@ -99,7 +99,7 @@ theorem checkedCreditMonitoringPeriod : CheckedCreditMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,
@@ -109,7 +109,7 @@ theorem checkedCreditMonitoringPeriod : CheckedCreditMonitoringPeriod := by
 /-- `SplitRateClosed` at H1's numbers, `K_d = 24`, `ρ = 8/9`, `w_max = 1`, `p = 7/8`, `p0 = ½`, `a = b = 1`:
 `Λ = max(67/8, 67/32) = 67/8`. -/
 theorem splitRate_h1 : SplitRate 24 (8 / 9) (7 / 8) (1 / 2) 1 1 1 (67 / 8) := by
-  have h := Accounting.SecurityProofs.Compose.Rates.splitRateClosed 24 (8 / 9) (7 / 8) (1 / 2) 1 1 1 (by norm_num)
+  have h := ResourceAccounting.SecurityProofs.Compose.Rates.splitRateClosed 24 (8 / 9) (7 / 8) (1 / 2) 1 1 1 (by norm_num)
     (by norm_num) zero_le_one (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num) one_pos one_pos
   convert h using 1
   rw [max_eq_left] <;> norm_num

@@ -110,7 +110,7 @@ own profile type and JSON.
 ## The registration log
 
 The registration log's check (`Core.Registration`) is registration's, the accounting protocol that runs once
-before any challenge: [`../accounting/registration/README.md`](../accounting/registration/README.md). The example Site
+before any challenge: [`../registration/README.md`](../registration/README.md). The example Site
 its example registers, which `Account`'s example reads too, is here (`CoreProtocol/SiteExample.lean`).
 
 ## What a protocol accounts for (`CoreProtocol/Account.lean`)
@@ -125,7 +125,7 @@ an answer carries, what an answer holds when nothing is certified, and the terms
 `Account.witness` is the key under which an accepted answer names the key its check ran under, a key of one of the
 auditor's devices on the site; a protocol that needs no such device names none, and its answers are of the whole site.
 An answer names no location and no registration's head: which hardware it is about is what the device holding its key
-(`Site.holder`) reaches, a network certifier's links to its host (`Site.hostLinks`) for egress and a memory challenger's
+(`Site.holder`) reaches, a network attester's links to its host (`Site.hostLinks`) for egress and a memory attester's
 hosts (`Site.hostsOf`) for compute, memory and reads, and an answer whose key no device or more than one holds counts
 for nothing. `Account.rests` names the answers a protocol's own rest on, those its check read as given and did not
 verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted
@@ -176,7 +176,7 @@ port, are what makes a verifier proven. All protocols share one Lake package for
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
 round trips and refusals; `core-protocol-example` runs it.
 
-## Periods (`CoreProtocol/Period.lean`)
+## Ticks, spans and monitoring periods (`CoreProtocol/Period.lean`)
 
 The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
 verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one

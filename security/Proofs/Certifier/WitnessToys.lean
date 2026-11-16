@@ -12,7 +12,7 @@ public import Definitions.Certifier.Ingress
 public import Definitions.Certifier.Assumptions
 
 /-!
-# What holds at the instances the network certifier's count and period witnesses are stated at
+# What holds at the instances the network attester's count and period witnesses are stated at
 
 The instances are definitions of `Definitions.Certifier.Witness`, which the witnesses' statements read; this
 module proves what `CountWitnesses` and `MonitoringPeriodWitnesses` conclude from. Each is built by hand, at a positive
@@ -32,7 +32,7 @@ accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these ex
   holds, is accepted (`obs1_sampAcc`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
-* `fxRows`, a rows format of the Python network certifier's fixture `fxQueue` (`fixtureAgrees` checks its egress
+* `fxRows`, a rows format of the Python network attester's fixture `fxQueue` (`fixtureAgrees` checks its egress
   record): it is well formed (`fxRows_wf`), and over one window of four slots `fxQueueSched` fits it (`fxQueue_fits`).
 -/
 
@@ -233,7 +233,7 @@ theorem pooled_bound_fails :
       (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
   simp [Pr, Claims.prUniform, PooledGood] <;> norm_num
 
-/-! ## The Python network certifier's fixture -/
+/-! ## The Python network attester's fixture -/
 
 theorem fxRows_wf : fxRows.Wf := by
   refine ⟨List.nodup_finRange 3, List.mem_finRange, ?_⟩
