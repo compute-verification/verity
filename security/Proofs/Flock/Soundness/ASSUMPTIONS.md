@@ -463,37 +463,10 @@ before the session's first coin, not bounds state by state.
 
 ## What the lock records
 
-`lean-audit.json` records each guarantee's statement (`guarantees`) and the definitions it reads (`reads`). The audit
-fails when either changes until the record is rewritten. A rewritten record is shown when it lands on `main`; nobody
-signs off and nothing waits on it. The
-guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms) and `execArith_correct`;
-none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
-(`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
-and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
-`linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_sampled` are guarantees too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
-`flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
-So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
-as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
-`tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_sampled`.
-The `cr/sha-512` restatements are guarantees beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
-`linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
-`Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
-(`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
-`hm96_sha512_bad_keys`: `Hm96Hiding` at `2^-193` fails for at most `2^-64` of the keys), and Lemma B and Lemma C with it
-discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `adaptive_prefinal_le`,
-`adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge's guarantees leave open about the key is
-that the pinned key's gap is small: they are stated at it, and `hash-derived-key` (`hm96/PROTOCOL.md` §2a) bounds it by
-`2^-193` only where a lemma or `RecursiveAudit` states that bound.
-Zero knowledge's Theorem GK is a guarantee (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
-`Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
-`Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
-`rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
-`bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
-`flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
-guarantees. A theorem that is not in `guarantees` is still audited (standard axioms, kernel replay), but a change to its statement
-would not fail the audit.
+`security/lean-audit.json` lists the guarantees, Flock's under `Flock.SecurityProofs` and `Flock.Guarantees`, and records
+each one's statement, the definitions it reads and the premises it takes; a changed statement is a changed record. The
+theorems this file names are proofs under those guarantees and not guarantees themselves: each is still audited
+(standard axioms, kernel replay), but a change to its statement changes no record.
 
 ## Upstream status
 
