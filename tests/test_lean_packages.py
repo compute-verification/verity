@@ -311,7 +311,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 
 #: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
-#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them, less
+#: `inline_failures`), with those the PRs queued then brought and those `main` landed before the rule reached them, less
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
@@ -328,8 +328,8 @@ def test_the_inline_list_only_shrinks():
           "its issue and due date), or state it as a lock-listed guarantee's conclusion")
 
 
-#: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
-#: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
+#: how far a cap here may stand above its count ({"CAP key": room}): changes queued when the caps came to equal
+#: their counts moved the counts and not the caps, so each room is the gap between the queued count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
 ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
@@ -588,8 +588,8 @@ def test_no_long_module_grows():
 RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 
-#: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
-#: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
+#: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or queued when the rule came; an
+#: entry whose FILE the tree doesn't have waits for the queued change that adds it
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",

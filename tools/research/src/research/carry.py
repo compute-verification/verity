@@ -6,7 +6,7 @@ The PR's own line is its first-parent line from ``new`` back to ``old`` (``git r
 merges bring in from off that line is other work.  ``new`` carries the verdict of ``old`` when ``old`` is an ancestor of ``new``
 and each commit of that line is one of:
 
-- landed (`trusted` with no merge: on `checked` or `main`);
+- landed (`trusted` with no merge: on `main`);
 - a merge of two parents whose other parent is trusted (`trusted(parent, merge)`: landed, or another PR's current marked head
   with a land verdict and no hold, which drive's containment lands first, `Queue.entries`), and whose tree is what the queue's
   merge of its parents gives (`queue.merged_tree`: its first parent's merge drivers, each conflicted pin rebuilt) but in
@@ -21,14 +21,14 @@ Generated content is each pin of the pins tool (`queue.pins_at` at ``new``), whi
 each lock's records (`queue.LEAN_LOCK`: `lock_policy`), which a Lean check regenerates and drive commits as it lands.  The rest
 of a lock is policy a person writes and the Lean check keeps as written, so a lock that differs in it, or that the queue's
 merge leaves conflicted (the lock's merge driver refuses only over policy), is the PR's own change.  A merge's textual result
-can still be wrong where two changes interact; that is the risk `next` takes for every pair of members it merges, and the same
+can still be wrong where two changes interact; that is the risk a candidate takes for every pair of members it merges, and the same
 Lean check and full check catch it.
 
 No other PR's verdict vouches for a commit of the PR's own line (a PR stacked on this one was reviewed over it, not for it),
 nor for an older head of that PR.
 
 ``python -m research.carry OLD NEW [--repo DIR] [--landed REF ...] [--head REF ...]`` prints the verdict as JSON and exits 0
-when it carries: each ``--landed`` ref and its ancestors landed (`origin/checked` and `origin/main` when none is given), each
+when it carries: each ``--landed`` ref and its ancestors landed (`origin/main` when none is given), each
 ``--head`` another PR's marked head with a land verdict and no hold, and the first landed ref holding `tools/move/restack.py`
 reruns the moves."""
 
@@ -253,7 +253,7 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
 
 
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = ()) -> Callable[[str, str | None], bool]:
-    """``trusted`` for `delta`: a commit that is one of ``landed`` (the tips of `checked` and `main`) or an ancestor of one, and,
+    """``trusted`` for `delta`: a commit that is one of ``landed`` (`main`'s tip) or an ancestor of one, and,
     as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold)."""
     landed, heads = [t for t in landed if t], {h for h in heads if h}
 
@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("old")
     ap.add_argument("new")
     ap.add_argument("--repo", default=".")
-    ap.add_argument("--landed", action="append", default=[], help="a landed ref (default: origin/checked and origin/main)")
+    ap.add_argument("--landed", action="append", default=[], help="a landed ref (default: origin/main)")
     ap.add_argument("--head", action="append", default=[], help="another PR's marked head with a land verdict and no hold")
     ns = ap.parse_args(argv)
     repo = Path(ns.repo)
@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     def sha(ref: str) -> str:
         return Q._out(repo, "rev-parse", "--verify", f"{ref}^{{commit}}")
 
-    landed = [sha(t) for t in ns.landed or ["origin/checked", "origin/main"]]
+    landed = [sha(t) for t in ns.landed or ["origin/main"]]
     restack = next((t for t in landed if Q.scripts_at(repo, t, [Q.RESTACK])), None)
     d = delta(repo, sha(ns.old), sha(ns.new), trust(repo, landed, [sha(h) for h in ns.head]), restack)
     json.dump(d.as_dict(), sys.stdout, indent=1)

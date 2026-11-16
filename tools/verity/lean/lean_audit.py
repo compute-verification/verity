@@ -3,7 +3,7 @@ packages whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
-                                                      [--regenerate] (the Lean check of `next`: record differences pass,
+                                                      [--regenerate] (a candidate's Lean check: record differences pass,
                                                       and audit.json's `regenerated` names the records drive commits,
                                                       `rekeyed` the passes kept for that commit)
                                                       [--bookkeeping warn] (with --regenerate, drive's lock run: the
@@ -322,7 +322,7 @@ def keep_repaired(out: Path, path: str, text: str) -> str:
 def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
     its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
-    changes queued on `next` still use), and a warning naming each. LookupError when a cap's line is not one dict literal
+    changes queued still use), and a warning naming each. LookupError when a cap's line is not one dict literal
     there."""
     def literal(name: str) -> tuple[re.Match, dict]:
         if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
@@ -1664,7 +1664,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False,
            documents: Path | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
+    ``regenerate`` (`check.py --regenerate`, a candidate's Lean check) passes a package whose every failure is a record
     difference; such a pass is never stored here, since its lock changes when drive commits the record (`keep_regenerated`
     stores the pass of the tree with that lock, from the facts document this audit leaves in ``documents``, `check.py
     --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache whether the package
@@ -2181,7 +2181,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
+    ap.add_argument("--regenerate", action="store_true", help="a candidate's Lean check: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "

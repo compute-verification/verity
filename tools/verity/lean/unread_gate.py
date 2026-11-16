@@ -26,8 +26,8 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
-how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. Drive judges every PR
-of `next` again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
+how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. The queue judges every
+marked PR again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
 (`gate`), and what the Lean declares by the Lean's tree (`declared`). Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
 HEAD``. Exit 0 when it passes, 1 when it fails (``--json``: `{"failures": [{"why", "fix"}]}`, `KIND`), 2 when it can't judge: a
 git error, `MAIN`'s code doesn't load, or neither tree's facts nor an ancestor's are kept here or stored.
@@ -50,7 +50,7 @@ from collections import defaultdict
 from pathlib import Path
 
 KIND = "lean-unread-gate/v1"
-#: the subject of the queue's merge of one PR onto `next`
+#: the subject of the queue's merge of one PR onto a candidate's base
 QUEUE_SUBJECT = "Queue: #"
 LEAN_TOOL = "tools/verity/lean/"
 #: what a Lean check reads (drive's `lean_reads`): a change to any of it is the Lean check's to judge
@@ -74,8 +74,8 @@ ENDED = "state IN ('done', 'failed', 'cancelled')"
 #: how long before a commit's committer time a check of it may have started by its run id: the commit's clock and the
 #: check's machine's are not one
 SKEW_S = 3600
-#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
-#: judges each PR of `next` again on every landing)
+#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (the
+#: queue judges each marked PR again on every landing)
 KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
 #: a recorded check's facts of the package with key K: `unread/K.jsonl.gz` under its lean-audit output
 STORED = re.compile(r"(?:.*/)?lean-audit/unread/([0-9a-f]{64})\.jsonl\.gz")
@@ -294,7 +294,7 @@ def declared(lo: str, cache: Path | None = None) -> tuple[set[str], set[str]]:
     """What the names the Lean under `ANALYSIS_DIR` declares at ``lo`` can start and end with (each a `WORD`): the first
     component of a `namespace` or of a name a keyword of `DECLARED` declares, and a private name's `_private`; the last
     component of such a name, or of a helper first on a line of a definition's `WHERE` block.  Kept in ``cache`` by the tree
-    of `ANALYSIS_DIR` (`declared/K.json`): every PR of `next` above the same Lean reads the same."""
+    of `ANALYSIS_DIR` (`declared/K.json`): every PR above the same Lean reads the same."""
     f = cache / "declared" / f"{digest(own(), lean_tree(lo))}.json" if cache is not None else None
     if f is not None and (got := kept(f)) is not None:
         return set(got["heads"]), set(got["lasts"])
@@ -542,7 +542,7 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
 def gate(base: str, top: str) -> dict:
     """The verdict on ``top``'s change: one kept for the same trees (``LO``'s and ``top``'s) by the same code (this script,
     ``base``'s `CODE_TREES`), and for one on `main`'s facts the same `main` Lean, else `judged` and kept (`verdicts/K.json`).
-    Drive judges every PR of `next` again when `main` moves, and a PR whose members below are the same has the same trees.
+    The queue judges every marked PR again when `main` moves, and a PR whose members below are the same has the same trees.
     A verdict on stale facts isn't kept, so a later run reads the facts of the Lean it judges once they are published; a gate
     that can't judge raises, and keeps nothing."""
     base, top = (git_text("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))

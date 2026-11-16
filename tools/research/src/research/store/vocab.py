@@ -211,8 +211,7 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: asks for; a candidate's member needs none, since the candidate's own check is the gate.
 READY = "ready"
 #: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
-#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
-#: (on `checked`; `main` follows only to commits whose after-landing run passed).
+#: once every member below it has one, `hold` keeps it, and every candidate holding it, off `main`; the owner's own doesn't count.
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
@@ -229,7 +228,8 @@ LANDED = "landed"
 #: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
 TASK_VERDICT = "verdict"
 TASK_VERDICTS = ("pass", "fail", "error")
-#: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
+#: On `commit:<sha>`, the old path's shadow comparison of its after-landing verdicts with the executor's; nothing writes
+#: or reads it.
 EXECUTOR_SHADOW = "executor_shadow"
 #: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
 #: (`tasks-graph/v1`), whose keys drive reads verdicts under.

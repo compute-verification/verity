@@ -242,7 +242,7 @@ def test_a_definition_one_side_stops_reading_leaves_the_merge_unless_the_other_s
     """A reads-only clash (one side moves definitions out of a module that the other side's new guarantees read).  No
     guarantee of the side that stopped reading the definition reads it, so in the merged tree only the other side's new
     ones may: the removal applies, named as a candidate, unless that side also changed the definition's hash, where the
-    union stays with its hash and the Lean check of `next` regenerates."""
+    union stays with its hash and a candidate's Lean check regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
