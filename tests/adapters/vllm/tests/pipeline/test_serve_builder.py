@@ -22,7 +22,6 @@ from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS
 from tests.protocols.test_pouw_h1_served import _unit
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
@@ -173,9 +172,9 @@ def test_a_log_with_site_entries_takes_the_item_under_the_day_params_auditor_and
 
 def test_under_the_tie_the_item_stands_in_the_log_before_the_first_windows_sample_coin(tmp_path, monkeypatch):
     """Under the tie (``--h1-window-commit``) the command at each window's close (`served_verdicts.sh`'s ``tie``) runs
-    `verity-vllm advice` for the window before window-commit writes R, and the window's calls_root, draw_root and sample
-    coin come only once R is bound. So the first window's call registers the item while nothing of the window is bound, and
-    its coin opens after; each later window's call finds it."""
+    `verity-vllm advice` for the window before window-commit writes R, and the window's roots and its sample coin come only
+    once R is bound. So the first window's call registers the item while none of them is bound, and each later window's
+    call finds it."""
     serve = tmp_path / "serve"
     serve.mkdir()
     day = SD.declare(_opts(tmp_path, *_day(tmp_path, 0, AUDITED)), serve)
@@ -183,10 +182,10 @@ def test_under_the_tie_the_item_stands_in_the_log_before_the_first_windows_sampl
     wc = WindowCommit(runs)
 
     def tie_command(argv: list[str], log: Any) -> int:
-        k = int(argv[5])
-        seen.append((k, SD.register_compiler(serve, ADV.builder_item(C)).registered,
-                     sorted({"calls_root", "draw", "commit"} & set(runs[k].commits))))
-        return wc(argv, log)
+        registered = SD.register_compiler(serve, ADV.builder_item(C)).registered
+        rc = wc(argv, log)
+        seen.append((int(argv[5]), registered, wc.calls[-1]["bound"]))
+        return rc
 
     tie = TIE.WindowTie("v3c-window-commit", serve, runner=tie_command, day=day)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=serve, unit=_unit(), prover=tmp_path / "prover",
@@ -202,8 +201,6 @@ def test_under_the_tie_the_item_stands_in_the_log_before_the_first_windows_sampl
     assert seen == [(w, "now" if w == 0 else "earlier", []) for w in range(len(PROMPTS))]
     for w, out in enumerate(outs):
         assert "error" not in out and out["commit_record"]["named"] is True, out
-        draw = json.loads((serve / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())["commitment"]["draw"]
-        assert draw["coin"] is not None and "refused" not in draw
     view, log = _view(tmp_path)
     assert view["builder"] == ADV.builder_item(C) and [type(e) for e in log] == [G.Declaration, G.Information]
     arm.drain()

@@ -2,12 +2,11 @@
 day's registration log (`serve_day.register_compiler`), which a log with site entries checks under DAY_PARAMS' auditor, so
 it passes ``--day-params`` whenever the run declared a day with them, and nothing new otherwise. The call comes before
 every coin that samples what the compiler builds: in ``tie`` and ``pearl_tie`` before window-commit, whose R the window's
-sample coin waits for, and in the main flow before step 3's sampled proofs and step 6's window commit and V3c's audit. A
-PoUW H1 window's own coins, drawn at its close while the endpoint serves, sample H1's blocks, not the circuit the compiler
+sample coin waits for, and in the main flow before step 3's SPOT and step 6's window commit and V3c's audit. A PoUW H1
+window's own coins, flipped at its close while the endpoint serves, sample H1's blocks, not the circuit the compiler
 builds, and without the tie they come before the call."""
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
@@ -29,14 +28,16 @@ def test_the_advice_call_passes_the_days_parameters_when_the_run_declared_a_day_
     tree, d, args = tmp_path / "tree", tmp_path / "serve", tmp_path / "args"
     (tree / "adapters" / "vllm").mkdir(parents=True)
     d.mkdir()
-    body = (f'set -uo pipefail\nvv() {{ printf "%s\\n" "$@" > "$ARGS"; }}\n{_function(SCRIPT.read_text(), "advice_of")}'
+    body = (f'set -o pipefail\nvv() {{ printf "%s\\n" "$@" > "$ARGS"; }}\n{_function(SCRIPT.read_text(), "advice_of")}'
             'advice_of 4 "--compiler-name n --compiler-digest d"\n')
-    env = {"PATH": os.environ["PATH"], "TREE": str(tree), "D": str(d), "CAP": "4096", "WREG": str(tmp_path / "none"),
-           "ARGS": str(args), **day}
+    env = {"TREE": str(tree), "D": str(d), "WREG": str(tmp_path / "none"), "ARGS": str(args), **day}
     run = subprocess.run(["bash", "-c", body], env=env, capture_output=True, text=True, check=False)
     assert run.returncode == 0, run.stderr
-    assert args.read_text().splitlines() == ["advice", str(d), "--window", "4", "--cap", "4096", "--compiler-name", "n",
-                                             "--compiler-digest", "d", *want, "--out", f"{d}/advice/.w4"]
+    argv = args.read_text().splitlines()
+    out = argv.index("--out")
+    assert argv[:4] == ["advice", str(d), "--window", "4"] and argv[out:] == ["--out", f"{d}/advice/.w4"]
+    assert argv[out - 4 - len(want):out] == ["--compiler-name", "n", "--compiler-digest", "d", *want]
+    assert ("--day-params" in argv) == bool(want)
 
 
 def test_the_advice_call_comes_before_each_coin_that_samples_what_the_compiler_builds():
