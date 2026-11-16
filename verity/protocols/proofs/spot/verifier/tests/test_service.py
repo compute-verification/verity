@@ -445,7 +445,7 @@ def test_no_retries_nothing_redraws_and_an_outcome_is_final():
     assert stream.symbols == ("reject",)
 
 
-def test_the_outcome_is_pending_until_the_verifier_of_record_ran():
+def test_the_outcome_is_pending_until_the_verifier_ran():
     stream = _stream()
     draw = stream.select(stream.register(_record(), _ports(6)))
     with pytest.raises(S.Pending):
@@ -744,7 +744,7 @@ def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monk
     assert _round(sampled).accepted and len(ran) == 3
 
 
-def test_public_outputs_come_from_the_verifier_of_record():
+def test_public_outputs_come_from_the_verifier():
     spec = _spec(public=(*RECORD_ITEMS, S.Public("credited", "output", "the credited work")), public_outputs=("credited",))
     stream = _stream(spec)
     draw = stream.select(stream.register(_record(), _ports(6)))

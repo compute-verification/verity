@@ -709,7 +709,7 @@ OUTSIDE = {
     "statement-binds-another-partition": "M0's statement bindings (`a0.bindings`)",
     "m0-selftest-unit-draw-session": "M0's selftest",
     "prover-ignores-the-draw (M0 selftest)": "M0's selftest",
-    "wrong-output-word": "the verifier of record (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
+    "wrong-output-word": "the verifier (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
     "lean-reads-another-root-of-W": "verity-verify-proof's registered reads (`--registered`), opening each table row against the reads "
                                     "file's root; the protocol reads the roots the verdict opened against (replayed as "
                                     "registered-read-opened-against-another-root)",
@@ -1637,8 +1637,8 @@ SERVED_OUTSIDE = (
     (r"receive-after-draw", "the challenger's record order (`Challenger.register`, late-registration): each window is received "
                             "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
-    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
-    (r"lean-.*", "the verifier of record (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
+    (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier's"),
+    (r"lean-.*", "the verifier (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
     (r"firewall-.*", "the ZK server's checks on a delivered proof, before the outcome"),
 )
 

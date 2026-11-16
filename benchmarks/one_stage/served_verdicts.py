@@ -314,7 +314,7 @@ PEARLPLUS_EPOCH_TIED = ("a salt-only session on vy-challenger-1 for the window, 
                         "window opened (serve_pearl.live) and opened by the window's install on its salt epoch's root; each "
                         "pass's salt is held to it by core_check.live_salt through the auditor's signed ledger, the host's "
                         "pins log and main's first-parent line (`pearlplus_coins`)")
-PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier of record's "
+PEARLPLUS_EPOCH_TIED_IN_PROCESS = ("an in-process challenger of the window's epoch over the Lean verifier's "
                                    "entropy (serve_pearl.in_process), held by the serving process")
 #: `served_step.coins_of`'s ``source`` for a live session's coins
 LIVE_SOURCE = "challenger"
@@ -1169,7 +1169,7 @@ Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str,
 #: the premises the pouw piece's verdict says whether the window meets (`premises`)
 PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
 #: why a window meets ``AcceptedLive`` (`Accounting.TS.Session`'s, ``accounting-ts-accepted-live``)
-LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
+LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier "
             "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
 #: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.MonitoringPeriod`'s)
 SALT_MET = ("core_check.salt_of_record accepted the window's salt as its live salt coin, opened after the window's open root and read "

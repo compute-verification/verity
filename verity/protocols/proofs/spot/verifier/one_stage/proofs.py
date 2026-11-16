@@ -487,7 +487,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     for s, v in zip(proof.sessions, lines):
         ok, why = v.get("accepted") is True, str(v.get("why", ""))
         if ok and form is not None:
-            return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
+            return None, ("form", f"the verifier accepted session {s}, whose files its mirror refuses "
                                   f"(`ks_form_why`): {form}")
         if ok and template is not None:
             ok, why = False, template

@@ -852,7 +852,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": reg.root.hex()})["accepted"]
 
 
-def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
+def test_the_opened_roots_come_from_the_verifiers_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
     passes on what the verifier opened and on a verdict that reports no read, and fails on a read reported at another
     root, by one verdict or by one of two."""

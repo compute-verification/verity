@@ -602,7 +602,7 @@ def prove(a) -> int:
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
-                  "verifier of record (spot verifier.coins), read only after the period's commitment; not "
+                  "verifier (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
     summary["warden_run"] = members["honest"].plan["warden_run"]
     summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
