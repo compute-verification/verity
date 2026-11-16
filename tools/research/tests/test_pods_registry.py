@@ -104,6 +104,7 @@ def test_a_machine_is_marked_stopped_and_back_with_its_other_lines_kept_and_a_re
     assert [registry.left_out({"unreachable_since": "2026-11-12T19:15:00Z"}, t.timestamp() + s) for s in (guard - 1, guard)] == \
         [None, "no answer since 2026-11-12T19:15:00Z"]
     assert registry.left_out({"stopped_since": "soon", "unreachable_since": 7}, t.timestamp()) is None, "a mark that is no time"
+    assert registry.left_out({"stopped_since": "2026-13-01T00:00:00Z", "unreachable_since": "0000-01-01T00:00:00Z"}, t.timestamp()) is None
 
 
 def test_g2_an_unknown_pod_id_is_refused_and_nothing_is_written(reg):

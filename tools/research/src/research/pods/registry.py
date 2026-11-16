@@ -39,6 +39,7 @@ without waiting for a later sync; `RESEARCH_NOTES_SYNC=0` leaves the commit to t
 """
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import json
 import os
@@ -66,6 +67,7 @@ KEPT_KEYS = ("lane", "deadline", "stopped_since")   # a re-registration of the s
 #: or restarted, keeps its place; `stopped_since` is a person's word and counts at once
 UNREACHABLE_OUT_MIN = 60
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
+STAMP_RE = re.compile(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)Z")
 OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
@@ -128,10 +130,10 @@ def left_out(entry: dict, now: float) -> str | None:
     """Why placement leaves the machine `entry` out at `now` (an epoch), or None: `stopped since T` once `stopped_since` is set,
     `no answer since T` once its `unreachable_since` is UNREACHABLE_OUT_MIN old. A mark that isn't a time leaves nothing out."""
     def at(key: str) -> float | None:
-        try:
-            return dt.datetime.strptime(entry.get(key), STAMP).replace(tzinfo=dt.UTC).timestamp()
-        except (TypeError, ValueError):
-            return None
+        m = STAMP_RE.fullmatch(v) if isinstance(v := entry.get(key), str) else None
+        y, mo, d, h, mi, s = map(int, m.groups()) if m else (0,) * 6
+        return calendar.timegm((y, mo, d, h, mi, s)) if y >= 1970 and 1 <= mo <= 12 and 1 <= d <= 31 and h < 24 and mi < 60 and s < 60 \
+            else None
 
     if at("stopped_since") is not None:
         return f"stopped since {entry['stopped_since']}"
