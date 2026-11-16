@@ -1,7 +1,10 @@
 # "declared utilization", the retired phrase (GLOSSARY.md Older names: "certified share", "declared utilization"; now utilization):
-# what `tools/move/rename.py --map tools/move/sweep_sweeptail2_utilization_map.toml` renames, in the nine places of
-# `benchmarks/one_stage/` and its tests that still say it, comments, docstrings and one help text. "declared work" beside it is
+# what `tools/move/rename.py --map tools/move/sweep_sweeptail2_utilization_map.toml` renames, in the eight comments and docstrings of
+# `benchmarks/one_stage/` and its tests that still say it (`scope = "prose"`: the ninth, `inference_only.py`'s `--utilization` help
+# string, is a hand edit). "declared work" beside it is
 # `declared_words_map.toml`'s and stays. It leaves GLOSSARY.md's row and the lint's list.
+
+scope = "prose"
 
 [words]
 "declared utilization" = "utilization"

@@ -1,6 +1,8 @@
 # "IR primitives" in a docstring of Flock's prover (GLOSSARY.md Older names: "IR primitives" is the circuit's primitives,
 # `verity.circuits`): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_circuit_map.toml` renames.
 
+scope = "prose"
+
 [words]
 
 [[words_in]]

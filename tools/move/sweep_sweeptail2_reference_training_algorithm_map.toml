@@ -2,6 +2,8 @@
 # training algorithm): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_reference_training_algorithm_map.toml`
 # renames.
 
+scope = "prose"
+
 [words]
 
 [[words_in]]

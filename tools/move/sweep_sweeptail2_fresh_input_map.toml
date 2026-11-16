@@ -2,6 +2,8 @@
 # input, fresh input bits): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_fresh_input_map.toml` renames. Each
 # is one phrase in one file (`fresh_input_prose_map.toml` renames the "novel" words; these two spell the other older name).
 
+scope = "prose"
+
 [words]
 
 [[words_in]]

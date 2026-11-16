@@ -4,6 +4,8 @@
 # `benchmarks/compute/run.py` and `benchmarks/spot_figures/tests/test_headline.py`, and nowhere else. It leaves the adapter
 # (`manifests/records.json` holds the word as a key).
 
+scope = "prose"
+
 [words]
 
 [[words_in]]

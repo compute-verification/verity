@@ -1,6 +1,8 @@
 # "composite protocols" in compose's README (GLOSSARY.md Older names: "composite protocols" is compose, over onsite's or
 # remote's list): what `tools/move/rename.py --map tools/move/sweep_sweeptail2_compose_map.toml` renames.
 
+scope = "prose"
+
 [words]
 
 [[words_in]]

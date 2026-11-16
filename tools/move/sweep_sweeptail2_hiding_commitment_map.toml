@@ -3,6 +3,8 @@
 # phrase stands across a line break in both, so each row is the words before the break; `salted` alone has other senses and is
 # renamed only here.
 
+scope = "prose"
+
 [words]
 
 [[words_in]]
