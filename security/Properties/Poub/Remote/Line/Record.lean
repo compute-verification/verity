@@ -63,9 +63,6 @@ What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session,
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
   that `Live`, a sample's size fixed by the coins before it, can hold of a session whose acceptance turns on later
   coins.
-* `recordCommitted`: the prover's records read through the coin commitment (`ResourceAccounting.Remote.Sample.Committed`):
-  holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordSample`;
-  `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
   its own, the trace the line's premises read.
 * `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
@@ -222,18 +219,6 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : ResourceAccounting.R
     ResourceAccounting.Remote.Sample.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
-
-/-- **The records' opening sample, read through the coin commitment**: holding commitment `c`, the prover's record at
-`ω` is `recs c ω`, and the session it plays is that record's opening sample (`recordSample`), with the correct receipts
-`correct c`. -/
-def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → ResourceAccounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
-    ResourceAccounting.Remote.Sample.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
-  view c := recordSample node (recs c) (correct c)
-
-/-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/
-def played {Ω Cm : Type} (recs : Cm → Ω → Record) (com : Ω → Cm) (ω : Ω) : Record := recs (com ω) ω
 
 /-- `s`, the node's squarings a tick. -/
 noncomputable def Node.squarings (n : Node) : ℝ := (n.rates.squaringsPerS : ℝ) / (ns : ℝ)

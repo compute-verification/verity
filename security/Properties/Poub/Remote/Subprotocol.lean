@@ -170,24 +170,22 @@ def traceBy {Ω : Type} (T : Trace Ω) (node : Node) (ver : Node → Record → 
 the event and the trace (`Verified`) and `sum` for the record the line and its paced session read
 (`Record.summary`). `LineHeld` is it at `Verified` and `Record.summary`. -/
 def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-    (com : SampleCoins node.samples κ X → Cm)
+  ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (r : SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
-    let r := played recs com
-    let F := recordCommitted node recs correct
+    let D := recordSample node r correct
     ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
-    IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
+    IngressCounted (traceBy T node ver r) I δnet → Live D →
+    Refused D prf rest (traceBy T node ver r) R → Counted D (traceBy T node ver r) →
     Pouw.pr (fun ω => ver node (r ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
-          ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+          (D.distinguisher prf (node.delta : ℝ) t)).toReal +
+        (R.binding D prf rest).toReal)
 
 /-- **`LineHeldAtSubprotocol` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
@@ -195,25 +193,23 @@ paced session read `sum` (`Record.summary`). `LineHeldAtSubprotocol`
 (`Properties.Poub.Remote.SubprotocolDeployed`) is it at `Plays`, `Verified` and `Record.summary`. -/
 def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-    (com : SampleCoins node.samples κ X → Cm)
+  ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (r : SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
     (a b e : SampleCoins node.samples κ X → ByteArray),
-    let r := played recs com
-    let F := recordCommitted node recs correct
+    let D := recordSample node r correct
     ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
-    IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
+    IngressCounted (traceBy T node ver r) I δnet → Live D →
+    Refused D prf rest (traceBy T node ver r) R → Counted D (traceBy T node ver r) →
     Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
-          ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+          (D.distinguisher prf (node.delta : ℝ) t)).toReal +
+        (R.binding D prf rest).toReal)
 
 /-- Each sample's receipts `U_c` in a verifier's record `sum node r` of record `r` on the node, none where it has none:
 `Record.receipts` at `sum = Record.summary`. -/
@@ -238,22 +234,20 @@ written as the acceptance and then what fails. `QBytesAtSubprotocol`
 def QBytesAtSubprotocolBy
     (acc : Node → Record → ByteArray → ByteArray → ByteArray → Poub.Protocol.Public → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-    (com : SampleCoins node.samples κ X → Cm)
+  ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (r : SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X)
     (a b e : SampleCoins node.samples κ X → ByteArray),
-    let r := played recs com
-    let F := recordCommitted node recs correct
-    (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
+    let D := recordSample node r correct
+    Live D →
+    Refused D prf rest (traceBy T node ver r) R → Counted D (traceBy T node ver r) →
     Pouw.pr (fun ω => (∃ pub, acc node (r ω) (a ω) (b ω) (e ω) pub) ∧
         ¬ ∀ pub, acc node (r ω) (a ω) (b ω) (e ω) pub → QBytesBy sum (traceBy T node ver r) ω node (r ω) pub) ≤
       (Poub.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
-          ((F.play (Committed.junk com t)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
+          (D.distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
+        (R.binding D prf rest).toReal
 
 /-- The deployed period's parameters (`period.run`'s defaults): two windows of 100 ms, one pass each, the audit's
 33 273 samples a sample, a 500 ms deadline, the lifetime cap of 300 windows, unpaced and not deferred, one window a
@@ -294,15 +288,14 @@ def noOutside {Ω : Type} (T : Trace Ω) : Outside T := ⟨fun _ _ => ∅, fun _
 def quietIngress (Ω : Type) : Ingress Ω := ⟨fun _ _ => 0, fun _ _ => 0⟩
 
 /-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each sample's
-receipts are the store's, the same at every commitment and every coin; and wherever the Lean verifier accepts, the
+receipts are the store's, the same at every coin; and wherever the Lean verifier accepts, the
 auditor saw every window, so the line's groups are the session's windows, each of one pass or more with its last root
 no sooner than its coin, the coins in order, `passes` at least the session's passes, and each pass run inside its
 group's span `[s_g, e_g]` on the record's clock. -/
-def HonestSchedule {Ω Cm : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → ℕ) (recs : Cm → Ω → Record)
-    (com : Ω → Cm) : Prop :=
+def HonestSchedule {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → ℕ) (rec : Ω → Record) : Prop :=
   1 ≤ node.windows ∧ (∀ ω p, tick ω p < tick ω (p + 1)) ∧
-    (∀ c c' ω ω' t, (recs c ω).sampleReceiptsAt node t = (recs c' ω').sampleReceiptsAt node t) ∧
-    ∀ ω, Verified node (played recs com ω) → ∀ gs, (played recs com ω).groups node = gs →
+    (∀ ω ω' t, (rec ω).sampleReceiptsAt node t = (rec ω').sampleReceiptsAt node t) ∧
+    ∀ ω, Verified node (rec ω) → ∀ gs, (rec ω).groups node = gs →
       gs.size = node.windows ∧
       (∀ g < node.windows, 1 ≤ gs[g]!.passes ∧ gs[g]!.releasedNs ≤ gs[g]!.lastNs) ∧
       (∀ g h, g ≤ h → h < node.windows → gs[g]!.releasedNs ≤ gs[h]!.releasedNs) ∧

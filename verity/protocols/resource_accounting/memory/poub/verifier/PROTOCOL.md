@@ -87,8 +87,8 @@ cut is not yet stated in Lean (the gap `binding-split`, §8). The sample has no 
 commitment only once the session has its outcome (§4). The windows' PRF advantages \(\sum_t \mathrm{adv}_t\) are the
 sample's third term, which nothing prices and no guarantee assumes: named with their claim (`prf/sha-512`,
 `ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
-binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
-(\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
+binding term beside its \(2^{-\text{slack}}\) a pass, and no hiding term: `LineHeld` reads the prover's record of each
+outcome and the session it plays, as `PooledSample` does. Under the default
 receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`), which adds at most
 \(Q \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(Q = 2^{80}\) SHA-512 compressions, its budget on any
 hardware it reaches (`QUERIES_LOG2`), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its hash, and
@@ -1001,15 +1001,13 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
   codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
-  link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
-  the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
+  link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus the
   receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
   bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
   plus the sketch's (`timing.sketch_failure`) plus the sample's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),
   at the receipts each sample requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it took: a sample
   that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is. These are the ledger's parts
-  (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these four. `LineHeld`'s error also carries the
+  (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these three. `LineHeld`'s error also carries the
   windows' PRF advantages, \(\sum_t \mathrm{adv}_t = \sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which nothing prices and no
   guarantee assumes, so they have no numeric value: the ledger names them by their claim (prf/sha-512,
   `ledger.PRF_CLAIM`), puts them in no δ, and each form's record carries them beside its δ (`ledger.NAMED_TERMS`).
@@ -1393,9 +1391,8 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   openings coins root it alike. What is open is the Lean: a model of the prover's play over the cut and a statement
   that it fixes each window's receipts by its cut, \(\mathrm{split}_t = 0\), `Binding.binding_le_of_fixed`'s
   hypothesis. Until it lands `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
-  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledSample` already reads the session the prover plays, with no
-  hiding term; `LineHeld` still reads the prover's records through the commitment (`Committed.play`), and charges
-  its hiding terms.
+  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledSample` and `LineHeld` read the session the prover plays, with
+  no hiding term.
 
 ## 9. Why the passes are chained
 

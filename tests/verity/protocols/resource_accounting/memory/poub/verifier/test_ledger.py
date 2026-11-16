@@ -239,29 +239,18 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     sampled = len(r.windows) * r.samples
     assert sampled == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
-    assert snap.delta == (Fraction(r.windows[0].profile.delta) + Fraction(P, 2 ** audit.SLACK_LOG2) + ledger.hiding(r)
+    assert snap.delta == (Fraction(r.windows[0].profile.delta) + Fraction(P, 2 ** audit.SLACK_LOG2)
                           + ledger.binding(r) + ledger.sketch(r) + Fraction(sampled, 2 ** ledger.REJECTION_LOG2))
     assert snap.to_json()["delta"] == str(snap.delta) and Fraction(snap.to_json()["delta"]) == snap.delta
     d = ledger.delta_parts(r)
     assert d == {"profile": Fraction(r.windows[0].profile.delta), "slack": Fraction(P, 2 ** audit.SLACK_LOG2),
-                 "hiding": ledger.hiding(r), "binding": ledger.binding(r), "sketch": ledger.sketch(r),
+                 "binding": ledger.binding(r), "sketch": ledger.sketch(r),
                  "rejection": Fraction(sampled, 2 ** ledger.REJECTION_LOG2)}
     assert tuple(d) == ledger.DELTA_PARTS
-    parts = d["profile"] + d["slack"] + d["hiding"] + d["binding"] + d["sketch"] + d["rejection"]
+    parts = d["profile"] + d["slack"] + d["binding"] + d["sketch"] + d["rejection"]
     assert snap.delta == parts and sampled > 0
     assert Fraction(d["rejection"]) == Fraction(sampled, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
-
-
-def test_the_coin_commitments_hiding_is_charged(store) -> None:
-    """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows for all but a 2^-64 fraction of keys, which the line's δ
-    carries (`PooledSample` reads none)."""
-    s, prover, passes, clock = drive(store, params(), SCHEDULE)
-    assert all(v.accepted for v in finish(s, prover, passes, clock))
-    r = s.record()
-    assert len(r.windows) > 1 and ledger.hiding(r) == Fraction(len(r.windows), 2 ** 191)
-    assert ledger.hiding(r) == ledger.hiding_over(len(r.windows))
 
 
 def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
@@ -353,7 +342,7 @@ def test_the_samples_terms_are_charged_by_name(store) -> None:
 
 
 def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
-    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^256 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window
+    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^256 + bind + Σ_t Adv(prf t), k_t the samples window
     t requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^256 short of E less the advantages.
     At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger charges 3·70 at the record's
@@ -370,8 +359,7 @@ def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_rec
     D = Fraction(deltas.pop())
     delta_s, delta = Fraction(ledger.sketch(r)), Fraction(r.windows[0].profile.delta)
     assert delta_s > 0 and Fraction(ledger.delta_parts(r)["rejection"]) == Fraction(sum(k), 2 ** ledger.REJECTION_LOG2)
-    held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
-            + Fraction(ledger.binding(r)))
+    held = delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.binding(r))
     slack = Fraction(r.passes, 2 ** audit.SLACK_LOG2)
     assert ledger.delta_parts(r)["slack"] == slack and D == held + slack
     assert sum(k) > sum(sampled) and ledger.delta_parts(r)["rejection"] != Fraction(sum(sampled), 2 ** ledger.REJECTION_LOG2), \

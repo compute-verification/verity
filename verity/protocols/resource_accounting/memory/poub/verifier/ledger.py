@@ -19,14 +19,14 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
   one stretch (`line.session_lost`: e_g, L and `fill` as `line` defines them).
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
-pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
-`timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
-`LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^256 at the record's `samples`.  `LineHeld`'s error also carries the
-windows' PRF advantages Σ_t adv_t, which no δ here holds: SHA-512's stream as a PRF is not priced and not assumed, so
-a δ of this module is never read alone.  It reads `DELTA_FORM`, δ + Σ_t adv_t, and a record names the term in the
+pass) plus the receipts' binding term (`binding`), under sketch-sha512 `timing.sketch_failure` over the session, and
+the sample's rejection (`rejection`): the statements' δc and δs, and `LineHeld`'s bind and Σ_t k_t/2^256 at the
+record's `samples`.  No δ here holds a hiding term: the prover is sent the coin commitment only at the session's end,
+and `LineHeld` reads the prover's record of each outcome and the session it plays, not records read through the
+commitment.  `LineHeld`'s error also carries the windows' PRF advantages Σ_t adv_t, which no δ here holds: SHA-512's
+stream as a PRF is not priced and not assumed, so a δ of this module is never read alone.  It reads `DELTA_FORM`, δ + Σ_t adv_t, and a record names the term in the
 object that carries its δ (`NAMED_TERMS`, under `PRF_CLAIM`).  γ's errors carry `PooledSample`'s terms beyond δ by
-name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the advantages
-named the same way and in neither."""
+name (`draw`), the advantages named the same way and in neither."""
 from __future__ import annotations
 
 import math
@@ -48,7 +48,7 @@ REJECTION_LOG2 = 256
 `ResourceAccounting.Remote.Sample.width`), each rejected with probability below 2^-64, and U < 2^64 puts at least four
 of them in its stream's first SHA-512 block, so every word of that block is rejected with probability below 2^-256
 (`PooledSample`'s Σ_t s_t/2^256)."""
-DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
+DELTA_PARTS = ("profile", "slack", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
 """The claim that names `PooledSample`'s and `LineHeld`'s Σ_t adv_t, adv_t = Adv(prf t): window t's openings are
@@ -224,23 +224,6 @@ def rejection(record: audit.Record) -> Fraction:
                          "Params.samples")
     return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
                     2 ** REJECTION_LOG2)
-
-
-def hiding(record: audit.Record) -> Fraction:
-    """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
-    window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
-    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
-    prover is sent the commitment only at the session's end (`coins.py`), so `PooledSample` reads no hiding term and
-    `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
-    return hiding_over(len(record.windows))
-
-
-def hiding_over(windows: int) -> Fraction:
-    """`hiding` over a session of `windows` windows, exactly: two of hm96's distances a window at its pinned key."""
-    leaf = receipts.HM96.statistical_distance_log2(1, key_failure_log2=64)
-    if not leaf.is_integer():
-        raise ValueError(f"hm96's distance a leaf is 2^{leaf}, which no exact power of two states")
-    return 2 * windows * Fraction(2) ** int(leaf)
 
 
 def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max_blocks: int) -> int:
@@ -480,13 +463,12 @@ def _paced(record: audit.Record) -> str | None:
 
 
 def delta_parts(record: audit.Record) -> dict[str, Fraction]:
-    """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
-    windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
-    (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
+    """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its five parts: the
+    windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
     sample's rejection (`rejection`), each exact, the binding term rounded up (`binding_over`).  The windows' PRF
     advantages are no part of it (`DELTA_FORM`)."""
     return {"profile": Fraction(record.windows[0].profile.delta), "slack": Fraction(record.passes, 2 ** audit.SLACK_LOG2),
-            "hiding": hiding(record), "binding": binding(record), "sketch": sketch(record),
+            "binding": binding(record), "sketch": sketch(record),
             "rejection": rejection(record)}
 
 
@@ -539,5 +521,5 @@ def declared(record: audit.Record, node: Node, *,
 
 
 __all__ = ["BINDING_ROOT_BITS", "DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM",
-           "REJECTION_LOG2", "SNAPSHOT", "TIER_KEYS", "TIME_HELD", "Tier", "binding_over", "hiding_over",
+           "REJECTION_LOG2", "SNAPSHOT", "TIER_KEYS", "TIME_HELD", "Tier", "binding_over",
            "window_receipts"]

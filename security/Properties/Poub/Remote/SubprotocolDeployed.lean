@@ -105,15 +105,14 @@ def QBytesAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (pu
     Poub.Codec.BLOCK_BYTES * (r.receipts node).toList.sum
 
 /-- **The `q_bytes` the subprotocol publishes, at its acceptance.** `LineHeldAtSubprotocol`'s node, coins, records, trace
-of record and bytes verbatim, and of its premises the samples' three alone (`Live` at every fixed coin commitment,
-`Refused` at the receipts `R` and `Counted`): the probability that the subprotocol accepts bytes that play the record of
+of record and bytes verbatim, and of its premises the samples' three alone (`Live`, `Refused` at the receipts `R` and
+`Counted`): the probability that the subprotocol accepts bytes that play the record of
 `ω` on the node with public outputs `pub` while `pub.qBytes` and the trace's wrong receipts, a block each, together
 exceed the record's receipts (the event `∃ pub, Publishes … pub ∧ ¬ QBytesAt … pub`, written as the acceptance and then
-what fails) is at most `δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind` over the run's samples at
+what fails) is at most `δ + Σ_c s / 2^256 + Σ_c adv_c + bind` over the run's samples at
 `δ = Poub.Protocol.DELTA`, the δ `certify` reads its pooled bound at: the samples' part of
 `LineHeldAtSubprotocol`'s bound. Its first two terms are the `eps` the subprotocol publishes
-(`PublishedEps`); the PRF advantages, the hiding terms and the receipts' binding term are in no published figure. A
-hiding term is 0 where the records and their correct receipts read no commitment.
+(`PublishedEps`); the PRF advantages and the receipts' binding term are in no published figure.
 
 **What it says.** On acceptance, except with the bound, `q_bytes ≤ BLOCK_BYTES × (U − the trace's wrong receipts)`
 (`BLOCK_BYTES` is 4096): `U` is the verifier's own count of the receipts in its record, and the wrong receipts are those
@@ -121,48 +120,44 @@ of registered blocks in the trace's credited passes. It bounds wrong receipts am
 say that `q_bytes` bytes were read on the node, nor that the `U` receipts are of blocks the trace planned: bits read on
 the node are `LineHeldAtSubprotocol`'s, under `Paced`, `Covers`, `SketchBoundAt`, `Covered` and `IngressCounted`. -/
 def QBytesAtSubprotocol : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-    (com : SampleCoins node.samples κ X → Cm)
+  ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (r : SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X)
     (a b e : SampleCoins node.samples κ X → ByteArray),
-    let r := played recs com
-    let F := recordCommitted node recs correct
-    (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
+    let D := recordSample node r correct
+    Live D →
+    Refused D prf rest (ofRecord T node r) R → Counted D (ofRecord T node r) →
     Pouw.pr (fun ω => (∃ pub, Publishes node (r ω) (a ω) (b ω) (e ω) pub) ∧
         ¬ ∀ pub, Publishes node (r ω) (a ω) (b ω) (e ω) pub → QBytesAt (ofRecord T node r) ω node (r ω) pub) ≤
       (Poub.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
-          ((F.play (Committed.junk com t)).distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
+          (D.distinguisher prf (Poub.Protocol.DELTA : ℝ) t)).toReal +
+        (R.binding D prf rest).toReal
 
 /-- **The memory line of record, in bits read, at the bandwidth component.** `LineHeld`'s node, trace, records and
 premises verbatim, one coin for each of the session's samples (`Node.samples`), and the bytes the component is given at
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
 accepts bytes that play the record of `ω` on the node (`Plays`) while the network attesters sign nothing but the
 verifier's messages entering the node over the credited passes and the record's line credits more bits read than the
-passes read is at most `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
+passes read is at most `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + bind)`, `LineHeld`'s bound. -/
 def LineHeldAtSubprotocol : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-    (com : SampleCoins node.samples κ X → Cm)
+  ∀ (node : Node) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (r : SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
     (a b e : SampleCoins node.samples κ X → ByteArray),
-    let r := played recs com
-    let F := recordCommitted node recs correct
+    let D := recordSample node r correct
     ∀ (O : Outside (ofRecord T node r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
-    IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
+    IngressCounted (ofRecord T node r) I δnet → Live D →
+    Refused D prf rest (ofRecord T node r) R → Counted D (ofRecord T node r) →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
-          ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
+          (D.distinguisher prf (node.delta : ℝ) t)).toReal +
+        (R.binding D prf rest).toReal)
 
 end Properties.Poub.Subprotocol

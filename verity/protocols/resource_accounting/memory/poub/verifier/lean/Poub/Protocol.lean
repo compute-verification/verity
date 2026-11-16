@@ -37,9 +37,8 @@ On acceptance it publishes the receipts not shown wrong and the error that holds
 the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's receipts
 and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^256 (`eps`), the session's `⌈W/g⌉`
 openings coins at its `samples` s each (the per-sample term of `ResourceAccounting.Guarantees.Remote.PooledSample`,
-s/2^256; its PRF advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where
-the records read no commitment, and the network attesters' term δnet, which `LineHeldAtSubprotocol` carries beside
-it): the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves at
+s/2^256; its PRF advantages and binding term are left out of ε, not numbers, and so is the network attesters' term
+δnet, which `LineHeldAtSubprotocol` carries beside it): the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves at
 `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which

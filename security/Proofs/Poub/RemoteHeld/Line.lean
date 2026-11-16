@@ -52,8 +52,8 @@ public import Proofs.Properties.Poub.Remote.Run
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
 the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
-`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Sample.pooledSample` at the records read
-through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
+`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Sample.pooledSampleLive` at the
+record's opening sample, `recordSample`, so at most the W the line reads: `LineCoversRun` at the record's
 samples, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
 samples, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
 (`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
@@ -573,12 +573,12 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
 
 /-- **The memory line of record, in bits read** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
+  intro node κ X _ prf rest r correct T R δs δnet D O I hp hcov hk hC hI hL hR hCnt
   have hN : (ofRecord T node r).blocks = node.blocks := rfl
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
-    (Sample.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
+    (Sample.pooledSampleLive prf rest D (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
-  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
+  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line hω.1 h.2)
 
 /-- **Memory held from bits read, under the device model**: on an accepting outcome where the record's line credits no
 more bits read than its groups' passes read (`ReadAt`), every stretch of form `i` credits what the trace held over its
