@@ -8,7 +8,7 @@ One span is one JSON line.  The shape is frozen (a contract the watcher builds a
 
 `parent_span_id` null marks the root; `end_utc`/`status` null while open; `status` is `ok`, `failed` or `cancelled`;
 `attributes` is a flat string-to-scalar map (check steps carry `step`, `rc`, `cache_key`, `log`; a check in its own scope adds
-`mem_peak_gb` and `mem_current_gb` to each step and to the root's completion, `check_memory`).
+`mem_peak_gb`, `mem_current_gb`, `mem_held_gb` and `cpu_s` to each step and to the root's completion, `check_memory`).
 
 The file is append-only, so an open span is a line with `end_utc`/`status` null and its completion is a later line with
 the same `span_id`: the last line per `span_id` wins.  The root span (the check itself) opens when the run's `Steps`
@@ -158,18 +158,34 @@ class ScopeWatch:
 def check_memory(root: Path = Path("/")) -> dict:
     """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
     when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
-    runs' too. GB are 10^9 bytes, one decimal."""
+    runs' too; with them `mem_held_gb`, memory.current less the page cache (`file - shmem` of memory.stat: what is left once
+    the kernel has reclaimed what it can, research.memmark's `held`), and `cpu_s`, the CPU seconds the scope has used
+    (cpu.stat's usage_usec), each where its file can be read. The scope is gone when the check ends, so the root's
+    completion keeps what the check used: its peak with the page cache, its CPU seconds over the time it held its slot, and
+    the most a step's end held without the cache, a floor on that peak. GB are 10^9 bytes, one decimal."""
     unit = SETTINGS.get(SCOPE_ENV)
     if not unit:
         return {}
+    def stat(f: Path) -> dict[str, int]:
+        if not f.is_file():
+            return {}
+        return {w[0]: int(w[1]) for ln in f.read_text().splitlines() if len(w := ln.split()) == 2 and w[1].isdigit()}
+
     try:
         line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
         d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
         if d.name != f"{unit}.scope":
             return {}
-        return {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
+        peak, current = (int((d / f"memory.{k}").read_text().strip()) for k in ("peak", "current"))
+        mem, cpu = stat(d / "memory.stat"), stat(d / "cpu.stat")
     except (OSError, StopIteration, ValueError):
         return {}
+    out = {"mem_peak_gb": round(peak / 1e9, 1), "mem_current_gb": round(current / 1e9, 1)}
+    if "file" in mem:
+        out["mem_held_gb"] = round(max(0, current - max(0, mem["file"] - mem.get("shmem", 0))) / 1e9, 1)
+    if "usage_usec" in cpu:
+        out["cpu_s"] = round(cpu["usage_usec"] / 1e6, 1)
+    return out
 
 
 class SpanLog:
