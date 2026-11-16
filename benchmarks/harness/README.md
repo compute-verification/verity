@@ -89,9 +89,6 @@ the bandwidth audit's spans arms (`benchmarks/vllm_encoded/README.md`) and the s
 (`verity_bench.vllm.bandwidth_ablation`, `BandwidthArm(..., spans=True, topup=False)`), each token-controlled by
 `bandwidth-plain`; `verity-bench breakdown` renders it.
 
-A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
-can't load the preset's.
-
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
 that `run_point.sh` sources before the point's Python starts (to build the arm's libraries from the dispatched commit and
