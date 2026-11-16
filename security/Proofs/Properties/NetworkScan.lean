@@ -197,4 +197,32 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
   rw [hP, hC] at hF
   exact not_fits_of_no_outs _ [] (show 0 < oneSlot.window by decide) 0 ⟨0, by decide⟩ hF
 
+/-- **`ScanScopeAccMembers`' honest witness** (the two-lemma rule's `_honest`): of what it takes, Flock's canonical
+form accepts a scan (`Flock.canon` at `null`), and a compiled sampled verifier has a statement in its sampling scope,
+at the toy verifier `Claims.Witness.SamplingGeneric.twoL`. That SPOT[Flock]'s statements are their members side by side
+(`StmtMembers`) is `MembersProof.stmtMembers_spotFlock`, given its held copies; `scanOf`'s, `Flock.Program.decode`'s
+and `Spot.Bits.check`'s acceptances are not exhibited: no descriptor is evaluated here. -/
+theorem scanMembers_honest : Flock.canon .null = .ok "null" ∧
+    ∃ (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg),
+      D.Scope x :=
+  ⟨canon_null, _, Claims.Witness.SamplingGeneric.twoL Bool, [], Claims.Witness.SamplingGeneric.twoL_scope []⟩
+
+/-- **`ScanScopeAccMembers`' conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan Flock
+canonicalizes as `null` and a compiled sampled verifier that accepts everything and whose statements have that text as
+their descriptor, a statement in its sampling scope is not in `ScopeAcc` at the members' layout of no members and a
+schedule (`oneSlot`): the only gate its circuit returns is an input (`not_fits_of_outs_inputs`). -/
+theorem scanScopeAccMembers_nontrivial :
+    ∃ (s : NetworkCheck.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
+      (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg)
+      (_ : D.Scope x)
+      (_ : ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8),
+      ¬ NetTiming.ScopeAcc D (fun _ => membersLayout ([] : Spot.Bits.Members) s) (fun _ => s.window) x := by
+  refine ⟨oneSlot, .null, "null", canon_null, _, acceptAllCompiled, [], acceptAllCompiled_scope [],
+    fun st hx => ?_, ?_⟩
+  · cases (Option.some.inj hx : nullStmt = st)
+    exact bytes_of_data_toList "null".toUTF8
+  · rintro ⟨-, st, hx, hF⟩
+    cases (Option.some.inj hx : nullStmt = st)
+    exact not_fits_of_outs_inputs _ null_outs_inputs (by decide) 0 ⟨0, by decide⟩ hF
+
 end Properties.NetworkScan
