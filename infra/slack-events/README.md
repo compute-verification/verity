@@ -37,7 +37,7 @@ them, so Vercel installs them alone; `uv lock` in `service/` after a pin moves).
 | `slack_events/subscriber.py` | The queue's consumer in poll mode: `drain` claims messages as consumer group `slack-events-drain` until the topic is empty or 45 s have passed. |
 | `slack_events/consumer.py` | One message: route a person's post (`deliver`, routing lines), dead-letter after 5 deliveries, the canary, a newcomer's `team_join`. |
 | `slack_events/crons.py` | The watchdog (reminders, escalation, the daily list, `stall`, `canary`) and reconciliation. |
-| `slack_events/router.py` | `route_unaddressed`, the seam for routing by model: None (no-model mode) unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built. |
+| `slack_events/router.py` | `route_unaddressed`, the seam for routing by model: None (no-model mode) unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the call to Vercel's model service, which isn't built. |
 | `slack_events/deps.py` | What the service runs against (routing code, registry, queue, Slack, cache, clock): `deployed()` from the environment, fakes in the tests. |
 | `slack_events/vendor.py` | Loads the routing code and registry: `_vendor/` in a deployment, the repository's own files from a checkout. |
 | `build.py` | The build step: copies `slack.py` and `.agents/skills/using-slack/registry.json` into `_vendor/` (never committed), so a deployment runs `main`'s routing code byte for byte. |
