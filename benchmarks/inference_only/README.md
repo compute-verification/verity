@@ -1,8 +1,8 @@
 # Inference-only
 
 How much training could a developer hide inside the inference blocks that Llama 3.2 1B's inference-only policy lets it
-serve? This benchmark answers with one number: the least slowdown that training would suffer, under the min-cut bound.
-A number of 1 says the bound shows no slowdown. The served policy's number is 1.
+serve? This benchmark answers with one number, the training slowdown theorem's cν/μ at the policy's c and k
+(`security/Definitions/Slowdown/README.md`), at least 1. The served policy's number is 1.
 
 Given a served run's record, it follows the core benchmarks' interface: a measurement, not an audit, with a number only
 where the record holds a PoUW accept of record and the policy's check ran and both its rules comply. Given none, it
@@ -87,8 +87,8 @@ S`, a typed share, whose figures print under a label saying they rest on no PoUW
 ## What is fixed
 
 By this tree, whatever a record says: the check (the policy's Lean record check, `inference-only-record-check`, with
-its two rules, the rate rule and the count), the bound (`min_cut`) with its premises (H) and (E) at the slowdown
-calculator's β (`benchmarks/slowdown/data/premises.toml`), the rule that only PoUW's accept of record
+its two rules, the rate rule and the count), the theorem (`min_cut`) with T1 and T2 at the β of
+`benchmarks/slowdown/data/premises.toml`, the rule that only PoUW's accept of record
 (`protocols.work.verdict`) credits work, the tie between that verdict and the record the check read, `tied.toml`, the
 fleets and periods, and that a number is given only where the record holds a PoUW accept of record and both rules
 comply.
@@ -107,15 +107,13 @@ says the deployed challenger from a record's own word. `tests/benchmarks/inferen
 
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
 
-- **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
-  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
-  (`benchmarks/slowdown/data/premises.toml`).
+- **Two assumptions.** The theorem holds of a training circuit, whose T1 and T2 are conjectures (Lean's (H) and (E),
+  `min_cut.HARDNESS` and `min_cut.EXPORTS`). T1's β by `k` is `benchmarks/slowdown/data/premises.toml`'s.
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
   every row a block reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
   the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
-  data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
-  calculator's (`uv run python benchmarks/slowdown/periods.py`).
+  data sheet's rate.
 - **Units, not converted.** `N` and `limit` are in the policy's own MACs, which count a MAC of the layers' linears as one
   and a BF16 MAC (attention, the LM head) as two, the card's dense int8 rate against its BF16 rate. The bound is at
   `F = 1`, which charges at most two of a training step's three kinds of product; the two thirds that leaves of a step

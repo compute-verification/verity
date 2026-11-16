@@ -5,9 +5,9 @@ from a registered start. The harness trains it, counts every multiplication the 
 one training step, and reads the run's slowdown at a policy off that step. The search scores a config by S:
 its counted gates to a target gain over its honest config's, times that slowdown.
 
-What it gives is the attack search's own measurement of a run, not the slowdown's definition. The slowdown is the
-Glossary's. Nothing runs the attack search
-today: its commands are documented as they are, and none of them is a routine step.
+What it gives is the attack search's own measurement of a run. The slowdown is the training slowdown theorem's ρ
+(`security/Definitions/Slowdown/README.md`). Nothing runs the attack search today: its commands are documented as they
+are, and none of them is a routine step.
 
 ## Try it
 

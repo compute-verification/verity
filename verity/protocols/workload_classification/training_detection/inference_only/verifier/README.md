@@ -1,8 +1,8 @@
 # The inference-only policy
 
-The inference-only policy is the part of Verity that tells serving from training. It asks that the registered circuit
-divide into inference blocks, each of at most c gates and each reading at most k bits of fresh input: bits from outside
-the registered information θ, the models, code and data fixed before the monitoring period.
+The inference-only policy proves the registered circuit a (c, k, n)-inference circuit (`InferenceOnly.CompliesAtMost`):
+its gates divide into at most n blocks of at most c gates, each reading at most k wires from outside θ, the registered
+information. A circuit that is that and also trains has slowdown ρ ≥ cν/μ (`security/Definitions/Slowdown/README.md`).
 
 This directory is the policy's check, in Lean only (`lean/`, the Lake package `inference_only_check`). Its one Python
 file is its manifest, `parties.py`: one party, the verifier, with no channel. Both composites, onsite and remote,
