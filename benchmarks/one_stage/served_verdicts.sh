@@ -235,7 +235,8 @@
 # stops the run there (`sampled_coins`, exit 20; `served_verdicts.sh sampled-coins` runs that check alone on D). V3c's
 # audit is held to the same on V3C_CHALLENGER's coins: its V3C-AUDIT line says whose coins and its coin_trees, and on the
 # gate's it fails, exit 20 with the same refusal, as a V3c audit that fails does (`v3c_trees`; `served_verdicts.sh
-# v3c-coins K` alone on D at V3C_CLASS). A record
+# v3c-coins K` alone on D at V3C_CLASS), and the compose hand-off of a record whose SPOT audit it is refuses the same
+# way (`handoff`), so no compose is asked of it. A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
 # research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
@@ -682,7 +683,7 @@ coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CH
   # from the session that sampled them, by its SUMMARY (`served_verdicts.py coin-trees`), else 20 with STEP's refusal
   # line; a development session's coins pass as before
   local why
-  why=$("$PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
+  why=$("$SAY_PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
   say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
   return 20
 }
@@ -1582,6 +1583,7 @@ for x in open(sys.argv[1]):
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
   local d f steps why rc sampled
   sampled=$(sampled_of_record)
+  [ "$sampled" = sampled-proofs-served ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue

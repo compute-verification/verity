@@ -179,8 +179,10 @@ it, `error_said`); PoUW's development piece reads ``development run, credits not
 window's credit.
 Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
-elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
-is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
+elsewhere, and the reason, whose sampled proofs' clause gives its sample's bound at each δ without its count
+(`bound_said`), which the serve dir's private copy alone holds (`bound_held`). The report and the line say where they
+were composed (``composed_on``: the host, whether it is the record's node, what it read, `COMPOSED_FROM`, or off that
+node `COPIED_FROM`, and whether the host is the auditor's device, `auditor_device`), and with ``--deferred`` what
 the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
 memory, or its compose hand-off), which composes the final record on another host, the record's node still ``--node``,
 and with ``--served-compare`` the served compare's verdict line (``served_compare``, `served_compare_line`).
@@ -352,6 +354,9 @@ HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wro
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
                f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
+#: infra's deploy manifest of the Nebius nodes, where `research` reads the auditor devices (`research.remote.restricted`):
+#: `composed_on`'s ``auditor_device`` reads it of the host composing the record (`auditor_device`)
+DEPLOY_MANIFEST = Path(__file__).resolve().parents[2] / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "deploy.toml"
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
@@ -744,11 +749,14 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
                  summary: Mapping[str, Any] | None = None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too. With the audit's ``challenger``, whose coins they
-    were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader takes a development session's
-    run for the auditor's."""
-    row = {k: v for k, v in records.items() if k != "population"}
+    (``leak.advice_bits``) and with how many proof blocks were sampled (``sampled``). Its ``population``, the scope's
+    unpadded member count, counts the execution phase's tokens: the private copy keeps it and the published one cuts it
+    (`public_line`). The scope's ``steps``, the window's engine steps, stay on the node too. With the audit's
+    ``challenger``, whose coins they were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader
+    takes a development session's run for the auditor's."""
+    row = dict(records)
+    if isinstance(row.get("draw"), list):
+        row["sampled"] = len(row["draw"])
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
     if summary is not None:
@@ -2134,7 +2142,72 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
         outside = (profile.get("outside") or {}).get("bytes") or {}
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
-    return out + (error_said(subprotocol) if subprotocol else [])
+    return out + (error_said(subprotocol) + bound_said(subprotocol) if subprotocol else [])
+
+
+#: why the published lines give the sample's bound without its count: with the number of proof blocks sampled, which they
+#: give, the count gives the population's size, which counts the execution phase's tokens
+BOUND_HELD = ("b and ε = b/N in the serve dir's private/verdicts.txt: with the number of proof blocks sampled, b gives N, "
+              "the population's size, which stays private")
+
+
+def _sample_at(entry: Mapping[str, Any]) -> tuple[int, dict[str, Mapping[str, Any]]]:
+    """A sampled-proofs entry's population size N and its certificate at each δ the record recomputes from its sample;
+    none for another subprotocol's entry."""
+    at = {d: x for d, x in (entry.get("at") or {}).items() if isinstance(x, Mapping) and x.get("by") == "draw"}
+    return int((entry.get("quantity") or {}).get("of") or 0), at
+
+
+def bound_said(entry: Mapping[str, Any]) -> list[str]:
+    """What a sampled-proofs entry of the block record says of its sample in the published lines: at each δ it gives, at
+    most b incorrect proof blocks except with probability δ (`BOUND_HELD`: b itself stays in the private copy,
+    `bound_held`), and vacuous where b is the population's size N. Another subprotocol's entry says nothing here."""
+    n, at = _sample_at(entry)
+    vacuous = [d for d, x in at.items() if x["value"] >= n]
+    bounded = [d for d in at if d not in vacuous]
+    return ([f"at most b incorrect proof blocks except with probability δ, at δ = {' and '.join(bounded)} ({BOUND_HELD})"]
+            if bounded else []) + ([f"vacuous at δ = {' and '.join(vacuous)}: every proof block may be incorrect"]
+                                   if vacuous else [])
+
+
+def bound_held(entry: Mapping[str, Any]) -> str | None:
+    """The private copy's line of a sampled-proofs entry's bound: at each δ the record gives, at most b of the N proof
+    blocks incorrect except with probability δ, with ε = b/N, vacuous where b = N; None for another subprotocol's."""
+    n, at = _sample_at(entry)
+    said = [f"at most {x['value']} of the {n} proof blocks incorrect except with probability {d}, ε = {x['epsilon']}"
+            + (" (vacuous)" if x["value"] >= n else "") for d, x in at.items()]
+    return "SAMPLED-PROOFS bound: " + "; ".join(said) if said else None
+
+
+def keep(serve_dir: Path, line: str) -> None:
+    """``line`` in the serve dir's private copy of its verdicts alone (``private/verdicts.txt``), as
+    `served_verdicts.sh`'s ``keep`` writes it."""
+    private = serve_dir / "private"
+    private.mkdir(mode=0o700, exist_ok=True)
+    with open(private / "verdicts.txt", "a") as f:
+        f.write(line + "\n")
+
+
+def auditor_device(host: str, manifest: Path | None = None) -> str:
+    """Whether the record was composed on the auditor's device, as infra's deploy manifest (`DEPLOY_MANIFEST`) says of
+    ``host``: on it where the manifest marks the node ``auditor = true``; off it where it lists the node with neither that
+    nor ``admin = true``, a node the lanes' keys reach; and not known where it marks the node ``admin = true`` alone, which
+    it gives the control host too, or lists no such node, or can't be read."""
+    import tomllib  # here, not at the top: the lines `say` publishes run this file under the node's python3, maybe older
+
+    path = manifest or DEPLOY_MANIFEST
+    try:
+        nodes = tomllib.loads(path.read_text()).get("nodes") or {}
+    except (OSError, ValueError) as e:
+        return f"not known: the deploy manifest {path.name} can't be read ({type(e).__name__})"
+    node = nodes.get(host)
+    if not isinstance(node, Mapping):
+        return f"not known: the deploy manifest lists no node {host}"
+    if node.get("auditor") is True:
+        return "composed on the auditor's device"
+    if node.get("admin") is True:
+        return f"not known: the deploy manifest marks {host} admin = true, which it gives the control host too"
+    return "composed off the auditor's device"
 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
@@ -2385,7 +2458,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
-             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
+             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM,
+             "auditor_device": auditor_device(host), **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
@@ -2777,6 +2851,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")
     print("RECORD " + json.dumps(line, sort_keys=True), flush=True)
+    if rec is not None and (held := bound_held(rec["legs"].get("integrity") or {})):
+        keep(a.serve_run, held)
     if refused or (rec is not None and line["check"]):
         return 1
     return RECORD_EXIT.get(line["composed"], 1)
