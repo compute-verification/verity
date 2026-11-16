@@ -249,7 +249,7 @@
   },
   "Verity.Vocab.ComponentBound": {
    "owner": "@soundness",
-   "digest": "ae889c27d4ec6e623a9fce49eb0ece765d6e1279a3deb891554dfe7c6a032e3b",
+   "digest": "cd706dba051c0df9e7ef23c3f2ea4c0bad3bf2100abec91a24dd4fc184acb131",
    "why": "The layer below's guarantee: a subprotocol's bound at its compiled component, which the composition sums and each subprotocol's piece proves."
   },
   "Verity.Vocab.PeriodsCouple": {
@@ -264,12 +264,12 @@
   },
   "Verity.Vocab.UpFrontFor": {
    "owner": "@soundness",
-   "digest": "6cec9c973b73ea4b5869ca8e24735648b4423bbaf092b55dfb8132635399bc97",
+   "digest": "3dbe781e7d571966c0c09f6a2f92b7c23b527cca1f76dc82190f8649a40b15af",
    "why": "the bound over the coins drawn up front that CoinsCouple carries into the play"
   },
   "Verity.Vocab.WipeCoupling": {
    "owner": "@soundness",
-   "digest": "663cc5b87b0fb0b682af3e54a3311d75b1d1a233776859158ba1fcba1a6d304d",
+   "digest": "1467486f0358349b251f0c77c6fc1fd8d8559318b233b68e3e2553cfb547e939",
    "why": "The layer below's guarantee: the play read at the wipe's boundary as the wipe's game, which the wipe's piece proves."
   }
  },
@@ -13238,7 +13238,8 @@
    "signature": [
     "Verity.target_of_periods_honest :",
     "  (Verity.Idle.vocab ENNReal.instTop.top 1).PeriodsCouple",
-    "    (fun o => Verity.ComponentAccepts Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
+    "    (fun o =>",
+    "      Verity.ComponentAccepts Verity.Idle.pins Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
     "    Verity.Registration.Composite.remote ResourceAccounting.Audit.pouw"
    ],
    "assumptions": [],
@@ -13259,8 +13260,8 @@
      "Hash.Assumptions.LmsForger.signed"
     ]
    },
-   "type_hash": "6a498d7513158b19ca2b5b5ca1e584e9ead1c9ff35fb00404c1998a0edb40384",
-   "unfolded_hash": "9fd07a2a107c64dfaa1acbd7976c3808ca33a0daff9540d7ee2e42b88859adb7"
+   "type_hash": "473374db227309d440e30e480d85d2a560b613a5cf64690bd6d3cd861b651983",
+   "unfolded_hash": "7540958e2603cc9cba7cea6462e36a6f92fb64bcca5b8d14715eca30af298c5e"
   },
   "Verity.target_of_periods_nontrivial": {
    "owner": "@soundness",
@@ -15062,43 +15063,43 @@
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.checkedCreditMonitoringPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (ResourceAccounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin Np), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.checkedWorkMonitoringPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (ResourceAccounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin Np), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod": {
     "instLENat.le Cd.units 144": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.MonitoringPeriod.stagedAt salt staged) (Properties.Pouw.MonitoringPeriod.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin 144), Real.instLE.le (instHMul.hMul (instHMul.hMul (8 / 9) (Nat.cast 144)) (ResourceAccounting.Compose.shareCone Sc Cd 144 t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd 144) (ResourceAccounting.Compose.shareCone Sc Cd 144) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin 144), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd 144 t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd 144 t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd 144 t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd 144) (ResourceAccounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd 144) (ResourceAccounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.MonitoringPeriod.stagedAt salt staged) (Properties.Pouw.MonitoringPeriod.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.h1J10RCheckedCreditMonitoringPeriod": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.MonitoringPeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditMonitoringPeriodStrata": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.MonitoringPeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15107,59 +15108,59 @@
     "∀ (s : Fin mB), Eq (Cd s).rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → instLENat.le 1 (k s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → And (Real.instLT.lt 0 (ρ s)) (Real.instLE.le (ρ s) 1)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.MonitoringPeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLE.le (instHMul.hMul (instHMul.hMul (ρ s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s).cast) (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t)) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) j) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (1 / 2))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (ResourceAccounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (ResourceAccounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.MonitoringPeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedFreed": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.MonitoringPeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.MonitoringPeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedWork": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.MonitoringPeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.MonitoringPeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (i : Prod St C), Eq (G.ext (work x w) i) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.MonitoringPeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.MonitoringPeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.MonitoringPeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
+    "instLENat.le E (instHMul.hMul (instHMul.hMul 3 ResourceAccounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le E (instHMul.hMul (instHMul.hMul 3 ResourceAccounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.Poub.runLayout blocks dflt appended sent (ResourceAccounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -17148,7 +17149,7 @@
    }
   },
   "Definitions.Core.Party": {
-   "digest": "49b7d41f922f24a8e54b4844dda9326f4a0f79a6ffd3b5b65092699f9295c9b1",
+   "digest": "5c364df98969b78d2eebf6187dfee16547097ac398c7947486989e78c3bd38ab",
    "definitions": {
     "Verity.AuditorParty": "316744ea529e2712138ada3dde233b350e1638856b47aded49704bea6445145b",
     "Verity.AuditorParty.draws": "a30f6195a11010dcb5df653c447731d796e4f454e021b547c238c15e49562da7",
@@ -17172,12 +17173,12 @@
     "Verity.AuditorPins.pouwSessions": "8f67cae40837f3692d7125efdd0d81a562d790db49e0e2aa5501fb6e1a39993c",
     "Verity.AuditorPins.sessions": "a98a7496542fe4b5f36053a20ba7168d8fac2e6480bc255cd698d3c082edf6a5",
     "Verity.Role": "69a5778a3293bd3079c779c5ab8ecb82e675a96236cb2a5ca2634527983f68f2",
-    "Verity.Role.casesOn": "49e5d3466ace1157de86a8a9b25ea9c19a9cf0f556cd5e5c223ecd441f3d243f",
+    "Verity.Role.casesOn": "97e44ca82fe28d459e9e77b84bd890245f58b080c77e541f83979dac38343b07",
     "Verity.Role.challenger": "c54e222fd4d0dc2e05c171e27219cc0f2a6d18063c5400c5c46a7d9511eeaa45",
     "Verity.Role.ctorIdx": "29c851e4c6dbd4aaa9e0e025eaf5803de26582d7f0aa2b580039c53c18e164c5",
     "Verity.Role.memoryChallenger": "4de668804e7502fc2d3b72ca0da42709d8dc3fec16762a683e797ae8d670035d",
-    "Verity.Role.networkCertifier": "df61e0d7eacc8a3ba7f241d5df90aed39edd3ea670145c89156776b8732563c7",
-    "Verity.Role.rec": "2fa507e9307e5363fbe492b03670d5362ec1c23efc0f9eea9587d743115888ce",
+    "Verity.Role.networkAttester": "f4582ad10ed38971b5e8293978a95b43480bda0893e7a5a9b7ed86e1bcc86f37",
+    "Verity.Role.rec": "e9c19c7942ded980bd015c3e54048ed2315ba411d822affe5dad1fcd6ef0fab5",
     "Verity.instDecidableEqRole": "88b88a96df3308238102631445313717616e3890c9d704ddfdbbd5b053f1c2e9"
    }
   },
@@ -27639,7 +27640,7 @@
    }
   },
   "Properties.Verity.Coupling": {
-   "digest": "bea9521bafe5d60825cd8219bc12ac185982c4a3f6505f598cf6f8f48537cf5e",
+   "digest": "38261bfd942568fa7066670161c10ec91d787dcde5048dfa9fe8e44f01400484",
    "definitions": {
     "Verity.CoinsCouple": "ac2882dfe05b38a81cb74d8dc86c87c578e7deddf11d6f73f0e41e0cc506d818",
     "Verity.Game.Strategy.assocMap": "1bd6c436e4f226f646f6f74552b03ef8311f9f1bf0907d5b670d607f1b466aa5",
@@ -27654,12 +27655,12 @@
     "Verity.UpFront.instFintype": "eb76bd2b9e8c110d5a390fbad7485a846b2f87f12ef421132c1b8fe761ab38be",
     "Verity.UpFront.read": "2c6211b30f954bbf4a67bee3165bdda4842df1cd516f4e15870e4adb5a680178",
     "Verity.UpFrontAll": "4d11075b23cbd155b6d41bf0f1176b124d7b012b4ed1de20e1fc5b9a7bab0009",
-    "Verity.Vocab.PeriodCoupling": "07c0030adf878b12ccf136be0dfd2150a92089fa1be6efd8edf4e3c6446c49fc",
-    "Verity.Vocab.PeriodCoupling.BreakBound": "1c0c7b8faf9a625f618ae1ac41a0d8b08e579888ae56e5ce1194e1912fe1e40f",
+    "Verity.Vocab.PeriodCoupling": "7bcaaa0893f52483dcaf71d346a0cfc37d1ba4042ecd5da821d894ef69d7b787",
+    "Verity.Vocab.PeriodCoupling.BreakBound": "551d4f18a791e5820eed47fdbea41f5a09fa237d72941e906b2f16b2a11b53e6",
     "Verity.Vocab.PeriodCoupling.C": "fec30490464e514c1c283997252a64e6fd004ae7d7b40be12fe31b53ea767373",
     "Verity.Vocab.PeriodCoupling.I": "d369dde1ae39cbc6396137d9161049702538934826b2bd1a5f4b7f9cf725702c",
     "Verity.Vocab.PeriodCoupling.brk": "720a9fff7abf2da5fde1be8b2788cfc6c0f72f00311992e858f6cab17b5da152",
-    "Verity.Vocab.PeriodCoupling.coins": "e2e6ce27a19855fa0f0fdb5821602416f2142f7974f68df7a733e0c1cec1e032",
+    "Verity.Vocab.PeriodCoupling.coins": "cef2c7672ec4e6063ad762d4619f532ac7c8f63782b7df08d2faa739cd5c1c7e",
     "Verity.Vocab.PeriodCoupling.decEqI": "292dbcead1b6f100dd0eacbc435e66d8f6de7c655579530a0b3db64f8fb93d21",
     "Verity.Vocab.PeriodCoupling.fintypeI": "f7329f535e2d145beca1aabb376f5afce522dde4d5f65762a719dfa8e17e02ec",
     "Verity.Vocab.PeriodCoupling.fintypeΩ": "08eb4706a3798f020c4554769a86b28e0c1d257b8374c427f043d118235fef76",
@@ -27668,9 +27669,9 @@
     "Verity.Vocab.PeriodCoupling.Ω": "f87b6152aac42aab25c533414b4c402ec46e1ed971ff5ea7a80dd08a8cfe29a0",
     "Verity.Vocab.PeriodsCouple": "3da375c641ed6fef157f05d386836752801a40b329fa55925a2aa2016cd65c98",
     "Verity.Vocab.SubprotocolBound": "2aeac257b496970b126038ac7dde1a09c922d405359de4338ce246e267a10de2",
-    "Verity.Vocab.UpFrontBound": "27436129df502d79d9a1ceadd0697e04c6b0fbf91cf18fc4361ea4e97ab90f45",
-    "Verity.Vocab.UpFrontFor": "6cec9c973b73ea4b5869ca8e24735648b4423bbaf092b55dfb8132635399bc97",
-    "Verity.Vocab.WipeCoupling": "663cc5b87b0fb0b682af3e54a3311d75b1d1a233776859158ba1fcba1a6d304d",
+    "Verity.Vocab.UpFrontBound": "7060bc51b59a9239dc43bd33c53541803594244587ca613b88cfa76bf759830a",
+    "Verity.Vocab.UpFrontFor": "3dbe781e7d571966c0c09f6a2f92b7c23b527cca1f76dc82190f8649a40b15af",
+    "Verity.Vocab.WipeCoupling": "1467486f0358349b251f0c77c6fc1fd8d8559318b233b68e3e2553cfb547e939",
     "Verity.WipeTarget": "1c643fc761d1f656e012293394c0291e7adf01a7b9af956209c49b8ef0bb9b44",
     "Verity.coinsLeft": "75b9a6a80a2ae3c5690bef64409b5238dac024bcd534e64f694b54cd3d02f62b",
     "Verity.outK": "319e16f0dca4f50b66c9463d95458706100bf8b14dccaff55f02b7d9377af90a",
@@ -27708,7 +27709,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "9fe3dfdafd39d5d2d940fd99638c17e619c8f6fc9bff0c26016f0e08c1b157fe",
+   "digest": "703299944640860ac6edb71736fb29124d08f79e17896ebaa2c01a653a5de61b",
    "definitions": {
     "Verity.Accepts": "2b52de6c68f2482e5e6cc118e4f2d4404df152af14e95c9b71d243bc75d6a8b4",
     "Verity.AuditorPins.Designated": "0c27807d1edf7ced0527743d9eef4ec79edec0d079543caf2e546d46342932c3",
@@ -27719,9 +27720,9 @@
     "Verity.AuditorPins.HoldsPouwSession": "8eb700914be11c9cea5260e2fe705fafd9c8de2e7df279f2cfe94d0a7d5923f4",
     "Verity.AuditorPins.HoldsSession": "d0c0324d821adc2a2ddfc930f88a0a89bdf35326ed64960c01b25781bdd926d8",
     "Verity.AuditorPins.certifierPin": "51899cca61cbe0c0e89ea6a9b2e26c909e92a5b6e4d43d4b1d05423658829e3a",
-    "Verity.AuditorPins.certifiersFor": "620335b5b825870e193b30014b29bb0bd0b756da6122e1a186b3b8bf3315ab89",
-    "Verity.AuditorPins.compiled": "dce973560d5bef000d90a381bbb4124353c3262061ddebc43c14a8d351cde1c0",
-    "Verity.AuditorPins.reads": "abbe67aa66cde8a714f0abab5fdd5c9171043e90f90181762533c0f04d8ddb73",
+    "Verity.AuditorPins.certifiersFor": "d4edb3b141571bd9a4c52291fb1c42a3cd8ecf6cdfbff272bfd5874c945bbf20",
+    "Verity.AuditorPins.compiled": "6e8699e412a36f85ba39e5119e6cd51fefd34ce18e664ff292ed998f088130de",
+    "Verity.AuditorPins.reads": "e6df34810ff30289da760020c70a80bba11668c4ae0d6774b002678038378e54",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
     "Verity.ComponentAccepts": "e1bf1adccce52d5d8969e01358e0c0a4d703f8071c975369bb0bbf5d8bf3c644",
     "Verity.Decoded": "5a3b58b9faa7a6565c00cc834ac3935d5e4244c6f7e624ab6d4632f38739be54",
@@ -27804,65 +27805,65 @@
     "Verity.TreeOpenable": "5eda18360f1488996b766de65947617b9e00356925effafc445a48a21669d608",
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
-    "Verity.Vocab": "7bc22ca43e86bcc89ac44b522301bdd3cb72fad9f75b7a41f88cabc874e63901",
+    "Verity.Vocab": "406dd51587c0f22111b36c296bf656ea3da8f6fad69bb328ffd48dff0d7adcf9",
     "Verity.Vocab.BandwidthAuditSound": "0ba14a8edc194d4a0149201841d2bb1f8546486d4829928a3f14a2193301d417",
     "Verity.Vocab.FinderCR": "4988e467405f34f916c2b1bf7074b15b045fab3fe04c323c1feb8e981114d4d2",
-    "Verity.Vocab.Holds": "513f41341563c53e70c9dff2808e56bcf2d64b7ed889efe39733a268df5dbf65",
+    "Verity.Vocab.Holds": "264e92d7d632382a54e67db886ce47c736f66414825ed6539585b4d561d7f2fa",
     "Verity.Vocab.InferenceOnlySound": "3eeaea529cff9ac8e9d0bc0599b0f27f70fbb1bcacf2732f8df500fb909f349f",
-    "Verity.Vocab.Logged": "4e9103acd00ceb2519f119ba968c49b8668f3a271344471d184221d25ff0c3bf",
+    "Verity.Vocab.Logged": "36de1d905e75523486db949b50b3c422a3d386e0bf5ee2b91d2416a0ffecd2e6",
     "Verity.Vocab.NetworkAttesterSound": "3add71017f6fcbf3309c7a2867a7b97fd2bd0581ec23c3ea28478d21f90644c5",
     "Verity.Vocab.Opens": "8b225916ac11f76386be82fc46b659a3522ecb124d2a6a71b7a7f40cfcdb6888",
     "Verity.Vocab.PousSound": "285adfe9935dfe33bdce1d341ec6b6e39323fe2971f5d22b7512f0cf828d5bda",
     "Verity.Vocab.PouwSound": "0a60981392f438a2bfc08c5989f3ff49c86ef53a15b10cc5e9a074dad8d30d80",
     "Verity.Vocab.Registered": "6bdc88364e86dadac6fab6f48500b183979aa4e28d851b9f10ec0eeaf8906e34",
-    "Verity.Vocab.Seed": "dbd60427fac5dc2b4d270255cc34b0513adf81bd9af97fe5266fece11c45b111",
-    "Verity.Vocab.SoundnessAt": "f311f7ff9bfb9015bfd54b33dcedcfa03c9a31f46a6e6c27f4083da059ddadca",
+    "Verity.Vocab.Seed": "2de6b975e4f367a5f167e4ea303ba16098874cb7af7c7f95295b65839b078167",
+    "Verity.Vocab.SoundnessAt": "e8208909d249114904296c1fcba2d6d743453102221b6499fd20355eb5eeadc7",
     "Verity.Vocab.SoundnessFor": "dca08429e8762a10aa313afe6b2995870c63bb1ed55811d954a8d726897891e1",
     "Verity.Vocab.SpotSound": "1e347ff1bc9991e036883a66c3e2296df9bed857caa8fe0d93264f57e907cd0b",
-    "Verity.Vocab.Spots": "842c03a1da7fcdba4277e9b4268afcd9ff238ca9ce59efef115063f82a81d207",
+    "Verity.Vocab.Spots": "d7a0cfb4d427d8cf55fefc64ce098544f4be0dd834a2f04f7e0639ad9d2328a2",
     "Verity.Vocab.Target": "aafab4598e9a78a118de998d2c52146b8ed26681157ac58feafb99323cddfe63",
-    "Verity.Vocab.Unforgeable": "d9c249f6032933a16276ad62e0b75e28eeae12ae61769b861e89509fb2f346bf",
-    "Verity.Vocab.Verdict": "3d662d5f175e0058c03d093099d51977013ebaba61ebe660079a48194abe94f6",
+    "Verity.Vocab.Unforgeable": "be87f9b98f337ffd92bc5cdb9c8e6e48f5a9e562cba25f53a7b434a06f7a6647",
+    "Verity.Vocab.Verdict": "0208a89689edf35904b212a2422fe3bfbf0f6a116ff34bc6589dce6f95d78f2c",
     "Verity.Vocab.WipeSound": "0cd2ace1aa9508d51f8785e7321099c129982a972ade0670af90a86b8da98a75",
-    "Verity.Vocab.boundary": "5f50a629a4bd24212c31bf1992bf7ec0fbc60a4597dae361e4d545061a7e1f63",
-    "Verity.Vocab.callsAdd": "e70cce128fccb977e8cad996d7a432961291bfd4ba1b8e31fed6114064d5bdc9",
-    "Verity.Vocab.callsMul": "1713a89cd2aff126d902d5899ffe298f87277e4807a0dad18a1f7db8636eba65",
-    "Verity.Vocab.certOf": "c38418c18beefdaf2991ac3a9a60d040c362ae6ccac2c04c2cf4b5afeacf4408",
+    "Verity.Vocab.boundary": "00dc75dd021c29b6f00e329d4e8082cbca21dc5d0ac0b0ce6e1b08d2af7c22bb",
+    "Verity.Vocab.callsAdd": "056577e6de2b3011cc4d0ec06b825c19fed614b39db512ad8072813ae9300c5a",
+    "Verity.Vocab.callsMul": "dfd3a40245cb01a90022d4bcf1027d171ac49860abb509446014580d813c09cf",
+    "Verity.Vocab.certOf": "6696f19e2d91fd58c786aeec2288036bd6368afe02d1e1941d307f4af3ab4b53",
     "Verity.Vocab.circuitOf": "89f21419f1330c3d2409378382ad990f09c4ad63fe1af5e037a23a9ccc1ec1e9",
-    "Verity.Vocab.coinsRead": "033e2daefc1ec474f611cd45a3ce5eccb2cf0eeafc3bbb6bf1b2334bf70eba14",
-    "Verity.Vocab.computed": "c808f78449742ea119df4422be6d279130466e43c4b9cf368149fb2a5dac0482",
-    "Verity.Vocab.cost": "b4e5c549c8df065d90f3ef828843e00ea8d73980b945ffaef2e2e85998688a90",
-    "Verity.Vocab.delta": "fb203b5016af740521287d261553c4b5e226ab28e54077761664a253e5406256",
-    "Verity.Vocab.devices": "f95e9aad2bbdd75b64729689a1c83616f61cc2cd8c014be8841aab234146cfb5",
-    "Verity.Vocab.epsForge": "1770857f00471f7794b47fea5b0898f285aef0397da4b3775f68de33768c2627",
-    "Verity.Vocab.error": "547cae36c4b10a4cc669629cb45e532c3a24e9d25bbe4f764be476370603ea8a",
-    "Verity.Vocab.extract": "a6a61398e0c68eedce99bc295e61ef7e17528137e4f1be954309d91e84f61e98",
+    "Verity.Vocab.coinsRead": "5ae60f1eb3e9ea655bab4842c15b62959ce89779a5ec588325ba34a16f1dc6e4",
+    "Verity.Vocab.computed": "9d8614d2bf441992217457b6a83302d21c43ce56b7fa973acde4055d476f2907",
+    "Verity.Vocab.cost": "c5ede4a2f3a107913b1967f0d3e01b611a2884bb99352527b5598a865e29eb43",
+    "Verity.Vocab.delta": "a48162f858ea1ef12ebdce6cf3743c01f9560b3fe463bcd229199d61c7bc906d",
+    "Verity.Vocab.devices": "3fe1a9fd700ccf68f25d948d6b0b42142cbc6c018241ecc691bac720b3ba6873",
+    "Verity.Vocab.epsForge": "68bfecdb60189638da7bdea016a8b53f3c1a2374e45e102efdc56b07305f4136",
+    "Verity.Vocab.error": "f0a6d6ab40db2edc66729f63040db4fb31a28be3d8384ef1774e22c2ca6974e6",
+    "Verity.Vocab.extract": "01150a3f2062a3412ce41b85b7ca95359e26e448d67c16d02478c43f87c7b4bc",
     "Verity.Vocab.families": "8f7d57eb185b9bfdbd1e780b28a0f9b0dc917bbe8613178cadb62b408a6caa29",
-    "Verity.Vocab.finder": "61dd6db53fef55e947d1509b9a8ac51f85bf4e1eba395e5a6a5581afe2e61572",
-    "Verity.Vocab.finderCR": "a8b6cbdf76c2dc92f33dd26b3cfb73b44b0e2c7b41a71ae0f3f96895d23a249f",
-    "Verity.Vocab.finders": "f85b13b4f7efdc87b211209555a877ce2c788ef8428bee7e771345a38a2ba09b",
-    "Verity.Vocab.foreignBits": "da51e355f6b9258ac6f5a1ff8615f4a6d77a16dea01155dbe0dd7191e1d0abd1",
-    "Verity.Vocab.forger": "4e7719ae7985dbeba30e4c72af4530f90e43f85e28086742459fc1d3558aa2d9",
-    "Verity.Vocab.game": "de6cb99f28e3a6fc2d63efd25859d72613326813411b368928ccaf92b0acdfe6",
+    "Verity.Vocab.finder": "53e04cf6e21914a212a9aea80fb6de7d58289374797da2b68ff4031dbc2c7751",
+    "Verity.Vocab.finderCR": "995392616031d28165706f9752b616056325ff170bdf96c37a9c2f781aff8cf3",
+    "Verity.Vocab.finders": "399baa74258fe466f0d333181619f12aa33fcc3204b27b450f0e41ad6e811e8e",
+    "Verity.Vocab.foreignBits": "a052428127a877689a3faaa220beae0a73b52b11605138916484f2361dd62844",
+    "Verity.Vocab.forger": "3d1df834244c7e36b02ca2d53e7cb0cf05726f0776eb85ebc68ca783bb0aeea4",
+    "Verity.Vocab.game": "cf2233dba0a1d0ddea57f05887d269ed57ecf6cbde5a1846690e7df7a917d40c",
     "Verity.Vocab.live": "887fcc82740e34738183588f509b453507d081ab1c2adb4e8b9959546eb293b9",
-    "Verity.Vocab.logAt": "bff39f4b2c7c6266998559d0db6bfd240c37c32cd1b290b576c2ec4a087cd58f",
-    "Verity.Vocab.loss": "d2fc1f255858190dc8ddba2f18e339a51e2bccbc339c925e72418f1f4846c092",
-    "Verity.Vocab.macs": "86c33078eda169896b0e8e2f4f9fb9ae98143aef48a50613298b08e55e873ba0",
+    "Verity.Vocab.logAt": "7f664420924313e978bd49844a1226d8d63424c808e6b08c54b34e158aa8f3a5",
+    "Verity.Vocab.loss": "e6a0bf0eb70eb896f2cd951e95d474429640bf71a2fd4b06f4f6506e02344595",
+    "Verity.Vocab.macs": "8bf10f64196773cbe9278624eab66d7921db064e679e8d689a76b38d05b061f0",
     "Verity.Vocab.partsOf": "fb7d883693ad80cc2d92df0fc55d9df41c64243a4c3cbd204e1ad123e15aa8a8",
-    "Verity.Vocab.pins": "2d723105e61a53c232cc0796bfd555b642a86e07583668a07e04f4d8f25dbcee",
+    "Verity.Vocab.pins": "b14d1277cb007ed8e0346e9eb9b5f7ca11cdee5bef3064dbf34ffd80d11c689e",
     "Verity.Vocab.place": "920aa80a531ccb47ba9caf03943fcca7d146a7a65dfbc279944bcb046daa3b34",
-    "Verity.Vocab.premises": "5c1df8e5e99ded5e226592eb0f42bd05e657c762d98af621b09470cdb1dba18f",
+    "Verity.Vocab.premises": "3262a7933f9b727757cb3b294fdc92edc29eae79c93c4818b45cc1f3f22a87ae",
     "Verity.Vocab.programDigest": "ea54008074f306a4525be3ba63452fa1f1e77a890182c5bed205414f623c6d8a",
     "Verity.Vocab.publicDigest": "f61c61011b07ea683c8d751dfe156f8f17fc67f70458366f515ffbb60ae9a029",
     "Verity.Vocab.read": "62d1ec736a85a7eebad85a0f954c5354ad44d98ce44b085ccf609f01e499dc2d",
-    "Verity.Vocab.schedule": "12d5f6c1e9c0971dfe768a37e8c6bbe26d14fec988465e3079110dc41be4827a",
-    "Verity.Vocab.signatures": "a54d4bf5843fe913e3abfb0c14aa3393bfbcbf685e702eaab0c13c73be18ee07",
+    "Verity.Vocab.schedule": "b51d7c98ed4be5092b6dd05a24231ac8a6066b735a3a5e792d00c9fb725e7cff",
+    "Verity.Vocab.signatures": "a7f229d2188f979391427be255ae11011b7dc37a80600047f50a3ea74189e278",
     "Verity.Vocab.signer": "a8b5ea311cbc5ca526fe1ee3a00a850c75f3445ba9f3200d9a61751b87ac2aef",
-    "Verity.Vocab.spans": "09840976418957954070c3e41066d8ba0a7ba8a55d59152fe0ce8213291aefa4",
+    "Verity.Vocab.spans": "b8bf99c0cab09b1a9fdfa45ce2b7d7711860c18d76f5ad8da2389477435f7466",
     "Verity.Vocab.units": "8ddbd18ef3908d4f5616782225cb92142fd96b82896f67014d987b1b42ff64c1",
-    "Verity.Vocab.wipe": "3eda84d90012b79bc05a487d1f5f7ef61f24ec891912dcbfe4aa0cc79627c0f8",
-    "Verity.Vocab.wipeRun": "14df3d5d10adb75c4f0be15b6b9100fc44d3e1fdba2b9303ec1fe404f4274490",
-    "Verity.Vocab.world": "de7583fd599ba2072a2c0d7c2074a8c4154153feade15c3aba12a6e5efb2de46",
+    "Verity.Vocab.wipe": "dc78c51a34c6fece117ef26c5d7b14e838467c5033039c1fa329eb171e7ccedb",
+    "Verity.Vocab.wipeRun": "dcea5e1c8f5642879a736aa2d21696e2aa38114cae1d575c4189b74fd3404dac",
+    "Verity.Vocab.world": "e072c8c7e9a137354a30facfdc4224acd64ce694b5d241f1be6e3de19eb3d88d",
     "Verity.WipePinned": "cc7d28567a999d5559a7d5f8d75aea11f3a81cf7d71f62296805f9afa12dcef2",
     "Verity.World": "2d973f9d96a7926a0883b968dea51f15ad0fc3cbd13dd2c9a9ba1d27f5668b12",
     "Verity.allTies": "7c0269b03c3b950a0a2d3e54e7ee726aa2d8c7c10e7f7d363290c0bd4a0455a1",
@@ -27916,7 +27917,7 @@
    }
   },
   "Properties.Verity.Idle": {
-   "digest": "42d476fb6d558c7de5b58f3c66da401ccf504ef6fdb8ea386ca8de3622ddfe29",
+   "digest": "c3a49680cc2fb15c1d1f73413f3d626c3d89ccfedc39bf61e2d57215d793c4f6",
    "definitions": {
     "Verity.Idle.blocks": "6a149964b0d925cb559bac07fd5a45854a00cc9ab71e58917e0085a7e44839d1",
     "Verity.Idle.device": "2b6b883d0be225dc04f58b733d34a725a675143751fbe5799a2fe75a34cb7a94",
@@ -27932,7 +27933,7 @@
     "Verity.Idle.signer": "5968ba4dc784e4abb6a97d0255cda336f344bc098a24610d7b8e5b7bc37f5d64",
     "Verity.Idle.step": "bc708e5ae6dedf02eee8bfc56901e7fa3a0baa247fd275793170e9a29731a424",
     "Verity.Idle.unbounded": "11556337337fea0ed4400347b0458ffbe449cde8674e00615a9772052a0e7920",
-    "Verity.Idle.vocab": "bda50d97f6a026510a1192ae7f407c30f7d53fb114b739833faa0eaebc2d6da9",
+    "Verity.Idle.vocab": "538e27a2c75277e33ba9bfeb317ce30a0e26363d542c2b205ddc7b6b06a8fa61",
     "Verity.Idle.wipe": "3d382883b130024ed165c889421ff3c6d8320427670aed94c7cb4d37c3981f4d",
     "Verity.Idle.world": "602dfd351b2f5fe8edb333c0157300a34673f077f050006056c5b4e487263294"
    }
@@ -27953,10 +27954,10 @@
    }
   },
   "Properties.Verity.Subprotocols": {
-   "digest": "7fd49601b5cb7e9a877633ed3ee56b515db24a7a3faf92cbef04cb13cadf0fab",
+   "digest": "153c9e53f4d3f2e570738412d8ade596640f818c316250431b3aad099aedf895",
    "definitions": {
     "Verity.SoundnessOfComponents": "cb37d15e09dc266824a3c45392ad6c0cd63b42b7c77439e0ff00850c6845501b",
-    "Verity.Vocab.ComponentBound": "ae889c27d4ec6e623a9fce49eb0ece765d6e1279a3deb891554dfe7c6a032e3b",
+    "Verity.Vocab.ComponentBound": "cd706dba051c0df9e7ef23c3f2ea4c0bad3bf2100abec91a24dd4fc184acb131",
     "Verity.Vocab.TargetFor": "3c32b7ab4c355b5039e79767de9c3e6859b64a65939228c8b176b961ca8ed2e1"
    }
   },
