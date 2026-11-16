@@ -73,8 +73,8 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
 /-- **Live coins, as the verifier releases them**: two outcomes that agree on the other coins and on the earlier
 windows' openings coins give window `t` the same size and the same correct receipts, whatever its own openings coin and
-the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs;
-the memory line over the prover's records reads it of `Committed.view c` at every commitment `c`. -/
+the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs,
+the memory line of the session the prover's record plays (`recordSample`). -/
 def Live (D : Run n m s κ X) : Prop :=
   ∀ t (ω ω' : SampleCoins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
     D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω'

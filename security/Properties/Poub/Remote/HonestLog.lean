@@ -9,8 +9,8 @@ public import Properties.Poub.Remote.HonestLog.Case
 codec, the parameters (one window of 100 ms, one sample, a 500 ms deadline, the lifetime cap of 300 windows, unpaced and
 not deferred) and the evidence, its two coins and the verifier's log (the session's start, the pass's root, the window's
 end, its sample and the opening). `HonestLogAccepted` says the deployed check (`Poub.Protocol.check`) accepts it.
-The honest witness of `LineHeldAtSubprotocol` takes it, and nothing in Lean proves it yet: the kernel
-doesn't evaluate the log's decoding (`Flock.unhex` on its block of 4096 bytes) or the window's sample
+The honest witnesses of `LineHeldAtSubprotocol` and `PublishedEps` take it, and nothing in Lean proves it yet: the
+kernel doesn't evaluate the log's decoding (`Flock.unhex` on its block of 4096 bytes) or the window's sample
 (`receiptSample`, which `Session.close` runs).
 
 It is what `test_honest_log.py` (the PoUB verifier's Lean tests) checks: `poub-protocol`, the compiled check, accepts
