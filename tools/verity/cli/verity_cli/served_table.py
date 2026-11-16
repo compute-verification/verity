@@ -602,10 +602,8 @@ def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] |
 
 
 def composite(env: Mapping[str, str]) -> dict[str, str]:
-    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
-    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
-    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
-    on the node) keeps what it named."""
+    """The runner's ``COMPOSITE``, set empty, so it composes none unless told otherwise. A caller whose environment
+    ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a composite on the node) keeps what it named."""
     return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
 
 

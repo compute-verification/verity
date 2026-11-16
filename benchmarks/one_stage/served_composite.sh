@@ -51,12 +51,8 @@
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
 # lacks it none (`COMPOSITE: not run`, exit 1), else v0.
-# On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
-# it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
-# first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
-# --development). COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its reason: a deferral's
-# follow-on sets it, since it composes on a prover node. The cases under the serve dir's private/compose and
-# private/deferred (a hand-off's or a deferral's copies) are no product's.
+# The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's copies) are no
+# product's.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -66,20 +62,6 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
-dev=()
-if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
-  dev=(--development "$COMPOSE_DEVELOPMENT")
-  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
-elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
-    say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
-        "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
-        "here as a development check)"
-    exit 1
-  fi
-  dev=(--development "composed on the served node $(hostname -s), which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
-  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
-fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
@@ -165,7 +147,7 @@ for f in sorted(root.rglob("case.json")):
 EOF
 )
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
-    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
+    --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" > "$P/$x.log" 2>&1
   r=$?
   grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
   case $r in

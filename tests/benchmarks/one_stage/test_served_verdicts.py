@@ -878,6 +878,13 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests
     assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-device {premise}; ")
 
 
+@pytest.mark.parametrize("development", [False, True])
+def test_a_development_runs_record_says_so_in_its_report_and_its_line(tmp_path, development):
+    report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                  development=development)
+    assert report.get("development_run") == line.get("development_run") == (S.DEVELOPMENT_RUN if development else None)
+
+
 def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
     """The network attester's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
     K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
@@ -1327,15 +1334,20 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         assert composed == "pending"
 
 
-def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
-    """On the served node no composite is of record (under COMPOSE_OFF_NODE=0 a development one), so the main run's record
-    reads none and is pending, and the run's exit is that record's (2), or 1 where a step failed: never 0. The main run
-    serves before it records, which no harness here stubs, so this reads the script: its one record of `$OUT/pieces`
-    takes no --composite, and the run ends on the record's exit."""
+def test_the_served_nodes_run_composes_the_composite_after_v3c_and_before_the_record_which_reads_it():
+    """Under COMPOSE_OFF_NODE=0, the default, the served node's run composes the composite after V3c and then its record
+    with --composite, at the audit the composite read; with no composite here (a deferral, COMPOSE_OFF_NODE=1 or
+    COMPOSITE empty) the record comes before V3c and reads none. The main run serves before it records, which no
+    harness here stubs, so this reads the script, and the run ends on the record's exit."""
     script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
-    on_node = [c for c in re.findall(r'^"\$TPY" benchmarks/one_stage/served_verdicts\.py record .*?publish_lines$', script,
+    on_node = [c for c in re.findall(r'^ *"\$TPY" benchmarks/one_stage/served_verdicts\.py record .*?publish_lines$', script,
                                      re.M | re.S) if '--pieces "$OUT/pieces"' in c]
-    assert len(on_node) == 1 and "--composite" not in on_node[0], on_node
+    assert len(on_node) == 1 and "--composite" not in on_node[0] and '"${@:2}"' in on_node[0], on_node
+    tail = script[script.index("\nHERE=\n"):]
+    early, v3c = tail.index('[ -n "$HERE" ] || record_here "$SP"\n'), tail.index("elif [ -n \"$V3C\" ]; then v3c_commit")
+    composite = tail.index('  TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1\n')
+    late = tail.index('  record_here "$D/$(sampled_of_record)" --composite "$OUT/composite"\n')
+    assert early < v3c < composite < late
     assert script.rstrip().endswith('[ "$wc_ok" = 1 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] && [ "$sc" = 0 ] || exit 1\n'
                                     'exit "$rec"')
 
@@ -4746,15 +4758,12 @@ composed = {"undecided": "pending"}.get(said[0], said[0]) if said else "pending"
 print("RECORD " + json.dumps({"composed": composed, "window": 7}))
 sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 '''
-#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json, which
-#: carries $COMPOSE_DEVELOPMENT as its ``development`` where it is set
+#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
-printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
   mkdir -p "$2/composite/remote-v1"
-  dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
-  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
+  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}}" \\
     > "$2/composite/remote-v1/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
@@ -4770,8 +4779,8 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
     """Window 7 of a toy serve dir under H1's tie: its commit as the tie left it, with a value file, H1's records, the
     record's and the composite's inputs, files no step after the serve reads (a row dir, a key, an audit session), and
     the pieces the record read in $OUT; then step 6's deferral (`served_verdicts.sh defer WHY`) on vy-dc-h200, a node short
-    of V3c's audit's memory, at the tree of commit SHA, in a development run (``extra`` adds to the environment, None
-    unsetting)."""
+    of V3c's audit's memory, at the tree of commit SHA, in a development run under COMPOSE_OFF_NODE=1 (``extra`` adds to
+    the environment, None unsetting)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
     _tied_commit(tmp_path, "same")
     vw = d / f"v3c-w7-{VTAG}" / "window"
@@ -4798,7 +4807,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
-           "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1"}
+           "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1", "COMPOSE_OFF_NODE": "1"}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
@@ -4831,9 +4840,9 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     peer, the tree's commit and where the final record is composed), and the follow-on's every input, listed for the
     prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log and each record it names,
     the tie's commit answer, the record's and the composite's inputs and its own files, and nothing else of the serve dir.
-    Its one line in $OUT names what was deferred, why and the follow-on's command (under COMPOSE_OFF_NODE=1, the default,
+    Its one line in $OUT names what was deferred, why and the follow-on's command (under COMPOSE_OFF_NODE=1
     V3c's audit alone, the record and the composite composed off both nodes), and no window; nothing else lands in $OUT."""
-    run = _deferred(tmp_path, **({} if off == "1" else {"COMPOSE_OFF_NODE": off}))
+    run = _deferred(tmp_path, COMPOSE_OFF_NODE=off)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
     assert _deferral_settings(tmp_path) == {
@@ -4876,14 +4885,14 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the composite, told the served node, so it
     says it composed elsewhere, and then the final record about the served node from the pieces it read, V3c's audit,
-    SPOT's audit of record and that composite. This node is a prover node, which the prover controls, so the
-    composite is a development check (COMPOSE_DEVELOPMENT) and no Lean answer of it is the record's, whatever it says:
-    the record is pending and the run's exit 2. Another tree runs only under FOLLOW_ANY_TREE, which its line names.
-    $OUT names no window."""
+    SPOT's audit of record and that composite, whose Lean answer is the record's verdict and the run's exit (2, pending,
+    where it gave none), the record saying it is a development run. Another tree runs only under FOLLOW_ANY_TREE, which
+    its line names. $OUT names no window."""
     assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra, LEAN=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
-    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
+    composed = {None: "pending", "undecided": "pending"}.get(lean, lean)
+    assert rc == S.RECORD_EXIT[composed] and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines.pop(0) == V3C_ENTRY
     assert lines[:2] == [
         "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
@@ -4894,21 +4903,16 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "COMPOSITE:", "RECORD"]
     assert lines[-2] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
-    assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == "pending"
-    assert (tmp_path / "order.development").read_text().startswith(
-        "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
-    if lean:
-        assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
-            "composed by a deferral's follow-on on cpu-6")
+    assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == composed
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-6] == [
+    assert argv[:-7] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
         "--node", "vy-dc-h200"]
-    assert (argv[-6], len(argv[-5]), argv[-4:]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
-                                                                           str(out / "composite")])
+    assert (argv[-7], len(argv[-6]), argv[-5:]) == ("--key-sha512", 128, ["--lane", "vllm", "--development",
+                                                                           "--composite", str(out / "composite")])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
 
@@ -5029,7 +5033,7 @@ def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_a
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dd / "inputs.sha256").read_text().splitlines())}
     assert sums["private/deferred/day-log.json"] == hashlib.sha256((d / "private/deferred/day-log.json").read_bytes()).hexdigest()
     rc, lines, order, _limits = _follow(tmp_path, records_audit=_day_tree(tmp_path), **extra, LEAN="accept")
-    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
+    assert rc == 0 and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines[1].endswith("(the serve dir's private/deferred/inputs.sha256): PASS")
     assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {_named(entry)[:16]}…)")
     assert _audited(tmp_path, DAYS) == {"--day": "3", "--day-log": str(dd / "day-log.json"),
@@ -5130,23 +5134,26 @@ OFF = "the final record composed off this node, on COMPOSE_NODE (vy-auditor-2), 
 SHORT_REMOTE = {**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
 
 
+OFF_NODE = {"COMPOSE_OFF_NODE": "1"}
+
+
 @pytest.mark.parametrize("extra, said", [
-    ({}, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
-    ({"COMPOSE_OFF_NODE": "0"}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
-    (TIES, f"512 GB: the serve's lease 150 min, capped at 160 GB; {OFF}"),
-    ({**TIES, "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
-    (SHORT_REMOTE, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
-    ({**SHORT_REMOTE, "COMPOSE_OFF_NODE": "0", "COMPOSITE": None},
+    (OFF_NODE, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
+    ({}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
+    ({**TIES, **OFF_NODE}, f"512 GB: the serve's lease 150 min, capped at 160 GB; {OFF}"),
+    ({**TIES, **OFF_NODE, "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
+    ({**SHORT_REMOTE, **OFF_NODE}, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
+    ({**SHORT_REMOTE, "COMPOSITE": None},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit and the composite to a "
      "follow-on"),
-    ({"COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
+    ({**OFF_NODE, "COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF.replace('record', 'record and the composite')}"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
         tmp_path, extra, said):
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
-    audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
+    audit's memory its deferral, and under COMPOSE_OFF_NODE=1 what is composed off the node. Nothing runs,
     and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
@@ -5402,17 +5409,14 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
 
 
 @pytest.mark.parametrize("extra, line", [
-    ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
-     "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
-     "or COMPOSE_OFF_NODE=0 for a development composite here"),
-    ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
+    ({"COMPOSITE": None}, None),
+    ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "1"}, None),
     ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not yes"),
+    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 0 (the default) or 1, not yes"),
 ])
-def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
-    """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
-    so they can't be composed off the node: under COMPOSE_OFF_NODE=1 the preflight refuses onsite with a composite, before
-    anything runs, and passes it with none or under COMPOSE_OFF_NODE=0."""
+def test_the_preflight_takes_an_onsite_composite_on_or_off_the_node_and_no_other_compose_off_node(tmp_path, extra, line):
+    """The preflight passes onsite with a composite or none, on the node (COMPOSE_OFF_NODE=0, the default) or off it
+    (1), and refuses any other COMPOSE_OFF_NODE before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, order) == ((3, []) if line else (0, [])) and (lines == [line] if line else len(lines) == 1), lines
@@ -5489,7 +5493,6 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
                                                                          "--tree", SHA, "--composite",
                                                                          str(out / "composite")])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", "h1", str(d), str(out)]
-    assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
 
@@ -5534,7 +5537,7 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 
 
 #: `served_verdicts.sh`'s COMPOSES, every setting a hand-off may carry
-HAND_OFF_NAMES = ("K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
+HAND_OFF_NAMES = ("K PRODUCT POUW DEVELOPMENT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
                   "AUDITED_ON SAMPLED_AUDIT STEPS")
 SETTINGS_REFUSED = ("PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's "
                     "private/compose/compose.env) as data, and refuses them, none set: its line {n} ")
@@ -5655,6 +5658,16 @@ def test_the_compose_follow_on_composes_at_the_hand_offs_pouw_and_refuses_a_tied
     else:
         assert order == ["composite", "record"], lines
         assert (tmp_path / "order.composite").read_text().split()[2] == composed
+
+
+@pytest.mark.parametrize("development", [None, "1"])
+def test_a_development_run_hands_development_off_and_its_compose_follow_on_records_it(tmp_path, development):
+    assert _handed(tmp_path, DEVELOPMENT=development).returncode == 0
+    got = dict(x.split("=", 1) for x in (tmp_path / "serve" / "private" / "compose" / "compose.env").read_text().splitlines())
+    assert got.get("DEVELOPMENT") == development
+    _rc, lines, order = _compose(tmp_path)
+    assert order == ["composite", "record"], lines
+    assert ("--development" in json.loads((tmp_path / "order.record").read_text())) == bool(development)
 
 
 @pytest.mark.parametrize("blob, why", [
@@ -6549,8 +6562,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, tied or not, whose period case reaches a product only as
-    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) it composes only under COMPOSE_OFF_NODE=0, a
-    development check its first line and each product's composite.py say claims no record. Where SERVED_NODE names
+    served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) it says it composed there,
+    and no product's composite.py is told it is a development check. Where SERVED_NODE names
     another host it says it composed there, from the compose hand-off (COMPOSE_HANDOFF) or a deferral's prover-side copy
     of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
@@ -6587,25 +6600,21 @@ sys.exit(1)
 ''')
     unstarted = ("COMPOSITE NOT_STARTED verity/sampled-proofs/v1: its check was not started; the case names 3 blob files "
                  "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "COMPOSE_OFF_NODE": "0"}
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
-    why = (f"composed on the served node {host}, which the prover controls: a development check, no claim of record "
-           "(COMPOSE_OFF_NODE=0)")
-    dev = f"COMPOSITE DEVELOPMENT: {why}"
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == (f"{dev}\nCOMPOSITE: not run, onsite's own cases come from "
+    assert (out / "verdicts.txt").read_text() == ("COMPOSITE: not run, onsite's own cases come from "
                                                   "ONSITE_PIECES's file, and it is unset\n")
     (out / "verdicts.txt").unlink()
     env["ONSITE_PIECES"] = str(ONSITE_PIECES)
     r = run()
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        dev, "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
@@ -6617,7 +6626,7 @@ sys.exit(1)
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
-    assert all(json.loads((p / x / "private" / "development.json").read_text()) == why for x in ("remote", "onsite"))
+    assert all(json.loads((p / x / "private" / "development.json").read_text()) is None for x in ("remote", "onsite"))
     assert (tmp_path / "built").read_text().split() == ["remote", "onsite"] and not (tmp_path / "card").exists()
     assert sorted(f.name for f in (d / "private" / "pous" / "w0").iterdir()) == ["answer.json", "case.json"]
     assert not (d / "private" / "wipe").exists()
@@ -6629,7 +6638,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == f"{dev}\nCOMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
@@ -6637,7 +6646,7 @@ sys.exit(1)
     r = run()
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        dev, "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0", unstarted,
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
@@ -6682,14 +6691,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
-    env["COMPOSE_DEVELOPMENT"] = "composed by a deferral's follow-on on a prover node"
-    assert run().returncode == 0
-    assert (out / "verdicts.txt").read_text().splitlines()[0] == f"COMPOSITE DEVELOPMENT: {env['COMPOSE_DEVELOPMENT']}"
-    assert json.loads((p / "remote" / "private" / "development.json").read_text()) == env.pop("COMPOSE_DEVELOPMENT")
-    (out / "verdicts.txt").unlink()
-    for x in (out / "composite", p, v2):
-        shutil.rmtree(x)
-    env |= {"COMPOSE_HANDOFF": "1", "COMPOSE_OFF_NODE": "1"}
+    env["COMPOSE_HANDOFF"] = "1"
     assert run().returncode == 0
     assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
         f"COMPOSITE: composed on {host}, not the served node the-served-node: from its compose hand-off (verifier-side "
@@ -6697,13 +6699,10 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
-    del env["SERVED_NODE"], env["COMPOSE_OFF_NODE"]
-    assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text().splitlines() == [
-        f"COMPOSITE refused: this is the served node {host}, which the prover controls, so a composite here claims no "
-        "record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it "
-        "here as a development check)"]
-    assert not (out / "composite").exists() and not p.exists()
+    del env["SERVED_NODE"], env["COMPOSE_HANDOFF"]
+    assert run().returncode == 0
+    assert (out / "verdicts.txt").read_text().splitlines()[-1] == on
+    assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
 
 
 #: onsite's own protocols: the piece's private directory, its public summary, its Lean, and a directory that isn't its

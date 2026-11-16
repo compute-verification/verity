@@ -557,9 +557,8 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
-    """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
-    ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
-    the node, gets the runner what it named and nothing more."""
+    """The table hands the runner ``COMPOSITE`` empty, so it composes none; a caller that names ``COMPOSITE``, or
+    ``COMPOSE_OFF_NODE=0`` for a composite on the node, gets the runner what it named and nothing more."""
     for name in ("COMPOSITE", "COMPOSE_OFF_NODE"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():

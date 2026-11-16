@@ -18,7 +18,7 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
+                              [--product P] [--deferred WHY] [--steps LO,HI] [--off-node] [--development]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
     served_verdicts.py witness < PATHS
@@ -161,7 +161,7 @@ where one about this node rejects or errs the composed verdict is ``reject`` and
 the verdict is the block record's, which is the compiled Lean ``onsite check``'s or ``remote check``'s (``remote-v1``'s
 under Pearl+) answer, as `composite.py` wrote it to the public composite under ``--composite`` (`served_composite.sh`'s
 $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the rows say. Without one composite of the
-product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
+product's check, one whose Lean answered, or with a development one (`composite.py --development`),
 no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
 name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
 record's window is refused (`composite_tie`): its SPOT case must name the digest of the docket R that
@@ -347,6 +347,8 @@ COPIED_FROM = ("a prover-side copy of each piece's answer file as the served nod
 #: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
 #: verdict was computed, and where the record is composed none of them is run again or held to anything.
 TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
+DEVELOPMENT_RUN = ("a development run (DEVELOPMENT=1): its sampled proofs may stand on a development challenger "
+                   "session's coins, not the auditor device's, so none of its verdicts is of record")
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
@@ -2356,7 +2358,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read") -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           lean: str = "no composite was read", development: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2391,7 +2393,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                            "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
-    left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
+    left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare),
+                              ("development_run", DEVELOPMENT_RUN if development else None)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
@@ -2541,6 +2544,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                        "whose verdict line the record names")
     r.add_argument("--steps", help="LO,HI: the window's engine steps, in place of picking them from the serve dir")
     r.add_argument("--off-node", action="store_true", help="composed from the served node's compose hand-off, off it")
+    r.add_argument("--development", action="store_true", help="a development run (DEVELOPMENT=1), which the record says")
     r.add_argument("--sampled-lean", action="store_true",
                    help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
     r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
@@ -2776,7 +2780,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean)
+                               answer=answer, lean=lean, development=a.development)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
