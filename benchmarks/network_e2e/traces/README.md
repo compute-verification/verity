@@ -50,8 +50,8 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   sends no timing. In a network attester trace the network attester in front of the server sends the release headers
   and streams the watermark (`network_attester_serve.py serve --watermark`, in
   `verity/protocols/resource_accounting/network/attester/`), and the summary takes each request's release from what the server
-  got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network attester's code in
-  front of the server on the serving host, not on a host the prover doesn't control. With no network attester in front
+  got, where the network attester's log agrees (`summary.feed_releases`); a run behind it shows the network attester's code in
+  front of the server on the serving host, not on a host the developer doesn't control. With no network attester in front
   of the server, the client stands in for it (`corpus.StandIn`): it numbers each request and puts it in the bucket of
   its send, in the release headers, and streams the watermark. The hostile schedulers' traces don't take the tick. τ_sat
   and τ_free are calibrated on a trace of the same server on the same host (`--tick-from`; `corpus.py tick TRACE_DIR`
@@ -59,9 +59,9 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   reads. `tick.sh`: GLM-5.3's load point under the tick on a whole H200 node, beside the same load admitted on arrival,
   then the advice v1 over both (its header has its command).
 - `ids.sh`: the id front (`verity-vllm ids-front`) before a server that is up under the tick, for a network attester
-  whose egress is the id form: vLLM's own server answers in HTTP, and the front sends the certifier only the output ids,
-  one id event each, then the trailer. With a command it runs the certifier's side through the front on the same host
-  and stops the front after it; without one the front serves a certifier that runs elsewhere (its header has its
+  whose egress is the id form: vLLM's own server answers in HTTP, and the front sends the network attester only the output ids,
+  one id event each, then the trailer. With a command it runs the network attester's side through the front on the same host
+  and stops the front after it; without one the front serves a network attester that runs elsewhere (its header has its
   command).
 - `run.sh`: the job on a leased GPU of a node (its header has its command and resources). `join.sh`: its summaries,
   comparison and the scheduler replay's table on a CPU node, for a GPU job run with `JOIN=0`. A summarized corpus is
