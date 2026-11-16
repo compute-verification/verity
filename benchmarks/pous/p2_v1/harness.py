@@ -246,7 +246,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/pous/verifier/tests/fixtures/p2-v4-keys.json"
+KEYS = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/pous/verifier/fixtures/p2-v4-keys.json"
 """The pinned v4 keys (`verity.protocols.resource_accounting.memory.pous.verifier.p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 

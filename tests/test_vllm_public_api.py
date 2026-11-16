@@ -434,15 +434,15 @@ _SHARED_WORDS = "until the shared word primitives move below both adapters"
 
 #: Single imports of a module neither PUBLIC nor KNOWN: (file, module) -> why it stands. Move the import and delete it.
 KNOWN_SITES = {
-    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
-    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
@@ -621,6 +621,6 @@ def test_the_scan_sees_each_form_and_the_tree():
     got = {(s.module, s.name) for s in _sites_in("x.py", text)}
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
-    assert ("benchmarks/harness/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
+    assert ("tests/benchmarks/harness/specs/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)
