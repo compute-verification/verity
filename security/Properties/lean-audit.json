@@ -67,9 +67,9 @@
   "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
   "Properties.Attest",
-  "Properties.Accounting.Requirement",
-  "Properties.Accounting.Served",
-  "Properties.Accounting.RegisteredCircuit",
+  "Properties.ResourceAccounting.Requirement",
+  "Properties.ResourceAccounting.Served",
+  "Properties.ResourceAccounting.RegisteredCircuit",
   "Properties.Composition",
   "Properties.InferenceOnly.Protocol",
   "Properties.InferenceOnly.Record",
@@ -115,12 +115,12 @@
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
-  "Properties.Accounting.Registration.Premises"
+  "Properties.Registration.Premises"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
  "assumptions": {
-  "Accounting.Assumptions.KeyBinding": {
+  "ResourceAccounting.Assumptions.KeyBinding": {
    "id": "key-binding",
    "owner": "@compute-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
@@ -137,12 +137,12 @@
   }
  },
  "domain": {
-  "Accounting.Compose.Declared.Reads": {
+  "ResourceAccounting.Compose.Declared.Reads": {
    "owner": "@compute-accounting",
    "digest": "34e1a427fab190fc8639f7212c7b3e301d106a2a3e7820f6766d8ed52fdac051",
    "why": "The gates a clause of `Scope` speaks of: gate `j` reads gate `i` (`Declared.Wf`'s coin rounds, `LayerCommitted`'s readers)."
   },
-  "Accounting.Compose.Declared.Writes": {
+  "ResourceAccounting.Compose.Declared.Writes": {
    "owner": "@compute-accounting",
    "digest": "a7f6a57ef22a891ed945c1d7816d0895ffa8ac8a41f9845322dd1ace42f8ff04",
    "why": "The gates a clause of `Scope` speaks of: the values the prover writes (`LayerCommitted`)."
@@ -274,220 +274,220 @@
   }
  },
  "open": {
-  "Accounting.Assumptions.ChainSum": {
+  "ResourceAccounting.Assumptions.ChainSum": {
    "owner": "@compute-accounting",
    "digest": "7ad0fc65bedd3bcb11daf125be103ea1315686f4dd0d691971d279a0c78ec748",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.CircuitCarriers": {
+  "ResourceAccounting.Assumptions.CircuitCarriers": {
    "owner": "@compute-accounting",
    "digest": "99f59232cf288d13cb7c5f394e99aa3978d8c3bc7d7c2f67e22acc18cc608b56",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.Compose.GuessLuckAt": {
+  "ResourceAccounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
    "digest": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.HelpWithinCertifier": {
+  "ResourceAccounting.Assumptions.HelpWithinCertifier": {
    "owner": "@compute-research",
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.Parties.Confined": {
+  "ResourceAccounting.Assumptions.Parties.Confined": {
    "id": "confined",
    "owner": "@memory-accounting",
    "digest": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.Parties.Faithful": {
+  "ResourceAccounting.Assumptions.Parties.Faithful": {
    "id": "faithful",
    "owner": "@memory-accounting",
    "digest": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.Parties.Secret": {
+  "ResourceAccounting.Assumptions.Parties.Secret": {
    "id": "secret",
    "owner": "@memory-accounting",
    "digest": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.Parties.WitnessPathPrivate": {
+  "ResourceAccounting.Assumptions.Parties.WitnessPathPrivate": {
    "id": "witness-path-private",
    "owner": "@memory-accounting",
    "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.SketchHashBudget": {
+  "ResourceAccounting.Assumptions.SketchHashBudget": {
    "owner": "@compute-accounting",
    "digest": "7152c3bee14ef89d534145e9ca82a0933d6aee2891e6a7e1beaa5a973944558b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.SketchRank": {
+  "ResourceAccounting.Assumptions.SketchRank": {
    "owner": "@compute-accounting",
    "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.SquaringFloor": {
+  "ResourceAccounting.Assumptions.SquaringFloor": {
    "owner": "@compute-accounting",
    "digest": "e3221c1341a83a0850d517579322dff20f661fb87ad013ef4b547cc75d2f1a9a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.TS.OperandHMu": {
+  "ResourceAccounting.Assumptions.TS.OperandHMu": {
    "id": "accounting-ts-operand-h-mu",
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.TS.ProofSoundAt": {
+  "ResourceAccounting.Assumptions.TS.ProofSoundAt": {
    "id": "accounting-ts-proofs-sound",
    "owner": "@compute-accounting",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.TS.ReceiptLuckAt": {
+  "ResourceAccounting.Assumptions.TS.ReceiptLuckAt": {
    "id": "accounting-ts-receipt-luck",
    "owner": "@compute-accounting",
    "digest": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.TS.UnitFixed": {
+  "ResourceAccounting.Assumptions.TS.UnitFixed": {
    "id": "accounting-ts-unit-fixed",
    "owner": "@compute-accounting",
    "digest": "ef200f592030ee7b72ed3b8f6cb7d7557c0ab56bd6e7cd30b2c4d660748453d6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Assumptions.WordCostsMacs": {
+  "ResourceAccounting.Assumptions.WordCostsMacs": {
    "owner": "@compute-research",
    "digest": "6bd040fc0a366e05c261a269bc43845578fdb319ae9e5df7eda4df4416dc261e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": {
+  "ResourceAccounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": {
    "owner": "@compute-accounting",
    "digest": "2ce8874e28d0b9a2c022d297f7757293ee2dc218a552922e1737d9cc00abc815",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.PrefixOf": {
+  "ResourceAccounting.Compose.PrefixOf": {
    "owner": "@compute-accounting",
    "digest": "20e76f89ae9e8add775b41b613a433d90b79f449fac25534292108cb5c52f9d2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.Scope": {
+  "ResourceAccounting.Compose.Scope": {
    "owner": "@compute-accounting",
    "digest": "d362c5e79d599c06c664a147eadc88e811b4d3bdcb3d93930ac23b1a7cb19e8c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.SplitRate": {
+  "ResourceAccounting.Compose.SplitRate": {
    "owner": "@compute-accounting",
    "digest": "c7eabc0812b80f74f761f6534791a40f16695287d8988db89e05f45ffa638500",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Gates.Property": {
+  "ResourceAccounting.Gates.Property": {
    "owner": "@compute-accounting",
    "digest": "cca267382696a493400aed3d716834fdcaa6b813e8e395a4e2b9e670196f5c12",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Gates.Restricted": {
+  "ResourceAccounting.Gates.Restricted": {
    "owner": "@compute-accounting",
    "digest": "be0dbfad64ed5222d72b7bed80afb9173ca69e5b81858ff3a36b954bf989faee",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.RateSketch.LifetimeCapped": {
+  "ResourceAccounting.RateSketch.LifetimeCapped": {
    "owner": "@compute-accounting",
    "digest": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Held.Assumptions.Covered": {
+  "ResourceAccounting.Remote.Held.Assumptions.Covered": {
    "id": "certifier-coverage",
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
    "issue": "MEM-289",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Held.Assumptions.Covers": {
+  "ResourceAccounting.Remote.Held.Assumptions.Covers": {
    "owner": "@memory-accounting",
    "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Held.Assumptions.IngressCounted": {
+  "ResourceAccounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
    "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
    "issue": "MEM-289",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Held.Assumptions.Paced": {
+  "ResourceAccounting.Remote.Held.Assumptions.Paced": {
    "owner": "@memory-accounting",
    "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
+  "ResourceAccounting.Remote.Held.Assumptions.SketchBoundAt": {
    "owner": "@memory-accounting",
    "digest": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Sample.Assumptions.Counted": {
+  "ResourceAccounting.Remote.Sample.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "cdbfc7fbafd1fc113303b2c07d4c028994d00e41331b24891aa8a82e7a85ea90",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Sample.Assumptions.Live": {
+  "ResourceAccounting.Remote.Sample.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "0a430c121942cc78809b5f72c22f130bedb41a4673f29a3284b69e0a4a4e6df6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Sample.Assumptions.Refused": {
+  "ResourceAccounting.Remote.Sample.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "5faa80c769bea8bfff01fdb1ff3eb80c3a8ff9d44af024685580c6d23644e1d0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Requirement.OneBlockEach": {
+  "ResourceAccounting.Requirement.OneBlockEach": {
    "owner": "@compute-accounting",
    "digest": "b2ef39d6e526e2594348fabf55c0b20b76c098ece66c9f7a769605c4281e073f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Requirement.Placement.Deadlines": {
+  "ResourceAccounting.Requirement.Placement.Deadlines": {
    "owner": "@compute-accounting",
    "digest": "ad9d24118ce106e6d2cbe144fb0a4f4ced756ae6b004396587332dd31423e97e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Requirement.PlanMatches": {
+  "ResourceAccounting.Requirement.PlanMatches": {
    "owner": "@compute-accounting",
    "digest": "d31411d0350f43c0cb39bf15c41023cc7ba1d489380042787eddd453c8ba5b8d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Requirement.StoreMatches": {
+  "ResourceAccounting.Requirement.StoreMatches": {
    "owner": "@compute-accounting",
    "digest": "d0aa0ce85aa44739a2c1b77355321989f75e5341ae0d84073797caa63794306b",
    "issue": "LEAN-186",
@@ -910,7 +910,7 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.NetworkCertifierSound": {
+  "Verity.Vocab.NetworkAttesterSound": {
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
    "issue": "LEAN-186",
@@ -960,12 +960,12 @@
   }
  },
  "ids": {
-  "Accounting.Assumptions.KeyBinding": "key-binding",
-  "Accounting.Assumptions.Parties.Confined": "confined",
-  "Accounting.Assumptions.Parties.Faithful": "faithful",
-  "Accounting.Assumptions.Parties.Secret": "secret",
-  "Accounting.Assumptions.Parties.WitnessPathPrivate": "witness-path-private",
-  "Accounting.Remote.Held.Assumptions.Covered": "certifier-coverage",
+  "ResourceAccounting.Assumptions.KeyBinding": "key-binding",
+  "ResourceAccounting.Assumptions.Parties.Confined": "confined",
+  "ResourceAccounting.Assumptions.Parties.Faithful": "faithful",
+  "ResourceAccounting.Assumptions.Parties.Secret": "secret",
+  "ResourceAccounting.Assumptions.Parties.WitnessPathPrivate": "witness-path-private",
+  "ResourceAccounting.Remote.Held.Assumptions.Covered": "certifier-coverage",
   "Claims.ExpectedCR": "ecr/sha-512",
   "Claims.StrictBirthday": "cr/sha-512",
   "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
@@ -1014,23 +1014,23 @@
   "Pous.Period.SecurityProofs.periodHeld": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Pous.Period.SecurityProofs.periodHeldDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Properties.Poub.Line.SecurityProofs.lineHeld": [
-   "Accounting.Remote.Held.Assumptions.Covered",
-   "Accounting.Remote.Held.Assumptions.Covers",
-   "Accounting.Remote.Held.Assumptions.IngressCounted",
-   "Accounting.Remote.Held.Assumptions.Paced",
-   "Accounting.Remote.Held.Assumptions.SketchBoundAt",
-   "Accounting.Remote.Sample.Assumptions.Counted",
-   "Accounting.Remote.Sample.Assumptions.Live",
-   "Accounting.Remote.Sample.Assumptions.Refused"
+   "ResourceAccounting.Remote.Held.Assumptions.Covered",
+   "ResourceAccounting.Remote.Held.Assumptions.Covers",
+   "ResourceAccounting.Remote.Held.Assumptions.IngressCounted",
+   "ResourceAccounting.Remote.Held.Assumptions.Paced",
+   "ResourceAccounting.Remote.Held.Assumptions.SketchBoundAt",
+   "ResourceAccounting.Remote.Sample.Assumptions.Counted",
+   "ResourceAccounting.Remote.Sample.Assumptions.Live",
+   "ResourceAccounting.Remote.Sample.Assumptions.Refused"
   ],
   "Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod": [
-   "Accounting.Assumptions.Compose.GuessLuckAt",
-   "Accounting.Assumptions.TS.OperandHMu",
-   "Accounting.Assumptions.TS.ReceiptLuckAt",
-   "Accounting.Assumptions.TS.UnitFixed",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
-   "Accounting.Compose.PrefixOf",
-   "Accounting.Compose.Scope",
+   "ResourceAccounting.Assumptions.Compose.GuessLuckAt",
+   "ResourceAccounting.Assumptions.TS.OperandHMu",
+   "ResourceAccounting.Assumptions.TS.ReceiptLuckAt",
+   "ResourceAccounting.Assumptions.TS.UnitFixed",
+   "ResourceAccounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
+   "ResourceAccounting.Compose.PrefixOf",
+   "ResourceAccounting.Compose.Scope",
    "Properties.Pouw.MonitoringPeriod.RegisteredBeforeDraw",
    "Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin",
    "Properties.Pouw.MonitoringPeriod.SampleIsCoin",
@@ -1103,7 +1103,7 @@
   "Base",
   "Circuits",
   "Commitments",
-  "NetworkCertifier",
+  "NetworkAttester",
   "NetworkCheck",
   "Lms",
   "Properties.Hash.Identity",
@@ -1141,9 +1141,9 @@
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
   "Poub",
-  "Properties.Accounting",
+  "Properties.ResourceAccounting",
   "CircuitRequirement",
-  "Definitions.Accounting",
+  "Definitions.ResourceAccounting",
   "Definitions.Compose",
   "Definitions.Poub",
   "Definitions.Registration",
@@ -1446,9 +1446,9 @@
    "honest": ["Properties.NetworkScan.scan_honest"],
    "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
   },
-  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
-   "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
-   "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
+  "ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound": {
+   "honest": ["ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
+   "nontrivial": "ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeldCoins": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
@@ -1629,15 +1629,15 @@
   }
  },
  "unwitnessed": {
-  "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
+  "ResourceAccounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "type_hash": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
    "unfolded_hash": "f4592ba96fdb3fec7bed8c52bb5f12a9f08a2d6c05b21caece185a2966f3bcbe"
   },
-  "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
+  "ResourceAccounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
    "type_hash": "233ad61733ca7095bc394ca4c902122f94aafdc423654f6584b19275efb55415",
    "unfolded_hash": "7ff67e61406ade02debf8ba99511046c3c5a32eaef1000efa42ef7d069959e71"
   },
-  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
+  "ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "type_hash": "d03eac6083dc91f985f258ffa9ba85043337fec435600a11bf6141e46e65c31b",
    "unfolded_hash": "6d6741157d56a2f660c80c03654b80363ec69eede8a1543cc3d532498100cb63"
   },
@@ -2367,22 +2367,22 @@
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity",
-    "Definitions.Accounting",
+    "Definitions.ResourceAccounting",
     "Properties.Assumptions",
     "Definitions.Pouw.PerRun"
    ],
    "except": [],
-   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, and its named assumption the instantiation (Properties.Assumptions.Pous), never over a proof"
+   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.ResourceAccounting`) whose capacity audit it is, and its named assumption the instantiation (Properties.Assumptions.Pous), never over a proof"
   },
-  "Properties.Accounting": {
-   "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": ["Properties.Accounting.Served", "Properties.Accounting.RegisteredCircuit"],
-   "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
+  "Properties.ResourceAccounting": {
+   "imports": ["Definitions.ResourceAccounting", "CircuitRequirement"],
+   "except": ["Properties.ResourceAccounting.Served", "Properties.ResourceAccounting.RegisteredCircuit"],
+   "why": "the requirement code's equalities are stated against its functions and the `Definitions.ResourceAccounting.Requirement` definitions they copy, never a proof"
   },
-  "Properties.Accounting.Served": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Compose.Compose"],
+  "Properties.ResourceAccounting.Served": {
+   "imports": ["Definitions.ResourceAccounting", "Spot", "Properties.Spot.Draw", "Properties.Compose.Compose"],
    "except": [],
-   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+   "why": "the served window's units and draw (`Definitions.ResourceAccounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Draw"],
@@ -2442,7 +2442,7 @@
     "Definitions.Compose.Assumptions.Parties"
    ],
    "except": [],
-   "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+   "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (ResourceAccounting.Assumptions.Parties), never over a proof"
   },
   "Properties.Flock": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock", "VStar.Unit"],
@@ -2486,7 +2486,7 @@
     "VStarRecursive.Sampled"
    ],
    "except": ["Properties.Verity.LedgerPinned"],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the challenger's coin tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the challenger's coin tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
@@ -2521,7 +2521,7 @@
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
     "Properties.Identity",
-    "Definitions.Accounting",
+    "Definitions.ResourceAccounting",
     "Definitions.Assumptions.Hash"
    ],
    "except": [],
@@ -2595,10 +2595,10 @@
    "except": [],
    "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   },
-  "Properties.Accounting.RegisteredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.Poub.Remote.Schedule"],
+  "Properties.ResourceAccounting.RegisteredCircuit": {
+   "imports": ["Definitions.ResourceAccounting", "Properties.Poub.Remote.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.Poub.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.ResourceAccounting`, `ResourceAccounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.Poub.Schedule`), never a proof"
   },
   "Properties.Spot.Members": {
    "imports": ["Properties.Spot.Bits", "Spot.Slots"],
@@ -2619,11 +2619,11 @@
    "imports": [
     "Properties.InferenceOnly.Record",
     "Properties.Flock.Circuit.CircuitOf",
-    "Definitions.Accounting.ReadUnit",
+    "Definitions.ResourceAccounting.ReadUnit",
     "Spot.Bits"
    ],
    "except": [],
-   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.ResourceAccounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   },
   "Properties.Pouw.PearlPlusTie": {
@@ -2669,7 +2669,7 @@
     "Definitions.Compose.Assumptions.Parties"
    ],
    "except": [],
-   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+   "why": "what the auditor sees of the memory challenger in a session is stated over the device's record of a round (Properties.Pous.MemoryChallenger, MemoryChallenger) and the party assumptions (ResourceAccounting.Assumptions.Parties), never over a proof"
   },
   "Properties.InferenceOnly": {
    "imports": [
@@ -2724,40 +2724,40 @@
   "Properties.Ties": {
    "imports": [
     "Properties.Verity.Game",
-    "Definitions.Accounting.Registration.View",
+    "Definitions.Registration.View",
     "Flock.ProvedScope",
     "NetworkCheck.Check"
    ],
    "except": [],
-   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Accounting.Registration.View`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
+   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Registration.View`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
   },
-  "Properties.Accounting.Registration": {
+  "Properties.Registration": {
    "imports": [
-    "Definitions.Accounting.Registration",
+    "Definitions.Registration",
     "RegistrationLog",
     "Properties.Core.Site",
-    "Properties.Accounting.Registration.Premises",
+    "Properties.Registration.Premises",
     "Definitions.Core.Compiler"
    ],
    "except": [],
-   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`) and, for the builders' caps (`Properties.Accounting.Registration.Premises`), the compilers they name (`Definitions.Core.Compiler`), never a proof",
+   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Registration.View`), over the Site's denotations (`Properties.Core.Site`) and, for the builders' caps (`Properties.Registration.Premises`), the compilers they name (`Definitions.Core.Compiler`), never a proof",
    "sealed": true
   },
   "Properties.Pouw.MonitoringPeriod": {
    "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting",
+    "Definitions.ResourceAccounting.Assumptions",
     "PouwCheck",
     "Definitions.Compose.ComposeMonitoringPeriod",
     "Definitions.Compose.Assumptions.Compose"
    ],
    "except": ["Properties.Pouw.MonitoringPeriod.Witnesses"],
-   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
+   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.ResourceAccounting.Assumptions`), never a proof"
   },
   "Properties.Pouw.MonitoringPeriodJ10R": {
    "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting",
+    "Definitions.ResourceAccounting.Assumptions",
     "PouwCheck",
     "Properties.Pouw.MonitoringPeriod",
     "Definitions.Pouw.TS"
@@ -2771,14 +2771,14 @@
    "why": "the period's credit over several tile strata is stated against the one-stratum statement's own vocabulary (`Properties.Pouw.MonitoringPeriodJ10R`: its verdict `PouwCheck.Credit.window`, its coins, tile run and premises) read at each stratum's view of the period's coins, never a proof"
   },
   "Properties.Compose.Compose": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Definitions.Compose.Compose"],
+   "imports": ["Definitions.ResourceAccounting", "Spot", "Properties.Spot.Draw", "Definitions.Compose.Compose"],
    "except": [],
    "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Compose.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
   },
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting",
+    "Definitions.ResourceAccounting.Assumptions",
     "Properties.Pouw.MonitoringPeriod",
     "Definitions.Pouw.Assumptions.CreditedWords"
    ],
@@ -2787,8 +2787,8 @@
   },
   "Properties.Certifier.JointBridge": {
    "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting",
+    "Definitions.ResourceAccounting.Assumptions",
     "Properties.Pous.Period",
     "Properties.Pouw.MonitoringPeriod"
    ],
@@ -2798,19 +2798,19 @@
     "Properties.Certifier.JointBridge.WorkOfCreditedWords",
     "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod"
    ],
-   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Compose.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.MonitoringPeriod`), never a proof"
+   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Compose.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.ResourceAccounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.MonitoringPeriod`), never a proof"
   },
   "Properties.Certifier.JointBridge.WorkOfCreditedWords": {
    "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting",
+    "Definitions.ResourceAccounting.Assumptions",
     "Definitions.Pouw.Assumptions.CreditedWords"
    ],
    "except": [],
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.Poub.Remote.Pooled": {
-   "imports": ["Definitions.Accounting", "Poub", "Definitions.Poub.Remote"],
+   "imports": ["Definitions.ResourceAccounting", "Poub", "Definitions.Poub.Remote"],
    "except": [],
    "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Poub.Remote.Sample`), never a proof"
   },
@@ -2833,7 +2833,7 @@
    "imports": [
     "Definitions.Pouw.Basic",
     "Definitions.Poub.Remote",
-    "Definitions.Accounting.Assumptions",
+    "Definitions.ResourceAccounting.Assumptions",
     "Poub",
     "Properties.Poub.Remote.Line",
     "Definitions.Poub.Assumptions.RemoteHeld",
@@ -2841,12 +2841,12 @@
     "Definitions.Poub.Assumptions.RemoteDraw"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Poub.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Poub.Remote, Definitions.ResourceAccounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.Poub.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "Poub", "Properties.Poub.Remote"],
+   "imports": ["Definitions.ResourceAccounting", "Poub", "Properties.Poub.Remote"],
    "except": [],
-   "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.ResourceAccounting.Schedule`), never a proof"
   },
   "Properties.Poub.Remote.Subprotocol": {
    "imports": ["Poub", "Properties.Poub.Remote.Line"],
@@ -13356,12 +13356,12 @@
  "shape": {
   "premises": [
    "Definitions.Certifier.Premises",
-   "Definitions.Accounting.Assumptions",
+   "Definitions.ResourceAccounting.Assumptions",
    "Definitions.Poub.Assumptions",
    "Definitions.Compose.Assumptions.Parties",
    "Properties.Poub.Remote.Line.Premises",
    "Properties.Poub.Remote.Schedule",
-   "Properties.Accounting.Registration.Premises"
+   "Properties.Registration.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -14859,17 +14859,17 @@
   "frozen": {
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
-   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
+   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (ResourceAccounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
-   "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are Accounting.Assumptions.WordCostsMacs and Accounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
-   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and every prover strategy, and takes PeriodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "ResourceAccounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (ResourceAccounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are ResourceAccounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and ResourceAccounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
+   "ResourceAccounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
+   "ResourceAccounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (ResourceAccounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are ResourceAccounting.Assumptions.WordCostsMacs and ResourceAccounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is ResourceAccounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
+   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (ResourceAccounting.Run) and every prover strategy, and takes PeriodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c + ε from a bound c on P2's audit at N and the coin commitments' hiding ε at N; it speaks of the deployed system as endToEndRing does",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": "frozen: endToEndRingAt with c from P2RingRoundSecure (PousP2Rounds.graded), at every N it covers (2^19 to 2^25); a bound on a game's probability in the ring model, not a property of one function",
    "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
@@ -14895,17 +14895,17 @@
    "Pous.Component.SecurityProofs.wipeAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts",
    "Pous.Component.SecurityProofs.runAccepts_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
    "Pous.Component.SecurityProofs.runBinds_meets": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite, a list of its subprotocols' ids, as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite's list (Verity.Registration.Composite.onsite, whose verifier is Core.Onsite.protocol, Verity.verifier_onsite, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (Poub.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are ResourceAccounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Properties.Remote.PolicyHeld of every case of the policy in the play's messages (Verity.PolicyCase), and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkAttesterSound, WipeSound) as a hypothesis until each is proved (InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis), Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols: the union bound at the compiled verifier of remote's list (Verity.Registration.Composite.remote, whose verifier is Core.Remote.V1.protocol, verity/remote/v1, Verity.verifier_remote, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol) and the inference-only policy, the policy and sampled proofs committed to one record and Pearl+'s run on it (Properties.Composition.AcceptSame, AcceptTied), with the same errors and Vocab, the policy's claim PolicyHeld of its sent case, and PoUW's claim Pearl+'s in MACs at the credit its check published; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
-   "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
+   "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is ResourceAccounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
    "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
-   "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
+   "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, ResourceAccounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
    "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
    "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it",
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.Poub.ScheduleLayoutGap and, as the event's first conjunct, Poub.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.Poub.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
-   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Certifier.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise Accounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise",
+   "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): ResourceAccounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.Poub.ScheduleLayoutGap and, as the event's first conjunct, Poub.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.Poub.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "ResourceAccounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Certifier.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise ResourceAccounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise",
    "Pous.Period.SecurityProofs.pooledShort_log": "frozen (premise): periodHeld pooled over a monitoring period of U windows, each window's joint run, audit and other audits' coins fixed before its own capacity coins (Pous.Period.FixedBefore) and its strategy any under the device model: the probability that at least M windows are accepted with no break and a certificate short of the held state (Pous.Period.ShortAccepted) is at most delta', for every z > 1 and every M >= ((z - 1) U (delta + eps_max) + log (1 / delta')) / log z (Pous.Period.CountMeets). Its event's acceptance is an abstract audit's (Pous.Period.Audits.Accepts) over an abstract joint run of the device model, and it takes periodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates, the certificate's fit in the ring game's state bound, Pous.Period.Fits) and FixedBefore, none of them under shape.premises. delta' is delta_PoUS, a public deployment parameter that no component publishes.",
    "Pous.Period.SecurityProofs.periodHeldCoins": "frozen (premise): periodHeld in the shared coin game (Verity.Game.prCoin over the memory challenger's hm96 coins and uniform streams, at any primitive), where the session, the device record and the schedule don't read the primitive (Pous.Period.ReadsNoPrimitive); it takes periodHeld's premises (P2RingAuditSecure, the device model Pous.Period.DeviceModel, the instantiation Pous.Period.Instantiates and the certificate's fit in the ring game's state bound, Pous.Period.Fits), none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
@@ -14969,10 +14969,10 @@
   },
   "events": ["Claims.Pr", "Pouw.pr"],
   "inline": {
-   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul c.S (run.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "ResourceAccounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul c.S (run.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
+   "ResourceAccounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
     "∀ (ξ : (i : I) → Ω i), Real.instLE.le (Pouw.pr fun x => And (acc ξ x) (Real.instLT.lt (fixed ξ x) (credit ξ x))) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Component.SecurityProofs.runAccepts_meets": {
@@ -15008,28 +15008,28 @@
    },
    "Pous.Period.SecurityProofs.obligationHeld": {
     "Function.Injective tag": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Period.SecurityProofs.periodCapacity": {
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Prod ΩW (Prod ΩQ (Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)))), r.accepts Accounting.Resource.capacity ω → And (P.Accepts ω) (Not (P.Break ω))": "r.accepts taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ω : Prod ΩW (Prod ΩQ (Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)))), r.accepts ResourceAccounting.Resource.capacity ω → And (P.Accepts ω) (Not (P.Break ω))": "r.accepts taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Period.SecurityProofs.periodHeld": {
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Period.SecurityProofs.periodHeldAt": {
     "ENNReal.instLE.le (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 p) 105) (instHMul.hMul 105 ε₀)) (instHAdd.hAdd (ENNReal.ofReal Pous.Params.δ.cast) (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 129) (instHPow.hPow (ENNReal.instInv.inv 2) 130)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHPow.hPow 2 19) N": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le N (instHPow.hPow 2 27)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) (Pous.EndToEnd.SAt N).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) (Pous.EndToEnd.SAt N).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Period.SecurityProofs.periodHeldDemo": {
     "ENNReal.instLE.le (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 p) 105) (instHMul.hMul 105 ε₀)) (instHAdd.hAdd (ENNReal.ofReal Pous.Params.δ.cast) (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 129) (instHPow.hPow (ENNReal.instInv.inv 2) 130)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq N (instHMul.hMul 1038 (instHPow.hPow 2 16))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) 1060008348186": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) 1060008348186": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.Period.SecurityProofs.periodHeldDeployed": {
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win ResourceAccounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15049,20 +15049,20 @@
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.checkedCreditMonitoringPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (ResourceAccounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriod.SecurityProofs.checkedWorkMonitoringPeriod": {
     "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (ResourceAccounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin Np), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd Np) (ResourceAccounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -15070,10 +15070,10 @@
     "instLENat.le Cd.units 144": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin 144), Real.instLE.le (instHMul.hMul (instHMul.hMul (8 / 9) (Nat.cast 144)) (Accounting.Compose.shareCone Sc Cd 144 t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.shareCone Sc Cd 144) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin 144), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd 144 t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd 144 t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd 144 t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin 144), Real.instLE.le (instHMul.hMul (instHMul.hMul (8 / 9) (Nat.cast 144)) (ResourceAccounting.Compose.shareCone Sc Cd 144 t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd 144) (ResourceAccounting.Compose.shareCone Sc Cd 144) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin 144), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd 144 t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd 144 t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd 144 t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd 144) (ResourceAccounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriod.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.MonitoringPeriod.stagedAt salt staged) (Properties.Pouw.MonitoringPeriod.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.h1J10RCheckedCreditMonitoringPeriod": {
@@ -15081,10 +15081,10 @@
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditMonitoringPeriodStrata": {
@@ -15094,10 +15094,10 @@
     "∀ (s : Fin mB), Eq (Cd s).rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → instLENat.le 1 (k s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → And (Real.instLT.lt 0 (ρ s)) (Real.instLE.le (ρ s) 1)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLE.le (instHMul.hMul (instHMul.hMul (ρ s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s).cast) (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t)) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) j) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (1 / 2))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (Accounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLE.le (instHMul.hMul (instHMul.hMul (ρ s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s).cast) (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t)) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) j) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s) t) (1 / 2))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) (ResourceAccounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.MonitoringPeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedFreed": {
@@ -15105,10 +15105,10 @@
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15121,10 +15121,10 @@
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15137,19 +15137,19 @@
     "instLENat.le Cd.units (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Cd.rounds 1": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.monitoringPeriodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT).cast) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), Real.instLE.le (ResourceAccounting.Compose.stageShare (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (ResourceAccounting.Compose.shareCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (ResourceAccounting.Compose.tileLuck Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (ResourceAccounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq Pl.game (ResourceAccounting.Compose.monitoringPeriodGame (ResourceAccounting.Compose.tileStage Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) (ResourceAccounting.Compose.liveCone Sc Cd (Properties.Pouw.MonitoringPeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.MonitoringPeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.MonitoringPeriodJ10R.pinnedAt (Properties.Pouw.MonitoringPeriodJ10R.saltOf ws) place tile) (Properties.Pouw.MonitoringPeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": {
-    "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le E (instHMul.hMul (instHMul.hMul 3 ResourceAccounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.Poub.runLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : ResourceAccounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.Poub.runLayout blocks dflt appended sent (ResourceAccounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },

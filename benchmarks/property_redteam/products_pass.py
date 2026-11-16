@@ -1,11 +1,11 @@
 """Data products on property/v1's pass: the gate model's nonlinear units read on Programs, and the honest int8
 Definitions' census with them.
 
-The gate model (`security/Definitions/Accounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
+The gate model (`security/Definitions/ResourceAccounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
 whose coefficients are fixed before the run's coins: constants, registered values (the pre-committed weights),
 additions and wiring. Every s8-family lane whose two multiplicands both depend on a run input is a *data product*, one
 unit whatever their width or range: an exact product of two data values is a universal gate (an AND of two bits is one,
-and a bitwise codec computes any function with them for free otherwise, `Accounting.SecurityProofs.Gates.
+and a bitwise codec computes any function with them for free otherwise, `ResourceAccounting.SecurityProofs.Gates.
 EncodeChainRefuted`, `bitwise_codec.py`). Every other nonlinear op is a budgeted unit, as property/v1 counts it.
 `Property` bounds the data products per certified byte read, beside the budgeted classes.
 

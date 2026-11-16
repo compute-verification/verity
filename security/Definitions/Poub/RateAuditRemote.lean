@@ -42,7 +42,7 @@ most a factor `G` in each pass's error.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -153,4 +153,4 @@ def atCand (A : GrindChain P N b h œÅ S L q r s G) (c : Fin G) : Chain P N b h œ
 
 end GrindChain
 
-end Accounting.Rate
+end ResourceAccounting.Rate

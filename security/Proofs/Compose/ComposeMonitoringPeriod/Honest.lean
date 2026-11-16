@@ -2,13 +2,13 @@ module
 
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.Compose.SplitRateClosed
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 public import Properties.Pouw.MonitoringPeriod.Witnesses
 
 /-!
 # An honest period meets `CircuitWorkMonitoringPeriod`'s premises
 
-The positive twin of `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditMonitoringPeriod` (brief rule I,
+The positive twin of `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditMonitoringPeriod` (brief rule I,
 as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
 windows of a circuit of one gate, one credited word, one tile and one
 live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
@@ -27,14 +27,14 @@ the second is, and all `n + 1` when none is, with `n` credited live words then, 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
+namespace ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p = 0 := by
   have hp : p = fun _ => False := funext fun ω => propext ⟨h ω, False.elim⟩
   rw [hp]
-  exact Accounting.SecurityProofs.TS.Rounds.prob_false
+  exact ResourceAccounting.SecurityProofs.TS.Rounds.prob_false
 
 /-! ## The circuit and the honest period -/
 
@@ -119,7 +119,7 @@ theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope scheme circuit δs :=
 
 /-- `SplitRateClosed` at `K_d = 1`, `ρ = 1`, `w_max = 1`, `p = p0 = ½`, `a = b = 1`: `Λ = 4`. -/
 theorem splitRate : SplitRate 1 1 (1 / 2) (1 / 2) 1 1 1 4 := by
-  have h := Accounting.SecurityProofs.Compose.Rates.splitRateClosed 1 1 (1 / 2) (1 / 2) 1 1 1 le_rfl one_pos
+  have h := ResourceAccounting.SecurityProofs.Compose.Rates.splitRateClosed 1 1 (1 / 2) (1 / 2) 1 1 1 le_rfl one_pos
     zero_le_one (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num) one_pos one_pos
   convert h using 1
   norm_num
@@ -272,7 +272,7 @@ theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+  exact ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -283,7 +283,7 @@ theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
         δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+  exact ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -457,7 +457,7 @@ theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
       δs + ((n + 1 : ℕ) : ℝ) * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -⟩ :=
     real_meets n hδs
-  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
+  exact ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
     le_rfl (monitoringPeriodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk zero_le_one zero_le_one (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -468,8 +468,8 @@ theorem real_credit (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
         (creditedLive scheme circuit (monitoringPeriodR n) (runR (n + 1)) x) 1 1 4 δs) ≤ δs + ((n + 1 : ℕ) : ℝ) * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -⟩ :=
     real_meets n hδs
-  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
+  exact ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
     le_rfl (monitoringPeriodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk one_pos one_pos (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
-end Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
+end ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest
