@@ -11,7 +11,7 @@ MiB (`streamed_wipe.egress_units`), `EGRESS_MAX_UNITS` when none is given (`egre
   key, a bad signature, an uncovered batch size.
 
 An accepted wipe publishes `uncounted`, `certify` at `EGRESS_MAX_UNITS`: `certified` false, whatever count the evidence
-names. No network certifier signs that count, so until the check that composes the wipe with the network certifier
+names. No network attester signs that count, so until the check that composes the wipe with the network attester
 holds it to the certifier's, the bound is taken on no count, and the profile names the evidence's count as a gap
 (`writer_gap`). `certify` is what that check is to publish: `{"certified", "egress_mib", "eps", "foreign_bits", "k",
 "memory_bits", "r"}`, `memory_bits = M` the declared tiers' bits (the fill's `n · 512` and `R` past it, the memory it doesn't reach),
@@ -21,20 +21,20 @@ that isn't saturated) `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128` (`foreign_bits`), with `E` the evidence's egress.
 Off it, `foreign_bits` is `M` and `eps` 0, the vacuous statement, and the profile names each gap. `EXPERIMENTAL` says
 what the bound rests on. The session signs no egress, and this check holds the evidence's count to nothing: it is the
-count whoever writes the evidence gives. That it is the network certifier's count over the span between the session's
-two marks is for the check that composes the wipe with the network certifier to establish.
+count whoever writes the evidence gives. That it is the network attester's count over the span between the session's
+two marks is for the check that composes the wipe with the network attester to establish.
 
 `named` and `outcome_counted` are the wipe's half of that check (`MemoryChallenger/WipeCount.lean`). `named` is what a
 composition's tie reads off the wipe's case: the session's start mark, the 64 bytes its two marks open to, and the
 evidence's count. `outcome_counted` is `outcome` that publishes `certify` at the evidence's count, for a composition
-that holds `named` to the network certifier's count over the span between those marks; it rejects an evidence with no
+that holds `named` to the network attester's count over the span between those marks; it rejects an evidence with no
 count and a session with no start mark. Nothing here calls it: on its own it certifies on what the evidence states.
 
 What runs one wipe, the prover's end of its session and the answer here, is `pous/prover/wipe_run.py`. What an accepted
 wipe's bound doesn't cover is `uncertified`, from its placement (`wipe_party.placement`): the key custody of a session
 not signed under a key the committed configuration's `[[pin]]` entries give the memory challenger for the wipe
 (`period.deployment`), an uncounted egress, the node's memory outside the declared tiers, what the prover's store leaves
-out (`store_gaps`) and each link leaving the node that no network certifier counts (`wipe_party.link`). Without
+out (`store_gaps`) and each link leaving the node that no network attester counts (`wipe_party.link`). Without
 `wipe-protocol` among the period's tools the Python's accept decides nothing (`NO_JUDGE`). `foreign_labels` is the
 labels a cheat of a given size keeps prior content in place of.
 """
@@ -150,13 +150,13 @@ def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
 
 def uncounted(p: sw.WipeParams) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.uncounted`, what an accepted wipe publishes: `certify` at `EGRESS_MAX_UNITS`,
-    which certifies nothing, whatever count the evidence names, since no network certifier signs that count."""
+    which certifies nothing, whatever count the evidence names, since no network attester signs that count."""
     return certify(p, sw.EGRESS_MAX_UNITS)
 
 
 def writer_gap(egress_mib: int) -> list[str]:
     """`MemoryChallenger.WipeProtocol.writerGap`: the evidence's count, when it names one `gaps` doesn't: the evidence
-    writer's, which no network certifier signs."""
+    writer's, which no network attester signs."""
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         return []
     return [f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe "
@@ -230,7 +230,7 @@ def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
           egress_mib: int | None) -> dict[str, Any] | None:
     """`MemoryChallenger.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
     signed message names, the session's start and end messages (`streamed_wipe.start_message` and `end_message`, the
-    64 bytes the memory challenger hands the network certifier for each of its two marks) and the evidence's count in
+    64 bytes the memory challenger hands the network attester for each of its two marks) and the evidence's count in
     whole MiB. None while the session is unsigned or the evidence gives no count. It raises what `end_message` raises
     where the signed session's message can't be formed (a batch record past a field's width), as no session `outcome`
     accepts is. It names no device, link or key."""
@@ -253,7 +253,7 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
     refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
     of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
     `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
-    the network certifier's count over the span between the session's two marks is the count the certifier's."""
+    the network attester's count over the span between the session's two marks is the count the certifier's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
     if out[0] != "accept":
         return out
@@ -319,9 +319,9 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
     check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
     signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
-    any other count is the evidence writer's, which no network certifier signed, and certifies no wipe), each
+    any other count is the evidence writer's, which no network attester signed, and certifies no wipe), each
     undeclared tier, what the prover's store leaves out (`store_gaps`) and each link leaving the node that no network
-    certifier counts. A placement that names the prover's store (`prover_store`, before the placement named no device)
+    attester counts. A placement that names the prover's store (`prover_store`, before the placement named no device)
     is refused: its store's gaps aren't in it."""
     if "prover_store" in where or "store_gaps" not in where:
         raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "

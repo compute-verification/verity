@@ -63,7 +63,7 @@ PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)
   proofs: one output line a phase, which credits only that phase. It trusts its challenger, so an outcome convinces the
   auditor and no third party.
 
-A certified execution phase's salt is the network certifier's instead (`salt.py`), a layer of its own that these parties
+A certified execution phase's salt is the network attester's instead (`salt.py`), a layer of its own that these parties
 don't hold, and a live phase's round challenges aren't in them yet.
 
 ## PoUW in the remote protocol
@@ -137,7 +137,7 @@ execution phase:
 
 1. The weights' root binds every weight's committed rows, and a credit period's open signs it.
 2. The salt is a live coin of the challenger, opened once after the root it follows (`PouwCheck.Rounds`,
-   `PouwCheck.Pass`), or, for a certified execution phase, the network certifier's salt (`salt.py`).
+   `PouwCheck.Pass`), or, for a certified execution phase, the network attester's salt (`salt.py`).
 3. The activation rows and the execution phase's entries are committed under one root, and the execution phase registers its
    level on the grid, its sampling design (a uniform subset of K′ of its N tiles, K′ the least K that misses a wrong
    share ε of the credited work with probability at most δ) and its fixed length before any coin is flipped.

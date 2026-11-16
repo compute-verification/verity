@@ -40,7 +40,7 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
   designs with each request charged at most the bits it serves (the `served_bits` input: each of its tokens served
-  as the token select's output word, at most the network certifier's registered response cap where the model's
+  as the token select's output word, at most the network attester's registered response cap where the model's
   `certifier` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
   (`card_influenceTwo_le_served_min`), which still counts which of a request's proof blocks are incorrect, and never
   above the scope's served bits (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`),
@@ -139,9 +139,9 @@ REQUESTS = ("census", "workload")
 SERVING = ("assumed", "measured")
 #: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
 SERVING_GOAL = 8 * 300e9
-#: the tokens a request serves: at most the network certifier's registered response cap, or every one of its tokens
+#: the tokens a request serves: at most the network attester's registered response cap, or every one of its tokens
 SERVED = ("cap", "request")
-#: what holds each response the network certifier releases to its registered cap
+#: what holds each response the network attester releases to its registered cap
 CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
@@ -150,7 +150,7 @@ DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token
               "layer_of_token": "Interior commitments at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
-#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
+#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network attester a layer of its own
 ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
          "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
          "no recursion (the proof_overhead card's dev arm); and a verifier samples the sample on the challenger's live "

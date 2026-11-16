@@ -99,7 +99,7 @@ class Keeper:
     """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
     its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
     head. `keep` takes a whole hand, or None, as `NetworkCertifier(lengths=…)` gives it to a publisher in the network
-    certifier's own process. In a schedule with a head offset it writes no line: it hands each one to `back`
+    attester's own process. In a schedule with a head offset it writes no line: it hands each one to `back`
     (execution phase, line), which that schedule and no other has."""
 
     def __init__(self, out: Path, issuer: Issuer, params: NetworkCertifierParams, link: str, back=None) -> None:
@@ -111,7 +111,7 @@ class Keeper:
 
     def _kept(self, window: int, line: dict, salts: bytes) -> None:
         """An execution phase's salts to `rows.salts`, and its line to `rows.jsonl` or back to the network
-        certifier."""
+        attester."""
         bf.write_blobs(self.out / SALTS, salts)
         if self.back is not None:
             self.back(window, line)
@@ -162,7 +162,7 @@ class Keeper:
 
 
 class Lines:
-    """The network certifier's `leave` in a schedule with a head offset (`connection_rows_run`'s "The hand"): called
+    """The network attester's `leave` in a schedule with a head offset (`connection_rows_run`'s "The hand"): called
     by its tick with an execution phase, the tick and the line the publisher handed back, it appends the line to
     `rows.jsonl` as it was handed back; with None for the line, the note that the execution phase's line missed its
     last tick. It writes nothing of the tick, which the device's own log alone holds (`NetworkCertifier.heads`). The file is
