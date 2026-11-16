@@ -23,7 +23,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     `verifier/live_challenger/` holds the auditor device's challenger service. `experimental/` holds the protocols being
     tried that no configuration lists (`dither/`, `pearl_c4/`). Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `attester/` is the
-    auditor's device (the network attester, the memory challenger).
+    auditor's device (the network attester, the memory attester).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/prover/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
@@ -180,7 +180,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
-- **Auditor-trusted devices.** The network attesters and memory challengers sign what they see; what they sign is
+- **Auditor-trusted devices.** The network attesters and memory attesters sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
   control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-device`.
   Nothing the developer runs or hosts is trusted. "Network attester" is its one name, never "network certifier", "warden" or "tap".
