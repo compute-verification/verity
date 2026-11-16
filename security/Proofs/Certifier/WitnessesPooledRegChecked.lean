@@ -25,6 +25,11 @@ Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`): at that instanc
 `1`, the phase's own error being `0` (`twoL` makes no SHA-512 call, `twoL_εregX` and `twoL_bopsX`), and the checked
 count is strictly below `PooledLeakRegistered`'s, the checked input being a free input outside the registered ones
 (`pooledCount_checked_lt`).
+
+Its third (`PhaseChecks_invalid`): `PhaseChecks` at `εchk = 1/2` at a prover `twoL` accepts on half its tapes
+(`coinP₂`), under a check that pins the checked input and that the run at the trace with the registered openings fails
+on every tape. The incorrect set there is empty (`twoL_FregR_certOps`), so the miss is the acceptance probability
+itself, `1/2`, and not charged to the phase's error.
 -/
 
 @[expose] public section
