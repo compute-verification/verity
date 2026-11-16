@@ -1100,6 +1100,41 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ = c₁ * c₂ * (Fintype.card α * Fintype.card β) := by ring
 
 
+/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
+theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
+    (g : ℝ) ≤ p₀ β S B ℓ * B := by
+  unfold p₀
+  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
+  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
+    exact_mod_cast (by omega : g ≤ B)
+  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
+    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
+    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
+    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
+    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
+      field_simp
+    rw [key]
+    have : ((β : ℝ) - S - B) / ℓ < b := by
+      rw [div_lt_iff₀ hℓ']; linarith
+    linarith
+
+open Classical in
+/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
+theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
+    (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
+    pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
+  have hgb := Finset.card_filter_add_card_filter_not (s := Finset.univ) good
+  rw [Finset.card_univ, Fintype.card_fin] at hgb
+  have hr := good_le_p₀ B ℓ β S _ _ hB hgb (by omega)
+  have hB0 : (B : ℝ≥0∞) ≠ 0 := by exact_mod_cast hB.ne'
+  rw [pr_def, Fintype.card_fin, ENNReal.div_le_iff hB0 (ENNReal.natCast_ne_top _)]
+  calc ((Finset.univ.filter good).card : ℝ≥0∞)
+      = ENNReal.ofReal ((Finset.univ.filter good).card : ℝ) := (ENNReal.ofReal_natCast _).symm
+    _ ≤ ENNReal.ofReal (p₀ β S B ℓ * B) := ENNReal.ofReal_le_ofReal hr
+    _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
+        rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
+
+
 /-- Post-process a program's output; the queries are unchanged. -/
 def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
@@ -5500,6 +5535,30 @@ open Classical in
 noncomputable def shiftΩ (t : Tweak n) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) : (p3ModelT n wc).Ω :=
   (ω.1, Function.update ω.2 t (xorPerm d * ω.2 t))
 
+theorem shiftΩ_ne {t t' : Tweak n} (h : t' ≠ t) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) :
+    (shiftΩ t d ω).2 t' = ω.2 t' := by
+  classical
+  simp only [shiftΩ]
+  exact Function.update_of_ne h _ _
+
+theorem shiftΩ_self (t : Tweak n) (d y : Lab n wc) (ω : (p3ModelT n wc).Ω) :
+    (shiftΩ t d ω).2 t y = labXor (ω.2 t y) d := by
+  classical
+  simp only [shiftΩ, Function.update_self]
+  rfl
+
+theorem shiftΩ_shiftΩ (t : Tweak n) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) : shiftΩ t d (shiftΩ t d ω) = ω := by
+  classical
+  refine Prod.ext rfl (funext fun t' => ?_)
+  by_cases ht : t' = t
+  · subst ht
+    ext y
+    rw [shiftΩ_self, shiftΩ_self]
+    simp [labXor, Labelling.bxor]
+  · rw [shiftΩ_ne ht, shiftΩ_ne ht]
+
+theorem labXor_eq_iff {a b v : Lab n wc} : labXor a b = v ↔ labXor a v = b := by
+  constructor <;> rintro rfl <;> funext i j <;> simp [labXor, Labelling.bxor]
 
 /-- **The shift count.** For `x`, `b` and `C` invariant under the shifts of `P_t`, the event `P_t(x) = b` is exactly a
 `1/M` share of `C`. -/
@@ -6183,6 +6242,11 @@ section Entries
 
 variable [DecidableEq ι] [∀ i, DecidableEq (α i)]
 
+theorem History.mem_dom {h : History α} {i : ι} {x : α i} : x ∈ h.dom i ↔ ∃ e ∈ h, e.inpAt i = some x := by
+  simp only [History.dom, List.mem_toFinset, List.mem_filterMap]
+
+theorem History.mem_rng {h : History α} {i : ι} {y : α i} : y ∈ h.rng i ↔ ∃ e ∈ h, e.outAt i = some y := by
+  simp only [History.rng, List.mem_toFinset, List.mem_filterMap]
 
 theorem History.card_dom_le (h : History α) (i : ι) : (h.dom i).card ≤ h.length :=
   (List.toFinset_card_le _).trans (List.length_filterMap_le _ _)
@@ -11635,6 +11699,10 @@ namespace HCell
 
 variable {n : ℕ}
 
+theorem known_union {G : TopoDAG n} {A B : P3ChainKnow n} {c : HCell n} :
+    c.known G (A.union B) ↔ c.known G A ∨ c.known G B := by
+  rcases c with ⟨L, u, k⟩ | ⟨L, v, p, k⟩ | ⟨L, v, p, k⟩ | ⟨u, w⟩ <;>
+    simp only [known, P3ChainKnow.union] <;> (try split_ifs) <;> simp [Finset.mem_union]
 
 theorem not_known_empty {G : TopoDAG n} {c : HCell n} : ¬ c.known G P3ChainKnow.empty := by
   rcases c with ⟨L, u, k⟩ | ⟨L, v, p, k⟩ | ⟨L, v, p, k⟩ | ⟨u, w⟩ <;>
@@ -12290,6 +12358,15 @@ theorem tri_pc (hc : (w, u) ∈ K.cols) (hk : (u, w) ∈ K.kc) : (u, w) ∈ K.pc
 
 end Tri
 
+
+theorem known_A {G : TopoDAG n} {K : P3ChainKnow n} {w u : Fin n} :
+    (HCell.lab 0 w u).known G K ↔ (w, u) ∈ K.cols := by simp [HCell.known]
+
+theorem known_B {G : TopoDAG n} {K : P3ChainKnow n} {u w : Fin n} :
+    (HCell.rc 1 u (ovCalls G u) w).known G K ↔ (u, w) ∈ K.kc := by simp [HCell.known]
+
+theorem known_C {G : TopoDAG n} {K : P3ChainKnow n} {u w : Fin n} :
+    (HCell.pin2 u w).known G K ↔ (u, w) ∈ K.pc := by simp [HCell.known]
 
 /-- A credit of round `τ` is in round `τ`'s fresh set. -/
 theorem cred_fresh {c τ : ℕ} {z : HCell n} (h : R.CredAt π c z τ) :
@@ -15399,6 +15476,25 @@ theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonem
         ring
 
 
+/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
+theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
+    (g : ℝ) ≤ p₀ β S B ℓ * B := by
+  unfold p₀
+  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
+  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
+    exact_mod_cast (by omega : g ≤ B)
+  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
+    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
+    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
+    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
+    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
+      field_simp
+    rw [key]
+    have : ((β : ℝ) - S - B) / ℓ < b := by
+      rw [div_lt_iff₀ hℓ']; linarith
+    linarith
+
+
 /-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
 theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
     ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
@@ -15556,6 +15652,22 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ = ((Finset.univ.filter P).card : ℝ≥0∞) * (c₂ * Fintype.card β) := by rw [← Finset.sum_mul, ← hP]
     _ ≤ (c₁ * Fintype.card α) * (c₂ * Fintype.card β) := by gcongr
     _ = c₁ * c₂ * (Fintype.card α * Fintype.card β) := by ring
+
+open Classical in
+/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
+theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
+    (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
+    pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
+  have hgb := Finset.card_filter_add_card_filter_not (s := Finset.univ) good
+  rw [Finset.card_univ, Fintype.card_fin] at hgb
+  have hr := good_le_p₀ B ℓ β S _ _ hB hgb (by omega)
+  have hB0 : (B : ℝ≥0∞) ≠ 0 := by exact_mod_cast hB.ne'
+  rw [pr_def, Fintype.card_fin, ENNReal.div_le_iff hB0 (ENNReal.natCast_ne_top _)]
+  calc ((Finset.univ.filter good).card : ℝ≥0∞)
+      = ENNReal.ofReal ((Finset.univ.filter good).card : ℝ) := (ENNReal.ofReal_natCast _).symm
+    _ ≤ ENNReal.ofReal (p₀ β S B ℓ * B) := ENNReal.ofReal_le_ofReal hr
+    _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
+        rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
 
 
 /-- Post-process a program's output; the queries are unchanged. -/
@@ -20732,6 +20844,11 @@ noncomputable def pinNextN (R : ChainReplay B ℓ c)
   | 0, a => some a
   | k + 1, a => (pinNextN R cut π k a).bind (R.pinNext cut π)
 
+theorem pinNextN_succ {cut : ℕ} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
+    {k : ℕ} {a e : VAtom B} :
+    R.pinNextN cut π (k + 1) a = some e ↔
+      ∃ y, R.pinNextN cut π k a = some y ∧ R.pinNext cut π y = some e := by
+  simp [pinNextN, Option.bind_eq_some_iff]
 
 theorem pinNextN_shift (R : ChainReplay B ℓ c)
     {cut : ℕ} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
