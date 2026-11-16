@@ -205,7 +205,7 @@ class Slowdown:
     serving: Mapping[str, Share]
     terms: Mapping[str, float]
     side: Side = "bound"
-    #: the reference training algorithm's MFU, `MFU₀`, which the overhead is against
+    #: the reference training algorithm's MFU, `MFU₀`, which the slowdown is against
     mfu: float = 1.0
     #: reference efficiency: a bound converts free compute into the reference's work at `a = 1`, not `1/MFU₀`
     reference_efficiency: bool = True
@@ -246,7 +246,7 @@ class Slowdown:
 def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
              reference_efficiency: bool = True, per_bit: float | None = None) -> Slowdown:
-    """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
+    """The slowdown from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the unregistered leaves. `w` is the reference's weight per gate, `u` the most a gate holds
     under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, `reference_efficiency`
     whether a bound counts free compute at it (`multiple_bound`), and `per_bit` the boundary term's `ω_max μ`."""
@@ -269,7 +269,7 @@ def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: flo
 
 def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: float | None = None) -> float:
     """The padded size ratio `|A| / T_0` when the unregistered leaves hold `unregistered` of the inventory's weight at capacity and the
-    monitored `1 − ε_unreg` hold `g` of theirs (`eps_unreg` defaults to `unregistered`)."""
+    registered `1 − ε_unreg` hold `g` of theirs (`eps_unreg` defaults to `unregistered`)."""
     rate = unregistered + (1 - (unregistered if eps_unreg is None else eps_unreg)) * g
     return efficiency / rate if rate > 0 else math.inf
 

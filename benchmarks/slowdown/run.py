@@ -51,12 +51,12 @@ def when(s: Scenario, overhead: float) -> str:
 
 
 def picked(r: Result) -> FamilyResult | None:
-    """The family the adversary picks: the one with the least lower bound."""
+    """The family the malicious developer picks: the one with the least lower bound."""
     return min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)
 
 
 def padded(r: Result) -> float:
-    """The padded size ratio `|A| / T_0` of the lower bound, at the family the adversary picks."""
+    """The padded size ratio `|A| / T_0` of the lower bound, at the family the malicious developer picks."""
     best = picked(r)
     return best.combined.padded if best else math.nan
 
@@ -76,7 +76,7 @@ def setter(f: FamilyResult) -> Estimate | None:
 
 
 def monitored(r: Result) -> float:
-    """The share of the adversary's counted weight on monitored gates, for the family the adversary picks."""
+    """The share of the malicious developer's counted weight on registered gates, for the family the malicious developer picks."""
     best = picked(r)
     return best.combined.parts.monitored if best and best.combined.parts else math.nan
 
@@ -262,7 +262,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
            "What sets the slowdown (each part's share of its rate, `s + x/MFU₀`, and the most it can be while it "
            "remains): "
            + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
-           f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
+           f"The malicious developer holds {monitored(r):.1%} of its counted weight on registered gates.", ""]
     out += certified_md(certified(s)) + operating_md(points) + incorrect
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", ""]

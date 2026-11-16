@@ -7,12 +7,12 @@ Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an
   gates and at the server block's (one server between two wipes), and where each becomes vacuous.
 * `overheads`: the overhead per scenario and family: its lower bound from the bounds at each status, each bound alone,
   and each attack beside it.
-* `unregistered`: the overhead's lower bound, and the best known attack's, against the unregistered share, per scenario.
-* `phase`: the overhead over pairs of parameters (`PHASES`), with its contours and frontier at each target.
+* `unregistered`: the slowdown's lower bound, and the best known attack's, against the unregistered share, per scenario.
+* `phase`: the slowdown over pairs of parameters (`PHASES`), with its contours and frontier at each target.
 * `tornado`: each scenario's tornado.
-* `vulnerability`: each parameter's plausible range against the overhead across a window around it, and where it crosses
+* `vulnerability`: each parameter's plausible range against the slowdown across a window around it, and where it crosses
   each target.
-* `corner`: the overhead as the ranged parameters move to their adversarial ends one at a time, down to all at once.
+* `corner`: the slowdown as the ranged parameters move to their adversarial ends one at a time, down to all at once.
 
 Scenario names here are defaults: a figure falls back to the first scenario that has what it needs, and skips itself
 (saying so in `render`'s result) when none does.
@@ -117,12 +117,12 @@ def _short(key: str) -> str:
 
 def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
     for t, (ls, c) in zip(targets, TARGET_STYLES * len(targets), strict=False):
-        (ax.axhline if axis == "y" else ax.axvline)(t, ls=ls, c=c, lw=1, label=f"target overhead {t:g}")
+        (ax.axhline if axis == "y" else ax.axvline)(t, ls=ls, c=c, lw=1, label=f"target slowdown {t:g}")
 
 
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
-    """Each class's per-block overhead `w c / q(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
+    """Each class's per-block slowdown `w c / q(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
     inference block's gates `c` and (for a regime with server blocks) at the server block's `c_S`, where a bound's is
     the serving cut's argument, `w c_S / (q(c_S, k) + ω_max μ k)` with its boundary term, with the declared
     policy's `k` and the server block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
@@ -180,7 +180,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                 if first is not None:
                     lines[f"attack {arg.name}"] = ax.axvline(
                         first, c="k", ls=(0, (1, 2)), lw=1.2,
-                        label=f"attack {arg.name} ({status}): overhead in the block "
+                        label=f"attack {arg.name} ({status}): slowdown in the block "
                               f"{overhead(first * 1.0001):.3g} from k = {first:.2g}")
                 continue
             vacuous = next((j for j, y in enumerate(ys) if y <= 1), None)
@@ -225,7 +225,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         ax.grid(True, which="major", alpha=0.3)
         data["panels"].append(panel)
     axes[0][0].set_ylim(1e-2, top * 3)
-    axes[0][0].set_ylabel("per-block overhead w c / q(c, k)")
+    axes[0][0].set_ylabel("per-block slowdown w c / q(c, k)")
     fig.legend(lines.values(), [h.get_label() for h in lines.values()], loc="lower center",
                ncol=min(4, len(lines)), fontsize=8, bbox_to_anchor=(0.5, -0.02 - 0.035 * math.ceil(len(lines) / 4)))
     fig.suptitle(f"Training classes per block: {s.model.name}, family {fam.name} (× = premise fails, ○ = vacuous)",
@@ -235,7 +235,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
 
 def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
               targets: Sequence[float] = (10.0, 100.0), grid: int = 30) -> list[Path]:
-    """The overhead for each scenario and family: its lower bound (every bound at once, the claim), the lower bound from
+    """The slowdown for each scenario and family: its lower bound (every bound at once, the claim), the lower bound from
     the bounds and cuts at each status or stronger, each bound alone (colored by status, refuted ones hollow), and each
     attack below them, a construction beside the bound rather than an end of it."""
     plt = _plt()
@@ -292,13 +292,13 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
                         label=label(f"an attack ({e['status']})"))
         by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
         attack = f"attack {row['attack']['argument']} {num(row['attack']['slowdown'])}" if row["attack"] else "no attack"
-        ax.text(xmax * 1.05, y, f"overhead ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
+        ax.text(xmax * 1.05, y, f"slowdown ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
     _targets(ax, targets, "x")
     ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
     ax.set_xscale("log")
     ax.set_xlim(min([0.8, *finite]) / 2, xmax)
     ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.set_xlabel("the overhead on the target run (∞ plotted at the right edge)")
+    ax.set_xlabel("the slowdown on the target run (∞ plotted at the right edge)")
     ax.set_title("The overhead: its lower bound by status, each bound alone, and the attacks beside it", fontsize=11)
     ax.grid(True, axis="x", which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.25 / len(rows)), ncol=3)
@@ -307,7 +307,7 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
 def unregistered(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """The overhead's lower bound (solid) and the best known attack's (dashed) against the unregistered share `ε_unreg`
+    """The slowdown's lower bound (solid) and the best known attack's (dashed) against the unregistered share `ε_unreg`
     (`grid + 11` points), per scenario, with `μ/ε_unreg`, the most the unregistered pool alone allows."""
     points = grid + 11
     plt = _plt()
@@ -340,7 +340,7 @@ def unregistered(registry: Registry, out: Path, names: Sequence[str] | None = No
     ax.set_yscale("log")
     ax.set_xlabel("unregistered share ε_unreg (the unregistered leaves' share of the inventory's capacity)")
     ax.set_ylabel("overhead")
-    ax.set_title("The overhead against the unregistered share, per scenario (• at today's ε_unreg)", fontsize=11)
+    ax.set_title("The slowdown against the unregistered share, per scenario (• at today's ε_unreg)", fontsize=11)
     ax.grid(True, which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
     return _save(fig, out, "unregistered", data)
@@ -348,7 +348,7 @@ def unregistered(registry: Registry, out: Path, names: Sequence[str] | None = No
 
 def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
           grid: int = 30, metric: Metric = LO, specs: Iterable = PHASES) -> list[Path]:
-    """The overhead over each pair of parameters in `specs` (a window around both plausible ranges), with its
+    """The slowdown over each pair of parameters in `specs` (a window around both plausible ranges), with its
     contours at each target (from the grid) and the frontier (by bisection, dots), today's values (★) and the
     plausible box (dashed)."""
     from matplotlib.colors import LogNorm
@@ -390,11 +390,11 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
                 ax.contour(p["xs"], p["ys"], z, levels=[t], colors=c, linewidths=1.4, linestyles=ls)
             pts = [(xv, yv) for xv, yv in p["frontier"][str(t)] if yv is not None]
             ax.plot([q[0] for q in pts], [q[1] for q in pts], "o", c="white", mec=c, mew=1.2, ms=4)
-            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"overhead {t:g}"))
+            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"slowdown {t:g}"))
         ax.legend(handles=handles, fontsize=8, loc="lower left", framealpha=0.85)
         p["not_reached"] = [t for t in targets if t not in levels]
         if p["not_reached"] and flat:
-            ax.text(0.02, 0.98, "\n".join(f"overhead {'<' if max(flat) < t else '>'} {t:g} everywhere here "
+            ax.text(0.02, 0.98, "\n".join(f"slowdown {'<' if max(flat) < t else '>'} {t:g} everywhere here "
                                           f"({min(flat):.3g} to {max(flat):.3g})" for t in p["not_reached"]),
                     transform=ax.transAxes, va="top", fontsize=8, bbox={"fc": "white", "alpha": 0.8, "lw": 0})
         (xl, xh), (yl, yh) = p["box"]
@@ -408,7 +408,7 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         ax.set_title(p["scenario"], fontsize=10)
     fig.colorbar(mesh, ax=axes[0].tolist(), label="overhead (lower bound)" if metric is LO else "overhead",
                  shrink=0.9)
-    fig.suptitle("The overhead over pairs of parameters: contours from the grid and frontier dots by bisection at the "
+    fig.suptitle("The slowdown over pairs of parameters: contours from the grid and frontier dots by bisection at the "
                  "targets, ★ today's values, dashed box the plausible ranges", fontsize=10)
     return _save(fig, out, "phase", {"metric": getattr(metric, "__name__", str(metric)), "targets": list(targets),
                                      "panels": panels})
@@ -416,7 +416,7 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
 
 def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
             grid: int = 30, top: int = 10, metric: Metric = LO) -> list[Path]:
-    """Each scenario's tornado (those where some parameter moves the overhead): the overhead at each parameter's low
+    """Each scenario's tornado (those where some parameter moves the slowdown): the slowdown at each parameter's low
     and high ends."""
     plt = _plt()
     names = list(names or registry.names("scenario"))
@@ -442,7 +442,7 @@ def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, t
                                        for s in reversed(ss)], fontsize=8)
         ax.set_xscale("log")
         ax.set_xlabel("overhead (lower bound)" if metric is LO else "overhead")
-        ax.set_title(f"{name}: overhead {base:.3g} at today's values", fontsize=10)
+        ax.set_title(f"{name}: slowdown {base:.3g} at today's values", fontsize=10)
         ax.grid(True, axis="x", which="major", alpha=0.3)
         ax.legend(fontsize=8, loc="lower right")
     fig.tight_layout()
@@ -493,7 +493,7 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
                     marker = markers[i % 3] if shown == u else ("<" if u < xlo else ">")
                     ax.plot([shown], [y], marker, ms=7, mec="k", mew=1,
                             c=TARGET_STYLES[i % 3][1] if 0 <= u <= 1 else "white")
-                    ax.annotate(f"overhead {t:g} at {xv:.2g}", (shown, y + (0.36 if i % 2 == 0 else -0.36)),
+                    ax.annotate(f"slowdown {t:g} at {xv:.2g}", (shown, y + (0.36 if i % 2 == 0 else -0.36)),
                                 fontsize=6.5,
                                 ha="center", va="bottom" if i % 2 == 0 else "top")
         ax.set_yticks(range(len(ms)), [f"{_short(m.key)}\n[{m.low:.3g}, {m.high:.3g}]{_unit(registry, m.key)}"
@@ -502,17 +502,17 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
         ax.set_xlim(xlo, xhi)
         ax.set_xlabel("position relative to the plausible range (0 = low end, 1 = high end; log scale for positive "
                       "ranges; ◁ ▷ beyond the view)")
-        ax.set_title(f"{name}: overhead {analysis.at(registry, name, None, metric):.3g} at today's values", fontsize=10)
+        ax.set_title(f"{name}: slowdown {analysis.at(registry, name, None, metric):.3g} at today's values", fontsize=10)
     handles = [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c=TARGET_STYLES[i % 3][1], ms=7,
-                      label=f"overhead {t:g} crossed inside the plausible range") for i, t in enumerate(targets)]
+                      label=f"slowdown {t:g} crossed inside the plausible range") for i, t in enumerate(targets)]
     handles += [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c="white", ms=7,
-                       label=f"overhead {t:g} crossed outside it") for i, t in enumerate(targets)]
+                       label=f"slowdown {t:g} crossed outside it") for i, t in enumerate(targets)]
     handles += [Line2D([], [], c="k", lw=1.2, label="plausible range"), Line2D([], [], c="k", lw=2.2, ls="",
                                                                                marker="|", ms=12, label="today")]
     axes[0][0].legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
     fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="overhead (lower bound)" if metric is LO else "overhead",
                  location="bottom", shrink=0.5)
-    fig.suptitle("How far each parameter is from where the overhead crosses a target: the overhead along a window "
+    fig.suptitle("How far each parameter is from where the slowdown crosses a target: the slowdown along a window "
                  "around its plausible range", fontsize=11)
     return _save(fig, out, "vulnerability", {
         "targets": list(targets),
@@ -523,7 +523,7 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
 
 def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
            grid: int = 30, metric: Metric = LO) -> list[Path]:
-    """Each scenario's adversarial corner (`analysis.corner`): the overhead as its ranged parameters move to their
+    """Each scenario's adversarial corner (`analysis.corner`): the slowdown as its ranged parameters move to their
     worse ends one at a time, the worst alone first, down to all of them at once."""
     plt = _plt()
     names = list(names or registry.names("scenario"))
