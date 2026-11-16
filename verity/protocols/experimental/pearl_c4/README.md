@@ -2,9 +2,9 @@
 
 PoUW's Pearl schemes credit a GPU's matrix products by having it compute them with noise in the operands, so that a
 verifier can recompute a sampled tile bit for bit. Pearl-C does that on FP8 products. Pearl-C4 (`pearl-c-nvfp4-v0`, with
-`pearl-c-mxfp4-v0` as a contrast line) is the same scheme on the block-scaled FP4 product of the RTX PRO 6000's
-sm_120 (`mma.sync kind::mxf4nvf4`): the noise enters inside one FP4 atom per element, one noisy cast forms each operand,
-and the BF16 clean-up is checked as in Pearl-C.
+`pearl-c-mxfp4-v0` as a contrast line) is the same scheme on the FP4 product of the RTX PRO 6000's sm_120, one scale per
+scale group (`mma.sync kind::mxf4nvf4`): the noise enters inside one FP4 atom per element, one noisy cast forms each
+operand, and the BF16 clean-up is checked as in Pearl-C.
 
 It is a protocol being tried: no demo lists it, and its guarantee rests on a premise that is stated and not proved.
 PoUW loads nothing of `experimental/`: its registry names the scheme and refuses it with `NotImplementedError`.
