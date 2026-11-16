@@ -29,8 +29,15 @@ untraced = [
 # interface (`Poub.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/audit.py", "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
+          "verity/protocols/proofs/spot/verifier/profile.py",
+          # the γ terms' ledger and the session verifier that holds the Lean's to it (`test_gamma.py`)
+          "verity/protocols/resource_accounting/memory/poub/verifier/ledger.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/timing.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/store.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/session",
+          "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/audit.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/wire.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/coins.py", "verity/protocols/resource_accounting/memory/poub/verifier/receipts.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/line.py",
@@ -87,4 +94,4 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the deployment layer and its wire, which the period hook's verifier side is started through
           # (`verity.runtime.stream.Side`)
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]

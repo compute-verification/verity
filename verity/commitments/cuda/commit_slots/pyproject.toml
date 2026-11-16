@@ -15,11 +15,12 @@ untraced = ["tests/test_cost.py", "tests/test_host_twin.py", "tests/test_scale.p
 inputs = ["verity/commitments/cuda/sha512_rows", "verity/commitments/tests/fixtures/layouts",
           "verity/__init__.py", "verity/errors.py", "verity/channel.py",
           "verity/commitments", "verity/circuits",
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py", "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
           "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/challenger.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

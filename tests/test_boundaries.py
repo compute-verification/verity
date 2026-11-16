@@ -1199,7 +1199,7 @@ def _trusted(path: str) -> str | None:
     """The verifier's or the device's directory ``path`` is in: the outermost ``verifier/`` or ``device/`` directory above
     it under ``verity/``, or None."""
     parts = path.split("/")
-    at = next((i for i, part in enumerate(parts[:-1]) if part in ("verifier", "device")), None)
+    at = next((i for i, part in enumerate(parts[:-1]) if part in ("verifier", "device", "attester")), None)
     return None if at is None or parts[0] != "verity" else "/".join(parts[:at + 1])
 
 
