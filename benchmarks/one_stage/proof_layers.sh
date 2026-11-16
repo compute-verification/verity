@@ -21,10 +21,9 @@
 #   --dry-run      every check, then each step's line; nothing runs and nothing is made
 # Refused before anything is downloaded or built, each in one line with its fix: a setting missing; not the tree's root;
 # nvidia-smi, taskset, python3 or cargo missing; card A5_CARD not an H200 (the runs serve on one, sm_90); under 64 GB of
-# host memory available (MemAvailable: on a shared node the others' memory is not this job's; the job's own processes
-# peak at 37.1 GB, in the bootstrap's builds on 20 cores, and each run at 7 to 14 GB); A5_CORES not a CPU list this job
-# may run on; under 25 GB free under WORK (the job's WORK peaks at about 20 GB); WORK not empty; results already in
-# --out.
+# host memory available (MemAvailable: on a shared node the others' memory is not this job's); A5_CORES not a CPU list
+# this job may run on; under 25 GB free under WORK; WORK not empty; results already in --out. Each run's steps.log has
+# what the job used.
 # steps.log has each step's start (UTC), command, exit code and seconds, and three peaks over its samples (every 10 s):
 # the job's own memory (the sum of PSS over the processes of this script's session), the machine's memory in use
 # (MemTotal less MemAvailable, every process on the machine, other jobs included) and WORK's size (du, with each run's
@@ -73,7 +72,7 @@ WORK=$(realpath -m "$WORK")
 d=$WORK; while [ ! -d "$d" ]; do d=$(dirname "$d"); done
 [ -w "$d" ] || refuse "can't write $d: give a WORK you can make"
 free_gb=$(df -Pk "$d" | awk 'NR == 2 {print int($4 / 1048576)}')
-[ "${free_gb:-0}" -ge 25 ] || refuse "${free_gb:-0} GB free under $d, not 25: the job's WORK peaks at about 20 GB; free some or give another WORK"
+[ "${free_gb:-0}" -ge 25 ] || refuse "${free_gb:-0} GB free under $d, not 25: the job needs 25 GB there; free some or give another WORK"
 RESULTS=$(realpath -m "${RESULTS:-${RESEARCH_RUN_DIR:-.}/out}")
 case $RESULTS/ in "$WORK"/*) refuse "--out $RESULTS is inside WORK, which is removed at the end: give a directory outside it" ;; esac
 for f in out-flock out-zk out-sampling bootstrap proof-layers.txt proof-layers.json steps.log; do

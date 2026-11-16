@@ -372,8 +372,8 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
 plain audit), Flock with zero knowledge, and with sampling. They differ in their settings and in their partition file's
 sampling design (its `law` key): `stratified-rate:880/880` and `subset:880` take all 880 proof blocks of the window, and
-`subset:256` samples 256 of them. The job's own processes peak at 37.1 GB of memory, in the bootstrap's builds (each run
-at 7 to 14 GB), and its work directory at about 20 GB. From a clone of `main` on an H200 node, at the tree's root:
+`subset:256` samples 256 of them. From a clone of `main` on an H200 node with at least 64 GB of host memory available
+and 25 GB of disk free under the work directory, at the tree's root:
 
 ~~~sh
 A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh

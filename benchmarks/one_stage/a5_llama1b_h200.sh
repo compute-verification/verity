@@ -26,7 +26,8 @@
 #   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE --env A5_CORES=CPUS -- bash benchmarks/one_stage/a5_llama1b_h200.sh
 #   or, on a machine of your own, from the tree's root: bash benchmarks/one_stage/a5_llama1b_h200.sh   (its record in ./out)
-# Uses: about 400 GB of memory at its peak (399 GB measured at k=256, 377 GB at k=880), about 3 GB of disk under A5_ROOT
+# Memory: it checks none; proof_layers.sh, which runs it three times, asks for 64 GB of host memory available.
+# Uses: about 3 GB of disk under A5_ROOT
 #   while it runs (the row dir and the window, removed at exit) and 0.3 GB for M0's Flock build (A5_FLOCK_WORK, kept), and 13-16 min on one H200 with M0's
 #   build kept (the uv, Lean and M0 builds run behind the GPU stages; a machine's first run builds Flock and Lean cold).
 # Needs, which vllm's one bootstrap makes (refused in one line each before any build, naming it):
