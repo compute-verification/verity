@@ -1,4 +1,7 @@
 #!/bin/sh
+# In use: `drive.sh queue ARGS` (`research queue eject`) with the App's token, and `status`. Kept stopped: the loop at the
+# bottom and `once`, `merge`, `queue promote` and `queue baseline`, which run verbs `research` and `research queue` no longer
+# have; /data/drive/stopped stays, and ci's verified queue lands PRs (README). The loop, as written:
 # Drive: `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
 # origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
@@ -29,9 +32,9 @@
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
 # state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), but
 # `queue baseline SHA --by ci` and `queue promote` (a loop's, every minute or so), which fast-forward main and write nothing of
-# drive's, run beside a tick (`unlocked`), so main follows a passed after-landing run within minutes, and `drive.sh merge
-# ARGS` runs `research merge ARGS` (`--push`) in the queue's clone on branch main, reset to origin's: $REPO is a blob:none
-# partial clone, where git fetches each object it lacks as a pack of its own. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
+# drive's, run beside a tick (`unlocked`), so main follows a passed after-landing run within minutes; `drive.sh merge
+# ARGS` runs `research merge ARGS`, which `research` no longer has, in the queue's clone. $REPO is a blob:none partial clone,
+# where git fetches each object it lacks as a pack of its own. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next, and `checked` once infra adds it there (drive lands the reviewed
 # prefix on checked, fast-forwards main only to a checked commit whose after-landing run passed every step on the merge
 # gate, and merges a main pushed outside it into checked); `research` refuses those pushes anywhere else.
