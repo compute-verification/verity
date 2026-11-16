@@ -31,7 +31,7 @@ from ..runners import circuit_binding as RB
 
 CHECKER = "tools/verity/circuit_check"
 #: circuit-check's suite, whose `[tool.verity.tests] inputs` its guard holds it to
-SUITE = "tools/verity/circuit_check/tests/pyproject.toml"
+SUITE = "tests/tools/verity/circuit_check/pyproject.toml"
 SOURCE = f"{CHECKER}/src/circuit_check"
 TARGETS = f"{SOURCE}/targets.py"
 SIDECARS = f"{SOURCE}/sidecars.py"

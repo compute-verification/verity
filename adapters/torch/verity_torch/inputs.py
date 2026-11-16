@@ -39,15 +39,15 @@ CHARGED: frozenset[str] = frozenset()
 #: alone of what reaches the outputs, a test (``path::function``) or a Lean theorem (``path::name``)
 RELATIONS: dict[str, str] = {
     "DsaTopKLongRow_v1":
-        "adapters/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
+        "tests/adapters/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
     "StopCheck_v1":
-        "adapters/vllm/tests/program/predict/test_steps.py::"
+        "tests/adapters/vllm/tests/program/predict/test_steps.py::"
         "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
     "ClassStopCheck_v1":
-        "adapters/vllm/tests/program/predict/test_class_window.py::"
+        "tests/adapters/vllm/tests/program/predict/test_class_window.py::"
         "test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_accepts_it_alone",
     "SeedCheck_v2":
-        "adapters/vllm/tests/program/test_seed_rule.py::test_the_word_check_accepts_the_rules_seed_alone",
+        "tests/adapters/vllm/tests/program/test_seed_rule.py::test_the_word_check_accepts_the_rules_seed_alone",
 }
 
 

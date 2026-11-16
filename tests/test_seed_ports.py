@@ -36,24 +36,24 @@ UNITS = {
         "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py::_lane_ports":
         "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
         "the lane's stand-in statement template, a position beside its ok sink",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_h1window.py::TILE_PORTS":
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
-    "adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
+    "tests/adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
-    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
+    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
         "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
     "verity/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
-    "verity/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
+    "tests/verity/circuits/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
     "verity/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
-    "verity/circuits/tests/test_population_ports.py::Counted":
+    "tests/verity/circuits/test_population_ports.py::Counted":
         "the population tests' stand-in key count: a position alone, whose population keeps it",
     "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
@@ -69,21 +69,21 @@ WINDOWS = {
         "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
-    "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
-    "verity/circuits/tests/test_ports.py::UNIT_PORTS": "the port rules' unit vectors: a seeded unit whose receipt is its sink",
-    "verity/circuits/tests/test_ports.py::SALTED": "seeds batched over positions (E_COIN_REUSE's vectors)",
-    "verity/circuits/tests/test_ports.py::test_a_seed_takes_the_coin_and_a_position":
+    "tests/verity/circuits/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
+    "tests/verity/circuits/test_ports.py::UNIT_PORTS": "the port rules' unit vectors: a seeded unit whose receipt is its sink",
+    "tests/verity/circuits/test_ports.py::SALTED": "seeds batched over positions (E_COIN_REUSE's vectors)",
+    "tests/verity/circuits/test_ports.py::test_a_seed_takes_the_coin_and_a_position":
         "the descriptor's port entry a batched seed encodes to, as the expected value",
-    "verity/circuits/tests/test_ports.py::test_a_position_is_a_run_input_passed_through":
+    "tests/verity/circuits/test_ports.py::test_a_position_is_a_run_input_passed_through":
         "E_PORT_KIND's negatives: a seed whose position is computed, not a run input",
-    "verity/circuits/tests/test_ports_one_use.py::ROOT_PORTS":
+    "tests/verity/circuits/test_ports_one_use.py::ROOT_PORTS":
         "the one-use check's random and negative Programs: a root's positions, read by seeds batched over them",
-    "verity/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
-    "verity/circuits/tests/test_population_ports.py::Seed":
+    "tests/verity/circuits/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
+    "tests/verity/circuits/test_population_ports.py::Seed":
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
-    "verity/circuits/tests/test_population_values.py::Unit":
+    "tests/verity/circuits/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
-    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
+    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
         "the sampled J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
         "accepts the stand-in statement (every input bit read)",
 }
