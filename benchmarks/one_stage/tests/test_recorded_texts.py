@@ -1,7 +1,7 @@
 """The constant text the one-stage audit's stand-ins and a proved bundle's summary write into their records, pinned by
 name against main's bytes.
 
-A word change alters no recorded text: a5_network_certifier's session root is hashed under its tag, and a8's window
+A word change alters no recorded text: a5_network_attester's session root is hashed under its tag, and a8's window
 states what it is in its registration record (``registration.json``, which its receipt binds), so both keep their bytes;
 a proved bundle's tampered session's arms name its ``negatives`` keys (``tampered/<arm>``) and its session directories.
 replay's era paths (`ERA_PARTS`) and A4's layout file are paths into history, read at a recorded run's commit: a move
@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parents[1]
 
 #: name -> (the producing file, a regex whose first group is the text it writes)
 SITES = {
-    "a5_network_certifier.root.tag": ("a5_network_certifier.py", r'ROOT = hashlib\.sha512\(b"([^"]+)"\)'),
+    "a5_network_attester.root.tag": ("a5_network_attester.py", r'ROOT = hashlib\.sha512\(b"([^"]+)"\)'),
     "a8.window.of": ("a8.py", r'win = \{"kind": "stand-in", "of": "([^"]+)"\s+f"'),
     "tampered.arm.zk_server": ("prove_bundle.py", r'arms = \[\("([a-z]+)", True\)\]'),
     "tampered.arm.plain": ("prove_bundle.py", r'\[\*arms, \("([a-z]+)", False\)\]'),
@@ -35,7 +35,7 @@ SITES = {
 
 #: sha256 of each site's text as main's records carry it
 PINS = {
-    "a5_network_certifier.root.tag": "3a658528806e0bd73c2b1882f1cd46eccef975622bbed37ad204554818dde5b3",
+    "a5_network_attester.root.tag": "3a658528806e0bd73c2b1882f1cd46eccef975622bbed37ad204554818dde5b3",
     "a8.window.of": "8dbf69c2a1bcdcb8a73dfa922bbd0d3a538f945469c18a164fae8705dd9781c8",
     "negatives.flipped": "bf6e7814c35d7231fb53f7ec0c85745df062bf65e96742df48cbb966b7129b71",
     "negatives.tampered": "d121be3103007b41edf96f8262925f8c7d61894afe9a041843b631f69445bc57",

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import record_files as RF  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
 from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 

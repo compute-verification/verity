@@ -46,10 +46,10 @@ from verity.commitments import domains
 from verity.commitments.crypto import lms
 from verity.commitments.identity import tagged_sha512
 from verity.protocols.resource_accounting.network.verifier import registered as R
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, LmsKey)
-from verity.protocols.resource_accounting.network.verifier.network_certifier import INTEGER_FIELDS, NetworkCertifierParams as Schedule
+from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkCertifierParams as Schedule
 
 ID = domains.CERTIFIER_SPAN_PROTOCOL
 COMMITMENT_TAG = domains.CERTIFIER_SPAN
