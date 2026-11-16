@@ -2,7 +2,7 @@
 # One-stage audit, run A5, over a GPU-served window: Llama-3.2-1B int8 batch-invariant eager on one H200 (ROW, default the B4
 # I256/O32 h200 row), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
 # --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1; or
-# A5_PARTITION's file, whose law is the sample) is committed at its C2 site before the bundle is sealed
+# A5_PARTITION's file, whose sampling design is the sample) is committed at its C2 site before the bundle is sealed
 # (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte run root. Then the Commit's C2 replay on CPU from
 # the sealed bundle, and the window's audit, in the same job, so the window's private bodies (m*-private.bin,
 # v*-private.bin: rows and salts) never leave the machine. The audit is A5_COINS's:
