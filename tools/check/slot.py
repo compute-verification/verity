@@ -120,7 +120,9 @@ before it only, each time its reason to wait changes, so its log says whom it wa
 when it took the slot, the last `why` it waited for when it waited, the GiB the slot reserves for it, `reserves_gib` (0 for
 none), and the scope its check runs in on a `scope=1` slot, `scope`) or left (why), so `research status` shows a run
 whose check waits here as `waiting`, not running, what a run waited behind outlasts its wait, and the run's record can say
-what it asked of its slot and where its check ran (research.memmark).
+what it asked of its slot and where its check ran (research.memmark). A check in its scope adds what the scope used to the
+held record (`used`: its busiest minute's cores and `anon` at its highest; spans.py's `ScopeWatch`), since this
+process execs into the check and the scope is gone when the check ends.
 
 A machine keeps one copy of this file of its own, NODE_COPY, which `research deploy install` places from `main`. A run that
 names a pool (`research run --pool`) takes its slot by that copy where the machine has one, so the waiters of a pool's line
