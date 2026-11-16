@@ -95,7 +95,7 @@ def test_gamma_is_the_pinned_twins(twin):
 @pytest.mark.parametrize("twin", [t for t in CUBES if t["reading"] == "forming-credited"],
                          ids=lambda t: t["pin"].removeprefix("Pouw.PearlC."))
 def test_credit_and_inert_bound_are_the_pinned_twins(twin):
-    """The Lean's credit, solved from the pinned gap alone, is `credit_of`; the unit's cap ρ·credit is its cells' and a
+    """The Lean's credit, solved from the pinned gap alone, is `credit_of`; the unit's inert-work share ρ·credit is its cells' and a
     tile's cap is ρ·credit·tileShare, `tile_inert_bound`'s on v1 (v2 has no debit rule, so its tile cap is the cells' credit)."""
     s, n, c = scheme_of(twin), twin["shape"], cast_offset(twin)
     sh, rho = Shape(n, n, n), s.cap

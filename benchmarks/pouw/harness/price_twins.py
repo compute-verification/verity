@@ -17,7 +17,7 @@ are read, and `_short` gives one key for both. Its key is
   n, k        a linear's (n, k) at any batch m, for a twin stated on `pearlCDomainDevNK` (``_n6144k4096``), its shape None
   layout      a served layout's linears, for a twin stated on `pearlCDomainDevShapes` (``_llama31_8b`` on
               `llama31_8bLinears`), the gap the max over them; its shape, n and k None
-  cap         FP8 v1 and v2's debit cap ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``InertShare1000``
+  cap         FP8 v1 and v2's inert-work share ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``InertShare1000``
               and ``Rev1InertShare1000`` are 1/1,000); a lookup reads the statement's cap (`INERT_SHARES`), and the others are history
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
@@ -78,7 +78,7 @@ CAST_VALUES = {"cast-8": Fraction(8), "cast-8.72": Fraction(218, 25), "cast-16":
                "cast-32.06": Fraction(1603, 50)}
 READINGS = {None: "forming-credited", "ChainOnly": "chain-only", "Chain": "chain-cap"}
 RULED_SIZING = "publicConst64"
-#: each FP8 statement's debit cap ρ
+#: each FP8 statement's inert-work share ρ
 INERT_SHARES = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
 NAME_INERT_SHARES = {"Rev1": Fraction(1, 400), "InertShare1000": Fraction(1, 1000), "Rev1InertShare1000": Fraction(1, 1000)}
 

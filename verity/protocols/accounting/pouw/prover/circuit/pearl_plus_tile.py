@@ -318,7 +318,7 @@ PearlPlusTile = CompositeDefinition(
 
 def tile(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, depth: int) -> SpecializedDefinition:
     """`PearlPlusTile_v1` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a unit of ``n`` columns and a
-    transcript tree of depth ``depth``: ρ the device's cap, ρr the scheme's row cap at k (`inert_bound.row_rho`)."""
+    transcript tree of depth ``depth``: ρ the device's inert-work share, ρr the scheme's row cap at k (`inert_bound.row_rho`)."""
     d = scheme.device
     if scheme.forming != "v1" or scheme.hashing != "h3" or DEVICES.get(d.name) != d:
         raise DomainError(f"{scheme.name}: Pearl+'s tile unit is forming v1 under -h3 on a device record")

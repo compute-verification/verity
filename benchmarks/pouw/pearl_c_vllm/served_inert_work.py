@@ -1,4 +1,4 @@
-"""The honest debit of a served pass at its scheme's cap ρ: a seeded, stratified sample of a retained pass's tiles (the
+"""The honest debit of a served pass at its scheme's inert-work share ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
 (`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
 (`clear_work._inert_work_and_bound`: ρ times the credited cells' credit) recorded.  CPU only.
