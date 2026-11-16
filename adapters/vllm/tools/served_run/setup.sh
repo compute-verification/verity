@@ -28,10 +28,19 @@ if on pin && [[ $REPO == verity-int8/* ]] && { [ -n "${STEPS:-}" ] || [ ! -f "$H
 fi
 . adapters/vllm/tools/served_run/pin_link.sh || exit 2
 if on taps && { [ -n "${STEPS:-}" ] || [ ! -s "$HIDDEN_SO" ] || [ ! -s "$NORM_TAP_SO" ]; }; then
-  (cd adapters/vllm && FA2=${HIDDEN_SO%/build/*} FA3_TAP_ROW_GUARD=1 FA3_TAP_FORCE=1 bash verity_vllm/ops/pod_fa3_tap.sh \
-     && NT=${NORM_TAP_SO%/build/*} NORM_TAP_FORCE=1 bash verity_vllm/ops/pod_norm_tap.sh) > "$OUT/taps.log" 2>&1 \
-    || { log "taps: NOT built: $(tail -n 1 "$OUT/taps.log" | cut -c1-300)"; exit 3; }
-  log "taps: built ($(grep -E '^(FA3|NORM)-TAP-OK' "$OUT/taps.log" | cut -c1-120 | tr '\n' ' ')): set placement.toml's TAPS_AT to $(git rev-parse HEAD)"
+  S=$R/taps-staged
+  rm -rf "$S/exactness" && mkdir -p "$S"
+  (cd adapters/vllm && S=$S PY=$PY FA_SRC=${HIDDEN_SO%/build/*}/../vllm-flash-attn TP=$TREE/tests/adapters/vllm:$paths \
+     gpu-lease 1 --on "$CARD" --cores "$CORES" --max-min 120 --mem-gb 64 -- bash -euc '
+       for g in 0 1; do REPO=$PWD FA2=$S/fa2 FA3_TAP_ROW_GUARD=$g FA3_TAP_FORCE=1 bash verity_vllm/ops/pod_fa3_tap.sh; done
+       REPO=$PWD NT=$S/norm_tap NORM_TAP_FORCE=1 bash verity_vllm/ops/pod_norm_tap.sh
+       cd ../../tests/adapters/vllm
+       PYTHONPATH=$TP "$PY" -m tests.properties.fa_tap_exactness_gpu --so "$S/fa2/build/fa3_matReq/verity_fa3_matReq.so" --out "$S/exactness/fa3"
+       PYTHONPATH=$TP "$PY" -m tests.properties.fa_tap_exactness_gpu --so "$S/fa2/build/fa3_matReqG/verity_fa3_matReqG.so" \
+         --baseline "$S/exactness/fa3/fa_tap_exactness.json" --construction check-inf-per-iteration --out "$S/exactness/fa3g"') \
+    > "$OUT/taps.log" 2>&1 || { log "taps: NOT built or NOT exact, so not live: $(grep -E 'FAIL|Error' "$OUT/taps.log" | tail -n 1 | cut -c1-300)"; exit 3; }
+  install -D "$S/fa2/build/fa3_matReqG/verity_fa3_matReqG.so" "$HIDDEN_SO" && install -D "$S/norm_tap/build/verity_norm_tap.so" "$NORM_TAP_SO" || exit 3
+  log "taps: built and exact, now live ($(grep -E '^(FA3-TAP-OK|NORM-TAP-OK|FA-TAP-EXACTNESS)' "$OUT/taps.log" | cut -c1-100 | tr '\n' ' ')): set placement.toml's TAPS_AT to $(git rev-parse HEAD)"
 fi
 if on flock && { [ -n "${STEPS:-}" ] || [ ! -x "$FLOCK_WORK/flock-gpu-link/flock/target/release/flock-circuit" ]; }; then
   mkdir -p "$FLOCK_WORK" "$OUT/m0-build"
@@ -45,17 +54,23 @@ BASE=$LLAMA_ROOT/$RESEARCH_RUN_ID KEPT=$LLAMA_ROOT/$RESEARCH_RUN_ID-unpublished
 mkdir -p "$BASE/predicted" "$KEPT" "$R/cache"
 (cd "$TREE" && PYTHONPATH=$paths "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$BASE/predicted") \
   > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" || { log "predict: refused: $(tail -n 2 "$KEPT/predict_row.err" | cut -c1-400)"; exit 3; }
-pin=$(python3 - "$TREE/tests/adapters/vllm/tests/program/predict/test_predict.py" "$ROW_ID" "$BASE/predicted/predicted.json" <<'EOF'
-import ast, json, sys
-src, row, got = sys.argv[1:]
-pins = [ast.literal_eval(n.value) for n in ast.parse(open(src).read()).body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") == "H200_INT8"]
-want = pins[0].get(row, {}).get("workload") if pins else None
+pin=$(python3 - "$TREE" "$ROW_ID" "$REPO" "$BASE/predicted/predicted.json" <<'EOF'
+import ast, json, re, sys
+tree, row, repo, got = sys.argv[1:]
 g = json.load(open(got))
-if want is None:
-    sys.exit(print(f"no pin of {row} in the tree to hold program_digest {g.get('program_digest', '')[:16]}… to") or 0)
-bad = [k for k in ("program_digest", "workload_digest") if g.get(k) != want]
-print(f"{bad} differ from the tree's pin {want}" if bad else f"program_digest and workload_digest are the tree's pin {want[:16]}…")
-sys.exit(1 if bad else 0)
+if repo.startswith("verity-int8/"):
+    test = f"{tree}/tests/adapters/vllm/tests/program/predict/test_predict.py"
+    pins = [ast.literal_eval(n.value) for n in ast.parse(open(test).read()).body if isinstance(n, ast.AnnAssign) and getattr(n.target, "id", "") == "H200_INT8"]
+    keys, of = ("program_digest", "workload_digest"), "test_predict.py's H200_INT8 pin"
+    want = [(pins[0].get(row) or {}).get("workload") if pins else None] * 2
+else:
+    keys, of = ("program_digest", "manifest_digest"), "served_verdicts.sh's BUILD_OF_RECORD"
+    m = re.search(r"BUILD_OF_RECORD=\$\{BUILD_OF_RECORD:-(\w+):(\w+)\}", open(f"{tree}/benchmarks/one_stage/served_verdicts.sh").read())
+    want = list(m.groups()) if m else [None, None]
+have = [g.get(k) for k in keys]
+print(f"{keys} {':'.join(map(str, have))} are {of}" if have == want else
+      f"{keys} {':'.join(map(str, have))} are not {of}, {':'.join(map(str, want))}")
+sys.exit(have != want)
 EOF
 ) || { log "predict: $pin"; exit 3; }
 log "predict: $pin"
