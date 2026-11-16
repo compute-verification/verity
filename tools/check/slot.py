@@ -77,8 +77,11 @@ the runs `main` waits on take the next slot, ahead of priority checks that came 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
 being taken: inside a `research run` (RESEARCH_RUN_DIR), the run's timeout, which counted the wait too, becomes the time it has
-run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT). `research queue ready
---on` sends both, so a check that times out waiting in a line is reported as never started, not as failed.
+run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT), and never later than
+the run's own end: a waiter whose run would end before CMD had SECONDS leaves the line without running CMD (NOT_STARTED,
+saying so), so a run's caller gives it its wait and SECONDS (`research run --pool` makes its timeout --pool-wait plus
+--timeout). `research queue ready --on` sends both, so a check that times out waiting in a line is reported as never started,
+not as failed.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
@@ -787,16 +790,50 @@ def held_why(slot: dict, priority: bool, min_mem: int | None) -> str:
     return "for train checks" if slot["trains"] and not priority else "busy" if holds(slot, min_mem) else f"under {min_mem} GB"
 
 
+def run_timeout(run_dir: str) -> float | None:
+    """The `research run` in ``run_dir``'s timeout as it stands, seconds from its start: RUN_TIMEOUT's when that was set (a
+    bare number too), else its status.json's; None for a run with none."""
+    doc = _read(Path(run_dir) / RUN_TIMEOUT)
+    t = doc.get("timeout_s") if isinstance(doc, dict) else doc
+    if not isinstance(t, (int, float)) or isinstance(t, bool):
+        t = _read(Path(run_dir) / "status.json").get("timeout_s")
+    return t if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0 else None
+
+
+def run_left(run_dir: str | None, mono=time.monotonic) -> float | None:
+    """The seconds the `research run` in ``run_dir`` has left before its stated end (its timeout, from its start, its
+    status.json's `started_mono` on this machine's monotonic clock); None outside a run, without its start, or with no
+    timeout."""
+    if not run_dir:
+        return None
+    started = _read(Path(run_dir) / "status.json").get("started_mono")
+    if not isinstance(started, (int, float)) or (stated := run_timeout(run_dir)) is None:
+        return None
+    return stated - (mono() - started)
+
+
+def short_of(run_max: float, run_dir: str | None, mono=time.monotonic) -> str | None:
+    """Why CMD can't have its ``run_max`` seconds before the run's stated end (`run_left`), or None where it can: it is then
+    not started, since its run would end it first."""
+    if (left := run_left(run_dir, mono)) is None or left >= run_max:
+        return None
+    return (f"the run ends in {max(left, 0):.0f} s (its timeout {run_timeout(run_dir):g} s from its start), less than --run-max "
+            f"{run_max:g} s, so CMD could not finish before the run's end")
+
+
 def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
-    """Make the `research run` in ``run_dir`` end ``run_max`` seconds from now: its timeout (from the run's start, its
-    status.json's `started_mono` on this machine's monotonic clock) becomes the time run so far plus ``run_max``. What was done,
-    in a line; outside a run, or without its start, nothing is changed and the run keeps the timeout it had."""
+    """Make the `research run` in ``run_dir`` end ``run_max`` seconds from now, never later than it would have: its timeout
+    (from the run's start, its status.json's `started_mono` on this machine's monotonic clock) becomes the time run so far
+    plus ``run_max``, or stays where it stands when that is earlier. What was done, in a line; outside a run, or without its
+    start, nothing is changed and the run keeps the timeout it had."""
     if not run_dir:
         return f"slot: --run-max {run_max:g} s not applied: not in a `research run` (no RESEARCH_RUN_DIR)"
     started = _read(Path(run_dir) / "status.json").get("started_mono")
     if not isinstance(started, (int, float)):
         return f"slot: --run-max {run_max:g} s not applied: {run_dir}/status.json has no started_mono; the run keeps its timeout"
     t = round(mono() - started + run_max, 3)
+    if (stated := run_timeout(run_dir)) is not None and stated <= t:
+        return f"slot: the run's timeout stays {stated:g} s from its start, before {run_max:g} s from taking slot {slot}"
     ctl = Path(run_dir) / RUN_TIMEOUT
     ctl.parent.mkdir(parents=True, exist_ok=True)
     tmp = ctl.with_name(f".{ctl.name}.{os.getpid()}")
@@ -811,15 +848,9 @@ def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
     its own, as a Lean audit slot's), so the wait doesn't use up the time its work was given. Its timeout now is RUN_TIMEOUT's
     when that was set, else its status.json's. What was done, in a line; None when there is nothing to move (no wait, not in a
     `research run`, or a run with no timeout)."""
-    if not run_dir or waited_s <= 0:
+    if not run_dir or waited_s <= 0 or (now := run_timeout(run_dir)) is None:
         return None
     ctl = Path(run_dir) / RUN_TIMEOUT
-    doc = _read(ctl)
-    now = doc.get("timeout_s") if isinstance(doc, dict) else doc
-    if not isinstance(now, (int, float)) or isinstance(now, bool):
-        now = _read(Path(run_dir) / "status.json").get("timeout_s")
-    if not isinstance(now, (int, float)) or isinstance(now, bool) or now <= 0:
-        return None
     t = round(now + waited_s, 3)
     try:
         ctl.parent.mkdir(parents=True, exist_ok=True)
@@ -1221,7 +1252,7 @@ def leave(ticket: Path, tfd: int, why: str) -> int:
     return NOT_STARTED
 
 
-def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep) -> int:
+def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sleep, mono=time.monotonic) -> int:
     if argv[:1] == ["--status"]:
         if argv[1:] == ["--json"]:
             print(json.dumps(status_doc(now())))
@@ -1312,6 +1343,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
                   passed=lambda name: passed_gb(name, SLOTS.parent))
         got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
                                   priority, poll)
+        if got and run_max is not None and (short := short_of(run_max, run_dir, mono)):
+            os.close(got[1])                                        # before a twin claim, which its twins would take as started
+            return gone(short)
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
@@ -1333,6 +1367,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             told = why
         if wait_max is not None and (now() - joined).total_seconds() >= wait_max:
             return gone(f"no check slot within --wait-max {wait_max:g} s ({why})")
+        if run_max is not None and (short := short_of(run_max, run_dir, mono)):
+            return gone(f"{short} ({why})")
         sleep(POLL_S)
     ticket.unlink()
     os.close(tfd)
@@ -1358,7 +1394,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if said := reserve(slot, now(), priority):
         print(said, file=sys.stderr, flush=True)
     if run_max is not None:
-        print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
+        print(limit_run(run_max, slot["name"], run_dir, mono), file=sys.stderr, flush=True)
     if slot.get("scope") and (why := scope_refusal()):
         print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
     elif slot.get("scope"):

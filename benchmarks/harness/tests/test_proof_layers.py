@@ -5,9 +5,12 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
+from verity_bench import kit
 from verity_bench import proof_layers as PL
 from verity_bench.cli import main
 
@@ -41,7 +44,7 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     rank = {"accepted": lean, "ok": lean, "population": 8, "draw_counts": {"SiluMul_v2{I=8192}": 2},
             "per_unit": {"SiluMul_v2{I=8192}": {"units": 2, "proof_bytes": 1700000, "prove_s_per_unit": 3.0,
                                                 "lean_verify_s_per_unit": 1.0}}}
-    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {str(r): rank for r in range(ranks)}}
+    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "delta": 0.5, "ranks": {str(r): rank for r in range(ranks)}}
     (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + ("A5 " + json.dumps(a5) + "\n") * (a5_lines or ranks)
                                    + "PROVE-PATH " + json.dumps(line) + "\n")
     (arm / "summary.json").write_text(json.dumps({"coins": {"source": "challenger", "challenger": "local"}}))
@@ -119,7 +122,7 @@ def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
     assert PL.read("zk", str(prove_path_arm(tmp_path / "a", "llama", ranks=2))).accepted
     row = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
     assert not row.accepted and row.prover_s is None and "not every rank has a Lean verify verdict" in row.lean
-    assert "1 audited A5 line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
+    assert "1 A5 result line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
 
 
 def test_the_printed_row_states_its_proof(tmp_path):
@@ -129,12 +132,17 @@ def test_the_printed_row_states_its_proof(tmp_path):
     rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
             PL.read("flock", None)]
     text = PL.render(rows)
-    line = {r.layer: x for r, x in zip(rows, text.splitlines()[4:7], strict=True)}
-    assert line["sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
-    assert "| plain | — |" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
-    assert line["flock"].startswith("| Flock | not run | — | — |")
+    line = table_lines(text)
+    assert line["with sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert "| plain | not stated | not stated | — |" in line["with sampling"]
+    assert "| zk | not stated | ε not stated at δ 0.5 | 3 s a drawn block (Flock's prove_total_s" in line["Flock with zero knowledge"]
+    assert line["Flock"].startswith("| Flock | not run | — | — | — | — |")
     assert ("- with sampling: no number: --sampling is the zk proof's row, and this output says its proof is plain"
             in text.splitlines())
+
+
+def table_lines(text: str) -> dict[str, str]:
+    return {x.split(" | ")[0][2:]: x for x in text.splitlines() if x.startswith("| ") and not x.startswith("| layer ")}
 
 
 def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
@@ -151,7 +159,7 @@ def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_th
     assert row.workload == ("row llama32-1b__int8__h200__tp1__b4: RoPEHead_v1{D=64} x 4 drawn of 112 units "
                             "(kind=served commitment=rows-sha512)")
     assert row.ran_with == "ran with: not stated"
-    assert row.detail == "audit verdicts challenger/m0, a challenger per drawn member"
+    assert row.detail == "A5 line's verdicts challenger/m0, a challenger per drawn member"
     assert "replay rc=0 a5 rc=0" in row.notes and "serving stage build PASS 2026-11-15T10:00:00Z" in row.notes
     assert "arm dev" in row.notes
 
@@ -217,7 +225,17 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
                                                                                            for m in written)
     assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
-    assert "| ran with |" in text and "| ran with: not stated |" in text
+    head = text.splitlines()
+    assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
+                         ("- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
+                          "(PROVE-PATH coins challenger; summary.json coins.challenger local)"),
+                         "- with sampling: ran with: not stated", "- with recursion: ran with: not stated"]
+    assert doc["audit"] is False and "audit" not in text.replace(PL.NOT_AN_AUDIT, "")
+    line = table_lines(text)
+    assert "| 1202 s a run, wall (one recursive run's path" in line["with recursion"]
+    assert "| 90 s a run, wall (the lean step whole" in line["with recursion"]
+    assert "| 18,000,000 bytes a run (V*'s 10 releases" in line["with recursion"]
+    assert "| 850,000 bytes a drawn block (its session's" in line["Flock with zero knowledge"]
 
 
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
@@ -244,5 +262,140 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
+    kit.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS))
     assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())
+
+
+def test_with_no_number_in_any_row_the_command_says_so_first_and_exits_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("OUT", raising=False)
+    assert main(["prove-layers", "--zk", str(tmp_path / "missing")]) == 1
+    first = capsys.readouterr().out.splitlines()[0]
+    assert first.startswith("prove layers: no number: flock: not run: no output given (--flock DIR|RUN); zk: unreadable: ")
+    assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r"))]) == 0
+    assert capsys.readouterr().out.startswith("The proof system by layer")
+
+
+def test_the_help_names_the_command_as_the_readme_does(capsys):
+    with pytest.raises(SystemExit):
+        main(["prove-layers", "--help"])
+    assert capsys.readouterr().out.startswith("usage: verity bench prove layers ")
+
+
+def test_a_run_id_the_store_cant_give_says_to_give_its_out_directory(monkeypatch):
+    monkeypatch.setitem(sys.modules, "research.store", None)
+    row = PL.read("recursion", "r20261115-183449-c6f6")
+    assert row.status == "unreadable" and "isn't installed here" in row.why and PL.FIX in row.why
+
+
+def test_the_device_is_the_outputs_own_words(tmp_path):
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    assert PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu))).device == "CPU (timing gpus 0)"
+    assert PL.read("sampling", str(a5_out(tmp_path / "n"))).device == "not stated"
+    assert PL.read("recursion", str(recursion(tmp_path / "r"))).device == "not stated"
+
+
+def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
+    """An outside machine has no store client, or no remote it can read: `prove` names what it needs and exits 2."""
+
+    monkeypatch.setitem(sys.modules, "research.store.local", None)
+    assert main(["prove", "--system", "flock", "--workload", "glm53"]) == 2
+    err = capsys.readouterr().err.strip().splitlines()
+    assert len(err) == 1 and err[0].startswith("verity bench prove: needs the evidence store's client")
+
+    class NoRemote:
+        remote, remote_error = None, "no remote is configured"
+
+    local = types.ModuleType("research.store.local")
+    local.LocalStore = NoRemote  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "research.store.local", local)
+    assert main(["prove", "--system", "flock", "--workload", "glm53"]) == 2
+    assert capsys.readouterr().err.strip().endswith("the evidence store has no remote here (no remote is configured)")
+
+
+SHA = "85b64d2c451637c4ac5b6bd0e2f6a934baea69ac"
+STMTS = (("s8-coord-k2048-c0", "ScaledMmS8Coordinate_v1{K=2048}", 2048), ("s8-coord-k8192-c0", "ScaledMmS8Coordinate_v1{K=8192}", 512))
+
+
+def layers_sh(root: Path, layer: str, *, k: int = 2560, zk_flag: bool | None = None, negative: bool = True) -> Path:
+    """One layer of a `benchmarks/one_stage/layers.sh all` run under `root` (its flock/, zk/ or sampled/), in the shapes
+    r20261115-212759-0c34 wrote."""
+
+    d = root / layer / "out"
+    (d / "a6").mkdir(parents=True)
+    (d / "layers.txt").write_text("ran with: coins local challenger; parameters development (a development challenger, "
+                                  f"local to each session; δ=2^-20; k={k})\na measurement, not an audit: stand-in values, never served\n")
+    (d / "job.log").write_text(f"21:36:07Z hidden-zk: source {SHA}, 96 CPUs\n{'7b' * 32}  flock-circuit\n")
+    (root / layer / "gpu-lease-usage.jsonl").write_text(json.dumps(
+        {"cmd": "flock-circuit prove --zk --gpu --verifier 127.0.0.1:7561", "gpus": [{"index": 4}]}) + "\n")
+    for name, _, _ in STMTS:
+        (d / "a6" / f"session-{name}").mkdir()
+        (d / "a6" / f"session-{name}" / "lean-verify.log").write_text(
+            "$ verity-verify-proof verify --statement verity/flock-circuit"
+            + (" --zk" if (layer != "flock" if zk_flag is None else zk_flag) else "") + " --coins tree\n")
+    if layer == "flock":
+        summary = {"accepted": True, "plain": True, "windows": [
+            {"name": name, "units": n, "live": {"accepted": True, "prove_total_s": 2.0 + i, "proof_bytes": [900 + i, 900 + i]},
+             "lean_verify": {"accepted": True, "verify_s": 5.0 + i, "unit_draw": {"strata": [{"template": t}]}}}
+            for i, (name, t, n) in enumerate(STMTS)]}
+    else:
+        counts = {"s8-coord-k2048-c0": 2048, "s8-coord-k8192-c0": 512} if k == 2560 else {"s8-coord-k2048-c0": 26, "s8-coord-k8192-c0": 6}
+        summary = {"audit": {"accepted": True, "complete": True, "verdicts": {f"lean-verify/{n}": True for n, _, _ in STMTS},
+                             "wrong_units": {"bound": 0 if k == 2560 else 895, "of": 2560, "delta": 2.0 ** -20}},
+                   "checks_before_draw": {"registration": True}, "negatives": {"draw-outside-the-partition": negative},
+                   "draw_counts": counts, "k": k, "population": 2560,
+                   "members": [{"name": n, "template": t} for n, t, _ in STMTS],
+                   "timing": {n: {"lean_verify_s": 6.0 + i, "timing": {"prove_total_s": 4.0 + i, "proof_bytes": [1100, 1100]}}
+                              for i, (n, _, _) in enumerate(STMTS)}}
+    (d / "a6" / "summary.json").write_text(json.dumps(summary))
+    return root
+
+
+def layers_run(root: Path) -> Path:
+    layers_sh(root, "flock"), layers_sh(root, "zk"), layers_sh(root, "sampled", k=32)
+    return root
+
+
+def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_stand_in_values(tmp_path):
+    """layers.sh's output is recognised by its own files (layers.txt beside a6/summary.json), each layer from its own
+    directory of the run, and the row says what the output says: stand-in values, figures a statement, its ε at δ."""
+
+    run = layers_run(tmp_path / "run")
+    rows = {x: PL.read(x, str(run)) for x in ("flock", "zk", "sampling")}
+    assert {r.format for r in rows.values()} == {PL.LAYERS_SH} and all(r.accepted for r in rows.values())
+    assert all(r.workload.startswith("stand-in values, never served: 2 statements of 2,560 units") for r in rows.values())
+    assert f"(source {SHA[:11]}, job.log)" in rows["zk"].workload and "32 of them drawn" in rows["sampling"].workload
+    assert [r.proof for r in rows.values()] == ["plain", "zk", "zk"]
+    assert rows["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
+    assert rows["sampling"].eps_delta == "at most 895 of 2,560 units wrong except with probability 2^-20"
+    assert rows["flock"].eps_delta == PL.NOT_STATED and rows["zk"].device.startswith("GPU 4 (gpu-lease's")
+    line = table_lines(PL.render(list(rows.values()) + [PL.read("recursion", None)]))
+    assert "| 2 s a statement of 2,048 units; 3 s a statement of 512 units (Flock's prove_total_s) |" in line["Flock"]
+    assert "| 6 s a statement of 26 units; 7 s a statement of 6 units (Lean's verify) |" in line["with sampling"]
+    assert "900 bytes a statement of 2,048 units; 901 bytes a statement of 512 units (one rep's proof)" in line["Flock"]
+
+
+def test_a_stand_in_row_writes_no_figure_a_proof_block_under_the_metric_ids(tmp_path):
+    run = str(layers_run(tmp_path / "run"))
+    rows = [PL.read(x, run if x != "recursion" else None) for x in PL.LAYERS]
+    written = PL.measured(rows, IDS)
+    assert len(written) == 9 and all(m["value"] is None for m in written)
+    assert all(m["why"] == "stand-in values, never served: its figures are a statement's, not a proof block's" for m in written)
+
+
+def test_a_layers_sh_row_with_a_negative_case_accepted_or_no_zk_flag_prints_no_number(tmp_path):
+    neg = PL.read("zk", str(layers_sh(tmp_path / "a", "zk", negative=False)))
+    assert not neg.accepted and neg.statements == [] and "negative draw-outside-the-partition not refused" in neg.lean
+    plain = PL.read("zk", str(layers_sh(tmp_path / "b", "zk", zk_flag=False)))
+    assert plain.proof is None and plain.statements == [] and "states no proof" in plain.why
+    assert PL.read("recursion", str(layers_run(tmp_path / "c"))).status == "unreadable"
+
+
+def test_a_prove_path_row_names_the_commit_its_machine_txt_states(tmp_path):
+    out = tmp_path / "out"
+    prove_path_arm(out, "z")
+    (out / "machine.txt").write_text(f"11\nMem: 755\n{'c352729e2ee' + '0' * 29}\n{'5e' * 20}\n")
+    assert PL.read("zk", str(out)).workload.startswith("arm z at commit c352729e2ee (machine.txt's git HEAD): ")
+    (out / "machine.txt").write_text("11\n")
+    assert PL.read("zk", str(out)).workload.startswith("arm z: ")

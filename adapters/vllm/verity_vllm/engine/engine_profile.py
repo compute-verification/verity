@@ -21,6 +21,7 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
+from verity_vllm.engine.fp8_checkpoint import snapshot_dir
 from verity_vllm.engine.profiles.cases import CASES
 from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
@@ -81,9 +82,16 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
     if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):
         raise SystemExit(f"{cp['repo']} is not downloaded on this pod (manifest says resolve-only)")
-    if not Path(cp["local_path"]).exists():
-        raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing")
-    return cp
+    if Path(cp["local_path"]).exists():
+        return cp
+    # the manifest's local_path is the HF cache it names (checkpoints_hf_home); a pin made or fetched under this process's
+    # HF_HOME, which `apply_env` leaves as it found it, is the same revision's snapshot there
+    hf_home = settings.HF_HOME
+    here = snapshot_dir(hf_home, cp["repo"], str(cp["revision"])) if hf_home and cp.get("revision") else None
+    if here is None or not here.is_dir():
+        raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing"
+                         + (f", and none of its revision at {here} (HF_HOME)" if here is not None else ""))
+    return {**cp, "local_path": str(here)}
 
 
 def verify_local_weights(cp: dict[str, Any]) -> None:
