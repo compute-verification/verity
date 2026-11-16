@@ -1339,7 +1339,8 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
             "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
             "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
             "honest": honest_witnesses(policy), "nontrivial": first_nontrivials(policy),
-            "errors": list(ERROR_HEADS), "below_one_head": BELOW_ONE, "below_one": below_one_lemmas(policy)}
+            "errors": list(ERROR_HEADS), "below_one_head": BELOW_ONE, "below_one_module": BELOW_ONE_MODULE,
+            "below_one": below_one_lemmas(policy)}
 
 
 #: the lock sections a lock run rewrites (`regenerated`, `repaired`), of which everything before the judge reads only what
@@ -2570,8 +2571,10 @@ WITNESS_KINDS = ("acceptance", "exclusion")
 #: the vocabulary's published error and its δ: where an honest witness is bounded by one, its targets (`Facts.lean`'s
 #: `targetsOf`, `error_failures`)
 ERROR_HEADS = ("Verity.Vocab.error", "Verity.Vocab.delta")
-#: what a `below_one` lemma concludes of a target: its published error below 1 at its vocabulary, parameters and subprotocol
+#: what a `below_one` lemma concludes of a target: its bound below 1 at the honest strategy, at its vocabulary, parameters,
+#: game and subprotocol; and the module that declares it, where the vocabulary's error is
 BELOW_ONE = "Verity.Vocab.ErrorBelowOne"
+BELOW_ONE_MODULE = "Properties.Verity.Game"
 
 
 def accepted(policy: dict, name: str) -> list[str]:
@@ -2917,7 +2920,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
       hold it. Each says something (`vacuous_meets`), and none applies a verifier that accepts everything
       (`accept_all`). A premise that can never hold fails here. Where one is bounded by the vocabulary's published error
       (a target, `error_failures`), a bound of 1 or more (`⊤` included) holds of every prover, so a lemma `below_one`
-      lists states the error below 1 there (`ErrorBelowOne`, `BELOW_ONE`), at the witness's own parameters;
+      lists states its bound below 1 there at the honest strategy (`ErrorBelowOne`, `BELOW_ONE`), at the witness's own
+      parameters, held to `assumes` and `vacuous_meets`; a walk for the targets that left some unread fails;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
       (`concluded`). For the `acceptance` kind, at an instance the lemma builds, where the conclusion fails, with a `∀`
       before the `¬` for each `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break
@@ -3074,6 +3078,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             for v in assumes(bp, policy, own) if bp else []:
                 fails.append(Failure("witnesses.below-one-assumes", n, f"witnesses: {n}, {g}'s `below_one` lemma, {v}: "
                                      f"it assumes nothing beyond named assumptions the lock lists"))
+            if bp and (v := vacuous_meets(ranges_dropped(statement_read(bp)), None)):
+                fails.append(Failure("witnesses.below-one-form", n, f"witnesses: {n}, {g}'s `below_one` lemma, {v}: a "
+                                     f"`below_one` lemma concludes `{BELOW_ONE}` itself, from no hypothesis that can fail"))
         if checked:
             fails += error_failures(g, pin, policy, allow.get(g) if half == "below_one" else None)
         if skip == "nontrivial":
@@ -3126,13 +3133,27 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     return fails
 
 
+def targets_unread(pin: dict) -> str | None:
+    """Why `Facts.lean`'s walk left some of a pin's targets unread (`targets_unread`), or that reading them raised
+    (`targets` null), else None."""
+    if isinstance(why := pin.get("targets_unread"), str) and why:
+        return why
+    return "reading them raised" if "targets" in pin and pin["targets"] is None else None
+
+
 def error_failures(g: str, pin: dict, policy: dict, entry) -> list[Failure]:
     """The targets of the guarantee ``g`` (its facts ``pin``) its honest witnesses say nothing of a cheating prover at:
     each error (`ERROR_HEADS`) one of them is bounded by (`targets`, `Facts.lean`'s `targetsOf`) where no lemma of
-    `witnesses[g].below_one` concludes `ErrorBelowOne` (`BELOW_ONE`) at its vocabulary and subprotocol and at its
-    parameters, or at every one where the witness is stated at every one, unless ``entry``, its `unwitnessed` entry
+    `witnesses[g].below_one` concludes `ErrorBelowOne` (`BELOW_ONE`, declared in `BELOW_ONE_MODULE`) at its vocabulary
+    and subprotocol, at its parameters, or at every one where the witness is stated at every one, and at its game, or at
+    some where the witness binds it, unless ``entry``, its `unwitnessed` entry
     {type_hash, missing: below_one, targets, owner, why}, lists the target's subprotocol. A bound of 1 or more on a
-    probability, `⊤` included, holds of every prover. A listed target that no uncovered error has is stale."""
+    probability, `⊤` included, holds of every prover. A listed target that no uncovered error has is stale. Where the walk
+    left targets unread (`targets_unread`, or no `targets`), it is that failure alone: no target is checked or stale."""
+    if unread := targets_unread(pin):
+        return [Failure("witnesses.targets-unread", g, f"witnesses: the walk for the errors {g}'s honest witnesses are "
+                        f"bounded by left some unread: {unread}. State the bound in the witness's conclusion or nearer "
+                        f"it (Facts.lean's `targetsOf` unfolds at most 8 deep and 64 times in all), or fix what raised")]
     ts = [t for t in pin.get("targets") or [] if isinstance(t, dict)]
     listed = set(entry["targets"]) if isinstance(entry, dict) and entry.get("missing") == "below_one" else set()
     bare = [t for t in ts if not t.get("below_one")]
@@ -3140,6 +3161,8 @@ def error_failures(g: str, pin: dict, policy: dict, entry) -> list[Failure]:
     if left:
         at = "; ".join(sorted({f"{t.get('subprotocol')} at {t.get('vocab')}, "
                                + (f"parameters {t['params']}" if t.get("params") else "every parameter it binds")
+                               + (f", game {' '.join(x or '(bound)' for x in t['game'])}" if any(t.get("game") or [])
+                                  else "")
                                + f" ({t.get('witness')})" for t in left}))
         unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
         owner = ((policy.get("guarantees") or {}).get(g) or {}).get("owner") or "its owner"
@@ -3149,8 +3172,9 @@ def error_failures(g: str, pin: dict, policy: dict, entry) -> list[Failure]:
         out.append(Failure("witnesses.honest-error", g, f"witnesses: {g}'s honest witnesses are bounded by the published "
                            f"error at {at}, and no lemma under witnesses[{g}].below_one concludes `{BELOW_ONE}` there: a "
                            f"bound of 1 or more (⊤ included) holds of every prover, so they show nothing of {g}'s "
-                           f"conclusion. List a lemma stating that error below 1 at that vocabulary and subprotocol and "
-                           f"at those parameters (`∀ θ` where the witness binds them) under witnesses[{g}].below_one, or "
+                           f"conclusion. List a lemma stating its bound below 1 at the honest strategy, at that "
+                           f"vocabulary and subprotocol, at those parameters (`∀ θ` where the witness binds them) and at "
+                           f"that game (`∃ F c` where it binds them) under witnesses[{g}].below_one, or "
                            f"until one exists, under `unwitnessed`: {json.dumps({g: back}, ensure_ascii=False)[1:-1]}"))
     if stale := sorted(listed - {t.get("subprotocol") for t in bare}):
         out.append(Failure("witnesses.below-one-stale", g, f"witnesses: unwitnessed[{g}] lists the targets "
@@ -3256,7 +3280,8 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     whose statement is the one it was listed with, under the hash of its new record (``kept``) when it says the same under
     another (moved, `--moved`, or lifted, `lifted_into`). An entry without `unfolded_hash` of a guarantee whose statement is
     a definition gets one only when its hash is that of the statement unfolded (the text before a lift), never at its type
-    hash, which a restated body leaves as it is. Every other entry drops, one of a name that is neither a guarantee of the
+    hash, which a restated body leaves as it is. A `below_one` entry keeps the targets still uncovered, all of them where
+    the walk left some unread (`targets_unread`). Every other entry drops, one of a name that is neither a guarantee of the
     lock nor among the records the update writes (``kept``) with them, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
     wit = claim_witnesses(policy)
@@ -3283,7 +3308,7 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
             out[g] = {"type_hash": built} | keyed if keyed else built
             continue
         entry = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
-        if half == "below_one":
+        if half == "below_one" and not targets_unread(pin):
             bare = {t.get("subprotocol") for t in pin.get("targets") or [] if isinstance(t, dict) and not t.get("below_one")}
             if not (left := [t for t in v["targets"] if t in bare]):
                 continue
