@@ -20,8 +20,7 @@ cd verity/protocols/workload_classification/training_detection/inference_only/ve
 lake exe inference-only id
 ~~~
 
-This builds the check and prints the core protocol's identity. It needs `lake` and no GPU. The first build takes a
-while.
+This builds the check and prints the core protocol's identity, `verity/inference-only/v0`. It needs `lake` and no GPU.
 
 ## Commands
 
