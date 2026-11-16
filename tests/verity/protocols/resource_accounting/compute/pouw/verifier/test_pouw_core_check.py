@@ -99,7 +99,7 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-sample": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work sample",
+    "answer-profile-sample": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
     "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",

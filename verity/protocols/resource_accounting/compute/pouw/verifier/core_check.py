@@ -430,7 +430,7 @@ def _core_sample(j: Any, ctx: str) -> dict:
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work sample")
+        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
     _exactly(d, j, ctx)
     return d
 

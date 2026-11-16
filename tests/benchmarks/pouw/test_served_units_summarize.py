@@ -46,7 +46,7 @@ def test_the_honest_run_is_accepted_and_the_selftest_builds_refused_for_its_vers
 
 
 def test_an_honest_check_with_another_verdict_fails_and_so_does_a_refused_forgery(tmp_path):
-    other = "refused: a session without a sample: every soundness claim is about a sampled session (D12)"
+    other = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
     for honest, forged in (({"honest-own": NO_PROGRAM}, {}), ({"honest-own": False}, {}), ({"honest-own": other}, {}),
                            ({"st-honest": True}, {}), ({"st-honest": NO_PROGRAM}, {}), ({"st-honest": None}, {}),
                            ({}, {FORGED[0]: other}), ({}, {FORGED[1]: True})):
