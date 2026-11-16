@@ -1250,12 +1250,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
         if drawn is not None:
             result["own_reads"] = True
+        pm = members_proof(members, done, not plain(a), one=on_stage)
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a), one=on_stage),
-                   **stage_case(a, relay is not None))
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
+                   per_member=pm, **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1275,11 +1275,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
+        pm = members_proof(members, done, not plain(a))
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
-                   per_member=members_proof(members, done, not plain(a)),
+                   served=given["served"], v2=v2_proof(done, not plain(a)) if pm is None else None, partition=part,
+                   tied=tie(a), per_member=pm,
                    coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
                    family=stream.family(draw), member_trees=relay is not None, challenger_key=a.coins.held()["key"])
     result["draw_counts"] = counts
@@ -1433,9 +1434,7 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in SPOT's one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for SPOT, in ``out/case-sampled.json``; or why there is neither in
-    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
-    (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
-    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case. With ``coins``
+    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case. With ``per_member`` (`members_proof`), the v2 case is the per-member form's (`case_members`) and ``v2`` is not read. With ``coins``
     (the sample's coin evidence, `a5_coins.evidence`'s, of an audit sampled on the auditor's challenger's coins), the
     challenger's key ``challenger_key`` as its session's start had it (`a5_coins.held`'s, which no evidence names), the
     family ``family`` the sample read them from (its docket's own, `a5_coins.family`) and the window's root
@@ -1455,28 +1454,22 @@ def write_case(out: Path, program, query: dict, sampling_design: dict, ports: di
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
+    if per_member is not None:
+        v2, build, named = per_member, functools.partial(case_members, c.case()), member_trees
+    else:
+        build, named = functools.partial(case_v2, c.case(), sessions), True
     if v2 is not None:
         try:
             if isinstance(v2, str):
                 raise ValueError(v2)
-            zk = case_v2(c.case(), sessions, **v2)
-            if coins is not None:
+            zk = build(**v2)
+            if coins is not None and named:
                 zk = case_coins(zk, coins, challenger_key, family, window_root)
             sampled = case_with_form(zk)
             (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
             (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
-    if per_member is not None:
-        try:
-            if isinstance(per_member, str):
-                raise ValueError(per_member)
-            pm = case_members(c.case(), **per_member)
-            if coins is not None and member_trees:
-                pm = case_coins(pm, coins, challenger_key, family, window_root)
-            (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
-        except Exception as x:  # noqa: BLE001 -- as the v1 case's
-            (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
 def case_written(out: Path) -> dict:
