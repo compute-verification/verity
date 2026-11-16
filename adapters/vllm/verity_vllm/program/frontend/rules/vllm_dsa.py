@@ -139,14 +139,14 @@ MAX_LOGITS = MAX_LOGITS_MB * 1024 * 1024 // 4
 
 
 def emit_indexer(keys: list[int], blocks: list[tuple[int, list[int]]], logits: Callable[[int, int], Any],
-                 alone: Callable[[int, Any], None], block: Callable[[int, list[int], list[Any]], None]) -> None:
+                 alone: Callable[[int, int, Any], None], block: Callable[[int, list[int], list[Any]], None]) -> None:
     """A call's indexer Calls in the order vLLM launches them (`sparse_attn_indexer`: per launch one MQA-logits kernel over its rows,
     sparse_attn_indexer.py:500 and 603, then one top-k over them, :509 and :617-657).  `keys` are the call's rows' keys in row
     order, increasing, its last the request's sequence length; a request's rows are one launch unless they pass `MAX_LOGITS`
     alone, when `split_indexer_prefill_chunks` cuts them into launches of max(1, MAX_LOGITS // keys[-1]) rows (a decode's are
     one).  Per launch: ``logits(i, N)`` for each row i in order, N its keys or its block's (`long_row_blocks`); then in row order
-    ``alone(i, logits)`` for each row outside `blocks` and ``block(N_b, rows, logits)`` for each block's rows in the launch, so a
-    block's ops each run over its rows in turn and batch (`prune.batched_form`)."""
+    ``alone(i, n, logits)`` for each row outside `blocks`, n its keys, and ``block(N_b, rows, logits)`` for each block's rows in
+    the launch, so a block's ops each run over its rows in turn and batch (`prune.batched_form`)."""
     at = {i: N for N, rows in blocks for i in rows}
     step = max(1, MAX_LOGITS // keys[-1]) if keys else 1
     for a in range(0, len(keys), step):
@@ -154,7 +154,7 @@ def emit_indexer(keys: list[int], blocks: list[tuple[int, list[int]]], logits: C
         out = {i: logits(i, at.get(i, keys[i])) for i in run}
         for i in run:
             if i not in at:
-                alone(i, out[i])
+                alone(i, keys[i], out[i])
         for N, rows in blocks:
             if (mine := [i for i in rows if i in out]):
                 block(N, mine, [out[i] for i in mine])
@@ -697,8 +697,8 @@ class DsaIndexerAttnRule(StateRule):
                 return ctx.call(ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D), iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)),
                                 Coll(Array(n, Value(32)), slog.cut(n)), node=node, rule=self, name=f"{h}/logits[t={pos[i]}]")
 
-            def alone(i: int, lg: Coll) -> None:
-                P, n = pos[i], keys[i]
+            def alone(i: int, n: int, lg: Coll) -> None:
+                P = pos[i]
                 if n <= TOPK:
                     ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")

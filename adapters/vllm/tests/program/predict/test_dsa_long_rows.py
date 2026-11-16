@@ -151,9 +151,9 @@ def test_a_request_past_the_logits_budget_is_launched_in_runs_of_rows(monkeypatc
     monkeypatch.setattr(V, "MAX_LOGITS", 12)
     seen: list[tuple] = []
     V.emit_indexer([1, 2, 3, 4, 5, 6], [(6, [3, 4, 5])], lambda i, n: seen.append(("logits", i, n)) or i,
-                   lambda i, lg: seen.append(("alone", i)), lambda N, rows, lgs: seen.append(("block", N, rows, lgs)))
-    assert seen == [("logits", 0, 1), ("logits", 1, 2), ("alone", 0), ("alone", 1),
-                    ("logits", 2, 3), ("logits", 3, 6), ("alone", 2), ("block", 6, [3], [3]),
+                   lambda i, n, lg: seen.append(("alone", i, n)), lambda N, rows, lgs: seen.append(("block", N, rows, lgs)))
+    assert seen == [("logits", 0, 1), ("logits", 1, 2), ("alone", 0, 1), ("alone", 1, 2),
+                    ("logits", 2, 3), ("logits", 3, 6), ("alone", 2, 3), ("block", 6, [3], [3]),
                     ("logits", 4, 6), ("logits", 5, 6), ("block", 6, [4, 5], [4, 5])]
 
 

@@ -19,8 +19,7 @@ padded batch under a FULL graph, its padding rows without keys (`_Launch.keys`);
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
 (BatchedGemm), SparseMlaSplit over the layer's latent history, and on an indexer layer the bf16 weights projection, DsaIndexerKRow,
-DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow, in vLLM's launch order (`vllm_dsa.emit_indexer`: each launch's logits, then its
-rows' selections); a step's prefills (more rows than the decode threshold) of at most INDEX_TOPK keys
+DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; a step's prefills (more rows than the decode threshold) of at most INDEX_TOPK keys
 by dense MHA instead (`use_dense_mha`, `_Model._dense_prefill`): kv_b_proj, FA3's prefill heads (Attention_v4, AttentionSplit, and
 with the lse AttentionHeadLse and AttentionHeadSplitLse where the step has context) and MergeAttnStates, while longer prefills take
 the decode kernels; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNVL kernel within its token
@@ -139,7 +138,7 @@ class Net:
         )
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY, MAX_LOGITS_MB
+        from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY
         hf = phi.hf_config
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         try:
@@ -187,9 +186,6 @@ class Net:
         if facts:
             _refuse("; ".join(facts))
         env = phi.engine.get("env")   # the switches the engines run under; a φ that states none sets none
-        if env and (mb := env.get("VLLM_SPARSE_INDEXER_MAX_LOGITS_MB")) is not None and str(mb) != str(MAX_LOGITS_MB):
-            _refuse(f"an engine whose environment sets VLLM_SPARSE_INDEXER_MAX_LOGITS_MB={mb!r} (the indexer's launches are written "
-                    f"at vLLM's default {MAX_LOGITS_MB}, `vllm_dsa.emit_indexer`)")
         self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), env if env else {})
         self.long_rows = None if env is None or all(env.get(k) == v for k, v in DSA_TOPK_ENV.items()) else (
             f"a row past INDEX_TOPK ({int(C['INDEX_TOPK'])}) keys under an engine whose environment sets "
@@ -638,13 +634,10 @@ class _Model(_Calls):
             select = self.k("dsa_topk_short_row", TOPK=TOPK)
             self.topk = {}
             blocks = long_row_blocks(keys, TOPK) if self.batched and mqa else []
-
             def logits(i: int, n: int) -> Coll:
                 return self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
                                  logs["iks"].cut(n))
-
-            def alone(i: int, lg: Coll) -> None:
-                n = keys[i]
+            def alone(i: int, n: int, lg: Coll) -> None:
                 if n <= TOPK:
                     self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
                     return
@@ -654,7 +647,6 @@ class _Model(_Calls):
                 scores = concat([lg.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else lg.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
-
             def block(Nb: int, rows: list[int], lgs: list[Coll]) -> None:
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
@@ -666,9 +658,7 @@ class _Model(_Calls):
                 masks = [self.call(fm, concat([s.refs, *tail]) if tail else s.refs, c).refs for s, c in zip(lgs, counts)]
                 for i, m in zip(rows, masks):
                     self.topk[pos0 + i] = self.call(fs, m)
-
-            if mqa:
-                emit_indexer(keys, blocks, logits, alone, block)
+            emit_indexer(keys if mqa else [], blocks, logits, alone, block)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
         if fp8:

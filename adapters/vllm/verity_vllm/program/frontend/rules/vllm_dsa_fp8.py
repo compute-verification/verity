@@ -290,8 +290,8 @@ class DsaFlashMlaAttnRule(StateRule):
                 return ctx.call(ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D), iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)),
                                 Coll(Array(n, Value(32)), slog.cut(n)), node=node, rule=self, name=f"{h}/logits[t={pos[i]}]")
 
-            def alone(i: int, _logits: Coll) -> None:
-                ln = ctx.call(ctx.kind("const", node, W=32, BITS=keys[i]), node=node, rule=self, name=f"{h}/len[t={pos[i]}]")
+            def alone(i: int, n: int, _logits: Coll) -> None:
+                ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={pos[i]}]")
                 selected[pos[i]] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={pos[i]}]")
 
             emit_indexer(keys, [], logits, alone, lambda *_: None)
