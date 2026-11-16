@@ -13,10 +13,6 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity ci inspect RUN` | a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far |
 | `verity tasks list --json [ARGS]` | the check's task graph here (`tasks/v1`, `tools/check/tasks.py`; its README's "Tasks") |
 | `verity tasks run ID [--out FILE]` | one task run here as check runs it, with its verdict, outputs, seconds and key |
-| `verity graph [--json [--packed]] [--family F]` | the fine-grained check's task graph of this checkout (`verity-graph/v2`, `tools/verity/graph/README.md`) |
-| `verity graph unpack [FILE]` | the graph/v2 a packed listing (`--packed`) packs |
-| `verity graph run ID --work DIR` | one task of it run here, with its result (`verity-result/v1`) |
-| `verity graph check --local [--family F]` | the graph run serially here, uncached: the reference executor |
 | `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
 | `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`); NAME defaults to `onsite_compute` |
 | `verity run CONFIG` | the parties a configuration places on this machine, and its verdict |

@@ -17,12 +17,6 @@
                                     the check's task graph here (`tasks/v1`, tools/check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
                                     run one task here as check runs it, and print its verdict, outputs, seconds and key
-    verity graph [--json [--packed]] [--family F]
-                                    the fine-grained check's task graph of this checkout (`verity-graph/v2`, graph/README.md)
-    verity graph unpack [FILE]      the graph/v2 a packed listing (`--packed`) packs
-    verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
-    verity graph check --local [--family F]
-                                    run the graph serially here, uncached: the reference executor
     verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
@@ -318,10 +312,6 @@ def main(argv: list[str] | None = None) -> int:
         return _runner("benchmarks", "bench", args[1:])
     if args[0] == "tasks":
         return _run([sys.executable, str(CHECK / "tasks.py"), *args[1:]])
-    if args[0] == "graph":
-        from verity_graph.cli import main as graph
-
-        return graph(args[1:])
     if args[0] in ("run", "config"):
         from . import run
 

@@ -18,8 +18,8 @@ spec = importlib.util.spec_from_file_location("lean_module_keys_under_test", HER
 MK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MK)
 C = MK.C
-#: the vectors the task graph's contract reproduces, which Verity and the executor share
-VECTORS = HERE.parent / "graph" / "key_vectors.json"
+#: the vectors the contract's key rule reproduces
+VECTORS = HERE / "key_vectors.json"
 
 TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
 
