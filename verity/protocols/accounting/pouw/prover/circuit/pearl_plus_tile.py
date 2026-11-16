@@ -21,7 +21,7 @@ The core, from the registry's call Definitions (`verity.protocols.accounting.pou
   - **admission.** Each row's `PearlPlusAdmit_v1`, `Pc8RowA`'s ``ok`` on the statistics the row returned: every word
     finite, the noise floor ρ·α >= 1 and at most k/64 dead words (`pc8`'s module docstring, `PearlC.admissible`).
   - **caps.** A's salt-dead counts (`PearlPlusSaltDead_v1`, `Pc8RowACap`'s), then `Pc8TileCap_v2` on the codes, the
-    factors, the admission words and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's cap at
+    factors, the admission words and the prover's certificates (``cert``): C̃ and U, and the verdict of the tile's inert-work bound at
     ρ = 1/RHO and each admitted row's at ρr = 1/RHOR (`inert_bound.row_rho`: 4ρ at a census k, else ρ).
   - **leaf.** The tile's ``sha512/row-seg/v1`` digest of its messages (`leaves.tile_messages`, `PearlCRowDigest_v1`): the
     preimage of its leaf in the transcript tree.
@@ -248,7 +248,7 @@ PearlPlusTileCore = CompositeDefinition(
     _core_body, refuse=_refuse_k, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
                                               "(verity/protocols/accounting/pouw/verifier/tests/test_circuit_pearl_plus_tile.py)",
     doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
-        "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's cap, and each row's "
+        "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's inert-work bound, and each row's "
         "served y its committed y at column tile col).")
 PearlPlusTileCoreV2 = _on_bits(PearlPlusTileCore, 2)
 

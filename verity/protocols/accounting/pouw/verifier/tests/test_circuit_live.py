@@ -339,7 +339,7 @@ def test_an_honest_fixed_length_round_is_accepted(s, slot):
 
 
 @pytest.mark.parametrize("s, slot, edit", [
-    # request 1 takes request 0's decode row in round 1, its hidden cap swapped with request 0's: v1 accepts it
+    # request 1 takes request 0's decode row in round 1, its hidden inert-work bound swapped with request 0's: v1 accepts it
     (1, [2, 3, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),
     # ... and in round 2
     (2, [2, 0, 0, 0, 0, 0, 0, 0], lambda r: [[0, 0, 0, 1, 3], [1, 0, 1, 3, 4]] + r[2:]),

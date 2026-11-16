@@ -468,7 +468,7 @@ def test_the_row_capped_tile_is_v1_and_each_admitted_rows_inert_bound(k, tile, n
 
 
 #: GLM-5.3's down projection's k on the H100 record, at its n, in tiles of 8 rows and 16 columns: a cell's credit is 420
-#: units and a flagged atom 40, so a row's cap is 16.8 units at ρ = 1/400 and 67.2 at 4ρ, and the tile's 134.4 at ρ
+#: units and a flagged atom 40, so a row's inert-work bound is 16.8 units at ρ = 1/400 and 67.2 at 4ρ, and the tile's 134.4 at ρ
 ROW_INERT_BOUND = dict(k=256, tile=(8, 16), n=6144, rho=400, dev="h100")
 
 
@@ -542,7 +542,7 @@ def _h0(tile, c, u):
 def test_the_split_h0_is_pearl_tile_digests_on_edge_tiles(tile):
     """On words fed to the row digests directly (half `EDGE`'s, half random bits), at TN on either side of a 32-column
     chunk and at the deployed 64 × 64: the split's h0 is `PearlTileDigest`'s and `pearl_c.leaf`'s, and each row's
-    cap-chunks words are `pearl_c.message_digest`'s of its chunks, then zeros."""
+    inert-work bound-chunks words are `pearl_c.message_digest`'s of its chunks, then zeros."""
     tm, tn = tile
     rng = random.Random(f"cap-h0-{tile}")
     word = lambda: rng.choice(EDGE) if rng.random() < 0.5 else rng.getrandbits(32)  # noqa: E731

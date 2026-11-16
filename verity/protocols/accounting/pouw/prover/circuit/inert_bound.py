@@ -97,7 +97,7 @@ and the strip's bits and bound, all through their committed rows (`PORTS`; the c
   - The tile and the tally are cut per tile row because Flock's composer gives each row a unit reads or writes an
     hm96 slot of 2^18 bits and a unit at most 2^27 bits (`circuit.K_MAX`), so at most 256 rows: a tile reading its
     words' rows directly would need 2^31 at 64 × 64.  Cut per row, no unit of a 64 × 64 tile has more than 66 rows
-    (the row tally's TN cap-flags rows, its sd row and its cap-sums row).
+    (the row tally's TN inert-work bound-flags rows, its sd row and its cap-sums row).
   - The tally's verdict is `Pc8TileCap`'s: every passing row's words are good, and the inequality holds.  It is the
     tally's public output (``public`` in `PORTS`: the verifier reads it; no row holds it), beside the tile digest, and
     the verifier accepts a sampled tile only when its tile check passes (the digest is the miner's h0) and the verdict is
@@ -586,12 +586,12 @@ def _word_unit_body(B, S_, a, pa, b, pb, cert):
 
 Pc8CapWordUnitDef = CompositeDefinition(
     "Pc8CapWordUnit", 1, ("K", "DEV"), _word_unit_sig, _word_unit_body,
-    doc="One word of the split cap: `Pc8CapWord`'s C̃ and U (`Pc8Tile`'s peel from C̃), its flags padded to whole 16-bit "
+    doc="One word of the split inert-work bound: `Pc8CapWord`'s C̃ and U (`Pc8Tile`'s peel from C̃), its flags padded to whole 16-bit "
         "words with zero bits, their count, its later +0 promotions, and good as an ok word.",
     conformance="protocol-defined")
 
 
-#: a tile row's cap-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
+#: a tile row's inert-work bound-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
 CHUNK_WORDS = L.CAP_ROW_WORDS // 2
 
 
@@ -611,7 +611,7 @@ Pc8CapRowDigestDef = CompositeDefinition(
     "Pc8CapRowDigest", 1, ("TN",),
     lambda S_: ((("c", Array(_columns(S_.TN), F32)), ("u", Array(S_.TN, F32))), Array(CHUNK_WORDS, W.U32)),
     _row_digest_body,
-    doc="The split cap's digests of one tile row: `leaves.PearlTileDigest`'s TurboSHAKE128 (D = 0x21) of each 32-column "
+    doc="The split inert-work bound's digests of one tile row: `leaves.PearlTileDigest`'s TurboSHAKE128 (D = 0x21) of each 32-column "
         "chunk of its TN words' C̃ and U, two digests (the second zero when TN <= 32), then zero words to its cap-chunks "
         "row's 64.", conformance="protocol-defined")
 
@@ -628,7 +628,7 @@ def _tile_body(B, S_, d):
 
 Pc8CapTileDef = CompositeDefinition(
     "Pc8CapTile", 1, ("TM", "TN"), _tile_sig, _tile_body,
-    doc="The split cap's tile: the tile digest h0 (`leaves.PearlTileDigest`'s TurboSHAKE128, D = 0x22) of its TM rows' "
+    doc="The split inert-work bound's tile: the tile digest h0 (`leaves.PearlTileDigest`'s TurboSHAKE128, D = 0x22) of its TM rows' "
         "chunk digests (`Pc8CapRowDigest`), in order.", conformance="protocol-defined")
 
 
@@ -657,7 +657,7 @@ def _strip_body(B, S_, oka):
 
 Pc8CapStripDef = CompositeDefinition(
     "Pc8CapStrip", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _strip_sig, _strip_body,
-    doc="The split cap's strip of TM rows of A, once for every tile in it: its rows' admission bits, padded to 64 with zero "
+    doc="The split inert-work bound's strip of TM rows of A, once for every tile in it: its rows' admission bits, padded to 64 with zero "
         "bits, the cap's bound at its passing rows' count, ⌊|R|·|C|·P/(RHO·g)⌋, and zero words to its cap-rows row's 64.",
     conformance="protocol-defined")
 
@@ -684,7 +684,7 @@ def _row_tally_body(B, S_, flags, atoms, zeros, good, sd):
 
 Pc8CapRowTallyDef = CompositeDefinition(
     "Pc8CapRowTally", 1, ("K", "TN"), _row_tally_sig, _row_tally_body,
-    doc="The split cap's sums over one tile row: its TN words' flag counts and later +0 promotions, its forming elements "
+    doc="The split inert-work bound's sums over one tile row: its TN words' flag counts and later +0 promotions, its forming elements "
         "(per atom block 32 when every word flags it, else the row's salt-dead count), and whether every word is good, as "
         "an ok word.", conformance="protocol-defined")
 
@@ -719,7 +719,7 @@ def _tally(B, S_, atoms, zeros, elems, good, mask, bound, row_consts):
 
 Pc8CapTallyDef = CompositeDefinition(
     "Pc8CapTally", 1, ("K", "TM", "TN", "N", "RHO", "DEV"), _tally_sig, _tally_body,
-    doc="The split cap's tally: `Pc8TileCap`'s verdict at ρ = 1/RHO on a unit of N columns as an ok word (every passing "
+    doc="The split inert-work bound's tally: `Pc8TileCap`'s verdict at ρ = 1/RHO on a unit of N columns as an ok word (every passing "
         "row's words are good, and the cap's inequality holds), from its rows' sums (`Pc8CapRowTally`) and its strip's "
         "admission bits and bound (`Pc8CapStrip`; its row's zero words unread).", conformance="protocol-defined")
 
