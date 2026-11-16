@@ -111,7 +111,7 @@ theorem registered_θ₀ : base.Registered θ₀ (base.registered θ₀) := by
   exact ⟨⟨circuitFile, by simp, Params.digests.1⟩, ⟨publicFile, by simp, Params.digests.2⟩⟩
 
 /-- At `θ'`, the registered file with the digest `h` names: the one at `θ₀`, else `θ'` itself, both files there. -/
-private theorem digest_at {θ' f : ByteArray} {h : Option Hash.Digest} (hf : f ∈ base.registered θ')
+theorem digest_at {θ' f : ByteArray} {h : Option Hash.Digest} (hf : f ∈ base.registered θ')
     (hd : h = some (Verity.sha512 f.data.toList)) (hθ : θ' ≠ θ₀) : h = some (Verity.sha512 θ'.data.toList) := by
   change f ∈ #[circuitFileAt θ', publicFileAt θ'] at hf
   have hf' : f = θ' := by simpa [circuitFileAt, publicFileAt, hθ] using hf
