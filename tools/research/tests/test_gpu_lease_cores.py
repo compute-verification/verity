@@ -189,6 +189,30 @@ def test_a_request_without_cores_beside_a_declared_lease_starts_with_one_warning
     assert held
 
 
+WHOLE = ("gpu-lease: no --cores: this lease counts as all 96 CPUs of this machine against its CPU quota of 81.6 while it is held, "
+         "so every other lease that names --cores waits or is refused until it ends; pass --cores LIST (per card, the ten CPUs of "
+         "its own NUMA node that the slots file gives)")
+
+
+def test_a_lease_without_cores_that_may_run_on_every_cpu_says_it_counts_as_the_whole_machine_against_the_quota(tmp_path):
+    node = Node(tmp_path)
+    inside = 'bash "$0" 1 --cores 0-9 --mem-gb 0 -- true; echo "next=$?"'
+    r = node.ask(cmd=("bash", "-c", inside, str(GPU_LEASE)))
+    assert r.returncode == 0 and r.stdout == "next=75\n"                    # what it says: a request that declares is refused
+    assert [ln for ln in r.stderr.splitlines() if "no --cores:" in ln] == [WHOLE]
+    assert "96 CPUs would be pinned on this machine, over its CPU quota of 81.6" in r.stderr
+
+
+@pytest.mark.parametrize("quota", [None, "max 100000"])
+def test_the_whole_machine_line_is_said_only_without_cores_on_a_machine_with_a_quota_and_every_cpu(tmp_path, quota):
+    node = Node(tmp_path)
+    assert "no --cores:" not in node.ask("--cores", "0-9").stderr
+    node.allows("0-9")                                                       # gpu-lease itself started on ten CPUs: counts as ten
+    assert "no --cores:" not in node.ask().stderr
+    (tmp_path / "no-quota").mkdir()
+    assert "no --cores:" not in Node(tmp_path / "no-quota", quota=quota).ask().stderr
+
+
 def test_a_lease_writes_the_machines_throttle_counters_at_its_start_and_at_its_release(tmp_path):
     node = Node(tmp_path)
     node.throttled(7, 1500)
