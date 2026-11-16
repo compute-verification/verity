@@ -107,7 +107,7 @@ directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --f
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
 them as not read, with that reason.
 Under `research run` the records go to `$RESEARCH_RUN_DIR/out` instead, beside the JSON's `memory.json`, and the
-benchmark result to `$RESEARCH_RUN_DIR/result.json`, with the same row.
+benchmark result to `$RESEARCH_RUN_DIR/result.json`, with the same metric.
 `--from` takes the run's directory or its `out/`, the directory stderr names, where `--local` leaves its JSON as
 `memory.json` beside the `verifier.json` it reads.
 

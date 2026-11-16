@@ -19,7 +19,7 @@ import ra_cases as M
 from verity.protocols.resource_accounting.memory.poub.prover import period_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 
-ROOT = M.PACKAGE.parents[5]
+ROOT = M.PACKAGE.parents[6]
 MODULE = ROOT / "security/Properties/Poub/Remote/HonestLog/Case.lean"
 NAMESPACE = "Properties.Poub.Subprotocol.HonestLog"
 STORE = hashlib.shake_256(b"one block").digest(100)

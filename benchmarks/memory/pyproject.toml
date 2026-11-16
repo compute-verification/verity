@@ -27,6 +27,7 @@ inputs = [
     "verity/device.py", "verity/protocols/resource_accounting/memory/poub/verifier", "hardware",
     "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
     "verity/commitments/randomness", "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+    "verity/protocols/resource_accounting/memory/__init__.py",
     "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/__init__.py",
     "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
     "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",

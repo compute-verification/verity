@@ -35,7 +35,7 @@ NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|la
                          r"|tools/verity/lean/.*"
                          r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/remote_session/auditor_line\.py")
 #: the directories whose every file, present or added later, is the auditor's devices' or a verifier's code
-TRUSTED_DIRS = ("device", "verifier")
+TRUSTED_DIRS = ("device", "verifier", "attester")
 #: a file name no name glob of the list matches, standing for a file added later to a directory
 NEW_FILE = "a-file-added-later"
 
