@@ -10,7 +10,7 @@ of bits of such a sender's secrets a decoder recovers from the client's view.
 The guarantee is `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`
 (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`), proved as
 `NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/Certifier/MonitoringPeriod.lean`). Over a monitoring
-period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
+period of n execution phases, execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network attester on the server's uplink running its code on schedules in `Ss`:
 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
@@ -74,14 +74,14 @@ Open premises (`open`):
     `network/tests/period_case.py` for the third;
   - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
     an active network attester's run, each record held to its certified head and its certificate to the key in the
-    session, then the certifier program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`.
+    session, then the network attester's program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`.
     `benchmarks/network_traces/certifier_piece.py` runs it in step 1 of each of its steps, on the kept network
     attester run (`network_attester_chain.rows_audit_case`);
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
     `NetworkCheck.Certificate`'s.
-- **Lean beside it**: `../attester/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
+- **Lean beside it**: `../attester/program/lean/`, the network attester's program, is the Lake package `certifier_program`, whose
   library `NetworkCertifier` the packages at `lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
   `INSTANCES PYTHON N`. The Lean check runs each `../attester/program/lean/scripts` script, then its difftest
@@ -105,7 +105,7 @@ Open premises (`open`):
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
   `inference_only_check` (`../../../workload_classification/training_detection/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
-  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
+  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the network attester's program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `parties` alone, `verity.protocol` and `verity.channel`;
   never the prover side, which `../attester/program/lean/scripts/window_vectors.py` and the tests import.
@@ -126,8 +126,8 @@ A spec-level reference for network certification's timing channel:
   the network attester's (`service.NetworkCertifierProfile`), and its claim is the heads' only: on every execution phase both
   are the network attester's, on its grid under its parameters digest, so the link's timing is its schedule's.
   Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
-  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
-  link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
+  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every execution phase of the
+  link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order one
   rejects the link;
 - one vLLM v1 scheduler step, in vLLM's compiler (`verity_vllm.compiler.replay_step`): `ReplayStep_v1`, a Boolean
   Definition with `reference` its spec, takes the committed queue state, the certified arrivals and the committed
@@ -172,73 +172,73 @@ A spec-level reference for network certification's timing channel:
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
-  the earliest egress window that can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
+  the earliest execution phase whose egress can show each record (`bits`). v0 is the committed form; the charge is ENC-CODE's
   compressed length of the advice;
 - advice v0's validity, in vLLM's compiler (`verity_vllm.compiler.advice_check`): `AdviceCheck_v1{L}`, the compile
   slice's proof block's first part as a Boolean Definition, 1 exactly when the committed bits (at most L) decode to a v0
   advice, up to the three refusals of `decode` it defers (unique ids, a source's KV computed there, release order per
   request); its AND count at each L is `size(L)`;
 - the replay's state chain, in vLLM's compiler (`verity_vllm.compiler.replay_chain`): ReplayStep_v1's state handed from
-  one step proof block to the next as the state rows of a produced value a window, with private heads into the window
-  row every step reads: the certified arrivals not yet taken and the window's decisions, since the step's cursors are
-  private. `ReplayAdvance` sits beside each step and checks its arrivals and decision bits are the window row's at the
-  heads; `ReplayLoad` runs once a window and carries the decisions the last window left unread; `ReplayClose` ends the
-  session with none unread. The windows join by equal openings and the session starts from the empty rows under public
+  one step proof block to the next as the state rows of a produced value an execution phase, with private heads into the
+  execution-phase row (`window_fields`) every step reads: the certified arrivals not yet taken and the execution phase's decisions, since the step's cursors are
+  private. `ReplayAdvance` sits beside each step and checks its arrivals and decision bits are the execution-phase row's at the
+  heads; `ReplayLoad` runs once an execution phase and carries the decisions the last one left unread; `ReplayClose` ends the
+  session with none unread. The execution phases join by equal openings and the session starts from the empty rows under public
   salts (`check_chain`). Its cost at a shape is `size`;
 - the compile slice, in vLLM's compiler (`verity_vllm.compiler.compile_slice`): `CompileSlice_v1`, a Boolean Definition
   with `check` its reference, composes `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires,
   `CacheStep_v1`'s calls on the certified tokens checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the
-  decisions the window commits, from its carry-in to its carry-out, for one window. It holds the charge to the declared
+  decisions the execution phase commits, from its carry-in to its carry-out, for one execution phase. It holds the charge to the declared
   one and the step rows to its committed ``srv`` row, the served rows. The evictable and returned counts are a stand-in
   held at 0 (`protocol/compile-slice.md`);
 - the compile slice over the memory-checked pool, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v4`):
   `CompileSlice_v4` computes its schedule rather than checking it. From the advice (DA decisions and the step count),
   the arrivals' ingress fields and their registered output lengths and tokens, it computes the served rows and the
-  state, window and slot rows the window leaves, each hit, evictable count and return where `ReplayStep_v1` reads it,
+  state, execution-phase and slot rows the execution phase leaves, each hit, evictable count and return where `ReplayStep_v1` reads it,
   and holds them to the registered ``srv`` and ``cout`` it reads; its one output is the 16-bit verdict. Its pool calls,
   in vLLM's order, are records on a bus to `CacheStep_v3`'s stream, which runs in the proof block from the empty pool with
   request keys the arrivals' `BlockKey_v1` chains printed under a live coin, so eviction, preemption and a leaving
   request's returns are in the slice. The hits, evictable counts and returns the steps read, and the stream's slots and
   touched list, are checked witness, unique and bound by live coins. Until a Lean lemma shows that uniqueness, the
-  witness counts as free input at its width, so the free input is the advice and the checked witness (`free_width`). A
-  window costs its stream's slots, whatever the pool's size. `benchmarks/network_e2e/encodings/compile_slice_pool.py`
+  witness counts as free input at its width, so the free input is the advice and the checked witness (`free_width`). An
+  execution phase costs its stream's slots, whatever the pool's size. `benchmarks/network_e2e/encodings/compile_slice_pool.py`
   (`check_trace_v4`) holds its calls to the advice decoder's block pool,
   `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces;
-- the compile slice at its window's activity, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v5`):
+- the compile slice at its execution phase's activity, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v5`):
   `CompileSlice_v5`, `CompileSlice_v4` with the arrivals' tokens registered in ``req`` as one ragged row of the NRK
-  blocks the window keys (a keyed block count a slot, and one key a block), RB's touched list the NRB addresses the
+  blocks the execution phase keys (a keyed block count a slot, and one key a block), RB's touched list the NRB addresses the
   stream touches, and each running slot's request number carried in the slot row, which ``cout`` registers, rather than
   looked up at every call. Its free input is the advice and the checked witness, as v4's (`free_width`), and its verdict
   adds bit 6 ``keys``. `parts` prices it at any class;
-- the compile slice with the block pool carried between windows, in vLLM's compiler
-  (`verity_vllm.compiler.compile_slice_v6`): `CompileSlice_v5` cut in two proof blocks, both proved every window.
+- the compile slice with the block pool carried between execution phases, in vLLM's compiler
+  (`verity_vllm.compiler.compile_slice_v6`): `CompileSlice_v5` cut in two proof blocks, both proved every execution phase.
   `CompileSlice_v6` is its load and steps from the registered results, their pool calls' bus records held to the
-  registered calls row. `PoolWindow_v1` opens the pool row under the input root, the previous window's output root
-  registered before the window's coins, as the memory check's initial values; runs `CacheStep_v3`'s stream from it over
-  the calls row with v5's ragged keys; and commits the row the stream leaves as the output root. A window from the empty
-  pool's root (`genesis`) is v5's, and a chain restarts from it after a failed window. The compile slice's free input is
-  the advice, the pool window's its checked rows (the left row, the blocks' sources and the stream's witness) at their
-  widths until their lemma (`free_width`). A request still open at the window's edge is cut (its registered ``a_cut``
+  registered calls row. `PoolWindow_v1` opens the pool row under the input root, the previous execution phase's output root
+  registered before its coins, as the memory check's initial values; runs `CacheStep_v3`'s stream from it over
+  the calls row with v5's ragged keys; and commits the row the stream leaves as the output root. An execution phase from the empty
+  pool's root (`genesis`) is v5's, and a chain restarts from it after a failed one. The compile slice's free input is
+  the advice, `PoolWindow_v1`'s its checked rows (the left row, the blocks' sources and the stream's witness) at their
+  widths until their lemma (`free_width`). A request still open at the execution phase's edge is cut (its registered ``a_cut``
   bit): `CompileEdge` frees every running slot in vLLM's preemption order and holds each open request to having emitted
-  its ``a_O``, and the next window takes its continuation, (id, P + e) with its prompt then its released outputs, as an
+  its ``a_O``, and the next execution phase takes its continuation, (id, P + e) with its prompt then its released outputs, as an
   ordinary arrival that hits its blocks in the carried pool. The close gives each keyed block's page its source, the
-  window's own write or the previous window's carried port, and a `PageCopy_v1` copy block holds the window's carried
-  port to it. `PoolChain_v1` is two windows so chained, and `parts` prices both proof blocks at any class, which
+  execution phase's own write or the previous one's carried port, and a `PageCopy_v1` copy block holds the execution phase's carried
+  port to it. `PoolChain_v1` is two execution phases so chained, and `parts` prices both proof blocks at any class, which
   `benchmarks/mempool/cost.py` does at a served load's;
 - the compile slice charging the length terms, in vLLM's compiler (`verity_vllm.compiler.compile_slice_v7`):
   `CompileSlice_v7`, `CompileSlice_v1` with `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot
-  for each certified arrival read from ``cert`` (its output length and its certified max_tokens), so a window's charge
-  covers `code_v1`'s segment and its length tail. vLLM's served windows name it (`serve_commit.SERVED_SLICE`), except
+  for each certified arrival read from ``cert`` (its output length and its certified max_tokens), so an execution phase's charge
+  covers `code_v1`'s segment and its length tail. vLLM's served execution phases name it (`serve_commit.SERVED_SLICE`), except
   under `--admit tick`, and `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain,
   ``--plain``);
-- the served rows, in vLLM's compiler (`verity_vllm.compiler.served_rows`): the step rows a served window ran, from the
+- the served rows, in vLLM's compiler (`verity_vllm.compiler.served_rows`): the step rows a served execution phase ran, from the
   server's kept rows, committed before the sample under the run root as a hiding-commitment registration, a row each
-  block of G steps (G = P unless given: a window's row, the slice's ``srv`` row; at G < P block j is the slice's
+  block of G steps (G = P unless given: an execution phase's row, the slice's ``srv`` row; at G < P block j is the slice's
   ``srv{j}``, `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1`). `leaf_ok` holds a proof block's row b‖c to
   its registered leaf, as the advice's ``adv`` row is held, and `reads_port` is the same read as the Lean verifier's
   registered reads take it;
 - the served rows' tie, in vLLM's compiler (`verity_vllm.compiler.served_tie`): `ServedRowsTie_v2`, a Boolean Definition
-  with `check` its reference, holds a window's served rows to the positions its steps' Commit holds (the step-input
+  with `check` its reference, holds an execution phase's served rows to the positions its steps' Commit holds (the step-input
   port, `port_chunks`: each step's ids and then its positions at the head of its stream), so the rows registered at
   serve time are the batch the server ran. Every proof block is proved, and its port, selection and cost are its
   docstring;
@@ -250,27 +250,27 @@ A spec-level reference for network certification's timing channel:
   scheduled row's pass over a table of whole cached units (an engine step's calls are `scan_step` and, as a circuit,
   `build_scan_step`), which checks the row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1");
-- the block pool as memory-checked RAM, in vLLM's compiler (`verity_vllm.compiler.cache_step_v3`): `CacheStep_v3`, a
-  window's pool calls as one stream of NS access slots over the five memories vLLM's `BlockPool` is made of (blocks,
+- the block pool as memory-checked RAM, in vLLM's compiler (`verity_vllm.compiler.cache_step_v3`): `CacheStep_v3`, an
+  execution phase's pool calls as one stream of NS access slots over the five memories vLLM's `BlockPool` is made of (blocks,
   keys, key copies, request blocks, request keys), checked by `MemCheck_v1`'s fingerprint under live coins, with a bus
   product of the calls' records for `ReplayStep_v1`. So a lookup's hit and evictable count and a free's returns are
-  derived past the cumulative pool bound too. A window's price is NS slots and NE list entries from a public ladder,
+  derived past the cumulative pool bound too. An execution phase's price is NS slots and NE list entries from a public ladder,
   whatever the pool's size; `Stream` is its specification, held to the replay's pool by `benchmarks/mempool/stream.py`;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
-  symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
-  holds the window to its declared charge, and `BookKT_v1{C}` is `code_v1`'s KT estimate for a bit's context. `ChargeCount_v1{N}` composes them into one window's charge from its decisions, the compile
-  slice's proof block's one call a window. The context and the frequencies are the circuit's, from the replay's position and the
+  symbol and counts the bits it puts in the execution phase's segment, `ArithCountFinish_v1{CW}` adds the termination and
+  holds the execution phase to its declared charge, and `BookKT_v1{C}` is `code_v1`'s KT estimate for a bit's context. `ChargeCount_v1{N}` composes them into one execution phase's charge from its decisions, the compile
+  slice's proof block's one call an execution phase. The context and the frequencies are the circuit's, from the replay's position and the
   registered book's counts, never witness. The bit-checking variant, the alternative: `ArithEncodeStep_v1{K, BIN}` and
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
-  v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
+  v1's execution phases and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
   in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1");
-- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hiding commitments,
-  window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
+- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from execution phase to execution phase as hiding commitments,
+  execution phase 0's the book's priors under a public salt, with the verifier's check of how they join (`check_chain`)
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`);
-- the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}` charge
-  advice v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
+- the whole execution phase's charge (`window_charge`): `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}` charge
+  advice v1's execution phase (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
   `code_v1` codes them, and its length terms' tail, with the order's position and rank added to the carry and chained
   under the value
   `window-charge` (`protocol/charge-chain.md`, "The whole window");
@@ -295,7 +295,7 @@ A spec-level reference for network certification's timing channel:
   The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network attester's cells as rows (`network_attester_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network attester signs with its
-  signer, beside a salted digest of the window's wiring. The registration is what a proof block's
+  signer, beside a salted digest of the execution phase's wiring. The registration is what a proof block's
   `--registered` port reads, and the verifier places each read, the (connection, cell) the Program's proof blocks'
   wiring pins (`Units`, whose digest the port's value names), with the network attester's wiring (`PROTOCOL.md`,
   "The network attester's cells as rows"; `verity/protocols/resource_accounting/network/prover/network_attester_zk.py`);
@@ -318,7 +318,7 @@ A spec-level reference for network certification's timing channel:
   the execution phase it expects at the verifier's own shape and returns the root to pin, or refuses by name
   (`REFUSALS`: another width is ``out-width``, another row count ``out-rows``), so the output proof blocks' rows are
   registered reads of the network attester's root rather than a comparison in the clear;
-- the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
+- the run's boundary in an execution phase's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose proof block ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the network attester's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the network attester's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
@@ -326,7 +326,7 @@ A spec-level reference for network certification's timing channel:
   circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
-  stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
+  stays structural: a served execution phase fits in the step-indexed scan's form, and one in any other form is refused;
 - the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
@@ -334,10 +334,10 @@ A spec-level reference for network certification's timing channel:
   `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
-- the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
+- the class circuit's check (`blocks`): a circuit record is one host's class execution phase circuit, and which host runs which
   proof blocks, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
   proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
-  state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
+  state no placement (`verity.commitments.periods.interface`'s `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
   or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no proof block, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
@@ -357,7 +357,7 @@ A spec-level reference for network certification's timing channel:
   (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
   public salts, a constant of T ≥ 2 (`scan_ok`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
-  and domain (`stateTied`): the scan's state tree is the window state (`window_state`), each row but leaf 0's the one a
+  and domain (`stateTied`): the scan's state tree is the execution phase's state (`window_state`), each row but leaf 0's the one a
   proof block computes (its o1) and the next reads (its sin), both registered reads, so a Program reads the states the scan's
   steps computed;
   `IngressScanStart`, the scan's start, commits leaf 0 by gates: the state its execution phase's record names (the
@@ -372,13 +372,13 @@ A spec-level reference for network certification's timing channel:
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the network attester's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
-  `window_state` the rows a window circuit of the execution phase from bucket t0 reads, the scan's rows t0 − 1 on (the
+  `window_state` the rows an execution phase's circuit from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); an execution phase's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
   proof block, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
-  its anchor. A window whose network attester refused a connection, traffic past its slots, has no certified record, and the
+  its anchor. An execution phase whose network attester refused a connection, traffic past its slots, has no certified record, and the
   period check refuses it. `Class.serves` names the network attester parameters it takes every run of.
   `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress proof block
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress proof block
@@ -425,7 +425,7 @@ assert audit.accepted
 ## Zero knowledge: what N2's verdict reads, and what's open
 
 Every protocol is to be zero-knowledge. The network audit's claim is the heads' only: N2 holds both heads of every
-execution phase to the network attester's grid and parameters digest, so each window's per-bucket counts are its
+execution phase to the network attester's grid and parameters digest, so each execution phase's per-bucket counts are its
 schedule's, beside the proved timing bound (provisional).
 
 N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
@@ -448,7 +448,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 `lean` under the friction skill's switching ruling, on these grounds:
 - the gap list is empty for the Lean's plain and served forms, which no Python link takes now. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
-  domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
+  domain, link, execution phase, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the network attester's session, and the sync in Σ_sync. Both
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
