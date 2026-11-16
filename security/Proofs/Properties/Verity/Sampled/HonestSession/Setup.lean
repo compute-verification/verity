@@ -11,7 +11,8 @@ walk reads `CircuitFileFacts.parseCommit_ok` and `hmIn_parse`, the partition che
 `ProgramFacts.partitionDigest_ok`, `PublicFileFacts`' loads, draw and check, the template query's unit derivation
 (`HmRow.deriveTemplateUnits`, `HmLinks.check`) over `Program`'s descriptor, then the schedule, the pins, Δ and the
 regions, as `Proofs.Flock.SessionLoop.Concrete.Setup` and `Trace` walk `setupH`. These facts are the named proposition
-`SetupFacts`, which is not proved: the pieces that use it take it as a hypothesis.
+`SetupFacts`, proved by `ProgramSetup.setupFacts_prog` given `PublicFileFacts` and four reads of the public file: the
+pieces that use it take it as a hypothesis, and `Witness` supplies it.
 -/
 
 @[expose] public section
@@ -21,7 +22,8 @@ namespace Verity.Sampled.Instance.HonestSession
 open Flock
 open FlockSoundness.Discharge
 
-/-- **Facts about `verify --zk`'s setup of the concrete session, not proved**: the sample file `draw₀` reads to one unit
+/-- **Facts about `verify --zk`'s setup of the concrete session** (`ProgramSetup.setupFacts_prog`, given four reads of
+the public file): the sample file `draw₀` reads to one unit
 of a one-unit subset law, the setup at table 0 returns the statement `st₀`, and `st₀` passes the zero-knowledge shape
 check. -/
 structure SetupFacts : Prop where
