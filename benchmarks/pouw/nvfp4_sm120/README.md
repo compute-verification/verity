@@ -1,4 +1,4 @@
-# nvfp4_sm120: the plain NVFP4 and FP8 GEMMs on the RTX PRO 6000
+# The plain NVFP4 and FP8 GEMMs on the RTX PRO 6000
 
 A plain GEMM on sm_120a over operands that carry one scale a scale group, with no proof of work in it, written so that a
 Pearl-C4 or Pearl-C kernel is timed against a baseline on the same mainloop. `mainloop_nvf4.cuh` computes one tile of
@@ -6,17 +6,17 @@ C = A Bᵀ as the chain of tensor-core atoms the silicon model states (`BLACKWEL
 `BLACKWELL_SM120_E4M3_M16N8K32`), so its words are the model's whatever the schedule. Operands and outputs are in the
 layout CUTLASS's and cuBLASLt's GEMMs take.
 
-| File | What it is |
-| --- | --- |
-| `mainloop_nvf4.cuh` | the TMA-fed, warp-specialized mainloop, NVFP4 and FP8 |
-| `nvf4_plain.cu` | the GEMMs on it as entries of the GPU harness's baseline registry; `../harness/native/build.sh` builds it into the harness's library |
+These GEMMs are baselines and nothing more: they run inside the GPU harness ([`../harness/`](../harness/README.md)),
+which gates and times them with every other arm, and a number of record is the harness's. Nothing in this directory is
+started by itself, and nothing here commits, hashes or checks a proof.
 
-## Running it
+## Try it
 
-The baselines run inside the harness (`../harness/`), which gates and times them with every other arm; a number of
-record is the harness's. Nothing in this directory is started by itself.
+List the baselines `nvf4_plain.cu` adds to the harness's registry:
 
-## Who reads it
+~~~sh
+grep -o '{"verity_[a-z0-9_]*"' benchmarks/pouw/nvfp4_sm120/nvf4_plain.cu
+~~~
 
-The harness reads `nvf4_plain.cu`: its build compiles it, with the mainloop, into the harness's library, and
-`../../../tests/benchmarks/pouw/test_harness.py` reads its text for its registry entries. Nothing here commits, hashes or checks a proof.
+It prints ten names, six NVFP4 (`verity_nvf4_256x128...`) and four FP8 (`verity_fp8_256x128...`).
+[`DESIGN.md`](DESIGN.md) has each file and who reads it.
