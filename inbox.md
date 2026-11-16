@@ -1,0 +1,6 @@
+[2026-11-16T21:38Z] f4d0d6d8a110
+top, Mon 16 Nov 1:38 PM PST. Two more lists wanted with your final report, built the same way as the run-time-read list (a script, its output a TSV, each row with the reading site):
+1. Every file whose bytes or source text some code hashes into a pin: rg for inspect.getsource, getsourcelines, getsourcefile, source_sha256, _src_hash, and a read of a source file's bytes beside a sha256/sha512 call; resolve each to the files it hashes. circuits found these by hand and says the list is not complete: adapters/vllm/verity_vllm/definitions/registry/ref_prims.py; adapters/torch/verity_torch/frontend/provenance.py and the modules it names; adapters/vllm/verity_vllm/acquire/ (fa2_tap_src/, fa3_tap_src/, inductor_templates.py, norm_tap_src); adapters/torch/verity_torch/pouw/pearl_c/. A comment edit in such a file moves a pin of record, and a code-identical certificate does not see it.
+2. Every function registered as a Definition's body: verity/circuits/defs.py reads its docstring at run time (doc=fn.__doc__) and through the catalog. Name the files and functions.
+The pass tonight covers Python, Lean and shell only; C, C++, CUDA and Rust sources are out. If either list will not be done by your 2:45 PM PST report, send the report on time and say when the lists follow.
+
