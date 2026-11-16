@@ -196,5 +196,86 @@ theorem NodeLevel :
   unfold gamma
   linarith
 
+/-- **The node-level bound's counting form (Mbw at the node), under Identity.** Under `NodeLevel`'s hypotheses, with
+`PaidJoint` for `Paid` and the tiers' ports within their ceilings (`Ports`), the probability that the audit accepts and
+the node determined more than `γ · C_true` bits of data independent of the store, seeds and oracle from its tiers is at
+most the errors summed. -/
+theorem NodeLevelJoint :
+    ∀ (τ Ω : Type) [Fintype τ] [Fintype Ω] (N : Node τ) (a : Audit) (r : Run N a Ω) (ε Wr δs δp δm δr δf δq : ℝ),
+      0 < N.declared a.T → 0 ≤ ε → 0 < a.cWord → Assumptions.Identity r →
+      r.Sampled ε δs → r.PaidJoint δp → r.ChipState δm → r.Rebuild δr → r.Fit Wr δf → r.Ports δq →
+      r.Holds (δs + δp + δm + δr + δf + δq) fun ω => (r.other ω : ℝ) ≤ gamma N a ε Wr * N.capacity a.T := by
+  intro τ Ω _ _ N a r ε Wr δs δp δm δr δf δq hC hε hcw hid hs hp hm hr hf hq
+  refine holds_mono ?_ (holds_and (holds_and (holds_and (holds_and (holds_and hs hp) hm) hr) hf) hq)
+  rintro ω - ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩
+  obtain ⟨hk, hg⟩ := charges_le hC hcw h3 h4 h5
+  have h2' : (r.other ω + r.correct ω * a.b : ℝ) ≤ r.paid ω + a.P * a.lam := by exact_mod_cast h2
+  rw [paid_of_identity hid] at h2'
+  have h6' : (r.reads ω : ℝ) ≤ N.capacity a.T := by exact_mod_cast reads_le h6
+  have hCt : (N.declared a.T : ℝ) ≤ N.capacity a.T := by exact_mod_cast declared_le N a.T
+  have eH := muHost_mul hC
+  have := mul_le_mul_of_nonneg_left hCt (add_nonneg hε hg)
+  unfold gamma
+  linarith
+
+/-- **The node-level bound without Identity.** On any node and any run whose outside work is at most `Φ_out` per tick,
+meeting PoUW's conjecture for the bound `z` at tile cost `W_tile` and the routes `Sampled`, `CoLocated`, `ChipState`,
+`Rebuild`, `Fit W_r` and `Links`, the probability that the audit accepts and the node's tiers carried fewer than
+`(1 − γ − μ_link − μ_out) · C_true` bits to its compute is at most the errors summed. -/
+theorem NodeLevelLinks :
+    ∀ (τ Ω : Type) [Fintype τ] [Fintype Ω] (N : Node τ) (a : Audit) (r : Run N a Ω)
+      (ε Wr Φout Wtile δs δc δm δr δf δl δz : ℝ),
+      0 < N.declared a.T → 0 ≤ ε → 0 < a.cWord → 0 < Wtile →
+      Assumptions.OutsideWork r Φout → Assumptions.ZCost r Wtile δz →
+      r.Sampled ε δs → r.CoLocated δc → r.ChipState δm → r.Rebuild δr → r.Fit Wr δf → r.Links δl →
+      r.Holds (δs + δc + δm + δr + δf + δl + δz) fun ω =>
+        (1 - gammaLinks N a ε Wr Φout Wtile) * N.capacity a.T ≤ r.reads ω := by
+  intro τ Ω _ _ N a r ε Wr Φout Wtile δs δc δm δr δf δl δz hC hε hcw hW hout hz hs hc hm hr hf hl
+  refine holds_mono ?_
+    (holds_and (holds_and (holds_and (holds_and (holds_and (holds_and hs hc) hm) hr) hf) hl) hz)
+  rintro ω - ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, ⟨h6i, h6o⟩⟩, h8⟩
+  obtain ⟨hk, hg⟩ := charges_le hC hcw h3 h4 h5
+  have hC0 : (0 : ℝ) < N.declared a.T := by exact_mod_cast hC
+  have hb : (0 : ℝ) ≤ a.b := Nat.cast_nonneg _
+  have f7i : (r.inBits ω : ℝ) ≤ N.linkIn * a.T := by exact_mod_cast h6i
+  have f7o : (r.outBits ω : ℝ) ≤ N.linkOut * a.T := by exact_mod_cast h6o
+  have f9 := hout ω
+  have hΦT : 0 ≤ Φout * a.T := (Nat.cast_nonneg (α := ℝ) (r.workOut ω)).trans f9
+  have hO : 0 ≤ a.b * Φout * a.T / Wtile := by
+    rw [mul_assoc]; exact div_nonneg (mul_nonneg hb hΦT) hW.le
+  have hA : ((r.outBits ω : ℝ) + r.zOut ω) * a.b / a.zb ≤
+      N.linkOut * a.b / a.zb * a.T + a.b * Φout * a.T / Wtile := by
+    rcases Nat.eq_zero_or_pos a.zb with h0 | hzb
+    · simp [h0]; exact hO
+    · have hzb' : (0 : ℝ) < a.zb := by exact_mod_cast hzb
+      have hz' : (r.zOut ω : ℝ) ≤ a.zb * Φout * a.T / Wtile := by
+        rw [le_div_iff₀ hW]
+        have : (a.zb : ℝ) * r.workOut ω ≤ a.zb * (Φout * a.T) := mul_le_mul_of_nonneg_left f9 hzb'.le
+        linarith
+      have k1 : (r.outBits ω : ℝ) * a.b / a.zb ≤ N.linkOut * a.b / a.zb * a.T := by
+        rw [div_mul_eq_mul_div, div_le_div_iff_of_pos_right hzb']
+        have := mul_le_mul_of_nonneg_right f7o hb
+        linarith
+      have k2 : (r.zOut ω : ℝ) * a.b / a.zb ≤ a.b * Φout * a.T / Wtile := by
+        have e2 : (a.zb * Φout * a.T / Wtile : ℝ) * a.b / a.zb = a.b * Φout * a.T / Wtile := by field_simp
+        rw [← e2]
+        exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hz' hb) hzb'.le
+      have e1 : ((r.outBits ω : ℝ) + r.zOut ω) * a.b / a.zb =
+          r.outBits ω * a.b / a.zb + r.zOut ω * a.b / a.zb := by ring
+      rw [e1]; linarith
+  have eL : muLink N a * N.declared a.T = N.linkIn * a.T + N.linkOut * a.b / a.zb * a.T := by
+    unfold muLink; field_simp
+  have eO : muOut N a Φout Wtile * N.declared a.T = a.b * Φout * a.T / Wtile := by unfold muOut; field_simp
+  have gL : 0 ≤ muLink N a := by unfold muLink; positivity
+  have gO : 0 ≤ muOut N a Φout Wtile := by
+    unfold muOut; rw [mul_assoc]; exact div_nonneg (mul_nonneg hb hΦT) (by positivity)
+  unfold Run.paidNode at h2
+  have hCt : (N.declared a.T : ℝ) ≤ N.capacity a.T := by exact_mod_cast declared_le N a.T
+  have eH := muHost_mul hC
+  have hg' : 0 ≤ ε + (muChip N a + muRebuild N a Wr + muLambda N a) + muLink N a + muOut N a Φout Wtile := by
+    linarith
+  have := mul_le_mul_of_nonneg_left hCt hg'
+  unfold gammaLinks gamma
+  nlinarith
 
 end ResourceAccounting.SecurityProofs.Remote
