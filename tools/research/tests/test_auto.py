@@ -28,7 +28,7 @@ NODES, SPILL = (CPU1, "vy-nebius-cpu-3", CPU5), auto.spill
 @pytest.fixture(autouse=True)
 def cpu_nodes(monkeypatch):
     """`auto.read` asks NODES, not the CPU nodes in the registry of the machine these tests run on."""
-    monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in NODES))
+    monkeypatch.setattr(auto, "spill", lambda machines=None, now=None: tuple((m, auto.SPILL_POOL) for m in NODES))
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +94,15 @@ def test_on_auto_asks_every_cpu_node_in_the_registry_and_skips_one_whose_pool_li
     assert SPILL(machines) == ((CPU1, "research"), ("vy-nebius-cpu-4", "research"), ("vy-nebius-cpu-10", "research")), \
         "the project's CPU nodes by number; never an auditor's machine, another project's node or a name that only starts so"
     assert SPILL({}) == ()
+    t0, mark = 1_794_508_500.0, "2026-11-12T18:20:00Z"                 # the mark is 15 minutes old at t0
+    marked = lambda **m: {**machines, "vy-nebius-cpu-4": {"project": "verity", **m}}       # noqa: E731
+    assert [m for m, _ in SPILL(marked(stopped_since=mark), t0)] == [CPU1, "vy-nebius-cpu-10"], \
+        "a node marked stopped is asked nothing: no launch waits out its ssh"
+    assert len(SPILL(marked(unreachable_since=mark), t0)) == 3, "one the sampler missed for a few minutes keeps its place"
+    assert len(SPILL(marked(unreachable_since=mark), t0 + 45 * 60)) == 2 and len(SPILL(marked(unreachable_since="?"), t0)) == 3
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(auto, "clock", lambda: t0)
+        assert len(SPILL(marked(stopped_since=mark))) == 2 and len(SPILL(marked(unreachable_since=mark))) == 3
     asked = []
 
     def run(argv, payload):

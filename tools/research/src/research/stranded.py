@@ -175,9 +175,10 @@ def program(tree: Path | None = None, root: str = remote.DEFAULT_ROOT, peers: st
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + defs + ENDING).encode()
 
 
-def machines() -> list[str]:
-    """Every CPU machine of the registry, by number (`auto.spill`)."""
-    return [m for m, _ in auto.spill()]
+def machines(now: float | None = None) -> list[str]:
+    """Every CPU machine of the registry that is in placement at ``now``, by number (`auto.spill`): one the registry marks
+    stopped is not read, and no machine's peers are short for lacking it."""
+    return [m for m, _ in auto.spill(now=now)]
 
 
 def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
@@ -590,7 +591,7 @@ def findings(ctx: Any) -> list:
     be read at all."""
     from .monitors import Finding
 
-    names = machines()
+    names = machines(ctx.now)
     if not names:
         raise RuntimeError(f"the registry names no CPU machine of project {auto.AUTO_PROJECT}: give the relay the registry "
                            "(RESEARCH_MACHINES_D in infra/control/watchers.toml's [env])")
@@ -674,7 +675,7 @@ def main(argv: list[str], now: Callable[[], float] = time.time) -> int:
     ap.add_argument("--pool", metavar="P", help="only pool P")
     ap.add_argument("--min", type=float, default=0, metavar="MINUTES", help="only jobs that have waited this long (default 0)")
     a = ap.parse_args(argv)
-    names = machines()
+    names = machines(now())
     if not names:
         raise SystemExit("research queue stranded: the registry names no CPU machine of project "
                          f"{auto.AUTO_PROJECT} (`research pods list`)")

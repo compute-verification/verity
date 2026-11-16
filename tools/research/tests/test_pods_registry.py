@@ -78,6 +78,34 @@ def test_register_writes_one_file_and_run_on_resolves_it(reg):
     assert sorted(x.name for x in reg.glob("*.toml")) == ["vy-lane-a.toml", "vy-lane-b.toml"]   # two pods, two files, no merge
 
 
+def test_a_machine_is_marked_stopped_and_back_with_its_other_lines_kept_and_a_re_registration_keeps_the_mark(reg, capsys, monkeypatch):
+    """`research pods stopped NAME` is the mark placement reads (`left_out`); it changes one line of the file and no machine."""
+    import datetime as dt
+
+    monkeypatch.setenv("RESEARCH_NOTES_SYNC", "0")
+    p, _ = registry.register_ssh("vy-nebius-cpu-7", "192.0.2.7", "verity", probe=lambda e: None, nebius_instance_id="computeinstance-x")
+    p.write_text(p.read_text() + 'deadline = "2026-12-01T06:00:00Z"\n')
+    before, t = p.read_text(), dt.datetime(2026, 11, 12, 19, 15, tzinfo=dt.UTC)
+    assert registry.left_out(tomllib.loads(before), t.timestamp()) is None
+    assert registry.stopped("vy-nebius-cpu-7", now=t) == (p, "is marked stopped since 2026-11-12T19:15:00Z")
+    assert p.read_text() == before + 'stopped_since = "2026-11-12T19:15:00Z"\n'
+    assert registry.left_out(tomllib.loads(p.read_text()), t.timestamp()) == "stopped since 2026-11-12T19:15:00Z"
+    assert registry.stopped("vy-nebius-cpu-7", now=t + dt.timedelta(hours=1))[1] == "is marked stopped since 2026-11-12T19:15:00Z already"
+    assert registry.register_ssh("vy-nebius-cpu-7", "192.0.2.7", "verity", probe=lambda e: None, lane="infra",
+                                 nebius_instance_id="computeinstance-x")[1] == "updated"
+    assert tomllib.loads(p.read_text())["stopped_since"] == "2026-11-12T19:15:00Z", "only `--back` takes the mark out"
+    p.write_text(before + 'stopped_since = "2026-11-12T19:15:00Z"\n')
+    assert part.main(["stopped", "vy-nebius-cpu-7", "--back"]) == 0 and p.read_text() == before
+    out = capsys.readouterr().out
+    assert "is no longer marked stopped (it was since 2026-11-12T19:15:00Z)" in out and "roll /etc/vy/peers --by WHO --apply" in out
+    assert registry.stopped("vy-nebius-cpu-7", back=True)[1] == "wasn't marked stopped" and p.read_text() == before
+    assert part.main(["stopped", "vy-absent"]) == 2 and "no " + str(reg / "vy-absent.toml") in capsys.readouterr().err
+    guard = registry.UNREACHABLE_OUT_MIN * 60
+    assert [registry.left_out({"unreachable_since": "2026-11-12T19:15:00Z"}, t.timestamp() + s) for s in (guard - 1, guard)] == \
+        [None, "no answer since 2026-11-12T19:15:00Z"]
+    assert registry.left_out({"stopped_since": "soon", "unreachable_since": 7}, t.timestamp()) is None, "a mark that is no time"
+
+
 def test_g2_an_unknown_pod_id_is_refused_and_nothing_is_written(reg):
     with pytest.raises(remote.Refused, match="not in the RunPod account"):
         registry.register("vy-lane-a", "nosuchpod00000", "verity", get_pod=pods(POD))

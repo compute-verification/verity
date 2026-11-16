@@ -69,6 +69,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -79,6 +80,7 @@ AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
 SPILL_POOL = "research"
 #: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
 CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
+clock = time.time             # what `spill` reads a registry mark's age against
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -311,18 +313,24 @@ def cpulist(text: str) -> int:
     return n
 
 
-def spill(machines: dict[str, dict] | None = None) -> tuple[tuple[str, str], ...]:
+def spill(machines: dict[str, dict] | None = None, now: float | None = None) -> tuple[tuple[str, str], ...]:
     """(machine, pool) where `--on auto` may spill: SPILL_POOL on every CPU node (CPU_NODE) of AUTO_PROJECT in the launcher's
     registry of machines (remote.load_machines; ``machines`` stands in for it), by number. No node is listed here, so one
-    registered today is asked today, and a pool left out can't sit idle while the others queue. Which nodes keep the pool
+    registered today is asked today, and a pool left out can't sit idle while the others queue. A node its registry entry
+    marks stopped, or unanswering for long (`registry.left_out` at ``now``, the clock's when None), is not asked: no launch
+    waits out its ssh, and `stranded` expects it in no machine's peers. Which nodes keep the pool
     is the probe's to say: one with no slots file for it, or a file that lists no slot, is skipped (`_pool`) at the cost of
     its probe, which runs beside the others'."""
     if machines is None:
         from . import remote
 
         machines = remote.load_machines()
+    from .pods import registry
+
+    now = clock() if now is None else now
     nodes = sorted((int(m.group(1)), name) for name, entry in machines.items()
-                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")]))
+                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")])
+                   and not registry.left_out(entry, now))
     return tuple((name, SPILL_POOL) for _, name in nodes)
 
 
