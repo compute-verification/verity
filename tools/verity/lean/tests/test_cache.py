@@ -134,7 +134,7 @@ def handler(b: Bucket, name: str):
 @pytest.fixture
 def s3():
     b = Bucket()
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(b, "verity-lean-cache"))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(b, "verity-lean-cache"))  # pragma: allowlist secret
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     url = f"http://127.0.0.1:{srv.server_address[1]}"
@@ -143,7 +143,7 @@ def s3():
 
 
 def client(url: str, who=WRITE) -> "C.S3":
-    return C.S3(url, "verity-lean-cache", *who)
+    return C.S3(url, "verity-lean-cache", *who)  # pragma: allowlist secret
 
 
 # ---------------------------------------------------------------- fixtures: a repository, a staged build, a fake lake
@@ -194,7 +194,7 @@ def lake(tmp_path):
 
 def env(url: str, tmp: Path, **kw) -> dict:
     return {"LEAN_CACHE_R2_ACCESS_KEY_ID": READ[0], "LEAN_CACHE_R2_SECRET_ACCESS_KEY": READ[1],
-            "LEAN_CACHE_R2_ENDPOINT": url, "LEAN_CACHE_BUCKET": "verity-lean-cache", "LAKE_CACHE_DIR": str(tmp / "lc"),
+            "LEAN_CACHE_R2_ENDPOINT": url, "LEAN_CACHE_BUCKET": "verity-lean-cache", "LAKE_CACHE_DIR": str(tmp / "lc"),  # pragma: allowlist secret
             "XDG_CACHE_HOME": str(tmp / "xdg"), "PATH": os.environ.get("PATH", ""), **kw}
 
 
@@ -218,7 +218,7 @@ def test_signature_matches_awss_published_examples():
 def test_the_server_here_refuses_a_bad_signature(s3):
     b, url = s3
     with pytest.raises(C.urllib.error.HTTPError) as e:
-        C.S3(url, "verity-lean-cache", READ[0], "wrong").get("main/x")
+        C.S3(url, "verity-lean-cache", READ[0], "wrong").get("main/x")  # pragma: allowlist secret
     assert e.value.code == 403
 
 
@@ -609,9 +609,9 @@ def test_the_key_file_must_name_all_four(tmp_path):
     f.write_text("export AWS_ACCESS_KEY_ID=a\nAWS_SECRET_ACCESS_KEY='b'\nR2_ENDPOINT=https://x.example\n")
     with pytest.raises(C.CacheError, match="R2_BUCKET"):
         C.writer(str(f))
-    f.write_text(f.read_text() + "R2_BUCKET=verity-lean-cache\n")
+    f.write_text(f.read_text() + "R2_BUCKET=verity-lean-cache\n")  # pragma: allowlist secret
     w = C.writer(str(f))
-    assert (w.key_id, w.secret, w.host, w.bucket) == ("a", "b", "x.example", "verity-lean-cache")
+    assert (w.key_id, w.secret, w.host, w.bucket) == ("a", "b", "x.example", "verity-lean-cache")  # pragma: allowlist secret
 
 
 # ---------------------------------------------------------------- prune
@@ -1624,7 +1624,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[st
                                        home=str(tmp)))
     key = tmp / "lean-cache.env"
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
-                   f"R2_BUCKET=verity-lean-cache\n")
+                   f"R2_BUCKET=verity-lean-cache\n")  # pragma: allowlist secret
     n = D.DailyPaths(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
                deps=tmp / "var" / "deps", trusted=tmp, lock=tmp / "lock", sandbox=[sys.executable, str(box)],
                research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),

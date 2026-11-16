@@ -8,14 +8,18 @@ what they find next time); both stamp last_success_at in the cache.
   goes to the admin's inbox.  And `stall`: an event published STALL_S ago or more with no message done by the consumer
   since rings STALL_TO (at most hourly), since health's other numbers can't show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
-- `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
-  neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
-  changes nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`."""
+- `reconcile` (every 10 minutes): each chat and ask channel's last hour, and the front door's.  A person's post (not in the
+  front door, where the sender delivers) that should ring someone and has neither a routing line nor a doorbell in any
+  inbox, and a post under an `external_posters` name with a name it rings whose inbox has no doorbell for it, are
+  enqueued again, keyed on the channel and ts as Slack's event is (`message_key`), so the event and a second pass add
+  nothing.  The oldest such post is what health reports as `oldest_unprocessed_age_s`.  And `silence`: a message it read
+  more than SILENT_S newer than Slack's last signed request rings STALL_TO (at most hourly), since Slack switches event
+  delivery off without a word and then nothing is enqueued for `stall` to judge."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .consumer import ASK_CHANNELS, is_line_for, line_names
+from .consumer import ASK_CHANNELS, PERSON_SUBTYPES, is_line_for, line_names
 from .deps import (
     CANARY_SENT,
     DEAD,
@@ -23,10 +27,13 @@ from .deps import (
     LAST_ENQUEUED,
     LAST_SUCCESS,
     OLDEST,
+    SILENCE_RUNG,
+    SLACK_HEARD,
     STALL_RUNG,
     TOPIC,
     Deps,
     error,
+    message_key,
 )
 
 REMIND_S, ESCALATE_S = 15 * 60, 60 * 60
@@ -44,6 +51,8 @@ STALL_S, STALL_EVERY_S = 10 * 60, 60 * 60                         # waiting this
 STALL_TO = "comms"                                               # who owns the service
 STALL_HEAD = "from slack-events, the queue stalled:"
 CANARY_EVERY_S = 60 * 60                                         # the synthetic event's period, so a quiet day still proves the drain
+SILENT_S = 30 * 60                                               # Slack sends a message's event in seconds and retries a failed one by 5 min
+SILENT_HEAD = "from slack-events, Slack stopped calling:"
 
 
 def chats(deps: Deps) -> tuple[dict, list[str]]:
@@ -61,12 +70,14 @@ def chats(deps: Deps) -> tuple[dict, list[str]]:
     return reg, [r["channel"]["id"] for r in reg.get("chat_people", [])]
 
 
-def threads(deps: Deps, ch: str, oldest: float) -> list[list[dict]]:
+def threads(deps: Deps, ch: str, oldest: float, skip: set[str] | frozenset = frozenset()) -> list[list[dict]]:
     """Each thread of `ch` with a post since `oldest`, oldest first: its root, then its replies (a lone post is a thread
-    of one)."""
+    of one).  The threads whose root is in `skip` are left unread."""
     api, out = deps.slack, []
     for root in sorted(api.paged("conversations.history", "messages", channel=ch, oldest=f"{oldest - WINDOW_S:.6f}"),
                        key=lambda m: float(m["ts"])):
+        if root["ts"] in skip:
+            continue
         if root.get("reply_count") or root.get("thread_ts") == root["ts"]:
             if float(root.get("latest_reply") or root["ts"]) < oldest:
                 continue
@@ -155,19 +166,47 @@ def stall(deps: Deps, now: float) -> bool:
         return False
     if isinstance(rung, (int, float)) and now - rung < STALL_EVERY_S:
         return False
-    rs = deps.rs
-    to, r = rs.Routes().resolve(STALL_TO)
-    if why := rs.unreachable(STALL_TO, to, r):
-        deps.log("stall-unrung", to=STALL_TO, why=why)
+    if not ring_owner(deps, "stall", f"{STALL_HEAD} the last event published at {at(enq)}, the consumer's last message done "
+                                     f"at {at(done)}. Check /api/cron/drain and the deployment's logs (infra/slack-events)."):
         return False
-    def at(t):
-        return datetime.fromtimestamp(t, timezone.utc).strftime("%d %b %H:%MZ") if isinstance(t, (int, float)) else "unknown"
-    deps.slack.call("chat.postMessage", channel=r.get("channel") or rs.channel_id_for(deps.registry, rs.FRONT_DOOR),
-                    thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                    text=f"{STALL_HEAD} the last event published at {at(enq)}, the consumer's last message done at "
-                         f"{at(done)}. Check /api/cron/drain and the deployment's logs (infra/slack-events).")
     deps.write(STALL_RUNG, now)
     deps.log("stalled", enqueued=enq, done=done)
+    return True
+
+
+def silence(deps: Deps, now: float, newest: float | None) -> bool:
+    """Ring STALL_TO when `newest`, the newest message reconciliation read (in a channel the bot is in, so one Slack owes the
+    events route an event for), is more than SILENT_S newer than Slack's last signed request: Slack switches delivery off
+    without a word.  An unknown time (a new deployment, a cold cache) is counted from this run, which rings nothing.  At
+    most every STALL_EVERY_S."""
+    heard, rung = deps.read(SLACK_HEARD), deps.read(SILENCE_RUNG)
+    if not isinstance(heard, (int, float)):
+        deps.write(SLACK_HEARD, now)
+        return False
+    if newest is None or newest - heard <= SILENT_S or (isinstance(rung, (int, float)) and now - rung < STALL_EVERY_S):
+        return False
+    if not ring_owner(deps, "silence", f"{SILENT_HEAD} its last signed request at {at(heard)}, a message it owes an event "
+                                       f"for at {at(newest)}. Slack may have switched Event Subscriptions off: check the "
+                                       "app's Event Subscriptions page and Retry its Request URL (infra/slack-events)."):
+        return False
+    deps.write(SILENCE_RUNG, now)
+    deps.log("silent", heard=heard, newest=newest)
+    return True
+
+
+def at(t) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%d %b %H:%MZ") if isinstance(t, (int, float)) else "unknown"
+
+
+def ring_owner(deps: Deps, why: str, text: str) -> bool:
+    """`text` in STALL_TO's inbox; False, logged, when it has none."""
+    rs = deps.rs
+    to, r = rs.Routes().resolve(STALL_TO)
+    if unreachable := rs.unreachable(STALL_TO, to, r):
+        deps.log(f"{why}-unrung", to=STALL_TO, why=unreachable)
+        return False
+    deps.slack.call("chat.postMessage", channel=r.get("channel") or rs.channel_id_for(deps.registry, rs.FRONT_DOOR),
+                    thread_ts=r["inbox_ts"], username="router", unfurl_links="false", text=text)
     return True
 
 
@@ -198,9 +237,9 @@ def daily(deps: Deps, reg: dict, still_open: list[tuple[str, str, float]], now: 
     return len(threads_)
 
 
-def doorbells(deps: Deps, reg: dict, routes, oldest: float) -> set[tuple[str | None, str]]:
-    """Every doorbell rung since `oldest`, as (the channel it names, the post's ts), from each inbox thread."""
-    rs, api, out = deps.rs, deps.slack, set()
+def doorbells(deps: Deps, reg: dict, routes, oldest: float) -> dict[tuple[str | None, str], set[str]]:
+    """Every doorbell rung since `oldest`, as (the channel it names, the post's ts), with the inbox threads it is in."""
+    rs, api, out = deps.rs, deps.slack, {}
     front = rs.channel_id_for(reg, rs.FRONT_DOOR)
     for inbox in sorted(routes.inboxes()):
         try:
@@ -211,7 +250,7 @@ def doorbells(deps: Deps, reg: dict, routes, oldest: float) -> set[tuple[str | N
             continue
         for m in msgs:
             if m.get("ts") != inbox and rs.is_doorbell(m, reg) and (d := rs.DOORBELL_RE.match(m.get("text") or "")):
-                out.add((rs.doorbell_channel(m["text"]), d[4] or d[3]))
+                out.setdefault((rs.doorbell_channel(m["text"]), d[4] or d[3]), set()).add(inbox)
     return out
 
 
@@ -233,37 +272,64 @@ def should_ring(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, 
                for n in targets)
 
 
+def unrung(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, routes, rung: set[str]) -> bool:
+    """Whether the `external_posters` post `p`, which the consumer rings by the rule alone, names someone whose inbox is not
+    among `rung` (the inbox threads holding its doorbell) or whose route couldn't be read.  Naming no one, it rings no one."""
+    rs = deps.rs
+    if chat:
+        targets = rs.chat_targets(p, [m for m in thread if m is not p], reg)
+    else:
+        root = thread[0] if p.get("thread_ts") not in (None, p["ts"]) else None
+        targets = rs.route_targets(p, root, reg, routes.inboxes())
+    humans, author = rs.people_names(reg), rs.poster(p, reg)
+    for n in targets:
+        to, r = routes.resolve(n)
+        if n in humans or to == author:
+            continue
+        if routes.unread(n) if rs.unreachable(n, to, r) else r["inbox_ts"] not in rung:
+            return True
+    return False
+
+
 def reconcile(deps: Deps) -> dict:
     rs, now = deps.rs, deps.clock()
     reg, ids = chats(deps)
-    ids += [c["id"] for k, c in reg["channels"].items() if k in ASK_CHANNELS and c.get("id")]
+    front = rs.channel_id_for(reg, rs.FRONT_DOOR)
+    ids += [c["id"] for k, c in reg["channels"].items() if k in ASK_CHANNELS and c.get("id")] + ([front] if front else [])
     routes = rs.Routes()
     routes.refresh([h["handle"] for h in reg["handles"]])
     rung = doorbells(deps, reg, routes, now - RECONCILE_S)
     chat_ids = {c["id"] for c in rs.chat_channels(reg).values()}
-    queued, unreadable, oldest = 0, [], None
+    queued, unreadable, oldest, newest = 0, [], None, None
     for ch in ids:
         try:
-            found = threads(deps, ch, now - RECONCILE_S)
+            found = threads(deps, ch, now - RECONCILE_S, routes.inboxes() if ch == front else frozenset())
         except rs.SlackError as e:
             if not rs._unreadable(e):
                 raise
             unreadable.append(ch)
             deps.log("reconcile-unreadable", channel=ch, error=error(e))
             continue
-        where = rs.key_of(reg, ch) or ch
+        newest = max([newest or 0.0, *(float(m["ts"]) for t in found for m in t)]) or None
+        where = None if ch == front else rs.key_of(reg, ch) or ch
         for thread in found:
-            for p in (m for m in thread if by_person(deps, m, reg)):
-                if not now - RECONCILE_S <= float(p["ts"]) <= now or (where, p["ts"]) in rung \
-                        or any(is_line_for(m, p["ts"], reg, rs) for m in thread) \
-                        or not should_ring(deps, p, thread, reg, ch in chat_ids, routes):
+            for p in thread:
+                external = rs.external_post(p, reg) and p.get("subtype") in (*PERSON_SUBTYPES, "bot_message")
+                if not (external or ch != front and by_person(deps, p, reg)):
+                    continue
+                if not now - RECONCILE_S <= float(p["ts"]) <= now or any(is_line_for(m, p["ts"], reg, rs) for m in thread):
+                    continue
+                recorded = rung.get((where, p["ts"]), set())
+                if external and not unrung(deps, p, thread, reg, ch in chat_ids, routes, recorded):
+                    continue
+                if not external and (recorded or not should_ring(deps, p, thread, reg, ch in chat_ids, routes)):
                     continue
                 oldest = p["ts"] if oldest is None or float(p["ts"]) < float(oldest) else oldest
                 if float(p["ts"]) > now - SETTLE_S:
                     continue                                       # in flight: the consumer may not have reached it
-                eid = f"reconcile:{ch}:{p['ts']}"
-                ev = {**{k: p[k] for k in ("type", "ts", "thread_ts", "text", "user", "reactions") if k in p},
-                      "type": "message", "channel": ch}
+                eid = message_key(ch, p["ts"])
+                ev = {**{k: p[k] for k in ("ts", "thread_ts", "text", "user", "bot_id", "username", "subtype", "reactions")
+                         if k in p}, "type": "message", "channel": ch}
                 deps.queue.send(TOPIC, {"kind": "event", "event_id": eid, "event": ev, "source": "reconcile"},
                                 idempotency_key=eid)
                 queued += 1
@@ -272,9 +338,10 @@ def reconcile(deps: Deps) -> dict:
         deps.write(OLDEST, {"ts": oldest, "at": now}, OLDEST_TTL_S)
     if deps.read(DEAD) is None:
         deps.write(DEAD, {"count": 0, "since": now})                # counted from here: an evicted count reads as unknown till now
+    silent = silence(deps, now, newest)
     deps.write(LAST_SUCCESS, now)
-    deps.log("reconcile", queued=queued, channels=len(ids), unreadable=len(unreadable))
-    return {"queued": queued, "channels": len(ids), "unreadable": unreadable}
+    deps.log("reconcile", queued=queued, channels=len(ids), unreadable=len(unreadable), silent=silent)
+    return {"queued": queued, "channels": len(ids), "unreadable": unreadable, "silent": silent}
 
 
 class _Log:

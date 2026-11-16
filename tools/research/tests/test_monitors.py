@@ -1867,7 +1867,7 @@ def test_a_check_of_a_verified_queue_candidate_is_never_cancelled_and_the_post_s
                                                       (LIVE, True, True)])
 def test_a_check_that_failed_only_where_a_live_allowance_covers_runs_on_and_any_other_red_is_cancelled_as_before(
         monkeypatch, expires, beyond, cancelled):
-    """A check of no candidate (a train) is judged as the verified queue judges a run's steps (`landing.allowed_steps`), by
+    """A check of a commit the verified queue didn't build as a candidate (the lander's `Merge #N` chain) is judged as the verified queue judges a run's steps (`landing.allowed_steps`), by
     policy.toml's allowances at its commit: a pytest step that failed only verity-vllm's allowed credit-gate test is taken as
     passed, so the check runs on though a ticket waits, and the post says so; an expired allowance is as if absent, and a suite
     that failed beyond its allowed test is red, so either is cancelled as before."""

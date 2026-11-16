@@ -16,7 +16,7 @@ runs where `research run --on` with custody works today, the research coordinato
                 `min_lease_s` (timeout_s plus the lease margin, set by `research jobs add`) the pod's lease can't cover isn't
                 claimed for it (`check.py --record` sets no --timeout, so its launch doesn't extend the lease).  Its rules of its
                 own are about whether a pod is free, not whether it's prepared: no job for a pod whose setup hasn't reported done
-                (a chain that launched a check while `pod_setup.sh` still ran cost train TVC an hour), nor for one with a live run.
+                (a chain that launched a check while `pod_setup.sh` still ran cost a candidate an hour), nor for one with a live run.
     preflight   whether a pod is prepared is decided in one place, `tools/check/preflight.py`, which `research run --on`
                 runs on the machine before claiming the run: a `--tool check` run gets it, and a `lean-regen` asks for it with
                 `--preflight check`.  A refusal is an error, retried on another pod, and the pod is benched for BENCH_S.

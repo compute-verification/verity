@@ -29,8 +29,8 @@ verity-bench prove --system S --workload W  # a proof system's prover on a workl
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
                                                 # reads (`verity bench prove lean-verify`, the same README)
-verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof system by layer, a row each read from
-                                                # its run's out/ or run id (`verity bench prove layers`, the same README)
+verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof benchmark by layer, the benchmark result
+                                                # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
 ## Specs

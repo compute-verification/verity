@@ -221,7 +221,7 @@ strict time.
   - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
     function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
     two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
-  - **The link finder** for one commit string samples a unit set that reads it and runs an extraction. Two sampled proof blocks
+  - **The link finder** for one commit string samples a proof block set that reads it and runs an extraction. Two sampled proof blocks
     that open the string differently are already a collision. If one value was read, it runs extractions on such
     samples until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
     $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a sample reads it gives
@@ -238,7 +238,7 @@ strict time.
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
     $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
-  - **$Q_s\le N_s$** is the expected number of commit strings the sampled proof blocks read, since the finder samples only unit
+  - **$Q_s\le N_s$** is the expected number of commit strings the sampled proof blocks read, since the finder samples only proof block
     sets that read its target. The record counts $Q_s$; with $N_s$ it would be $t\cdot2^{-205.1}$ for
     audit B.
 - **Strict time, proved** (`CROnly/`). The link finders stopped at a budget $q$ fixed in advance meet
@@ -529,13 +529,13 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the binding error.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
+- **Knowledge soundness and the binding error.** Halevi–Micali leaves open to essentially any value, so a proof block is incorrect
   relative to a committed trace defined by extraction. A sampled incorrect proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
   and every composition lemma is a strong induction over gate indices.
-- **Two-stage.** Second-stage coins are flipped for every coarse unit, and only the sampled proof blocks' coordinates are used.
+- **Two-stage.** Second-stage coins are flipped for every replay block, and only the sampled proof blocks' coordinates are used.
   Tightness and the dilution counterexample hold for any first-stage sampling design. Minimax uses the supporting line
   of `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form

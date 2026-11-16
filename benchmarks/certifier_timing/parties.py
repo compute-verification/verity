@@ -472,7 +472,7 @@ async def network(cfg: dict) -> dict:
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
     from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifier as Certifier, NetworkCertifierParams as Parameters, cells
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester as Certifier, NetworkAttesterParams as Parameters, cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:

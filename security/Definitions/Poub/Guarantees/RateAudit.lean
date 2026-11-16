@@ -30,9 +30,9 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -64,7 +64,7 @@ of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `�
 compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose compute is within `F` on every run has
 the conjunct always.
 
-**The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Accounting.Guarantees.Remote.AuditRO`'s. A sampled
+**The proof** (`ResourceAccounting.SecurityProofs.RateAudit`) generalizes `ResourceAccounting.Guarantees.Remote.AuditRO`'s. A sampled
 word passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h`
 per sampled word); the sample misses the words never queried with chance `((k − 1)/N)^s`. A device that queried `k`
 words under the stream knows those `k·b` bits and all `ρ` bits of the stream at its queries, and it had them from its
@@ -77,7 +77,7 @@ fresh, so the link's bits that carried them carried nothing about the store. Its
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
 (at one codec round with the payload known, a lattice completes a word's bottom third far below its per-bit price) is
 outside this game; `RateAuditPartial` (`RateAuditPartial.lean`) puts it inside, at this floor and error, under the named
-assumption `Accounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion form, for codecs with `k ≥ 2`
+assumption `ResourceAccounting.Assumptions.WorkHardness` (`rate-codec-work` in partial-completion form, for codecs with `k ≥ 2`
 rounds).
 
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
@@ -103,7 +103,7 @@ number of accepted windows below it is at most `n·ε`.
 **The reading.** At `m = 1`: the average footprint over the windows is at least `RateAudit`'s `(1 − μ)·|E|` except with
 probability `n·ε`. At `m = δ·n`: it is at least `(1 − δ)·(1 − μ)·|E|` except with probability `ε/δ`, whatever `n` is,
 so a time average at a slack of `δ` costs no union over the windows. Proof:
-`Accounting.SecurityProofs.RateAuditWindows`, from `RateAudit` at each window, at each value of the other windows'
+`ResourceAccounting.SecurityProofs.RateAuditWindows`, from `RateAudit` at each window, at each value of the other windows'
 coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
@@ -117,7 +117,7 @@ def RateAuditWindows : Prop :=
 
 /-- **The rate audit as a joint run's bandwidth guarantee, with the rebuilds charged as compute.** For any run on any
 device whose bandwidth audit realizes the rate audit's game at price `p`, `c_tag` per tag and `c_enc` per rebuilt word
-(`Accounting.RealizesRate`: the game's device within the device model's limits over the bandwidth window, its ingress
+(`ResourceAccounting.RealizesRate`: the game's device within the device model's limits over the bandwidth window, its ingress
 charged to the bandwidth account and its tags and rebuilds to accounts other than the compute account), at any value
 of the compute and capacity audits' coins, and for any `W`: the probability over the bandwidth coins that the
 bandwidth audit accepts, the compute account did at least `W` of work over the compute window, and the bandwidth
@@ -137,7 +137,7 @@ work below `W` by `ε_W` (`Run.ComputeSoundPerRun`) gives, by a union bound, the
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
 a per-run reading: the event is about the reads at the coins flipped. A `RealizesRate` for a deployed run must put the
 deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute
-window's work of the other accounts (`compute_le`). Proof: `Accounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
+window's work of the other accounts (`compute_le`). Proof: `ResourceAccounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
 
 Frozen (no-function, hash): it carries `RateAudit`, a bound in the random-oracle model over an abstract chip program, to
 the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run, not to a Lean
@@ -169,7 +169,7 @@ the compression behind `RateAudit` encodes the bits the chip read, not what its 
 costs only what the chip read of it. A source may see the certified stream as well (the host that sends it, a tap on the
 link): the stream is fresh, so whatever the chip learns of it still came in over the link.
 
-Proof: `Accounting.SecurityProofs.RateAuditInteractiveRO`: an interactive device is a device whose side source,
+Proof: `ResourceAccounting.SecurityProofs.RateAuditInteractiveRO`: an interactive device is a device whose side source,
 addressed by what was sent and where, may depend on the store and the stream, and `RateAudit`'s argument holds for such
 a device.
 
@@ -202,7 +202,7 @@ needn't read the stream for it. As for `RateAudit`, `L` is the side links' signa
 the rebuild charge and `ρ` are `RateAudit`'s at the floor's `k − m` words; at `m = 0` the bound is weaker than
 `RateAuditInteractiveRO`'s, which is the one to use when the answers ignore the oracle.
 
-Proof: `Accounting.SecurityProofs.RateAuditInteractive`, `Bandwidth.Guarantees.AuditRelay`'s argument on `RateAudit`'s
+Proof: `ResourceAccounting.SecurityProofs.RateAuditInteractive`, `Bandwidth.Guarantees.AuditRelay`'s argument on `RateAudit`'s
 game: a sampled word passes because the chip queried it, or its tag was relayed; `m` relayed tags fix `h·m` bits of the
 oracle from at most `L` bits read.
 
@@ -216,7 +216,7 @@ def RateAuditInteractive : Prop :=
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources as a joint run's bandwidth guarantee.** `RateOfAudit` for a run
-whose bandwidth audit an interactive device plays (`Accounting.RealizesRateInteractive`), at `RateAuditInteractive`'s
+whose bandwidth audit an interactive device plays (`ResourceAccounting.RealizesRateInteractive`), at `RateAuditInteractive`'s
 floor and error: for any `m`, the probability over the bandwidth coins that the bandwidth audit accepts, the compute
 account did at least `W` of work over the compute window, and the bandwidth account read fewer bits of device memory
 than the floor at `k − m` words and the compute budget `F·T − W`,
@@ -228,7 +228,7 @@ sources ignore the oracle at every value of the other audits' coins, `RateOfAudi
 (`RateOfAuditInteractiveRO`).
 
 **The reading.** As `RateOfAudit`'s: the compute account's `W` leaves at most `F·T − W` for the rebuilds and the tags,
-and the compute audit's per-run certificate makes `W` hold. Proof: `Accounting.SecurityProofs.RateOfAuditInteractive`,
+and the compute audit's per-run certificate makes `W` hold. Proof: `ResourceAccounting.SecurityProofs.RateOfAuditInteractive`,
 from `RateAuditInteractive`.
 
 Frozen (no-function, hash): as `RateOfAudit`. -/
@@ -246,8 +246,8 @@ def RateOfAuditInteractive : Prop :=
 
 /-- **The rate audit with interactive side sources that ignore the oracle, as a joint run's bandwidth guarantee.**
 `RateOfAudit`'s bound, as it is, for a run whose bandwidth audit an interactive device plays
-(`Accounting.RealizesRateInteractive`) whose side sources' answers, at every value of the other audits' coins, don't
-depend on the oracle. Proof: `Accounting.SecurityProofs.RateOfAuditInteractiveRO`, from `RateAuditInteractiveRO`.
+(`ResourceAccounting.RealizesRateInteractive`) whose side sources' answers, at every value of the other audits' coins, don't
+depend on the oracle. Proof: `ResourceAccounting.SecurityProofs.RateOfAuditInteractiveRO`, from `RateAuditInteractiveRO`.
 
 Frozen (no-function, hash): as `RateOfAudit`. -/
 def RateOfAuditInteractiveRO : Prop :=
@@ -262,4 +262,4 @@ def RateOfAuditInteractiveRO : Prop :=
         ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h +
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

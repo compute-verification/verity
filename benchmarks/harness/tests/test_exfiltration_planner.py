@@ -169,13 +169,13 @@ def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     assert field == {2.02900114160274e16} and year["requests"] == pytest.approx(1.7784008649596718e16, rel=1e-12)
     assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
     assert year["requests"] == pytest.approx(term().plan()["world_requests"].value, rel=1e-12)
-    assert "The row is priced over 1.778e+16 requests, the count the network certifier's part is over." in E.render(doc)
+    assert "The row is priced over 1.778e+16 requests, the count the network attester's part is over." in E.render(doc)
     assert "\n- this is the headline figure: λ times the bound where the row's total is 10% of compute" in E.render(doc)
 
     s = Store(tmp_path / "other")
     s.label(s.ran(ROWS, [as_row(r) for r in rows() if (r["row"], r["h8"]) == (CUT_ROW, "h8")]))
     with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 2.11575e\\+16 requests on "
-                                         "the compute audit's side and 1.7784e\\+16 on the network certifier's"):
+                                         "the compute audit's side and 1.7784e\\+16 on the network attester's"):
         E.build(store=s.store, root=REPO)
     # the run as the planner's driver wrote it, several variants of the row in one scope, is refused by name, and
     # read at the variant named

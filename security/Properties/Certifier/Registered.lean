@@ -3,10 +3,10 @@ module
 public import NetworkCheck.Registered
 
 /-!
-# The network certifier's link, read off the registered hardware: it states its rate
+# The network attester's link, read off the registered hardware: it states its rate
 
 `NetworkCheck.Registered.registered S head link key` reads one link of a Site, the one named `link`, which a check of the
-network certifier's certificates is handed (`NetworkCheck.Span`'s parameters). It runs over that link alone and no other
+network attester's certificates is handed (`NetworkCheck.Span`'s parameters). It runs over that link alone and no other
 link of `S`. `RegisteredLinkRated` states what its acceptance says of that link's rate; `RegisteredLinkRatedHonest` and
 `RegisteredLinkRatedNontrivial` are its witnesses.
 
@@ -24,7 +24,7 @@ open NetworkCheck (Registered)
 
 /-- **The named link states a rate.** For every Site `S`, registered or not, and every `head`, `link` and `key`: where
 `registered` reads `link` off `S`, `S` has a link under that id (the first, where `S` gives an id twice), it joins a
-network certifier and a host, and it states a rate (`β` some), the one `registered` returns. So a link with no rate is
+network attester and a host, and it states a rate (`β` some), the one `registered` returns. So a link with no rate is
 never read as one: `registered` refuses it by name. This is of the named link only; `S`'s other links, a certifier's
 other half to the outside and the links of another certifier among them, may state none. -/
 def RegisteredLinkRated : Prop :=

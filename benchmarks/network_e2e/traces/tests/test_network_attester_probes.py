@@ -21,7 +21,7 @@ def probe_mod(mod):
 
 
 def test_probe_records_every_ticks_work_each_publish_and_the_collections(probe_mod):
-    class NetworkCertifier:
+    class NetworkAttester:
         def __init__(self) -> None:
             self.origin, self.slack, self.lateness, self.params = 10.0, 0.025, [], NS(bucket_ms=100, window=600)
 
@@ -40,8 +40,8 @@ def test_probe_records_every_ticks_work_each_publish_and_the_collections(probe_m
 
     ticks = itertools.count(10.0, 0.5)
     probe = probe_mod.Probe(clock=lambda: next(ticks))
-    probe.install(NetworkCertifier, Publisher)
-    w = NetworkCertifier()
+    probe.install(NetworkAttester, Publisher)
+    w = NetworkAttester()
     with pytest.raises(ValueError):
         asyncio.run(w.run())
     Publisher().keep(NS(link="requests", window=0), None)
@@ -62,7 +62,7 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
     ticks.json's `publisher`."""
     probe_mod = mod("network_attester_probe")
 
-    class NetworkCertifier:
+    class NetworkAttester:
         def __init__(self) -> None:
             self.origin, self.slack, self.lateness, self.params = 10.0, 0.025, [0.0], NS(bucket_ms=100, window=600)
 
@@ -91,8 +91,8 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
 
     ticks = itertools.count(10.0, 0.5)
     probe = probe_mod.Probe(clock=lambda: next(ticks), out=tmp_path)
-    probe.install(NetworkCertifier, type("Inline", (), {"keep": lambda self, r, g: None}), PublisherProcess)
-    asyncio.run(NetworkCertifier().run())
+    probe.install(NetworkAttester, type("Inline", (), {"keep": lambda self, r, g: None}), PublisherProcess)
+    asyncio.run(NetworkAttester().run())
     p = PublisherProcess(tmp_path)
     p(NS(link="requests", window=0), None)
     p(NS(link="responses", window=0), None)

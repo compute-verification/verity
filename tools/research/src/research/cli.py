@@ -1322,8 +1322,8 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
-#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
-#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs trains and lanes' direct runs
+#: never a slot a candidate waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
+#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs candidates' checks and lanes' direct runs
 #: already oversubscribe (top, 02:53Z).
 AUTO_KIND = "agent-test"
 #: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
@@ -2453,7 +2453,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def checkout_age(repo: Path = Path(__file__).resolve().parent) -> str:
     """Where this checkout's HEAD stands: its commit, and how far behind origin/main it is as of the last fetch (no network,
-    so a credential prompt can't hang it; no date, since merge trains pin theirs). Empty outside a git checkout."""
+    so a credential prompt can't hang it; no date, since candidates pin theirs). Empty outside a git checkout."""
     import subprocess
 
     def git(*a: str) -> str:

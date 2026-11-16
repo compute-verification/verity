@@ -17,7 +17,7 @@ queries the oracle `H(R, t, d)` at the window's fresh seed, as `RateAuditSketch.
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -97,4 +97,4 @@ def linkSteps (A : LayoutDevice N m ρ h X Sig Dg) (σ : Sig) (O : Oracle N ρ h
 
 end LayoutDevice
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch

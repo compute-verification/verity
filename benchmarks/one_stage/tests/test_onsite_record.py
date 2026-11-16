@@ -666,7 +666,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({COVERED: ["Verity.Assumptions.TrustedDevice"]}, []),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
     ({ACCEPTED: ["Verity.Assumptions.TrustedDevice"]}, []),
-    ({ACCEPTED: ["Accounting.Covered"]}, []),
+    ({ACCEPTED: ["ResourceAccounting.Covered"]}, []),
     ({ACCEPTED: ["NetTiming.CertifierRegisters"]}, []),
     ({ACCEPTED: None}, [ACCEPTED])])
 def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
