@@ -38,12 +38,12 @@ def test_each_landed_pr_is_split_into_its_five_steps(tmp_path):
     by = {r["pr"]: qs.spans(r) for r in rows}
     one = by[1]
     assert one["total"] == 3.0
-    assert one["queue"] == 61 / 60                         # 09:00 -> 10:01, the first train with it
-    assert round(one["rework"], 4) == round(0.5, 4)        # 10:01 -> 10:31, the train it landed with
+    assert one["queue"] == 61 / 60                         # 09:00 -> 10:01, the first candidate with it
+    assert round(one["rework"], 4) == round(0.5, 4)        # 10:01 -> 10:31, the candidate it landed with
     assert round(one["machine"], 4) == round(9 / 60, 4)    # 10:31 -> 10:40
     assert one["check"] == 1.0                             # 10:40 -> 11:40: pytest ended after the landing, so it was deferred
     assert round(one["land"], 4) == round(20 / 60, 4)
-    assert by[3]["queue"] == 11 / 60 and by[3]["rework"] == 0  # marked after the first train: only the landing check had it
+    assert by[3]["queue"] == 11 / 60 and by[3]["rework"] == 0  # marked after the first candidate: only the landing check had it
     assert {r["pr"]: r["trains"] for r in rows} == {1: 2, 2: 2, 3: 1}
     s = qs.summary(rows)
     assert s["prs"] == 3 and s["landings"] == 1 and s["rechecked"] == 2

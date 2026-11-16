@@ -116,7 +116,7 @@ def _sources(lay: H.Layout, at: tuple) -> dict[str, dict]:
 
 
 def _bits_n(words: list[int], lo: int, n: int) -> int:
-    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`Accounting.TS.Lanes.bitsN`)."""
+    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`ResourceAccounting.TS.Lanes.bitsN`)."""
     return sum(((words[(lo + i) // 16] >> ((lo + i) % 16)) & 1) << i for i in range(n))
 
 
@@ -323,7 +323,7 @@ def wire_in(rng: random.Random) -> dict:
     try:
         ws = wires(x)
     except D.Reject:
-        ws = []
+        return {**x, "wire": rng.choice([0, 1, -1, rng.randint(0, 1 << 40)])}
     n = sum(w["wires"] for w in ws)
     edges = [e for w in ws for e in (w["wire"], w["wire"] + w["wires"] - 1)]
     return {**x, "wire": rng.choice(edges + [0, n - 1, n, n + 1, rng.randrange(max(1, n)), -1, rng.randint(0, 1 << 40)])}
@@ -396,7 +396,7 @@ def test_the_known_rows_are_the_known_ports(r: int, c: int, k: int, server) -> N
     """Each statement's known rows (`leaf_lanes.known_rows`) are its known ports in Lean's layout: the same ports and
     values, each row its port's words (lane l's ``pub`` 101, ``admit`` the leaf's R bits, ``o0`` one) with no bit set past
     its port's, and each field read least significant bit first where Lean puts it (`fieldOf?`, as
-    `Accounting.TS.Lanes.decLane` reads it) the value it was built of: the salt and roots with their big-endian 32-bit
+    `ResourceAccounting.TS.Lanes.decLane` reads it) the value it was built of: the salt and roots with their big-endian 32-bit
     halves least significant first, the position with its halves swapped, the index, the admit bits and ok = 1."""
     rng = random.Random(r * c * k)
     salt, roots, position = rng.randbytes(64), [rng.randbytes(64), rng.randbytes(64)], rng.getrandbits(64)

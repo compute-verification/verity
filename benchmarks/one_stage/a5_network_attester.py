@@ -82,7 +82,7 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkCertifierParams  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -99,7 +99,7 @@ LINKS = {RC.INGRESS: ("c0", "row"), RC.EGRESS: ("c1", "o0")}
 MADE_FOR = {"pad": "not another value", "pad-named": "reads position", "swapped": "not another value"}
 
 
-def first_cells(params: NetworkCertifierParams) -> dict[str, int]:
+def first_cells(params: NetworkAttesterParams) -> dict[str, int]:
     """Each link's first cell the Program's units read of a connection admitted in the execution phase: ingress its cell 0, egress
     its cell D·r (the D buckets before are its delay's pads, the schedule's)."""
     return {RC.INGRESS: 0, RC.EGRESS: params.delay * params.slots}
@@ -113,7 +113,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     opening (the record's rows and wiring under its salts) held to its head, the row and slot the network attester's wiring places each
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = NetworkCertifierParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = RC.read_records(run, params)
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
@@ -152,7 +152,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     return out
 
 
-def templates(params: NetworkCertifierParams) -> tuple:
+def templates(params: NetworkAttesterParams) -> tuple:
     """The transfer-gate template over one bucket row's S·B bytes, and the rest's over 2B bytes."""
     tg, rest = WR.row_bytes(params), 2 * params.cell_bytes
     if tg == rest:

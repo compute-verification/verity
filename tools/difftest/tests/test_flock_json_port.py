@@ -373,7 +373,7 @@ def test_recorded_public_headers(server):
 VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
     "verity/protocols/resource_accounting/network/verifier/network/tests/fixtures",
     "verity/protocols/resource_accounting/network/verifier/tests/fixtures",
-    "verity/protocols/resource_accounting/memory/poub/verifier/tests/fixtures", "verity/protocols/resource_accounting/memory/poub/verifier/tests/vectors.json",
+    "verity/protocols/resource_accounting/memory/poub/verifier/tests/fixtures", "verity/protocols/resource_accounting/memory/poub/verifier/vectors.json",
     "verity/protocols/resource_accounting/memory/pous/verifier/tests/fixtures", "verity/protocols/resource_accounting/compute/pouw/verifier/tests/vectors",
     "verity/protocols/proofs/recursion/verifier/zk_server/tests/fixtures",
     "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served",

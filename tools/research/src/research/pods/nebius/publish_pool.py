@@ -151,7 +151,10 @@ def leased_pid(pid: int, lease: str) -> bool | None:
     """Whether a GPU process belongs to the lease: in its scope or under its pid. None when the process is gone."""
     try:
         cg = (PROC / str(pid) / "cgroup").read_text()
-    except OSError:
+    except OSError as e:
+        if (PROC / str(pid)).exists():
+            print(f"publish_pool: pid {pid}'s cgroup unread, so whose it is is unknown ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
         return None
     scope, top = field(lease, "scope"), field(lease, "pid")
     if scope and scope != "-" and f"/{scope}.scope" in cg:

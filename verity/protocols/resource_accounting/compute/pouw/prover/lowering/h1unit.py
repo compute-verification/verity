@@ -22,7 +22,7 @@ prover and the verifier of ``benchmarks/pouw/h1_prove/recorded.py`` share.
   (`known_ok`: the Lean verifier computes ``ok``'s root from those rows and refuses the file at another, `check_known`), so
   Lean opens each instance's ok row against that root at the unit's position, and a proof it accepts is one whose unit
   computed 1
-  (`Accounting.Guarantees.TS.CheckedSessionSound`'s port named ``ok`` in the circuit and in ``own``). A record that is
+  (`ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s port named ``ok`` in the circuit and in ``own``). A record that is
   not the tile's product and its dequant makes the unit compute 0, whose row opens no registered root, and a prover that
   commits 1 anyway commits a wrong witness.
 * **The execution phase's commitments** are those rows' ``b || c`` (hm96-sha512 under the committer's salts) as frame-v3-sha512
@@ -328,7 +328,7 @@ def known_ok(window: str, population: int) -> dict:
     """The known content of ``window``'s ``ok`` rows as the Lean verifier's ``--registered`` file names it under a port's
     ``known`` key (`Registered.KNOWN_KEY`, `Flock/RegKnown.lean`): row u the one word 1 (`OK`) and its public `ok_salt`, so
     the verifier computes ``ok``'s root itself and refuses a file whose ``ok`` root is another (
-    `Accounting.Guarantees.TS.HeldSessionSound`)."""
+    `ResourceAccounting.Guarantees.TS.HeldSessionSound`)."""
     return {"rows": [OK.tolist()] * int(population), "salts": [ok_salt(window, u).hex() for u in range(int(population))]}
 
 

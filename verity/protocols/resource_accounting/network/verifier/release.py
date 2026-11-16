@@ -21,7 +21,7 @@ The headers and the watermark are the certifier's, sent to the server only. The 
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
 server sees itself. N, A and n are read back from the signed ingress records: the network attester's `END` cells in
-record order and the bucket of each (`network_attester.NetworkCertifier`). A client's own release headers are dropped;
+record order and the bucket of each (`network_attester.NetworkAttester`). A client's own release headers are dropped;
 bytes that aren't an HTTP/1 request with its whole head pass unchanged. A live shim that rebuilds the POST copies the
 headers onto it (`release_of`, `release_head`).
 

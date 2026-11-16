@@ -83,7 +83,7 @@ $R -- gpu-lease 1 --wait -- bash -c "$H"                                        
 $R --no-sampler -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
-A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
+A measured panel result also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
 
 ```bash
 V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
@@ -101,11 +101,11 @@ Before a shape's reps, the same interleaved schedule runs as a warm-up (kept apa
 it; the shape's `warmup` says whether it got steady). Every entry's item is sized to the same device time, at least
 `--item-ms` (40): calls for a baseline or an arm, replays for a chain, from the warm-up's first round (so its later rounds
 run the timed items) and again from its last (`sizing`). Every item samples NVML while the GPU
-runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
+runs it (`sensors.during`), and each panel result carries both sides' reps in the same run (`panel.reps`: per-call and item ms
 and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
 `clock_gap` (medians more than 0.5% apart).
 
-Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
+Decode results count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface
 v0.6) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
@@ -143,13 +143,13 @@ run's source commit (`RESEARCH_SOURCE_SHA`). For example, GPU 1's `verify.py` ov
 
 `verify.py RESULT_JSON` runs them from the run's working directory, keeps their output under `verify/`, and accepts a
 transcript only by an output line that starts with `ACCEPT` and names `sha256:<hex>` of the transcript file as it hashes it
-itself, with no `REJECT` line naming it (per shape, every command must also exit 0). Each panel row gets `verification`,
+itself, with no `REJECT` line naming it (per shape, every command must also exit 0). Each panel result gets `verification`,
 and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `transcript` and `panel_args`; the result JSON
-gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
-exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
+gets `verification` with every command's exit code. It exits 0 only if every panel result was accepted and every command
+exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured result.
 
 Every reference verifier an arm names today is a replay: it opens the run's rows and words and recomputes the scheme in the
-clear. So an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck). The
+clear. So an accepted result is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck). The
 records and `panel.py`'s arguments keep the name `verifier`.
 
 Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
@@ -161,14 +161,14 @@ take minutes.
 **Poisoned transcripts and the no-write control** (a panel rule). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
 default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
-row gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes
+result gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes
 `transcripts/<arm>/<shape>/`; then the buffers are poisoned again, nothing is launched, and `dump` writes
 `negative/<arm>/<shape>/`, which the verifier must reject. The run's JSON says what was poisoned and how many bytes the call
 wrote (`poisoning`). `verify.py` judges the control at the transcript's path under `negative/` unless the declaration names
-another `control`; an accepted control rejects the row, and a rejected one's line is the row's `--negative-control`. An arm
+another `control`; an accepted control rejects the result, and a rejected one's line is the result's `--negative-control`. An arm
 without `dump` still writes its own transcripts, and its record says the harness didn't poison them.
 
-**Every attempt is recorded.** `verify.py` writes `ledger/<arm>/<shape>.json` for every arm row, replay-verified or not; pass
+**Every attempt is recorded.** `verify.py` writes `ledger/<arm>/<shape>.json` for every arm and shape, replay-verified or not; pass
 `--tier 2b` for a timed whole-node run (the default, 2a, is a screen that never plots), `--hypothesis`, `--parent`, and
 `--publish` to put the records into the evidence store. The arm's build record names its `variant`
 (`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,

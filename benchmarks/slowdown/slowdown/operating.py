@@ -1,15 +1,15 @@
-"""Operating points: what the overhead means in time, at the work and exfiltration references (`work.*`, `exfil.*` in
+"""Operating points: what the slowdown means in time, at the work and exfiltration references (`work.*`, `exfil.*` in
 the registry).
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
-  in at least the overhead times `T_0 / (MFU₀ Φ_total)` seconds at the overhead's lower bound, and in that at the best
+  in at least the slowdown times `T_0 / (MFU₀ Φ_total)` seconds at the slowdown's lower bound, and in that at the best
   known attack's (`Scenario.seconds`); the reference itself in `T_0 / (mfu_train Φ_total)` (`unencumbered`), and the
   unregistered leaves alone in `T_0 / (mfu_unreg ε_unreg Φ_total)`.
-* **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the unregistered leaves only through
+* **Exfiltration** (`exfil.<name>.bits`): onsite, what registered locations produce reaches the unregistered leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
-* **Incorrect outputs** (`incorrect.*`): a block SPOT lets go unchecked returns outputs the adversary
+* **Incorrect outputs** (`incorrect.*`): a block SPOT lets go unchecked returns outputs the malicious developer
   chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
   `q`, and a sampled one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
   carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
@@ -63,7 +63,7 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 class Incorrect:
     """The incorrect-outputs channel: `identities` identities, each ended by its first sampled incorrect step."""
 
-    #: SPOT's sample rate per step (1 where every unit is proved)
+    #: SPOT's sample rate per step (1 where every proof block is proved)
     q: float
     delta: float
     #: the output bits an incorrect step chooses
@@ -101,7 +101,7 @@ class Row:
 
 def incorrect(registry: Registry, scenario: Scenario) -> Row:
     """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
-    regime samples at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
+    regime samples at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every proof block
     (`q = 1`); unregistered, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)

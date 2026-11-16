@@ -12,6 +12,8 @@ So Inputs are labelled by provenance (`OWN_GROUPS` own, the registration's share
 role's launch statics are held to (b) across the launch shapes the registration allows (`templates`). In class G (`steps.CLASS_G`,
 no batch invariance) every token-count-dependent kernel choice reads the launch, so no template holds its statics to (b): each
 request's Program is built at its launch context, which the advice fixes, and the rules below hold its values to its own inputs.
+On a batch-invariant target FA3's tile is built so too: at its launches' max_seqlen_q, which the advice's steps fix
+(`steps.RequestUnit.seqlen_q`), never a batch-mate's value, so R2 compares the unit apart from it as it does class G's launch.
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 

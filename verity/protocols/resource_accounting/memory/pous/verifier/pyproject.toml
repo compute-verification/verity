@@ -27,7 +27,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "tools/pous_grader", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
           "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py",
           "verity/protocols/resource_accounting/memory/pous/attester/continuous.py",
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/__init__.py",
           # the memory challenger's key as a deployment starts it, and the wipe's native streamer, which the conftest
           # and the wipe's store tests build and run

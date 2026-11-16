@@ -24,11 +24,13 @@ from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli, row_stages
 from verity_vllm.pipeline import row as ROW
 from verity_vllm.pipeline import row_records as R
-from verity_vllm.program.frontend.target_profile import (
+from verity_vllm.program.frontend.artifact import (
     ApplicabilityError,
     ArtifactIdentity,
-    TargetProfile,
     check_reuse,
+)
+from verity_vllm.program.frontend.target_profile import (
+    TargetProfile,
 )
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
@@ -723,7 +725,9 @@ def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
+        DomainError,
+    )
     t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
