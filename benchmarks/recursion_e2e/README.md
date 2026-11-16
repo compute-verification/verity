@@ -56,6 +56,23 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
   the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean
   verifies each with the lean step's own flags, beside the honest control, which must accept. The headline's `forged_refused` gives
   each kind's verdict.
+- **`--release`**, the recursive session through the ZK server's release side (live PROTOCOL.md §10.5; the pod script's
+  `RELEASE=1`), one pass. The inner step fixes the session's parts (V*'s statements at the inner statement's shape, in
+  `rec-statements`' order) and its release schedule (`RELEASE_WINDOWS_S`: a window per part by its class, and a lead before
+  the first; `rec_inner.py release-parts`) before its one inner session, which opens the recursive session on the ZK
+  server's state (`rec_live --zk-server`) on a stream whose failure budget is `RELEASE_BUDGET` (1 unless `--env
+  RELEASE_BUDGET=b`: the ZK server opens no recursive session on a stream without one). oprove then proves each part once,
+  in order, through
+  `flock-circuit prove --zk --zk-server-state DIR --session ID --part NAME`: the ZK server's Lean session loop behind
+  the release side's own Lean loop (`core-zk-server session`), which holds each verdict to its release time and stops the
+  session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the
+  schedule and the Lean loop's `FIREWALL-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
+  fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
+  step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
+  (`out/inner/tree-held.json`, by `rec_live.tree_held_reason`, the Python mirror of the check the recursive audit reads,
+  `Spot.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
+  part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
+  needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   run needs ran (build, inner, vstage, vcap, oprove, lean). `parts_ok` when, in addition, every invocation exited 0, every
   honest verdict accepted, every flipped coin and every forgery was refused. `composed` when Lean composed V*'s parts

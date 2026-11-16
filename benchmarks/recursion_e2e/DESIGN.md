@@ -48,23 +48,6 @@ before and after with it.
 - **`--e2e`**, the one-pass mode: build, inner, vstage, vcap, oprove, lean and negative once each, one
   run per prove and no warm one. With `--cpu` it is the CPU prover end to end (`GPU=0`, no lease), on a
   CPU node.
-- **`--release`**, the recursive session through the ZK server's release side (live PROTOCOL.md §10.5; the pod script's
-  `RELEASE=1`), one pass. The inner step fixes the session's parts (V*'s statements at the inner statement's shape, in
-  `rec-statements`' order) and its release schedule (`RELEASE_WINDOWS_S`: a window per part by its class, and a lead before
-  the first; `rec_inner.py release-parts`) before its one inner session, which opens the recursive session on the ZK
-  server's state (`rec_live --zk-server`) on a stream whose failure budget is `RELEASE_BUDGET` (1 unless `--env
-  RELEASE_BUDGET=b`: the ZK server opens no recursive session on a stream without one). oprove then proves each part once,
-  in order, through
-  `flock-circuit prove --zk --zk-server-state DIR --session ID --part NAME`: the ZK server's Lean session loop behind
-  the release side's own Lean loop (`core-zk-server session`), which holds each verdict to its release time and stops the
-  session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the
-  schedule and the Lean loop's `FIREWALL-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
-  fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
-  step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
-  (`out/inner/tree-held.json`, by `rec_live.tree_held_reason`, the Python mirror of the check the recursive audit reads,
-  `Spot.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
-  part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
-  needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
 - **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,
   vstage, vcap, oprove, lean), its first invocation's wall and CPU seconds and peak RSS, what the session's figures (its
   cost, knowledge-soundness error and stop-leak bound per window and pooled over the monitoring periods) scale from. The
