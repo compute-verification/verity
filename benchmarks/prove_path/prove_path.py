@@ -382,8 +382,10 @@ def served_forged_partition(honest: Mapping[str, Any], forged: Mapping[str, Any]
     partition's templates and scope, every unit sampled (``DESIGN:1/1``), at steps the honest run already holds to the window.
     A given one whose steps fall outside the honest partition's is refused here, before any build, rather than by its commit
     after the honest arm ran."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+
     if forged is None:
-        return {"templates": list(honest["templates"]), "law": f"{design}:1/1",
+        return {"templates": list(honest["templates"]), DESIGN: f"{design}:1/1",
                 **({"scope": dict(honest["scope"])} if "scope" in honest else {})}
     inside = (honest.get("scope") or {}).get("steps")
     steps = (forged.get("scope") or {}).get("steps")

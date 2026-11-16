@@ -1287,7 +1287,7 @@ def test_the_served_forged_partition_forges_at_the_honest_partitions_steps_and_r
         with pytest.raises(SystemExit, match=re.escape("names steps [24, 25], outside the honest partition's [1, 2]")) as e:
             PP.served_forged_partition(doc(honest), doc(forged), design)
         assert "Unset PP_FORGED_PARTITION" in str(e.value) and f"({design}:1/1)" in str(e.value)
-    unscoped = {"templates": ["SiluMul_v2{I=8192}"], "law": "rate:1/1"}
+    unscoped = {k: v for k, v in doc("step1_all").items() if k != "scope"}
     with pytest.raises(SystemExit, match="names steps unscoped"):
         PP.served_forged_partition(doc("step1"), unscoped, "rate")
     assert PP.served_forged_partition(unscoped, None, "rate") == unscoped
