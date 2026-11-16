@@ -64,11 +64,11 @@ the session's, and its challenger the deployed key at `label₀`. The digests it
 `params_full` discharges by `JsonCanon.jsonFacts` (the canonical-JSON reader's deliverable); nothing is decided over a
 hash.
 
-Two facts about `programJ` remain this piece's hypotheses, as `ProgramPlain` and `NormFacts`: that it is plain, and that
-the parser rebuilds its exact tree (`jnorm programJ = programJ`). Both are concrete-JSON facts of this instance that no
-tactic here shows robustly; their `plain_mkObj`/`norm_mkObj_fix` decomposition over the descriptor's deeply nested,
-partly non-ascending `definitions` is deferred. The composite's and the component's own norm and plainness facts are
-discharged below from these two (`normFacts_derive`, `plain_θJ`, `plain_paramsJ`).
+Two concrete-JSON facts about `programJ`, named `ProgramPlain` and `NormFacts`, drive the rest: that it is plain, and
+that the parser rebuilds its exact tree (`jnorm programJ = programJ`). The program worker proves both
+(`ProgramProof.plain_programJ` and `ProgramParse.norm_programJ`, the latter by `kernel_rfl'` over the ascending
+descriptor), and `params_full` discharges them at its one call site. The composite's and the component's own norm and
+plainness facts follow from these two (`normFacts_derive`, `plain_θJ`, `plain_paramsJ`).
 -/
 
 @[expose] public section
@@ -147,8 +147,8 @@ private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = 
     s.toUTF8.data.all (· < 0x7f) = true :=
   ascii_bytes (FlockComplete.JsonRT.canon_ascii j hc)
 
-/-- The program descriptor is plain (no hash is spliced into it): a concrete-JSON fact of this instance, taken as a
-hypothesis `hpp : ProgramPlain` by every lemma below that reads `programJ`. -/
+/-- The program descriptor is plain (no hash is spliced into it): a concrete-JSON fact of this instance, proved by
+`ProgramProof.plain_programJ` and passed as `hpp : ProgramPlain` to every lemma below that reads `programJ`. -/
 def ProgramPlain : Prop := Firewall.plain programJ = true
 
 /-- The parser's rebuild (`norm`) of these two JSON literals is the literal itself. `canonicalJson` returns `norm` of the
@@ -156,18 +156,12 @@ parsed value, and the decoders must then read that value's fields as a concrete 
 well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
 `norm j = j`, and no `plain j → norm j = j` lemma exists).
 
-`jnorm θJ = θJ` and `jnorm paramsJ = paramsJ` are *discharged* below (`norm_θJ`, `norm_paramsJ`): `norm` rebuilds each
+`jnorm θJ = θJ` and `jnorm paramsJ = paramsJ` are discharged below (`norm_θJ`, `norm_paramsJ`): `norm` rebuilds each
 object as the tree of its members re-inserted in ascending key order (`normObj`), which reproduces a literal exactly when
 that literal is `mkObj` of an ascending, duplicate-free key list at every level (`norm_mkObj_fix`), as `θJ`, `paramsJ`
-and all but one of `programJ`'s objects are. The one object this piece does not yet descend is `programJ`, for two
-reasons: its literal is nested ~15 objects deep, so discharging its fixpoint the same way needs a per-level tree equality
-for each (the concrete `kernel_rfl'` over the whole literal exhausts memory, so each level's tree equality is proved with
-its values abstract, as the `*_tree` lemmas do); and its `definitions` member is the one non-ascending literal (source
-keys `Input16_v1, Unit_v1, Root_v1`; sorted order `Input16_v1 < Root_v1 < Unit_v1`), so `norm_mkObj_fix` does not apply
-to it directly — it needs a value-preserving reorder to the ascending key list first (`mkObj` of either list is the same
-tree, since `ofList` sorts), which the scratch `NormProbe` validated through `norm_mkObj_fix_ns`. Until then
-`norm_θJ`/`norm_paramsJ` take `jnorm programJ = programJ` as a hypothesis, and `NormFacts` is exactly that one
-structural fact. -/
+and `programJ`'s objects all are. `NormFacts` is the one structural fact `jnorm programJ = programJ` those two consume for
+the program member; the program worker proves it directly (`ProgramParse.norm_programJ`, by `kernel_rfl'` over the
+descriptor, whose keys ascend at every level). -/
 def NormFacts : Prop := jnorm programJ = programJ
 
 /-- The session's query is plain. -/
