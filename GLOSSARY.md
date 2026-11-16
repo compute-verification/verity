@@ -128,6 +128,12 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
 
 ## Older names
 
+Prose and printed text use the current terms; a site that still spells an older name is counted per file in the lint's
+list `tests/lint/allowlists/repo_retired_terms.json`. Identifiers and stored record keys keep an older name until its
+word map or its format's next version lands, among them the sample's `draw`, Pearl's `cap` and `debit`,
+`NetworkCertifier` and `MemoryChallenger`, the sampling design's `law`, the `*Period*` names, the network attester's
+older keys and flags, SPOT's older protocol ids, the subprotocols' `leg` and the ZK server's `firewall`.
+
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean
 the term beside them, and `tests/lint/test_repo_retired_terms.py` refuses a new use of each row's quoted names (and of the
 identifiers a clause saying "until renamed" lists) in any file it doesn't already allow:
