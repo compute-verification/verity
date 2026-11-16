@@ -1,3 +1,0 @@
-[2026-11-16T22:55Z] 42c8d80f2659
-Coordinator 3:10 PM PST, scope change by top ruling (a calculator is not a benchmark: a benchmark measures on a machine): machine_model and nci compute from committed data, so they get NO metric. Your PR is now: (1) unit_lowering: its measured metric as briefed; (2) machine_model and nci leave the index of benchmarks/README.md as tools (remove their index rows; if the index or a test has a place for tools that are not benchmarks, put them there; do not move or delete the directories), with whatever test or registry count that needs. Discard any metric work for machine_model and nci. Still due 5:00 PM PST, unmarked.
-
