@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceNetRows
-public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDa
+public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta
 public import Proofs.Flock.SpotFlock.InstanceStmt.Trace
 import Flock.HmRow
 import Flock.HmNets

@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceRegions
+public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDa
+public import Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts
 public import Proofs.Flock.SpotFlock.InstanceStmt.ScopeZk
 public import Proofs.Flock.SessionLoop.Concrete.Live
 import Flock.HmRow
