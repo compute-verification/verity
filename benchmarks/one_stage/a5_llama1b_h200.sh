@@ -66,7 +66,7 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 [ -n "$CKPT" ] && [ -d "$CKPT" ] || refuse "no $REPO@${REV:0:10} checkpoint under $HF_HOME (HF_HOME): make it with $BOOT"
 [ -e "$FA3G" ] || refuse "no guarded FA3 tap at $FA3G (A5_TAPS): make it with $BOOT"
 [ -e "$NT" ] || refuse "no norm tap at $NT (A5_TAPS): make it with $BOOT"
-[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its law"
+[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its sampling design"
 command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the row serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
@@ -167,7 +167,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   run=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$B/binding_map.json") || return 21
   k=$("$TPY" -c 'import json, sys; l = json.load(open(sys.argv[1]))["law"]; print(l.split(":")[1] if l.startswith("subset:") else "")' "$PART")
   n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json")
-  [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a subset:K partition law, the rate rate:K/N over the window's N units" >&2; return 22; }
+  [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a subset:K partition sampling design, the rate rate:K/N over the window's N units" >&2; return 22; }
   rate=rate:$k/$n
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
   "$TPY" -m verity_numerical.bench.generate --subcircuit "${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16}" --n 4 --seed 1 \
@@ -256,13 +256,13 @@ def read(p):
     except (OSError, ValueError):
         return {}
 summ = {**read(d / "window" / "summary.json"), **read(s)}
-# records_audit.py's law is its rate text; the window's is the partition's {law, k}
-law = next((x for x in (read(s).get("law"), read(d / "window" / "summary.json").get("law")) if isinstance(x, dict)), {})
+# records_audit.py's sampling design is its rate text; the window's is the partition's {sampling_design, k}
+sampling_design = next((x for x in (read(s).get("law"), read(d / "window" / "summary.json").get("law")) if isinstance(x, dict)), {})
 rate, card = read(s).get("law") if isinstance(read(s).get("law"), str) else None, os.environ["CARD"]
 lines = [x for x in (d / "a5.log").read_text(errors="replace").splitlines() if x.startswith("A5 ")] if (d / "a5.log").is_file() else []
 audit = next((json.loads(x[3:]).get("audit") for x in reversed(lines) if '"audit"' in x), None) or {}
 accepted = "accepted" if audit.get("accepted") is True else "NOT accepted"
-sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
+sample = (f"sampling design {sampling_design.get('law', '?')} k={sampling_design.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
           f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
 if os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []

@@ -111,9 +111,9 @@ def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
 
 
 def test_the_fit_bound_rows_are_fits_with_chi_on_top():
-    law, target = S.FIT_TARGET
-    L = F.target_loss(law, target)
-    N = F.n_star(law, L)
+    sampling_design, target = S.FIT_TARGET
+    L = F.target_loss(sampling_design, target)
+    N = F.n_star(sampling_design, L)
     chi = S.cheat(P)
     fb = S.fit_bound()
     for r in fb["rows"]:
@@ -142,9 +142,9 @@ def test_the_regimes_add_unregistered_compute_at_full_efficiency():
 def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
     """At the streamed-label and power-removal rungs, the slowdown by the fit bound is ``fit.row``'s; at today's 166 GB,
     where the fit bound doesn't hold, it is the slowdown without a memory cap (T2's)."""
-    law, target = S.FIT_TARGET
-    L = F.target_loss(law, target)
-    N = F.n_star(law, L)
+    sampling_design, target = S.FIT_TARGET
+    L = F.target_loss(sampling_design, target)
+    N = F.n_star(sampling_design, L)
     chi = S.cheat(P)
     rows = {r["rung"]: r for r in S.ladder()}
     for gb, name in WIPES.items():

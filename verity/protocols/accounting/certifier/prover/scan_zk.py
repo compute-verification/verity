@@ -1597,10 +1597,10 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     proof blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
-    law = S.SamplingDesign(rule_of(k, n))
-    named = S.selection_sampling_design(law, n, S.selection_sizes(law, pg.program, pg.query))
+    sampling_design = S.SamplingDesign(rule_of(k, n))
+    named = S.selection_sampling_design(sampling_design, n, S.selection_sizes(sampling_design, pg.program, pg.query))
     strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
-                                               S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
+                                               S.selection_table(sampling_design, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the round's provenance: its link-window of the warden's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
@@ -1610,7 +1610,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
                     proof_deadline=float(MEMBER_DEADLINE_S * len(members)), tied=pg.tied)
     values = (*(S.Value(p, schemas[p], "serve") for p in sorted(want)),
               *((S.Value(CARRY, None, "serve", registered=True),) if started else ()))
-    spec = S.Spec(values, law, check,
+    spec = S.Spec(values, sampling_design, check,
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(root))
     counts: dict[str, int] = {}
     for m in members:
@@ -1762,7 +1762,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
+    sampling_design, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: execution phase {at.number} of {at.source}, its ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
@@ -1773,12 +1773,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
         {"empty": {CARRY: carry.empty}} if carry and carry.empty else {})
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+    rec = R.record(pg.program, pg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
                    **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
 
     def registration(r: dict, given: dict) -> dict:
-        return V.check(r, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+        return V.check(r, pg.program, pg.query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                        tied=pg.tied or None, **given).to_json()
 
     checks = {"registration": registration(rec, carry.check if carry else {})}

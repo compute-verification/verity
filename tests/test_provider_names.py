@@ -4,7 +4,7 @@ named only in infra and run tooling (machine names such as a node's host name in
 
 Scanned: every tracked file under `security/`, the claim ids' table (`verity/commitments/claim_ids.json`), and every
 `PROTOCOL.md`. A name matches case-insensitively as a word or as one part of an identifier (`trusted-x-host`,
-`TrustedXHost`, `x_host`), never inside a longer word (`laws`, `samples`). `lambda` is a keyword in Python and a word in
+`TrustedXHost`, `x_host`), never inside a longer word (`sampling designs`, `samples`). `lambda` is a keyword in Python and a word in
 Lean and mathematics, so the provider of that name matches only in its provider forms (`Lambda Labs`, `Lambda Cloud`).
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ def test_the_scan_reads_each_form():
     files = ["security/A.lean", CLAIM_IDS, "verity/commitments/claim_ids.py", "verity/core/protocols/x/PROTOCOL.md",
              "verity/core/protocols/x/README.md"]
     docs = {
-        "security/A.lean": "def TrustedNebiusHost := 1\n`trusted-runpod-host` on vy-nebius-2\nfun x => x -- lambda, laws, samples",
+        "security/A.lean": "def TrustedNebiusHost := 1\n`trusted-runpod-host` on vy-nebius-2\nfun x => x -- lambda, sampling designs, samples",
         CLAIM_IDS: '{"x": "lambda e: e.id",\n "y": "hosted on Lambda Labs; an AWS_REGION, the gcp_zone, Azure\'s"}',
         "verity/commitments/claim_ids.py": "AWS",
         "verity/core/protocols/x/PROTOCOL.md": "the trusted device (`trusted-device`); a coreweave node",

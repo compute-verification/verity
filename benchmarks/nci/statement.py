@@ -137,9 +137,9 @@ def capacity(p: dict) -> float:
 def fit_mu(gb: float) -> float:
     """The fit bound's cap on the registered counted share at a wipe residual of ``gb`` GB, for a ``FIT_TARGET``-class target at
     central w_e; ``inf`` where it doesn't hold."""
-    law, target = FIT_TARGET
-    L = F.target_loss(law, target)
-    return F.row(gb, F.n_star(law, L), L)["mu_fit"]
+    sampling_design, target = FIT_TARGET
+    L = F.target_loss(sampling_design, target)
+    return F.row(gb, F.n_star(sampling_design, L), L)["mu_fit"]
 
 
 def capped(p: dict, tier: str, mu: float) -> float:
@@ -311,9 +311,9 @@ def floor() -> list[dict]:
 def fit_bound() -> dict:
     """The fit bound for a 405B-class target (``fit.row``) at ``FIT_WIPES``, with T5's cheating share on top; its
     premises' values; and the wipe residuals up to which it holds and beats the closed form."""
-    law, target = FIT_TARGET
-    L = F.target_loss(law, target)
-    N = F.n_star(law, L)
+    sampling_design, target = FIT_TARGET
+    L = F.target_loss(sampling_design, target)
+    N = F.n_star(sampling_design, L)
     out = []
     for gb in FIT_WIPES:
         r = F.row(gb, N, L)
@@ -324,7 +324,7 @@ def fit_bound() -> dict:
                     "slowdown_fit_T5": F.slowdown(p, r["mu_fit"], t5["declared"], t5["cheat"]),
                     "slowdown_fit_low": r["slowdown_fit_low"], "slowdown_fit_high": r["slowdown_fit_high"],
                     "slowdown_fit_train": r["slowdown_fit_train"]})
-    s = F.summary(law)
+    s = F.summary(sampling_design)
     bite = s["bite_gb"]
     holds = bite[f"{target}/floor/none"]
     name = target.upper()
@@ -503,8 +503,8 @@ def render(s: dict) -> str:
                    *(num(r["slowdown"][t]) for t in LADDER_TIERS), *(num(r["slowdown_fit"][t]) for t in FIT_TIERS)]
                   for r in s["ladder"]])
     out += bullets(s["floor"]) + bullets(s["substitutes"])
-    law, target = FIT_TARGET
-    out += [f"## The fit bound (a {target.upper()}-class target, `fit.FITS['{law}']`)", "",
+    sampling_design, target = FIT_TARGET
+    out += [f"## The fit bound (a {target.upper()}-class target, `fit.FITS['{sampling_design}']`)", "",
             "`fit.row` at each wipe residual: the slowdown by the closed form (T4), and by the fit bound at central w_e (T4, and "
             "T5 with χ on top), at low and high w_e, and at 16 bits per trained weight; L, the window in wipe periods. "
             f"{num(FIT_WIPES[2])} GB is 1 GB with the GPUs' on-chip 3.05 GB on top.", ""]

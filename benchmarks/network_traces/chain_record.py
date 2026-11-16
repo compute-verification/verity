@@ -171,8 +171,8 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
     return Stratified.uniform(n, k).count_bound(delta)
 
 
-def eps_at_delta(n: int, k: int, law: str) -> dict:
-    return {"law": law, "units": n, "drawn": k,
+def eps_at_delta(n: int, k: int, sampling_design: str) -> dict:
+    return {"law": sampling_design, "units": n, "drawn": k,
             "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
                          "symbolic: Claims.SamplingGeneric.Compiled.KS is a hypothesis until "
@@ -395,7 +395,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     n = (sample.get("population") or honest.get("windows")
          or (s.get("link") or {}).get("planned_windows", {}).get("honest") or 0)
     sampled = sample.get("k", s.get("drawn", n))
-    law = sample.get("law") or s.get("law", "all")
+    sampling_design = sample.get("law") or s.get("law", "all")
     proved = (bool(members) and all(v["windows"] and not v["unexpected"] for v in members.values())
               and (s.get("ok") is True and rc in (None, "0") or any(v["escaped_the_draw"] for v in members.values())))
     if not proved and honest.get("windows"):
@@ -413,7 +413,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
                                                                       "found them equal to the signed ones: "
                                                                       f"{certs_doc.get('signed_are_declared')}"},
-            "eps_at_delta": eps_at_delta(n, sampled, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
+            "eps_at_delta": eps_at_delta(n, sampled, sampling_design), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
 
 
 def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | None = None) -> dict:
@@ -583,16 +583,16 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     if terms["registered"] and window.get("circuit") != hashlib.sha512(body).hexdigest():
         raise SystemExit(f"--audit {d}: its registration's window binds another circuit record than circuit.json, so "
                          "the registered rows counted there are none the registration registers")
-    law, n = reg["law"], reg["population"]
-    if law.get("law") == "subset":
-        sampled, q = law["k"], Fraction(law["k"], n)
-    elif law.get("law") == "stratified" and law.get("strata"):
-        sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
-        sampled, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
+    sampling_design, n = reg["law"], reg["population"]
+    if sampling_design.get("law") == "subset":
+        sampled, q = sampling_design["k"], Fraction(sampling_design["k"], n)
+    elif sampling_design.get("law") == "stratified" and sampling_design.get("strata"):
+        sizes = [sum(hi - lo for lo, hi in s["units"]) for s in sampling_design["strata"]]
+        sampled, q = sum(s["k"] for s in sampling_design["strata"]), min(Fraction(s["k"], m) for s, m in zip(sampling_design["strata"], sizes))
         if q == 0 or sum(sizes) != n:
-            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each sampled, not {law}")
+            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each sampled, not {sampling_design}")
     else:
-        raise SystemExit(f"--audit {d}: K's q is a subset or stratified sampling design's, not {law}")
+        raise SystemExit(f"--audit {d}: K's q is a subset or stratified sampling design's, not {sampling_design}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
             "units": n, "drawn": sampled, "q": str(q), "free": terms["free"], "inputs": terms,
             "held": sorted(IF.held_params(pins, roots))}

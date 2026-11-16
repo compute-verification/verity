@@ -423,24 +423,24 @@ def a4_sampling_design(ks: dict) -> Stratified:
     return Stratified(tuple(Stratum(name, size, ks[name]) for name, size in A4_SIZES.items()))
 
 
-def _enumerate(law: Stratified):
+def _enumerate(sampling_design: Stratified):
     """Every unit as (stratum index, unit index), and every equally likely sample of the sampling design."""
-    units = [(i, j) for i, s in enumerate(law.strata) for j in range(s.size)]
-    per = [[{(i, j) for j in c} for c in combinations(range(s.size), s.k)] for i, s in enumerate(law.strata)]
+    units = [(i, j) for i, s in enumerate(sampling_design.strata) for j in range(s.size)]
+    per = [[{(i, j) for j in c} for c in combinations(range(s.size), s.k)] for i, s in enumerate(sampling_design.strata)]
     draws = [set().union(*parts) for parts in product(*per)]
     return units, draws
 
 
-def _escapes(law: Stratified):
+def _escapes(sampling_design: Stratified):
     """(wrong set, exact escape) for every subset of the units, by counting samples."""
-    units, draws = _enumerate(law)
+    units, draws = _enumerate(sampling_design)
     for r in range(len(units) + 1):
         for b in combinations(units, r):
             yield set(b), Fraction(sum(not (d & set(b)) for d in draws), len(draws))
 
 
-def _counts(law: Stratified, b) -> dict:
-    return {s.name: sum(1 for i, _ in b if i == idx) for idx, s in enumerate(law.strata)}
+def _counts(sampling_design: Stratified, b) -> dict:
+    return {s.name: sum(1 for i, _ in b if i == idx) for idx, s in enumerate(sampling_design.strata)}
 
 
 SMALL = [Stratified((Stratum("a", 4, 2), Stratum("b", 3, 1), Stratum("c", 3, 0))),
@@ -449,29 +449,29 @@ SMALL = [Stratified((Stratum("a", 4, 2), Stratum("b", 3, 1), Stratum("c", 3, 0))
          Stratified.uniform(9, 2)]
 
 
-@pytest.mark.parametrize("law", SMALL)
-def test_stratified_escape_miss_and_count_bound_by_enumeration(law):
+@pytest.mark.parametrize("sampling_design", SMALL)
+def test_stratified_escape_miss_and_count_bound_by_enumeration(sampling_design):
     """Escape depends only on the counts per stratum and is exact; miss(K) is the largest escape of K incorrect proof blocks; the
     count bound is the largest K with miss(K) >= delta."""
     best = {}
-    for b, e in _escapes(law):
-        assert law.escape(_counts(law, b)) == e
+    for b, e in _escapes(sampling_design):
+        assert sampling_design.escape(_counts(sampling_design, b)) == e
         best[len(b)] = max(best.get(len(b), Fraction(0)), e)
-    assert [law.miss(K) for K in range(law.population + 1)] == [best[K] for K in range(law.population + 1)]
+    assert [sampling_design.miss(K) for K in range(sampling_design.population + 1)] == [best[K] for K in range(sampling_design.population + 1)]
     for delta in (0.9, 0.5, 0.3, 0.1, 0.01, 1e-6):
-        assert law.count_bound(delta) == max(K for K, e in best.items() if e >= Fraction(delta))
+        assert sampling_design.count_bound(delta) == max(K for K, e in best.items() if e >= Fraction(delta))
 
 
-@pytest.mark.parametrize("law", SMALL)
-def test_stratified_harm_bound_brackets_the_integer_optimum(law):
+@pytest.mark.parametrize("sampling_design", SMALL)
+def test_stratified_harm_bound_brackets_the_integer_optimum(sampling_design):
     """The relaxation is at or above the best integer strategy and within one unit's harm of it (only its last unit is
     fractional); harms per stratum, and several harms inside one stratum."""
-    harms = [{s.name: float(i + 1) for i, s in enumerate(law.strata)},
-             {law.strata[0].name: [(5.0, 1), (2.0, law.strata[0].size - 1)]},
-             {s.name: 1.0 for s in law.strata}]
+    harms = [{s.name: float(i + 1) for i, s in enumerate(sampling_design.strata)},
+             {sampling_design.strata[0].name: [(5.0, 1), (2.0, sampling_design.strata[0].size - 1)]},
+             {s.name: 1.0 for s in sampling_design.strata}]
     for harm in harms:
         def unit_harm(i, j):
-            h = harm.get(law.strata[i].name, 0.0)
+            h = harm.get(sampling_design.strata[i].name, 0.0)
             if isinstance(h, float):
                 return h
             for v, c in h:
@@ -479,53 +479,53 @@ def test_stratified_harm_bound_brackets_the_integer_optimum(law):
                     return v
                 j -= c
             return 0.0
-        top = max(unit_harm(i, j) for i, s in enumerate(law.strata) for j in range(s.size))
+        top = max(unit_harm(i, j) for i, s in enumerate(sampling_design.strata) for j in range(s.size))
         for delta in (0.5, 0.1, 0.01):
-            exact = max(sum(unit_harm(i, j) for i, j in b) for b, e in _escapes(law) if e >= Fraction(delta))
-            bound = law.harm_bound(harm, delta)
-            assert exact <= bound <= (exact + top) * (1 + 4 * HARM_MARGIN) + 1e-12, (law, harm, delta)
+            exact = max(sum(unit_harm(i, j) for i, j in b) for b, e in _escapes(sampling_design) if e >= Fraction(delta))
+            bound = sampling_design.harm_bound(harm, delta)
+            assert exact <= bound <= (exact + top) * (1 + 4 * HARM_MARGIN) + 1e-12, (sampling_design, harm, delta)
 
 
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_one_stratum_is_the_uniform_subset(run):
     """One stratum sampled k of n is the one-stage audits' sampling design: the same count bound as the profile and the Lean curve."""
     n, k, delta, _, at_most = E2E[run]
-    law = Stratified.uniform(n, k)
-    assert law.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
-    assert law.miss(at_most) == Fraction(comb(n - at_most, k), comb(n, k)) and law.inclusion("unit") == Fraction(k, n)
+    sampling_design = Stratified.uniform(n, k)
+    assert sampling_design.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
+    assert sampling_design.miss(at_most) == Fraction(comb(n - at_most, k), comb(n, k)) and sampling_design.inclusion("unit") == Fraction(k, n)
 
 
 def test_a4_uniform_leaves_the_norms_undrawn():
     """A4 P6's sampling design: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
     wrong in every unit escapes with probability 0.958."""
-    law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
-    assert law.count_bound(2.0 ** -20) == 91_051
-    assert 0.957 < float(law.escape({"unit": 287})) < 0.958
+    sampling_design = Stratified.uniform(sum(A4_SIZES.values()), 1024)
+    assert sampling_design.count_bound(2.0 ** -20) == 91_051
+    assert 0.957 < float(sampling_design.escape({"unit": 287})) < 0.958
 
 
 def test_a4_one_unit_floor_per_template():
     """Proportional allocation with one unit per template, at A4's proving cost: every template is exercised, a
     template wrong in every unit is always caught, and the count bound moves by 3%."""
-    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
-    assert law.k == 996 and law.count_bound(2.0 ** -20) == 93_892
-    worst = law.worst_counts(93_892)
+    sampling_design = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    assert sampling_design.k == 996 and sampling_design.count_bound(2.0 ** -20) == 93_892
+    worst = sampling_design.worst_counts(93_892)
     assert worst["rms_triton"] == worst["rms_fused"] == worst["silu_mul"] == worst["rope"] == 0
     for name in ("rms_triton", "rms_fused", "silu_mul"):
-        assert law.escape({name: 287}) == 0 and law.stratum_bound(name, 2.0 ** -20) == 286
-        assert law.escape({name: 1}) == Fraction(286, 287)
+        assert sampling_design.escape({name: 287}) == 0 and sampling_design.stratum_bound(name, 2.0 ** -20) == 286
+        assert sampling_design.escape({name: 1}) == Fraction(286, 287)
 
 
 def test_a4_proportional_to_output_bits():
     """Inclusion proportional to output bits at the same proving cost: the count bound rises to 11.4% of the units."""
-    law = a4_sampling_design({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
-    assert law.count_bound(2.0 ** -20) == 773_981
+    sampling_design = a4_sampling_design({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
+    assert sampling_design.count_bound(2.0 ** -20) == 773_981
 
 
 def test_the_count_bound_is_the_unit_harm_bound_rounded_down():
-    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    sampling_design = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
     for delta in (2.0 ** -10, 2.0 ** -20, 2.0 ** -40):
-        K = law.count_bound(delta)
-        assert K <= law.harm_bound({s.name: 1 for s in law.strata}, delta) < K + 1 + 1e-6 * K
+        K = sampling_design.count_bound(delta)
+        assert K <= sampling_design.harm_bound({s.name: 1 for s in sampling_design.strata}, delta) < K + 1 + 1e-6 * K
 
 
 def _exact_risk(n: int, k: int, m: int) -> Decimal:
@@ -650,10 +650,10 @@ def test_harm_bound_holds_over_several_large_strata():
     spent across them, most of them at once."""
     rows = [(7 * 10 ** 18, 900_000, 16.0), (3 * 10 ** 17, 1_500, 262_144.0), (10 ** 19, 40_000_000, 4096.0),
             (10 ** 16, 300, 64.0)]
-    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     for delta in (0.01, 1e-6, 2.0 ** -40):
         lower, upper = _optimum_bracket(rows, delta)
-        bound = Decimal(law.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
+        bound = Decimal(sampling_design.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
         assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
         assert upper - lower <= Decimal("1e-9") * upper
 
@@ -669,11 +669,11 @@ def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypat
     (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
     from verity.protocols.proofs.spot.verifier import profile
 
-    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}
-    at_once = law.harm_bound(harm, 2.0 ** -40)
+    at_once = sampling_design.harm_bound(harm, 2.0 ** -40)
     monkeypatch.setattr(profile, "HARM_WHOLE", 10 ** 30)
-    assert at_once == pytest.approx(law.harm_bound(harm, 2.0 ** -40), rel=1e-9)
+    assert at_once == pytest.approx(sampling_design.harm_bound(harm, 2.0 ** -40), rel=1e-9)
 
 
 @pytest.mark.parametrize("rows, delta", [([(20_000, 1, 1e-30)], 0.5), ([(20_000, 1, 1e-30), (5_000, 2, 3e-30)], 0.3),
@@ -682,8 +682,8 @@ def test_harm_bound_holds_where_the_search_cannot_close(rows, delta):
     """Harms so small or so large that the threshold lies outside the search's range: it stops short of the optimum by
     thousands of proof blocks, which are then taken one by one, in order, never at once at the first one's ratio."""
     lower, upper = _optimum_bracket(rows, delta)
-    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
-    bound = Decimal(law.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
+    sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    bound = Decimal(sampling_design.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
     assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
     assert upper - lower <= Decimal("2e-3") * upper
 
@@ -701,27 +701,27 @@ def test_ill_formed_strata_are_refused(kw):
 
 
 def test_stratified_queries_name_known_strata():
-    law = SMALL[0]
+    sampling_design = SMALL[0]
     with pytest.raises(KeyError):
-        law.escape({"z": 1})
+        sampling_design.escape({"z": 1})
     with pytest.raises(ValueError):
-        law.escape({"a": 5})
+        sampling_design.escape({"a": 5})
     with pytest.raises(ValueError):
-        law.miss(law.population + 1)
+        sampling_design.miss(sampling_design.population + 1)
     with pytest.raises(ValueError):
-        law.count_bound(1.0)
-    assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
+        sampling_design.count_bound(1.0)
+    assert sampling_design.worst_counts(sampling_design.population) is None and sampling_design.miss(sampling_design.population) == 0
 
 
 def test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design():
     """A Stratified sample of the checked level: the profile's bound is the sampling design's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the sampling design's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
-    for law in SMALL:
-        a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
-        assert a.strata() is law and a.bound() == law.count_bound(0.1)
-        assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
-        assert a.harm_bound(2.0) == law.harm_bound({s.name: 2.0 for s in law.strata}, 0.1)
-        assert a.to_json()["levels"][0]["draw"] == law.to_json()
+    for sampling_design in SMALL:
+        a = IntegrityProfile((Level("unit", "q"),), (sampling_design.population,), {"unit": sampling_design}, 0.1, drawn={"unit": sampling_design.k})
+        assert a.strata() is sampling_design and a.bound() == sampling_design.count_bound(0.1)
+        assert a.stratum_bounds() == {s.name: sampling_design.stratum_bound(s.name, 0.1) for s in sampling_design.strata}
+        assert a.harm_bound(2.0) == sampling_design.harm_bound({s.name: 2.0 for s in sampling_design.strata}, 0.1)
+        assert a.to_json()["levels"][0]["draw"] == sampling_design.to_json()
         with pytest.raises(ValueError):
             a.worst_case(lambda m: m)
     grouped = IntegrityProfile(("group", "unit"), (2, 5), {"unit": SMALL[1]}, 0.1)
@@ -745,11 +745,11 @@ def test_a_lone_bernoulli_draw_of_the_checked_level_bounds_exactly():
     for n in (0, 1, 7, 100, 1000):
         for p in (Fraction(0), Fraction(1, 1000), Fraction(1, 100), Fraction(1, 3), Fraction(1, 2), Fraction(999, 1000), Fraction(1)):
             for delta in (0.5, 0.1, 2.0 ** -10, 2.0 ** -40):
-                law = Bernoulli(p)
-                assert law.count_bound(n, delta) == scan(n, p, delta), (n, p, delta)
+                sampling_design = Bernoulli(p)
+                assert sampling_design.count_bound(n, delta) == scan(n, p, delta), (n, p, delta)
                 for levels, sizes in ((("unit",), (n,)), (("group", "unit"), (n, 1))):
-                    a = IntegrityProfile(levels, sizes, {"unit": law}, delta)
-                    assert a.bound() == law.count_bound(n, delta) and a.bound() <= a.worst_case(lambda m: m)
+                    a = IntegrityProfile(levels, sizes, {"unit": sampling_design}, delta)
+                    assert a.bound() == sampling_design.count_bound(n, delta) and a.bound() <= a.worst_case(lambda m: m)
     assert Bernoulli(Fraction(1, 2)).count_bound(1000, 2.0 ** -10) == 10
     for delta in (0.0, 1.0):
         with pytest.raises(ValueError):
@@ -780,9 +780,9 @@ def test_a_work_design_is_the_stratified_one_at_its_k():
     """A `Work` sample of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
     `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
     a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
-    law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
-    assert WORK.stratified == law and a.strata() == law and a.bound() == law.count_bound(0.1)
-    assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+    sampling_design = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
+    assert WORK.stratified == sampling_design and a.strata() == sampling_design and a.bound() == sampling_design.count_bound(0.1)
+    assert a.stratum_bounds() == {s.name: sampling_design.stratum_bound(s.name, 0.1) for s in sampling_design.strata}
     assert a.to_json()["levels"][0]["draw"] == {"law": "work", "k": 3, "strata": [
         {"name": "a", "size": 4, "k": 2, "work": 3, "floor": 1}, {"name": "b", "size": 6, "k": 1, "work": 1, "floor": 1}]}
     with pytest.raises(ValueError):

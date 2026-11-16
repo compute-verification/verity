@@ -124,7 +124,7 @@ while serving and, once a sampled replay block's interior is committed (`Stream.
 `cell`; the rule's `k`, one count or one per template, capped at the cell's size; counts proving every cell whole are
 refused). The check names the replay block's templates in the order of their first instance in it and the interior is
 template-major, so each cell is a range of the interior's proof blocks and the second stage is one stratum per cell
-(`second_law`). A cell of `n` proof blocks and footprint `w` is missed with probability at most
+(`second_sampling_design`). A cell of `n` proof blocks and footprint `w` is missed with probability at most
 `C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
 `Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
@@ -177,7 +177,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   and session checks too (`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and
   `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks the verifier for them;
   `lean/tests/test_challenger_difftest.py` holds its answers to the challenger's Python. The same package ports the challenger's sample from the
-  selection rule on (`Spot/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
+  selection rule on (`Spot/Select.lean`: `service.selection_sampling_design`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s sample of record.
   The Lean also runs a docket whole, from the docket through the verdict (`Spot/Run.lean`,
@@ -333,7 +333,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
     and the window is sampled once, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first docket; `halted` maps each halted
     operator to its halt's cause.
-  - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
+  - `selection_sampling_design` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
     challenger's coins (or a sampler) under the expanded design, with a work sample's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R8), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
@@ -348,7 +348,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
 - `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
-- `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
+- `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_sampling_design` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`: both verifiers' outcomes).
@@ -375,7 +375,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `TensorCommit`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
-  and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
+  and `work_sampling_design` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
   n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
   of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs

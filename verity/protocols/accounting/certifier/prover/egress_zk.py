@@ -282,15 +282,15 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_design(f"stratified:{n}")
+    sampling_design = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the network certifier's execution phase {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": f"registered: port o1 reads {at.head.value} at the network certifier's signed root, unit base + t row t; "
                    "state the member's committed states at their registered root; o0 the verifier's words 1"}
-    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = R.record(sg.program, sg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want,
+    checks = {"registration": V.check(rec, sg.program, sg.query, sampling_design, a0.SCHEME, want,
                                       leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want), "registered": WZ.registered_roots(m, rec)}
     receipt = R.receipt(rec, "one-stage-e2e verifier (egress_zk.py)")

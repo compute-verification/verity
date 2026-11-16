@@ -2282,12 +2282,12 @@ def _by_template(r: random.Random, desc: dict, m: str) -> tuple[dict, list[dict]
     ks = [fewer(n) if d in broken.get(m, ()) else n if d in whole else r.randint(1, n) for _, d, n in ts]
     j = next(j for j, (_, d, _) in enumerate(ts) if d not in whole)
     ks[j] = fewer(ts[j][2])
-    lo, law, strata = 0, [], []
+    lo, sampling_design, strata = 0, [], []
     for (key, _, n), k in zip(ts, ks):
-        law.append({"k": k, "template": key, "units": [[lo, lo + n]]})
+        sampling_design.append({"k": k, "template": key, "units": [[lo, lo + n]]})
         strata.append({"k": k, "name": key, "size": n})
         lo += n
-    return {"k": sum(ks), "law": "stratified", "strata": law}, strata
+    return {"k": sum(ks), "law": "stratified", "strata": sampling_design}, strata
 
 
 def _oversample(r: random.Random, size: int, k: int, strata: list[dict] | None) -> int:
@@ -2642,7 +2642,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             if r.random() < 0.5 and units == 2 * T + 1 else None
         k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
         cuts = [0, 1, T + 1, 2 * T + 1]
-        law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
+        sampling_design = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[lo, hi]]} for s, lo, hi in zip(strata, cuts, cuts[1:])]}
         if aimed and m == "answer-oversampled":
             k = _oversample(r, units, k, strata)
@@ -2661,7 +2661,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             ((got := start_empty(*start))[:1], [], got[1])
         window = {"kind": "stand-in", "window": w} | ({} if reads is None else {"reads": reads}) | (
             {} if empty is None else {"empty": empty})
-        rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
+        rec = {"format": fmt, "law": sampling_design, "partition": f"{link}/scan/{w}", "population": units, "program": program,
                "protocol": ONE_STAGE, where: entries, "window": window}
         there, oks = _ok_entries(ro, T, unok if aimed else None)
         for into, more in ((there, oks), ("registered", list(by_value)), ("roots", by_port)):
@@ -2746,18 +2746,18 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             untied.append(prog)
         # `tied-sampled`: one or two of the tied audit's proof blocks, the demo's sample
         k, strata = r.randint(1, min(2, units - 1)) if sampled else units if i in tied else r.randint(1, units), None
-        law = {"k": k, "law": "subset"}
+        sampling_design = {"k": k, "law": "subset"}
         wrong = (0 if r.random() < 0.25 else r.randint(1, units)) if sampled else r.randint(0, units)
         if partial:
-            law, strata = _by_template(r, desc, m)
+            sampling_design, strata = _by_template(r, desc, m)
             k, wrong = sum(s["k"] for s in strata), 0 if r.random() < 0.25 else r.randint(1, units)
         elif halves or (r.random() < 0.5 and not sampled):
             cuts = [0, *([r.randint(1, units - 1)] if units > 1 and (halves or r.random() < 0.5) else []), units]
-            law = {"k": k, "law": "stratified", "strata": [
+            sampling_design = {"k": k, "law": "stratified", "strata": [
                 {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}
                 for j, (lo, hi) in enumerate(zip(cuts, cuts[1:]))]}
             strata = [{"k": s["k"], "name": s["template"], "size": s["units"][0][1] - s["units"][0][0]}
-                      for s in law["strata"]]
+                      for s in sampling_design["strata"]]
             k = sum(s["k"] for s in strata)
         if i == a and m in ("audit-oversampled", "tied-oversampled"):
             k = _oversample(r, units, k, strata)
@@ -2767,7 +2767,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             k = _strata_resize(r, strata, seed)
         elif i == a and m == "audit-unregistered":
             k, strata = _resample(r, units, k, strata)
-        rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
+        rec = {"format": r.choice(FORMATS), "law": sampling_design, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         rec["roots"] = _output_entries(rp, i, ties, sched.window // sched.every, first + t, untie, unwire, hit)
         stated = i == ties[first + t]["audit"]

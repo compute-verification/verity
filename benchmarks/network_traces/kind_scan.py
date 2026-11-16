@@ -90,8 +90,8 @@ ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
-    "law.law": S, "law.k": S, "law.p": S, "law.strata[].template": S, "law.strata[].k": S,
-    "law.strata[].units[][]": S, "law.strata[].work": S, "law.strata[].floor": S,
+    "law.law": S, "law.k": S, "law.p": S, "sampling design.strata[].template": S, "sampling design.strata[].k": S,
+    "sampling design.strata[].units[][]": S, "sampling design.strata[].work": S, "sampling design.strata[].floor": S,
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
     "window.kind": S, "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M,
