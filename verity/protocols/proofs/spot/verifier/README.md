@@ -195,7 +195,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/verity/protocols/proofs/spot/verifier/test_proofs.py` holds
   to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
@@ -263,11 +263,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
   proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
   Core API lists each module.
-- **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
+- **The Lean-generated vectors.** `tests/verity/protocols/proofs/spot/verifier/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
-  count on two-stage designs (`tests/lean/`, by `generate.sh`); `tests/test_consumers.py` holds the consumers to them.
-  `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `sampleOn` on raw bytes,
-  `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `tests/verity/protocols/proofs/flock/prover/stratified_agree.py`
+  count on two-stage designs (`tests/verity/protocols/proofs/spot/verifier/lean/`, by `generate.sh`); `tests/verity/protocols/proofs/spot/verifier/test_consumers.py` holds the consumers to them.
+  `tests/verity/protocols/proofs/spot/verifier/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `sampleOn` on raw bytes,
+  `tests/verity/protocols/proofs/spot/verifier/test_one_stage.py` the work sizes to Flock's tests' pins, and `tests/verity/protocols/proofs/flock/prover/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
 - **The parties.** `parties` holds both deployments (Core API) as parties of `verity.runtime`, each machine's work a
   capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.runtime.runner.run` runs them.
@@ -383,7 +383,7 @@ The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock
 states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
 is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
 core's `tests/verity/circuits/partition_vectors.json` and `template_instance_vectors.json`, which
-`tests/test_one_stage.py` replays, with the object's refusals and digest.
+`tests/verity/protocols/proofs/spot/verifier/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
 
@@ -398,7 +398,7 @@ core's `tests/verity/circuits/partition_vectors.json` and `template_instance_vec
   Lean verifier reads them.
 - `check_draw` also holds the sample's population to the docket's.
 
-Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, objects and expansion.
+Pinned by `tests/verity/protocols/proofs/spot/verifier/test_one_stage.py`'s checks of each sampling design's text, objects and expansion.
 
 ### What a proof block's work may count
 
@@ -453,7 +453,7 @@ is the registered request Definition, and each audit record accepted and is comp
 `Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
 Python side the run is held to.
 
-Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
+Pinned by `tests/verity/protocols/proofs/spot/verifier/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).
 
 ### The consumers
@@ -474,7 +474,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
   relation reads none (`rTwo_congr`) and takes a trace whose interiors were never computed (`deferred_not_credited`).
 - A proof block's output bits or work is one number for every proof block, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regenerated when its Lean files change (a test compares their sha256).
+Pinned by `tests/verity/protocols/proofs/spot/verifier/test_consumers.py` and the Lean-generated vectors, each regenerated when its Lean files change (a test compares their sha256).
 
 ### The proof system
 
@@ -498,8 +498,8 @@ Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regener
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
 
-Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`,
-`tests/test_service_history.py`, `tests/test_service_sessions.py` and `tests/test_service_fleet.py`, and the stream's
+Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/verity/protocols/proofs/spot/verifier/test_service.py`,
+`tests/verity/protocols/proofs/spot/verifier/test_service_history.py`, `tests/verity/protocols/proofs/spot/verifier/test_service_sessions.py` and `tests/verity/protocols/proofs/spot/verifier/test_service_fleet.py`, and the stream's
 and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
 ### The sample's coins
@@ -509,9 +509,9 @@ selection reads coins takes only a `coins.ChallengerCoins` (else `service.NO_OWN
 reads none), and `Run.run` refuses a sample that read coins without the challenger's evidence or under another
 `coin_source`. `coins.OwnRandomness` reads those bytes, after the docket, with `Flock.Draw`'s samplers and no hash,
 derivation or beacon; `draw_first` reads them as `Flock.Draw.drawWith` does, and `coins`' docstring has the byte layout.
-Nothing derives a sample but vLLM's legacy replay challenge, until its re-baseline. Pinned by `tests/test_coins.py`.
+Nothing derives a sample but vLLM's legacy replay challenge, until its re-baseline. Pinned by `tests/verity/protocols/proofs/spot/verifier/test_coins.py`.
 `one_stage.verifier.coins` (`IO.getRandomBytes`) is only `challenger.LiveChallenger`'s entropy; tests sample from
-`tests/fake_challenger.py`.
+`tests/verity/protocols/proofs/spot/verifier/fake_challenger.py`.
 
 A stream's `coins.ChallengerCoins` come from `remote.RemoteChallenger` (`challenger.LiveChallenger` in process).
 `commit(after)` takes the prover's commitment (the docket's
@@ -529,7 +529,7 @@ that carries a key is refused), run from a commit the host's pins log records on
 first-parent line (`pinned_session`; `Stream(main=)`, which the copy the evidence carries must be), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the sample read are those coins, after the docket's digest. Missing evidence and a docket without its
-window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
+window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/verity/protocols/proofs/spot/verifier/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
 
 ### The window's seed salt
@@ -537,7 +537,7 @@ window root are refused the same way, a reject failing `run`; a sample that read
 At the window's open, before it serves, the stream samples its seed salt (`Stream.seed_salt`): the first coin of the
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
-Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
+Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/verity/protocols/proofs/spot/verifier/test_registered.py`).
 
 ### The registered compiler
 
@@ -545,5 +545,5 @@ A verifier that reads the registration log's registered compiler (`compiler`: th
 with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
 window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
 (`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
-`R6-compiler`. Lean `Docket.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+`R6-compiler`. Lean `Docket.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/verity/protocols/proofs/spot/verifier/test_registered.py` and
 the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.
