@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from functools import lru_cache
 from types import ModuleType
@@ -30,6 +31,9 @@ CANARY_SENT = "canary-sent-at"                                   # when the watc
 CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
 OLDEST = "oldest-unrouted"                                       # {"ts", "at"}: reconcile's oldest unrouted post, or ts None
+LINEAR_API = "https://api.linear.app/graphql"
+
+Linear = Callable[[str, dict], dict]                             # a GraphQL query and its variables to the answer's `data`
 
 
 class Cache(Protocol):
@@ -53,6 +57,7 @@ class Deps:
     clock: Callable[[], float]
     env: Mapping[str, str] = field(default_factory=dict)
     out: Any = None                                               # where log lines go (stdout)
+    linear: Linear | None = None                                  # reads Linear (LINEAR_API_KEY); None reads nothing
 
     def log(self, event: str, **fields: Any) -> None:
         """One JSON line: ids, decisions and errors only.  Never pass Slack text here."""
@@ -114,13 +119,28 @@ def runtime_cache() -> Cache:
     return RuntimeCache(namespace=CACHE_NS)
 
 
+def linear_reader(key: str) -> Linear:
+    """Linear's GraphQL API with a personal API key (read access is all the service needs)."""
+    def gql(query: str, variables: dict) -> dict:
+        req = urllib.request.Request(LINEAR_API, data=json.dumps({"query": query, "variables": variables}).encode(),
+                                     method="POST", headers={"Authorization": key, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = json.load(r)
+        if body.get("errors"):
+            raise RuntimeError("Linear: " + "; ".join(x.get("message", "?") for x in body["errors"]))
+        return body["data"]
+    return gql
+
+
 @lru_cache(maxsize=1)
 def deployed() -> Deps:
     """The deployment's: SLACK_BOT_TOKEN posts directly (never through the broker), the registry bundled at build, Vercel
-    Queues and Runtime Cache; routes.d and people.d from the published notes (RESEARCH_ROUTES_URL, RESEARCH_NOTES_TOKEN)."""
+    Queues and Runtime Cache; routes.d and people.d from the published notes (RESEARCH_ROUTES_URL, RESEARCH_NOTES_TOKEN);
+    Linear read with LINEAR_API_KEY when it is set."""
     rs, env = vendor.slack(), os.environ
     if not env.get("SLACK_BOT_TOKEN"):
         raise RuntimeError("SLACK_BOT_TOKEN is not set: the service posts and reads with Verity's bot, never the broker")
     rs.OIDC_TOKEN = vercel_oidc
     return Deps(rs=rs, registry=vendor.registry(), cache=runtime_cache(), queue=VercelQueue(),
-                slack=rs.Slack(env["SLACK_BOT_TOKEN"], direct=True), clock=time.time, env=env)
+                slack=rs.Slack(env["SLACK_BOT_TOKEN"], direct=True), clock=time.time, env=env,
+                linear=linear_reader(env["LINEAR_API_KEY"]) if env.get("LINEAR_API_KEY") else None)

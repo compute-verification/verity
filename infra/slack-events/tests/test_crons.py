@@ -384,3 +384,69 @@ def test_slacks_silence_rings_comms_hourly_once_a_message_is_30_min_newer_than_i
     world.slack.add(COORD, text="@circuits later", username="kernels", bot_id=BOT)
     assert crons.reconcile(world.deps)["silent"] is False and len(rung()) == 2
     assert world.rung("top") == []
+
+
+class FakeLinear:
+    """Linear's `issues` query over `nodes`, two to a page; each call's filter is kept."""
+
+    def __init__(self, nodes: list[dict]):
+        self.nodes, self.filters = nodes, []
+
+    def __call__(self, query: str, variables: dict) -> dict:
+        self.filters.append(variables["f"])
+        at = int(variables["after"] or 0)
+        more = at + 2 < len(self.nodes)
+        return {"issues": {"nodes": self.nodes[at:at + 2], "pageInfo": {"hasNextPage": more, "endCursor": str(at + 2) if more else None}}}
+
+
+def issue(ident: str, title: str = "a deliverable", labels: tuple[str, ...] = (), person: str | None = None,
+          app: str | None = None, comments: int = 0) -> dict:
+    return {"identifier": ident, "title": title, "url": f"https://linear.app/x/{ident}", "team": {"key": ident.split("-")[0]},
+            "labels": {"nodes": [{"name": n} for n in labels]}, "creator": {"name": person} if person else None,
+            "botActor": {"userDisplayName": app} if app else None, "comments": {"nodes": [{"id": "c"}] * comments}}
+
+
+def test_an_issue_filed_in_a_lanes_team_by_any_means_rings_that_lane_once(world):
+    """COMM-113: a person filed in comms' team through the connector, and nothing rang comms until the sweep's audit,
+    whose ring for a lane goes out once in 12 h, 9 h later.  Reconciliation rings the lane at its next run: a person's
+    issue, another handle's, Linear's agent's.  The lane's own, one already taken up and an ask (whose doorbell names its
+    issue) ring nothing, and this cron's own doorbell keeps it from ringing twice."""
+    from conftest import COORD
+    rs = world.deps.rs
+    ask = world.slack.add(COORD, text="@circuits which tile?\nLinear: <https://linear.app/x/CIR-5|CIR-5>", username="kernels",
+                          bot_id=BOT)
+    rs.deliver(world.deps.slack, crons.chats(world.deps)[0], rs.Routes(), COORD, ask, now=world.clock())
+    world.deps.linear = FakeLinear([
+        issue("CIR-1", "A handle for the Goals page", person="Daniel Example"),
+        issue("CIR-2", labels=("from:circuits",), app="circuits"),
+        issue("CIR-3", labels=("from:kernels",), app="kernels"),
+        issue("CIR-4", person="Daniel Example", comments=1),
+        issue("CIR-5", labels=("from:kernels",), app="kernels"),
+        issue("HASH-6", app="Linear"),
+        issue("PRF-7", labels=("lane:soundness",), person="Daniel Example")])
+    assert crons.reconcile(world.deps)["issues"] == 3
+    assert world.rung("circuits")[1:] == [
+        "from linear, Linear CIR-1 (https://linear.app/x/CIR-1): a new issue in CIR, filed by Daniel Example: A handle for the Goals page",
+        "from kernels, Linear CIR-3 (https://linear.app/x/CIR-3): a new issue in CIR, filed by kernels: a deliverable"]
+    assert world.rung("kernels") == ["from linear, Linear HASH-6 (https://linear.app/x/HASH-6): a new issue in HASH, filed by "
+                                     "Linear: a deliverable"]
+    assert [x for x in world.logs() if x["event"] == "new-issue-unrung"] == [
+        {"event": "new-issue-unrung", "issue": "PRF-7", "to": "soundness", "why": "no inbox"}]
+    f = world.deps.linear.filters[0]
+    assert f["createdAt"] == {"gt": datetime.fromtimestamp(T0 - crons.LINEAR_S, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    assert {"CIR", "HASH", "COMM"} <= set(f["team"]["key"]["in"]) and len(world.deps.linear.filters) == 4
+    world.clock.t += 600
+    assert crons.reconcile(world.deps)["issues"] == 0 and len(world.rung("circuits")) == 3 and len(world.rung("kernels")) == 1
+
+
+def test_without_a_linear_reader_reconciliation_reads_no_issues_and_a_failing_one_leaves_slacks_part_done(world):
+    assert crons.reconcile(world.deps)["issues"] is None
+
+    def down(query, variables):
+        raise ConnectionError("Linear unreachable")
+    world.deps.linear = down
+    world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    world.clock.t += SETTLE_S + 1
+    got = crons.reconcile(world.deps)
+    assert (got["queued"], got["issues"]) == (1, None) and world.deps.cache.get(LAST_SUCCESS) == world.clock()
+    assert {"event": "new-issues-failed", "error": "ConnectionError"} in world.logs()
