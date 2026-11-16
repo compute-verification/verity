@@ -1,8 +1,9 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
 `Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case_twin`
-(`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
-names), the network
+(`verity/pouw/period/v1`, the work of remote's development composite, with `credit.commit_of` reading the record each
+window of a period names), Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`, the work of onsite and of remote's
+composite of record, `PEARL_PLUS`), the network
 attester's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
 certificates and one-stage's answers, `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
@@ -367,10 +368,17 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SPOT = Ported(SPOT_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-#: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
-#: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
-#: to any other case
-PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
+#: Pearl+'s run verdict, the work of onsite and of remote's composite of record: on a run whose commitment names a
+#: record and a window record, with params that aren't its coins, which it refuses with no digest (`REJECT`, the case a
+#: product's sample draws, since no case here makes the passes it would accept); on the served run a test records for
+#: it (`pearl_plus_answer`); and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no
+#: answer to any other case
+PEARL_PLUS_REFUSED = "params: keys are not coins, draws, record"
+PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1", {REJECT: (
+    {"commitment": canonical({"manifests": [{}], "record": "00" * 64,
+                              "window": {"dropped": [], "record": {}, "rounds": None}}).encode().hex(),
+     "evidence": canonical({"files": []}).encode().hex(), "params": {}},
+    P.outcome("verity/pouw/pearl-plus/v1", REJECT, PEARL_PLUS_REFUSED))})
 #: `PouwCheck.PearlPlus.Protocol.commitmentTag`
 PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
 
@@ -733,9 +741,10 @@ def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Excepti
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
-#: `Core.Remote.windows`: every window of PoUW's period on the policy's record, remote's tie and onsite's.
+#: `Core.Remote.windows`: every window of PoUW's period on the policy's record, the tie of remote's development
+#: composite.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
-#: `Core.Remote.V1.run`: Pearl+'s run on the policy's record.
+#: `Core.Remote.V1.run`: Pearl+'s run on the policy's record, remote's tie and onsite's.
 RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_record)))
 #: `Core.Remote.V1.window`: Pearl+'s passes on the window record the policy's record is chained right after.
 WINDOW = Tie("window", ((INFERENCE_ONLY.id, policy_previous), (PEARL_PLUS.id, run_window)))
@@ -846,15 +855,16 @@ class TiedSame(Same):
 
 
 #: `Core.Remote.V1.protocol`, `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
-#: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
-#: Pearl+ run naming the policy's record, every window of its development composite's PoUW period and of onsite's naming
-#: it too, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
+#: of their ids: each one's policy and integrity committing to one registration record, the Pearl+ run of remote's
+#: composite of record and of onsite naming the policy's record and the window record it is chained right after, every
+#: window of remote's development composite's PoUW period naming it too, and onsite's PoUS and PoUB-P2 on one store
+#: (`Core.Onsite.ties`, in its order).
 REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SPOT),
                      (INFERENCE_ONLY.id, SPOT.id), (RUN, WINDOW))
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SPOT), (INFERENCE_ONLY.id, SPOT.id),
                   (WINDOWS,))
-ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SPOT, WIPE),
-                  (INFERENCE_ONLY.id, SPOT.id), (WINDOWS, STORE))
+ONSITE = TiedSame("verity/onsite/v1", (CERTIFIER, INFERENCE_ONLY, POUS, PEARL_PLUS, BANDWIDTH, SPOT, WIPE),
+                  (INFERENCE_ONLY.id, SPOT.id), (STORE, RUN, WINDOW))
 #: `Core.Onsite.counted`: onsite with the count over the wipe's span beside it and the wipe's count held to it.
-ONSITE_COUNTED = TiedSame("verity/onsite/counted/v0", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,
+ONSITE_COUNTED = TiedSame("verity/onsite/counted/v1", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,
                           (*ONSITE.ties, WIPE_NODE, *WIPE_COUNT))

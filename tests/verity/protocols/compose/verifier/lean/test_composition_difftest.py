@@ -226,10 +226,12 @@ def kinds(C) -> list[str]:
 
 @st.composite
 def component_case(draw, C, kind: str | None) -> dict:
-    """`C`'s case aimed at `kind` (any of `kinds(C)` when it is None; SPOT's are all refused, whatever the
-    aim), from its own difftest's generator or its recorded cases, with its digest as its Python reads it on `BLOBS` (the
-    case's own commitment when it doesn't decode, which a rejection never binds)."""
+    """`C`'s case aimed at `kind` (any of `kinds(C)` when it is None; SPOT's and Pearl+'s are all refused, whatever
+    the aim), from its own difftest's generator or its recorded cases, with its digest as its Python reads it on `BLOBS`
+    (the case's own commitment when it doesn't decode, which a rejection never binds)."""
     kind = kind or draw(st.sampled_from(kinds(C)))
+    if C is R.PEARL_PLUS:
+        kind = R.REJECT
     if C is R.POUS and kind == R.ACCEPT and draw(st.integers(0, 3)) == 0:
         kind = periods.OTHER_STORE
     if isinstance(C, R.Recorded):
@@ -474,9 +476,9 @@ ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 #: `onsite-counted serve`, onsite's development composite with the wipe's count held (`Core.Onsite.counted`)
 ONSITE_COUNTED = port("onsite-counted", R.ONSITE_COUNTED, SEEN["onsite-counted"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
-#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
-#: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
-#: no product)
+#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run is
+#: accepted in the reference only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development
+#: composite is no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
 onsite_counted_server = D.server_fixture(ONSITE_COUNTED)
@@ -1002,7 +1004,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
 INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 #: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
-PEARL_PLUS_REFUSED = "params: keys are not coins,"
+PEARL_PLUS_REFUSED = R.PEARL_PLUS_REFUSED
 
 
 def _checked(exe: Path, tmp_path: Path, name: str, case: dict, blobs: list[Path]) -> tuple[int, dict]:
@@ -1092,8 +1094,8 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
 @OPT_IN
 def test_onsite_agrees(onsite_server, recorded):
     """Onsite rejects with a subprotocol undecided beside the rejection, its policy and integrity meet on one record
-    (left to the subprotocols) and on two (refused), its period's windows on the policy's record and on others, and
-    PoUS and PoUB-P2 on one store and on two, each often. What only whole cases hold: `onsite serve`, over its seven
+    (left to the subprotocols) and on two (refused), and PoUS and PoUB-P2 on one store and on two, each often; its
+    Pearl+ run is refused (`R.PEARL_PLUS`), so its run's ties are never read here. What only whole cases hold: `onsite serve`, over its seven
     subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
     subprotocol is undecided beside a rejection, which the trial's rule would leave undecided
     (`test_a_reference_without_reject_dominance_is_caught`). Its thousand cases reach what
@@ -1135,8 +1137,8 @@ def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, r
 def test_product_names_only_the_composites():
     """`product IDS id` is each composite over its subprotocols, in any order (onsite, and remote v1 with Pearl+'s
     run), exactly the configuration's composites (`verity.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
-    gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
-    and the wipe (exit 64), and remote's plain sibling by name."""
+    gives their names), and refuses every other set of their subprotocols, H1's development composite's and onsite's
+    with PoUW's period as its work among them, and the wipe (exit 64), and remote's plain sibling by name."""
     exe = D.build(ONSITE_PACKAGE, "product")
 
     def named(xs) -> tuple[int, str]:
@@ -1151,6 +1153,7 @@ def test_product_names_only_the_composites():
         assert named(ids) == (0, cid)
         assert named(ids[::-1]) == (0, cid)
     assert named(C.id for C in R.REMOTE.components)[0] == 64
+    assert named(R.POUW_PERIOD.id if C is R.PEARL_PLUS else C.id for C in R.ONSITE.components)[0] == 64
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
@@ -1187,18 +1190,21 @@ def test_onsites_bandwidth_is_p2():
     assert [s for s, _ in R.STORE.names] == [R.POUS.id, R.BANDWIDTH.id]
 
 
-def test_onsites_ties_are_remotes_windows_and_the_store():
-    """Onsite holds remote's `windows` tie, the one value of it, before its store tie (`Core.Onsite.ties`)."""
-    assert R.ONSITE.ties == (R.WINDOWS, R.STORE) and R.REMOTE.ties == (R.WINDOWS,)
-    assert R.ONSITE.ties[0] is R.REMOTE.ties[0]
+def test_onsites_ties_are_the_store_and_remote_v1s_run_and_window():
+    """Onsite holds its store tie, then the `run` and `window` ties of remote's composite of record, the one value of
+    each (`Core.Onsite.ties`), and no tie on PoUW's period, which is none of its subprotocols."""
+    assert R.ONSITE.ties == (R.STORE, R.RUN, R.WINDOW) and R.REMOTE_V1.ties == (R.RUN, R.WINDOW)
+    assert all(a is b for a, b in zip(R.ONSITE.ties[1:], R.REMOTE_V1.ties))
+    assert R.PEARL_PLUS in R.ONSITE.components and R.POUW_PERIOD not in R.ONSITE.components
 
 
 @pytest.mark.slow
 def test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict(recorded):
-    """On sampled cases onsite's verdict is its verdict without its ties (onsite before them), except where a window of
-    its PoUW period names another record than the policy's, or PoUS and PoUB-P2 committed to two stores (PoUS's run on
-    another store, `periods.OTHER_STORE`), which it refuses: the ties change no other verdict. Python only: the
-    difftest holds the Lean to it. Sampled from a fixed seed, as `verity_difftest.run` samples."""
+    """On sampled cases onsite's verdict is its verdict without its ties (onsite before them), except where PoUS and
+    PoUB-P2 committed to two stores (PoUS's run on another store, `periods.OTHER_STORE`), which it refuses: the ties
+    change no other verdict. Its Pearl+ run is refused here with no digest, so its run's ties are never read; they are
+    `test_remote_v1_ties_pearl_plus_run_to_the_policys_record`'s and the next test's. Python only: the difftest holds
+    the Lean to it. Sampled from a fixed seed, as `verity_difftest.run` samples."""
     untied = dataclasses.replace(R.ONSITE, ties=())
     seen = collections.Counter()
 
@@ -1216,7 +1222,7 @@ def test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict(recorded):
         seen.update(f"two {what}s" for what in strays)
     check()
     assert seen["same"] > 20 and seen["was reject, two"] > 0, dict(seen)
-    assert seen["two records"] > 0 and seen["two stores"] > 0, dict(seen)
+    assert seen["two stores"] > 0 and not seen["two records"] and not seen["two windows"], dict(seen)
 
 
 class Trial(R.TiedSame):
