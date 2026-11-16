@@ -1,0 +1,79 @@
+# Lowering PoUW's H1 circuit files: design
+
+The statements, the commands and the leaderboard, beside [the README](README.md).
+
+## The statements
+
+What writing a PoUW H1 circuit file costs, and the file it writes, for three statements of an R × C tile (the leaf):
+
+- `lane`: the leaf's lane statement `PouwH1LaneZy_v1{TILE}`. It is one circuit for all the leaf's lanes, each 4 rows by
+  8 columns, with the lane index a public input.
+- `combine`: the leaf's `PouwH1Combine_v1{TILE}`, which joins the lanes.
+- `tile`: the whole H1 tile unit, the auditor's lowering whose file a PoUW period-open commits as `k<K>`
+  (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `adapters/vllm`).
+
+The tile is a parameter. 32 × 32 is the H1 kernel's warp tile, never a choice made for proving. The lane and the combine are
+what can be proved once the tile is past the block (`verity/protocols/resource_accounting/compute/pouw/verifier/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
+`lanes.py` stages each one as `h1_lanes/leaf.py`'s `stager` does, with its `RC` set to the leaf, bound to the Program a served
+window's verifier derives for it. They exist only at an R that is a multiple of 16: a lane reads the leaf's R admit bits as
+one row, and a row is whole 16-bit words (`h1zy._leaf`). So at 4 × 8 and 8 × 8 the tile itself is the statement; a 4 × 8 tile
+is one lane. Every lowering runs with `HZ_STAGE=fast` (under `--staging library`, with none of `fast_stage`'s patches)
+and with `H1_TMPL` unset (flat) or `structural`.
+
+**What a caller may import** is `run.py`'s and `lanes.py`'s `__all__`. The directory is no package: its modules import
+each other by bare name (`from run import BIND`) with the directory on `sys.path`, as its suite does, and no code
+outside it imports them. `mem_profile.py` and `structural.py` are commands, which nothing imports. **What it never
+does:** it proves nothing (it writes a circuit file, reads it and measures the writing), it writes no circuit file
+under `--out` (the file goes under `--scratch`, to `--path` or to a temporary directory), and its guard passes no flat
+file whose SHA-512 differs from `reference.json`'s.
+
+## The commands
+
+- `run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard [all]]
+  [--tree PATH] [--staging fast|library] [--keep]` writes `OUT/unit_lowering.json`. The record holds `unit`, `k`,
+  `tile`, `form`, `staging`, `peak_gib`, `wall_min`, `bytes`, `ands`, `k_log`, `sha512` and `commit`, plus each
+  section's rows. It prints `UNIT-LOWERING unit=.. k=.. tile=RxC form=.. peak_gib=.. wall_min=.. ands=.. bytes=..
+  k_log=.. sha512=<16 hex>`. The circuit file is deleted once read, unless `--keep` leaves it under `--scratch`.
+- A tile is R = 4 i rows by C = 8 j columns (i j lanes, `h1tile.Layout.lanes`), at a K that is a multiple of 32 from 64. The
+  1 × 1 and 4 × 4 tiles fail in `h1tile._xor`. A lane or combine also needs R to be a multiple of 16, and the combine needs
+  K from 384.
+- `--guard` writes `OUT/guard.json`. It exits 1 and names each shape whose SHA-512 or k_log fails. `--tree PATH` runs
+  another checkout's lowering (a worktree of your approach) under this harness.
+- `mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]` runs the lowering
+  in-process. It reports:
+  - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the circuit's description, the digests;
+  - a census of live objects by type at the peak;
+  - with `--frames`, tracemalloc's allocation sites.
+- `structural.py` lowers the same three statements in the structural form (`H1_TMPL=structural`: the unit as
+  `struct_lower`'s template, the flat unit never built) or the flat one, in-process, and holds the two forms to each
+  other. Its docstring states each record's fields. Its four commands:
+  - `structural.py lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library]
+    [--bind leaf|zero] [--path FILE] [--program FILE]` writes the record OUT (JSON) and prints one `LOWER` line of its
+    main fields: the lowering's rows, commits and ANDs, its seconds and peak RSS, the binding, and the file's bytes,
+    SHA-512 and k_log. A shape it refuses exits 0 too, and the record's `refused` says why. The circuit file goes to
+    `--path`, else to a scratch directory removed at exit.
+  - `structural.py check K R C LANE COMBINE OUT` holds a leaf-bound lane file and combine file to `credit`'s lanes
+    form. It writes OUT, prints one `CHECK` line, and exits 1 unless credit would take them as `lane<K>` and
+    `combine<K>`.
+  - `structural.py agree K R C OUT [--no-check]` evaluates the flat and the structural tile unit on the same rows, each
+    against `h1zy.reference`, then takes `circuit_check.structural.check_unit`'s verdict on the template. It writes
+    OUT, prints one `AGREE` line, and exits 1 when the two differ or the verdict fails.
+  - `structural.py sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--staging S] [--bind B] [--jobs J]` runs
+    `lower` on each shape in a process of its own, with its peak RSS from `wait4`. It writes
+    `DIR/<form>-<unit>-k<K>-<R>x<C>.json`, each one's log under `DIR/logs/`, and `DIR/sweep-<form>.json`.
+- `verity bench unit_lowering ...` is `run.py ...`.
+
+`reference.json` comes from `run.py --pin-reference`, or from measured runs of d40fe21d26's lowering, one `run` id each.
+
+## The leaderboard
+
+Every measured run gets a label:
+
+```text
+research data label RUN unit_lowering '{"unit":"lane","k":2048,"tile":[R,C],"form":"flat","peak_gib":..,"wall_min":..,
+  "ands":..,"bytes":..,"k_log":..,"peak_b_per_and":..,"file_b_per_and":..,"guard":"pass|fail|n/a","approach":"<approach>",
+  "commit":"<branch>@<sha>"}' --value-json --by LANE --ref RUN
+```
+
+Runs of d40fe21d26's lowering carry the approach `baseline`. To read the leaderboard:
+`research data sql "select target, by, value from labels where key='unit_lowering'"`.
