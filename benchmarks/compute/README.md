@@ -256,6 +256,11 @@ A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-
 The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
 but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
 
+On fewer cores the two verdicts take longer. On 36 cores `python-verify` took 1,355 s and `lean` 3,451 s, and the
+whole run 92 minutes; on 20 cores `python-verify` took 2,368 s, and `lean` took more than 3,600 s. The Lean verdict has
+`LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over the cores serve.sh may run on (`nproc`) on
+fewer, 17,280 on 20. Give `research run` a `--timeout` to match: the `2h` above is for 96 cores.
+
 ## A record directory
 
 The paths below are relative to the record directory.

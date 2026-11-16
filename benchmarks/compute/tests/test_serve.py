@@ -1,6 +1,7 @@
 """`serve.sh`'s refusal of a run directory that already holds a record, before it touches the machine or writes a file:
 a share read after a failed run would otherwise be an earlier run's number. And its serve's card under a caller's
-gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant."""
+gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant. And the Lean verdict's limit, which
+grows as the cores fall."""
 from __future__ import annotations
 
 import os
@@ -56,3 +57,21 @@ def test_under_a_callers_lease_the_serve_runs_on_its_card_and_takes_no_lease(tmp
     forever, so the serve runs on the lease's card (CUDA_VISIBLE_DEVICES, GPU its UUID for the up-front check)."""
     got = served(tmp_path, GPU_LEASE_UUID="GPU-67cd8250,GPU-099c8642", CUDA_VISIBLE_DEVICES="3,4", GPU="0")
     assert got == ["GPU=GPU-67cd8250", "served on 3,4"]
+
+
+@pytest.mark.parametrize(("cores", "given", "limit"), [
+    (96, None, "3600"), (192, None, "3600"), (36, None, "9600"), (20, None, "17280"), (20, "5000", "5000")])
+def test_the_lean_verdicts_limit_grows_as_the_cores_fall(tmp_path, cores, given, limit):
+    """On 20 cores the Lean verdict ran past a flat 3,600 s and the run failed with Python's accept in hand: the limit
+    is 3,600 s on 96 cores and as much longer as there are fewer, and LEAN_TIMEOUT stands where given."""
+    line = re.search(r"^CORES=\$\(nproc\) && LEAN_TIMEOUT=.*$", SERVE.read_text(), re.M)
+    assert line, "serve.sh's LEAN_TIMEOUT line moved: this test reads it"
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "nproc").write_text(f"#!/bin/sh\necho {cores}\n")
+    (bin_ / "nproc").chmod(0o755)
+    keep = {k: v for k, v in os.environ.items() if k != "LEAN_TIMEOUT"}
+    env = {**keep, "PATH": f"{bin_}:{keep['PATH']}", **({"LEAN_TIMEOUT": given} if given else {})}
+    got = subprocess.run(["bash", "-c", f'{line[0]}\necho "$LEAN_TIMEOUT"'], env=env, capture_output=True, text=True,
+                         check=True)
+    assert got.stdout.strip() == limit
