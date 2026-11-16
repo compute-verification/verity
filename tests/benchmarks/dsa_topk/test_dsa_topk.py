@@ -80,6 +80,19 @@ def test_reference_is_the_registered_relations_set(dist):
         assert set(got) == T.topk_set(words, k) and T.order_ok(words, got, k) == 1
 
 
+@pytest.mark.parametrize("dist", ["randn", "int", "edge"])
+def test_the_stress_definition_check_runs_the_registered_relation(dist):
+    pytest.importorskip("torch")
+    import stress
+    T, D = registered(), stress.definition_code()
+    data, lo, n = rows_case(3, 20, 40, 6, dist)
+    for row, a, m in zip(data, lo, n):
+        words = [struct.unpack("<I", struct.pack("<f", v))[0] for v in row[a:a + m]]
+        for k in {k for k in (1, 6, m) if 1 <= k <= m}:
+            assert D["topk_set"](words, k) == T.topk_set(words, k)
+            assert D["canonical_ok"](words, sorted(T.topk_set(words, k)), k) == 1
+
+
 def rows_case(seed: int, rows: int, cols: int, k: int, dist: str):
     rng = random.Random(seed)
     data, lo, n = [], [], []

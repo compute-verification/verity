@@ -78,6 +78,11 @@ outputs unpatched and canonical across processes and repetitions, whether the ca
 (also from a garbage fast selection), whether the unpatched one selects the reference's set up to keys tied at the
 k-th, and whether rows of at most `k` keys are unchanged. `stress.py time` writes `time.json`: the device time a call
 (CUDA events, queued behind a sleep) and the host time, unpatched and canonical, per parameter variant (`--variants`).
+`stress.py definition --out DIR` holds each of the plugin's `MODES` to the registry's own `topk_set` (read from its
+source, since the venv has no `verity`) on `cooperative_topk` at served decode shapes: 6 distributions, 6 to 24 rows of
+20,000 to 131,072 keys in rows as wide as GLM-5.3's longest context, and 45 calls whose first guess is garbage, a near
+miss or the pin's overflow. Every row is compared eagerly and replayed from a CUDA graph. It writes
+`definition.json` and the run's validation, passed only where every row is the Definition's.
 `stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
 each case through the indexer's own entry points (`plugin.json`). `log_cost.py` needs no device: it times what keeping
 the counters adds to a call on the host, a wrapper's time a call over stand-in ops with the record kept and without.
