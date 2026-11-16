@@ -9,7 +9,7 @@ import json
 import pearl_c4_regions_vectors as RV4
 import test_circuit_anchors as T
 from verity.protocols.experimental.pearl_c4.prover import pc4
-from verity.protocols.accounting.pouw.prover.circuit.anchors import ANCHORED
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import ANCHORED
 
 #: each anchor's rule id, as META's ``derivation`` names it: part of Flock's circuit pin, so a changed rule is a new version
 RULES = {a: f"verity/pouw/anchor/pearl-c4/{a}/v2" for a in ANCHORED}

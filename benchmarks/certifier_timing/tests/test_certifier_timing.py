@@ -35,9 +35,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.network_certifier import (
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
+from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.resource_accounting.network.verifier.network_certifier import (
     END, FAIL, NetworkCertifier as Certifier, NetworkCertifierParams as Parameters, cells, read_cell,
 )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
 from verity_torch.pouw import credit_gate_device as CGD
 
 torch = pytest.importorskip("torch")
