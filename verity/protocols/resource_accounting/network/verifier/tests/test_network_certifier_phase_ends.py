@@ -1,7 +1,7 @@
 """The lengths rows' form 2 (`network_certifier`'s "The lengths rows", `connection_rows`' "The word that no head comes"), driven
 tick by tick on `test_network_certifier`'s harness: every execution phase of a run ends once, in its hand or
 without releases, the run's last at its last close. The form is a value of its own digest, and a schedule at form 1
-leaves what it left. The network certifier admits no connection that may end past the run, and turns away an arrival
+leaves what it left. The network attester admits no connection that may end past the run, and turns away an arrival
 in the run's last buckets, by its tick count and the schedule alone, with one constant cell on the next tick and no
 refusal; it hands an execution phase only where it and the ones beside it were published complete, so no hand holds
 a byte of one that wasn't; a run that ends early ends the execution phases it has not; and the word that an

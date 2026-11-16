@@ -1,6 +1,6 @@
-"""Network certificates: the network certifier's signed record of each execution phase, on SHA-512 (record v2).
+"""Network certificates: the network attester's signed record of each execution phase, on SHA-512 (record v2).
 
-The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
+The network attester is the auditor-trusted device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`). Once per execution phase whose record is complete it signs one **network certificate**: a signature
 over a hiding digest of the window's record, salted by the certifier. An execution phase whose record isn't complete gets
 none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
@@ -71,7 +71,7 @@ An issuer certifies a mark once. Asked for a mark it has signed a certificate of
 link, it raises (`MarkRefused`): it hands back nothing, takes no coins and uses no leaf. So the mark certificates of
 one issuer are of distinct marks, and a mark has one certificate of it, which names one execution phase. A second
 signer on the key's leaf state signs nothing in a session the state has started (`Signer.start`), so a session's mark
-certificates are those of the issuers on the one signer that started it, and the network certifier's run builds one
+certificates are those of the issuers on the one signer that started it, and the network attester's run builds one
 issuer.
 
 **A certificate's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
@@ -93,18 +93,18 @@ signer refuses (`SignerRefused`), and then the execution phase has no certificat
 So does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
 before its first signature, and a refused start leaves every execution phase of the run without a certificate.
 
-**The device state** (`DeviceState`): what the network certifier keeps for its registered key across sessions, in a file
+**The device state** (`DeviceState`): what the network attester keeps for its registered key across sessions, in a file
 of its own beside the key and apart from the key's leaf state: the key's life so far, in milliseconds on the network
-certifier's clock, and the ids of the sessions started under the key. A session's start takes the key's life as it
+attester's clock, and the ids of the sessions started under the key. A session's start takes the key's life as it
 stands as the session's base, and the number of sessions started under the key before it as its ordinal, and moves the
 life on by the session's whole span, its execution phases of T ticks each, written and synced to disk before the base is
 returned: a run that ends early loses the rest of its span, no later session is given a millisecond an earlier one was,
-and no two sessions of the key have one ordinal. The state is held, under a lock, by one run of the network certifier
+and no two sessions of the key have one ordinal. The state is held, under a lock, by one run of the network attester
 from before its first tick to after its last, so no two sessions under a key run at once, and it refuses a session id it
 has started (`StartRefused`). It is keyed by the registered key, which today is the key that signs.
 
 **The start's certificate** (`CertifiedStart`, `Issuer.certify_start`): once a session, before its first tick, the
-network certifier signs where the session starts on its key's life, and which of the key's sessions it is, under the
+network attester signs where the session starts on its key's life, and which of the key's sessions it is, under the
 message every certificate signs, for the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
 
     signed digest = tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖ u64be ordinal ‖ schedule)
@@ -358,7 +358,7 @@ def start_link(link: str) -> str:
 def start_digest(base_ms: int, ordinal: int, schedule: bytes) -> bytes:
     """The digest a start's certificate signs: tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖
     u64be ordinal ‖ schedule), `base_ms` the key's life at the session's start, in milliseconds on the network
-    certifier's clock, `ordinal` the number of the key's sessions started before it, and `schedule` the schedule's
+    attester's clock, `ordinal` the number of the key's sessions started before it, and `schedule` the schedule's
     parameters digest. All are public, so it carries no salt."""
     if type(schedule) is not bytes or len(schedule) != DIGEST_BYTES:
         raise ValueError(f"a schedule's parameters digest is {DIGEST_BYTES} bytes")
@@ -366,9 +366,9 @@ def start_digest(base_ms: int, ordinal: int, schedule: bytes) -> bytes:
 
 
 class StartRefused(Exception):
-    """The device state refuses a session's start: it is held by another run of the network certifier, missing,
+    """The device state refuses a session's start: it is held by another run of the network attester, missing,
     unreadable or another key's; the session is already started; or the key's life has no room for the session's span.
-    The network certifier then does not start: no tick runs and nothing is signed."""
+    The network attester then does not start: no tick runs and nothing is signed."""
 
 
 def _fsync_dir(d: Path) -> None:
@@ -383,7 +383,7 @@ class DeviceState:
     """One registered key's device state, in a file that fails closed (the module docstring's "The device state").
 
     ``path`` holds ``{"public", "count_ms", "sessions", "check"}`` as JSON: the registered key (``I ‖ T[1]``, in hex),
-    the key's life so far in milliseconds on the network certifier's clock, the ids of the sessions started under the
+    the key's life so far in milliseconds on the network attester's clock, the ids of the sessions started under the
     key (in hex), and ``check``, the first 16 bytes of SHA-512 over the rest. Opening takes ``path.lock`` exclusively
     for the object's life and refuses a state another run holds, so a run that opens it before its first tick and
     closes it after its last is the key's only one. It refuses a state that is missing, unreadable or another key's.
@@ -451,7 +451,7 @@ class DeviceState:
 
     @property
     def count_ms(self) -> int:
-        """The key's life so far, in milliseconds on the network certifier's clock, as this object last read or wrote
+        """The key's life so far, in milliseconds on the network attester's clock, as this object last read or wrote
         it."""
         return self._count
 
@@ -738,8 +738,8 @@ class CertifiedRecord:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedStart:
-    """What the network certifier hands over once a session, before its first tick: the session's base on its key's
-    life (`base_ms`, milliseconds on the network certifier's clock), its ordinal among the key's sessions (`ordinal`),
+    """What the network attester hands over once a session, before its first tick: the session's base on its key's
+    life (`base_ms`, milliseconds on the network attester's clock), its ordinal among the key's sessions (`ordinal`),
     the schedule's parameters digest it runs under, and the certificate, which signs their start digest
     (`start_digest`) for the link's start name (`start_link`), ``egress``, window 0. All of it is public."""
 
@@ -821,7 +821,7 @@ class CertifiedMark:
 
 @dataclass
 class Issuer:
-    """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
+    """The network attester's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
     phase, in certifier session `session`. Before its first signature it starts the session on its signer, which refuses
     a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and
@@ -861,7 +861,7 @@ class Issuer:
     def certify_start(self, link: str, base_ms: int, ordinal: int, schedule: bytes) -> CertifiedStart | None:
         """The start's certificate of this session on `link`: its base on the key's life, `base_ms`, and its ordinal
         among the key's sessions, `ordinal`, under the schedule whose parameters digest is `schedule`
-        (`start_digest`), or None when the signer refuses. The network certifier signs it before its first tick, with
+        (`start_digest`), or None when the signer refuses. The network attester signs it before its first tick, with
         the base and the ordinal its device state gave the session (`DeviceState.start`), and does not start without
         it."""
         certificate = self.sign(start_link(link), Direction.EGRESS, 0, start_digest(base_ms, ordinal, schedule))
@@ -900,7 +900,7 @@ class Issuer:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
         `certify_start` the session's start, `mark` a salted mark,
-        and the network certifier's cell rows their head's digest (`network_certifier_rows`)."""
+        and the network attester's cell rows their head's digest (`network_certifier_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

@@ -1,5 +1,5 @@
-"""wipe-egress: the network certifier's count of what can leave a node on the link its network certifier relays over a
-memory wipe's session [t0, t1), read off the gate's network certifier run (`vy-challenger-gate warden-rehearse`,
+"""wipe-egress: the network attester's count of what can leave a node on the link its network attester relays over a
+memory wipe's session [t0, t1), read off the gate's network attester run (`vy-challenger-gate warden-rehearse`,
 `wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The record is all this script
 writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
 (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
@@ -10,17 +10,17 @@ RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
 FILE), and exits 0 when the record is covered, 1 when it isn't.
 
-**The count.** The network certifier's schedule (`NetworkCertifierParams`) fixes what each 3.2 s execution phase can carry out of
+**The count.** The network attester's schedule (`NetworkCertifierParams`) fixes what each 3.2 s execution phase can carry out of
 the node: its egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for
 ``window`` buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every execution
-phase that meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the network certifier host's
+phase that meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the network attester host's
 clock (`covering`); the pad (`PAD_NS`, 1 s) is how far the two hosts' clocks may disagree. ``egress_bits`` is the
 windows' capacity, ``egress_mib`` it in the wipe's units (`streamed_wipe.EGRESS_UNIT_BITS`), rounded up. With no compute
 audit over the wipe nothing in the cells is bound to a computation, so all of it is free: ``K`` is ``egress_bits``, and
 ``delta`` is 0, since nothing was sampled.
 
 **What it reads.** Only what the gate publishes: ``end.json``'s verdict and its SHA-512 of each ``out/`` file, the
-deployment (``out/deployment.json``: the network certifier's key, session, schedule and origin) and the certificates
+deployment (``out/deployment.json``: the network attester's key, session, schedule and origin) and the certificates
 alone (``out/certificates.jsonl``, each signing a salted digest). The gate publishes a run's certificates only when
 its check accepted it: of a run it didn't, none is read and the record isn't covered. The cells' counts are witness
 and never enter the record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the
@@ -46,7 +46,7 @@ from verity.protocols.resource_accounting.network.verifier.network_certifier imp
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
-#: how far the wipe challenger host's clock and the network certifier host's may disagree
+#: how far the wipe challenger host's clock and the network attester host's may disagree
 PAD_NS = 1_000_000_000
 #: the bundle's files the count reads, by their path under the run's directory
 END, DEPLOYMENT, CERTIFICATES = "end.json", "out/deployment.json", "out/certificates.jsonl"

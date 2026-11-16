@@ -90,7 +90,7 @@ logger = logging.getLogger(__name__)
 class WipeMemoryChallenger:
     """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
     docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
-    completes unless a test gives it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
+    completes unless a test gives it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
     with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
     whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
 
