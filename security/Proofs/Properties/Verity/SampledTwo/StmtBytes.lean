@@ -30,6 +30,11 @@ open Claims
 open Lean (Json)
 open FlockDeploy (encNat encBytes encStr encBool encOpt encList)
 
+private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
+  cases x with
+  | error e => cases h
+  | ok b => cases h; rfl
+
 private theorem size_toUTF8 (s : String) : s.toUTF8.size = s.utf8ByteSize := by
   rw [String.toUTF8_eq_toByteArray, String.size_toByteArray]
 
@@ -170,7 +175,7 @@ theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
     unfold VStar.Recursive.SampledTwo.stmtSizeAt
     simp only [hname, hfind, hrec, hc, hpb, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
   exact Nat.lt_of_le_of_lt (Nat.le_trans (stmtRaw_le m circuit pub tables (_root_.Flock.Witness.recordDraw record))
-    (stmtSize_mono m.own circuit pub (tablesSize_ownTables_le (SpotFlock.HeldOf.ok_of_toOption ht)) _))
+    (stmtSize_mono m.own circuit pub (tablesSize_ownTables_le (ok_of_toOption ht)) _))
     (VStar.Recursive.SampledTwo.stmtsBytesFit_at hfit hmem hsz)
 
 /-- **On a case the form's check accepts, template `t`'s session statement is under `2^64` bytes**: the check ran
