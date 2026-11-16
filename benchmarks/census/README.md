@@ -1,22 +1,39 @@
 # Census
 
-Data only: the fixed quantities benchmarks are computed against. It will grow into a knowledge base of hardware, ML
-models and workloads. The renderer and benchmark code read these files directly, and so does the docs website. Nothing
-imports them as code, so the directory can move to its own repository unchanged.
+The census is the fixed numbers benchmarks are computed against: what each GPU can do at its peak, which operand
+formats exist, which networks, datacenters and workloads a result is stated for, and the adversary resource model, the
+world's compute that every result is set against. It is data and no code. Benchmarks, the renderer and the docs website
+read the files directly, nothing imports them, and Verity itself never reads them: a number reaches a protocol only as a
+parameter.
 
-| File | Entries | Schema |
-| --- | --- | --- |
-| `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate | `schemas/hardware.schema.json` |
-| `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
-| `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
-| `deployments.json` | deployments, whose figure a result gives beside the adversary resource model's (`adversary.json`): the machines of a datacenter and the window each machine is audited in, stated parameters (results per monitoring period) | `schemas/deployments.schema.json` |
-| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") | `schemas/subcircuits.schema.json` |
-| `workloads.json` | served configurations: the model, the serving config (engine, batch, TP, datatype, hardware class) and the template mix, the proof blocks (`vus`) per subcircuit template and bound parameters, with the source run | `schemas/workloads.schema.json` |
-| `input_sets.json` | the frozen input set of each subcircuit (an input is one instance of the subcircuit): dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its inputs are of | `schemas/input_sets.schema.json` |
-| `adversary.json` | the adversary resource model, the compute every result is stated against: the reference is `world-inference-2027`, all inference worldwide over a one-year monitoring period (requests, FLOP a request, about 9.4e30 FP8 FLOP in all), with the H100-equivalent base its source states | `schemas/adversary.schema.json` |
+## Try it
 
-Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
-in `tests/benchmarks/numerical/bench/test_census_data.py` check that.
+~~~sh
+uv run python -c "
+from verity_numerical.bench import census
+for h in census.raw('hardware'):
+    print(h['id'], f\"{h['flop_per_second']:.3g}\")
+"
+~~~
+
+This prints each hardware line's id and its dense peak in FLOP per second, from `a100-sxm4-80gb/bf16 3.12e+14` to
+`l40s-48gb/e4m3 7.33e+14`. It needs only a checkout.
+
+## The files
+
+Each file is a JSON array of entries, and each entry validates against its file's JSON Schema (draft 2020-12) under
+`schemas/`, as `tests/benchmarks/numerical/bench/test_census_data.py` checks.
+
+| File | Entries |
+| --- | --- |
+| `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate |
+| `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` |
+| `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles |
+| `deployments.json` | deployments, whose figure a result gives beside the adversary resource model's (`adversary.json`): the machines of a datacenter and the window each machine is audited in, stated parameters (results per monitoring period) |
+| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm-coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates, each with an id and a display name, such as `gemm-coordinate/k1536/sm90-wgmma-e4m3` ("GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)") |
+| `workloads.json` | served configurations: the model, the serving config (engine, batch, TP, datatype, hardware class) and the template mix, the proof blocks (`vus`) per subcircuit template and bound parameters, with the source run |
+| `input_sets.json` | the frozen input set of each subcircuit (an input is one instance of the subcircuit): dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its inputs are of |
+| `adversary.json` | the adversary resource model, the compute every result is stated against: the reference is `world-inference-2027`, all inference worldwide over a one-year monitoring period (requests, FLOP a request, about 9.4e30 FP8 FLOP in all), with the H100-equivalent base its source states |
 
 ## Ids
 
@@ -34,12 +51,6 @@ in `tests/benchmarks/numerical/bench/test_census_data.py` check that.
   blocks, which applications choose per run.
 - Ids are stable. Renders cite them, and sites build history over them. A changed quantity gets a new entry with a new
   id, and an id that has been cited is never renamed or reused.
-
-## Input sets and recorded names
-
-"Instance set" is now "input set", and a single instance is an "input". Recorded names keep the old word: the
-`instance-equiv/v1` artifact kind, a result's `instances` ref, and the `tier` field (`vu-k1536…`) are what fixtures and
-recorded results carry, so they are unchanged.
 
 ## Work models
 
