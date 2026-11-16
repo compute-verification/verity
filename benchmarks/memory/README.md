@@ -101,7 +101,7 @@ target is 0.14 at an error of at most 2^-100.**
 | 3 | no session reached a verdict (no NVIDIA driver, no data sheet for the card, no `VLLM_PY`, a checkpoint that can't be fetched, a process that failed): `memory: no number: WHY` |
 
 **Where the result goes:** the text and one line of JSON on stdout. With `OUT=DIR`, the JSON goes to `DIR/memory.json`
-and the result to `DIR/result.json`, its row `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
+and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
 beside the bytes and the error. The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
@@ -209,8 +209,8 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
   `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
 - **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=node GPUS=1`, the node run's
-  engine, prover and paced verifier on one card. Its row on the Metrics tab says it is no audit, and, where the share
-  is the Python ledger's, says that too. The served row (`SERVE=row`), whose store is one request's reads and whose
+  engine, prover and paced verifier on one card. Its metric on the Metrics tab says it is no audit, and, where the share
+  is the Python ledger's, says that too. The served workload (`SERVE=row`), whose store is one request's reads and whose
   share was 1 or more, is not this benchmark: `run.sh` runs it directly.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
@@ -222,7 +222,7 @@ it prints no number and exits 3. The text's first line prints the number's error
 error the result's `error`, below, holds, with the same words in its unit; the JSON holds it under `error`. A session
 whose error is 1 or more bounds nothing: the first line prints "no bound at this period" with the error in place of
 the number, and the JSON's `value` is null with those words under `no_bound` (the rule and the words are
-`verity/protocol.py`'s, one for every row's error).
+`verity/protocol.py`'s, one for every metric's error).
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
 state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the
@@ -248,7 +248,7 @@ by window as the share is: the record's declared error, which adds the sketch's 
 binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
 and its unit says so. The printed number is written once more under
-`memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
+`memory-accounting/node-read-rate-uncertified`, the id of its metric on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
 That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
 verifier held no checkpoint, every session now, still writes it, with `"bound": false` and its verdict naming that premise
 (`within target; the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind
