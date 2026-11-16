@@ -396,13 +396,11 @@ private theorem printable_partition : JsonCanon.Printable partitionObj := by
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl
-  · refine ⟨by decide, ?_⟩                                          -- format
-    show JsonCanon.Printable (Json.str Flock.HmRow.PARTITION_V1)
+  · refine ⟨by decide +kernel, ?_⟩                                          -- format
     exact ProgramParse.printable_of _ (by decide +kernel)
-  · refine ⟨by decide, ?_⟩                                          -- program
-    show JsonCanon.Printable (Json.str (hexOf programSha))
+  · refine ⟨by decide +kernel, ?_⟩                                          -- program
     exact printable_hexOf _
-  · refine ⟨by decide, ?_⟩                                          -- query (build's if)
+  · refine ⟨by decide +kernel, ?_⟩                                          -- query (build's if)
     dsimp only
     split <;> exact ProgramParse.printable_of _ (by decide +kernel)
 
@@ -416,45 +414,45 @@ theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide)⟩     -- anchors
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩     -- anchors
   · -- challenger
-    refine ⟨by decide, ?_⟩
+    refine ⟨by decide +kernel, ?_⟩
     refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
     intro e2 he2
     simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
     rcases he2 with rfl | rfl
     · -- key
-      refine ⟨by decide, ?_⟩
+      refine ⟨by decide +kernel, ?_⟩
       refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
       intro e3 he3
       simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he3
       rcases he3 with rfl | rfl | rfl
-      · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩  -- H
-      · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩  -- W
-      · exact ⟨by decide, printable_hexOf _⟩                       -- public
-    · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩    -- label
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- delta
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- form
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- law
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- leaf_layer
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- log
-  · exact ⟨by decide, printable_partition⟩                         -- partition
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- ports
-  · exact ⟨by decide, ProgramParse.printable_programJ⟩             -- program
+      · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩  -- H
+      · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩  -- W
+      · exact ⟨by decide +kernel, printable_hexOf _⟩                       -- public
+    · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩    -- label
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- delta
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- form
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- law
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- leaf_layer
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- log
+  · exact ⟨by decide +kernel, printable_partition⟩                         -- partition
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- ports
+  · exact ⟨by decide +kernel, ProgramParse.printable_programJ⟩             -- program
   · -- proofs
-    refine ⟨by decide, ?_⟩
+    refine ⟨by decide +kernel, ?_⟩
     refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
     intro e2 he2
     simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
     rcases he2 with rfl | rfl | rfl
-    · exact ⟨by decide, printable_hexOf _⟩                         -- circuit
-    · exact ⟨by decide, printable_hexOf _⟩                         -- public
-    · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩    -- registered
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- query
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- registered
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- scheme
-  · exact ⟨by decide, printable_hexOf _⟩                           -- window_root
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- work_table
+    · exact ⟨by decide +kernel, printable_hexOf _⟩                         -- circuit
+    · exact ⟨by decide +kernel, printable_hexOf _⟩                         -- public
+    · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩    -- registered
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- query
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- registered
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- scheme
+  · exact ⟨by decide +kernel, printable_hexOf _⟩                           -- window_root
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- work_table
 
 set_option maxHeartbeats 4000000 in
 /-- The composite's parameters print to ASCII; the `Printable` witness `canon_plain` takes for `θJ`. The one component's
@@ -465,7 +463,7 @@ theorem printable_θJ : JsonCanon.Printable θJ := by
   intro e he
   simp only [List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl
-  refine ⟨by decide, ?_⟩                                          -- components
+  refine ⟨by decide +kernel, ?_⟩                                          -- components
   refine printable_arr ?_
   intro e2 he2
   have hmem : e2 = Json.mkObj [("id", .str VStar.Recursive.Sampled.PROTOCOL), ("params", paramsJ)] := by
@@ -475,8 +473,8 @@ theorem printable_θJ : JsonCanon.Printable θJ := by
   intro e3 he3
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he3
   rcases he3 with rfl | rfl
-  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- id
-  · exact ⟨by decide, printable_paramsJ⟩                           -- params
+  · exact ⟨by decide +kernel, ProgramParse.printable_of _ (by decide +kernel)⟩      -- id
+  · exact ⟨by decide +kernel, printable_paramsJ⟩                           -- params
 
 /-- `canonicalJson θ₀` reads back the composite's parameters. -/
 private theorem canon_θ₀ (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
