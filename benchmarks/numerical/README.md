@@ -6,7 +6,7 @@ as a Boolean circuit. It has three parts:
 
 - `bench`: the result contract (`contract`) and the comparison of two results under it (`judge`), a result's interaction
   time (`interaction`, `latency`), the census as Python (`census`, which reads `benchmarks/census/`), input sets (`generate`,
-  `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
+  `fixture_sets`, `instances`), one benchmark result on its prover and verifier pods (`cell`, `placement`, `drivers`), the
   subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
 - `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
   for `verity.circuits.targets.target.FIRST`.
@@ -42,7 +42,7 @@ a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell'
 | `unit_costs_menu` | `bench.unit_costs_menu` | each model's menu of session shapes | `menu.json` and `menu.md` under `--out`, or `Pinned.lean` |
 | `latency` | `bench.latency` | a result's rounds priced as network round trips, per batch | `<out>.md` and `<out>.json` with `--out` |
 | `judge` | `bench.judge` | compares two recorded results: refuses where their identity fields differ, else their ratios and fingerprint deltas | the report on stdout, as JSON with `--json`; no file |
-| `cell` | `bench.cell` | plans, launches, checks and registers one measured cell | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
+| `cell` | `bench.cell` | plans, launches, checks and registers one benchmark result | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
 | `placement` | `bench.placement` | a machine's identity, and whether a run's parties are placed as their roles require | the probe or the gate record on stdout, and in `--out` |
 | `sweep` | `checker.sweep` | the reference checker over `bench-instances/v1` | a report in `--out` or the run directory, with `result.json` under `research run` |
 | `search` | `checker.search` | the search for an accepted wrong output, per gadget and for a group step | the table on stdout; `--json FILE` |

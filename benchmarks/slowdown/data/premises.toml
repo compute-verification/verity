@@ -1,5 +1,5 @@
 # Assumptions the training classes cite (slowdown/classes.py, premise_status): where each stands and up to what block
-# size it is credible. An assumption has its `standing` for blocks of at most `credible_bits` novel bits
+# size it is credible. An assumption has its `standing` for blocks of at most `credible_bits` fresh input bits
 # and its `beyond` above. Standings: supported (measured evidence for it), assumed (stated, no evidence either way),
 # contested (evidence against it at the scale, or a construction it hasn't answered), refuted (a measured execution
 # breaks it). `lean` is the cited name: a Lean assumption from a lock, or a `draft:` id of E1's premises.

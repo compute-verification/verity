@@ -128,6 +128,10 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
 
 ## Older names
 
+Prose and printed text use the current terms; a site that still spells an older name is counted per file in the lint's
+list `tests/lint/allowlists/repo_retired_terms.json`. Identifiers and stored record keys keep an older name until its
+word map or its format's next version lands; each row below names the ones it covers.
+
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean
 the term beside them, and `tests/lint/test_repo_retired_terms.py` refuses a new use of each row's quoted names (and of the
 identifiers a clause saying "until renamed" lists) in any file it doesn't already allow:
@@ -164,11 +168,12 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK: M1 is its masking, M2 its coin tree |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths the `Certifier` Lean cites | network accounting |
+| "network transparency"; the `network-transparency/` paths the `Certifier` Lean cites | network accounting for the area, which began as the experimental branch of that name; network certification for what the paths' note proves, the network attester's timing-channel bound |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; what a format fixes, until the network attester's next format version: its domain tags `verity-network-warden/` (`cells-domain/v2`, `cells/v2`, `parameters/v3`, `registration/v2`, `units/v1`, `wiring/v1`) and a stand-in's (`verity/a5/warden-stand-in/v1`, `a5-warden/rest/`), the circuit `WardenRowIdentity` and the names its units are staged under (`unit/warden-row`, `unit/a5-warden`), a link window's kind and key `warden`, a row registration's value `warden/<direction>/<w>` and a fails certificate's link `warden-fails`; what a caller outside the tree gives, until its callers change with it: the auditor gate's verb `warden-rehearse`, the variables `A5_WARDEN_RUN`, `CR_WARDEN_RUN`, `N2_WARDEN_RUN`, `SC_WARDEN_RUN`, `A5_WARDEN_UNITS` and `WARDEN_SERVE_C_ALLOCATOR`, the flags `--warden-run` and `--warden`, the class `--class warden` (`N2_CLASS=warden`), the path `CR_PATH=warden` and the subcommand `negatives.py warden`; what recorded data holds: a kept run's log `warden.json`, its directory `warden/` and its reports' key `warden_run`, which programs read back, the trace corpus's labels `warden-heavy` and `warden-smallkv`, its keys `warden.*` and `meta['warden']`, its watch label `warden:PID` and its value `ingress="warden"`, and the store label value `replay_set=warden/re-verify`; network steganography's own terms, an active warden and a passive warden, stay | the network attester; "the warden's records" are network certificates |
 | "network certifier", "the certifier" for the device; what a format fixes, until its next format version: its domain tags `verity-network-certifier/`, the party `network-certifier`, the record keys `"network_certifier"` and `network_certifier_run`; the Lean package `NetworkAttester` and the names that follow it, until lean renames them | the network attester |
+| "memory challenger"; what code and records still spell, until its word map or a format version renames them: the party and role `memory-challenger`, the Python module `memory_challenger` (`pous/attester/`, `benchmarks/pous/memory_challenger/`), the Lean's `MemoryChallenger` names and its Lake package `core_memory_challenger`, the signed message `memoryChallengerMessage` and the domain tags `verity/memory-challenger-record/v1` and `verity/pous/memory-challenger` | the memory attester (the challenger, which every coin comes from, keeps its name) |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
-| "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory challenger |
+| "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory attester |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
 | "verifier gateway" | the challenger |
 | "batch verifier" (B-Ligero's was another thing) | the verifier |
@@ -200,6 +205,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for what a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `adapters/vllm/` until vLLM's workloads move | workload; a workload of record |
+| "benchmark row", "benchmark cell", "bench cell", "measured cell", "metric row", "metrics row"; "proof table" for the proof benchmarks' results; "row" and "cell" for what a benchmark recorded (a table's row, a commitment row and Dither's cell keep their senses) | a benchmark result, or a metric for one named number of it (Terms of one area) |
 | "link-window", "link window"; code and records' `window` (`NetworkAttesterParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.commitments.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
 | "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
@@ -227,7 +233,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/slowdown`'s `eps_dark`; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
 | "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Slowdown.Slowdown.residualShare`, `ResourceAccounting.Run.ComputeSound`) and the block record (`verity/block-record/v2`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
 | "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U (its registered part is ε_undecl + ε_skip). "Slack" keeps its other senses |
-| "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
+| "unregistered input", "unregistered input bits", "unregistered information", "novel information", "novel bits", "novel input" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
@@ -244,7 +250,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
 | a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
-| "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
+| "window" for SPOT's served span with its audit; SPOT's records' `window` (`window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
@@ -324,10 +330,10 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
-  - **Window**: the code's windows (`verity.commitments.windows`, a served window circuit and its window record, PoUW's window and
-    its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
-    server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
-    PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
+  - **Window**: the code's windows (`verity.commitments.periods`' `Window`, a served window circuit and its window
+    record, PoUW's window and its salt) are one period's served steps, and keep the word until renamed. A span of time
+    is a period, a server's gates between two memory wipes are a server block, and a sliding window is a model's term
+    (above). PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
   - **Escape**: an incorrect proof block's chance to pass the sample is its miss probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
@@ -369,8 +375,13 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   A replay block is *closed* when it reads no other replay block's values, recomputing from its own inputs any it
   needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
   served cap of S bits charges each replay block at most F S.
-- **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
-  hardware.
+- **Benchmark**: one command that measures and records its numbers (`verity bench NAME`, a directory's runner under
+  `benchmarks/`).
+- **Metric**: one named number a benchmark records, declared as one `[[metric]]` of its directory's `metrics.toml`
+  (`benchmarks/README.md`).
+- **Benchmark result**: what one run of a benchmark recorded in one configuration. A proof benchmark's
+  configuration is a proof system (or an archived one's backend id) × statement × input set × prover hardware
+  (`verity_numerical.bench.cell`).
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
   anchor (the registered weights root, the client's request commitment, the challenger's live coins), always, never sampled.
@@ -406,8 +417,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Record limit** and **sealed sink** (`ResourceAccounting.Guarantees.LeakParts`, `LeakPartsRegistered`): a device's record
   limit `K` is a cap on the values its record takes over a window, whatever the developer's hardware sends
   (`ResourceAccounting.RecordsWithin`); a record of a stated format has it at its size in bits. A subtree's leak limit sums it
-  over the subtree's trusted devices. A sealed sink is a memory challenger every registered link of which ends in the
-  subtree: it is part of the location, nothing is asked of what it does, and it adds no term. A memory challenger linked
+  over the subtree's trusted devices. A sealed sink is a memory attester every registered link of which ends in the
+  subtree: it is part of the location, nothing is asked of what it does, and it adds no term. A memory attester linked
   outside the subtree as well is shared, and is a trusted device with a record limit of its own.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
