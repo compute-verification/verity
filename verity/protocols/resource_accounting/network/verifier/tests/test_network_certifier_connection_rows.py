@@ -1,7 +1,7 @@
-"""The network certifier's connection rows (`connection_rows`): an execution phase's lengths and fails tables are the
+"""The network attester's connection rows (`connection_rows`): an execution phase's lengths and fails tables are the
 schedule's size whatever the load and read back as the releases the certifier handed, each row opens its table's root
 at its position and nowhere else, one head lists both tables and is signed once, the registration reads back under the
-network certifier's key and session and the schedule and refuses any field, table, key, session or certificate but its
+network attester's key and session and the schedule and refuses any field, table, key, session or certificate but its
 own, and a schedule without lengths rows has none of it."""
 
 from __future__ import annotations

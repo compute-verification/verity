@@ -1807,7 +1807,7 @@ def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copi
 
 # -- cut and continue ---------------------------------------------------------------------------------------------------
 
-#: three windows' arrivals as the network certifier saw them: each one's id, the values it arrives with, the window it
+#: three windows' arrivals as the network attester saw them: each one's id, the values it arrives with, the window it
 #: arrives in, and the outputs the certifier released of it in each window from then on. It closes in its last window,
 #: and at the edge of each window before that it is open: it is cut there and continues in the next window.
 ARRIVALS = ((7, (11, 12, 13, 14, 15), 0, ((21, 22, 23), (24, 25))), (8, (31, 32), 0, ((41,),)),
@@ -1880,7 +1880,7 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
 
 
 def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_it_left():
-    """Cut and continue: an arrival open at a window's edge is cut there, at the e outputs the network certifier released
+    """Cut and continue: an arrival open at a window's edge is cut there, at the e outputs the network attester released
     of it, and continues in the next window as a fresh arrival, (its id, P + e), whose row is the values it arrived with
     then those outputs, first among that window's arrivals in release order. The record needs nothing new for it. The
     window's arrivals are a certified input, the root the certifier signed for the window, which the verifier pins

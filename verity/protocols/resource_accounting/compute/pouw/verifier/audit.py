@@ -204,7 +204,7 @@ class Epoch:
     @classmethod
     def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
                   reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
-        """The execution phase of PoUW execution phase p, the network certifier's execution phases `windows` with k per PoUW execution phase (p·k … p·k + k − 1,
+        """The execution phase of PoUW execution phase p, the network attester's execution phases `windows` with k per PoUW execution phase (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
         `coins`, when given, is the commitment the execution phase's sampling coin opens against."""

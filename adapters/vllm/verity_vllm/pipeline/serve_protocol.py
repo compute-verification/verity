@@ -1,7 +1,7 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
 CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
-instead to the network certifier's id requests, since the certifier forwards the server's bytes into its cells unchanged,
+instead to the network attester's id requests, since the certifier forwards the server's bytes into its cells unchanged,
 and answers every other request as vLLM does (`of`)."""
 from __future__ import annotations
 
@@ -226,7 +226,7 @@ ID_PAYLOAD = 503
 
 def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
     """The fields (`workload.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
-    request as the network certifier forwards it: without the release headers it puts on the server's copy
+    request as the network attester forwards it: without the release headers it puts on the server's copy
     (`release.with_release`), exactly `workload.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
     ``payload``). None for anything else."""
     head, _, body = request.partition(b"\r\n\r\n")
@@ -243,14 +243,14 @@ def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
 
 
 class IdsProtocol:
-    """The scan's id form (``--protocol ids``) for the network certifier's id requests, and ``base`` for every other request (`of`),
-    so that clients straight to the endpoint (the network certifier's shim and probes, the load) get vLLM's HTTP and JSON.
-    The network certifier relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
+    """The scan's id form (``--protocol ids``) for the network attester's id requests, and ``base`` for every other request (`of`),
+    so that clients straight to the endpoint (the network attester's shim and probes, the load) get vLLM's HTTP and JSON.
+    The network attester relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
     each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
     - each token id its own `workload.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id
       right-aligned in 10 characters, spaces before the blank line), whatever the delta carries;
     - no usage chunk, whatever ``force_include_usage``;
-    - then exactly `workload.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network certifier checks
+    - then exactly `workload.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network attester checks
       against the stop rule; a stream the engine fails sends neither it nor any text, only its ids so far before the
       connection closes (`error_end`).
 
@@ -266,11 +266,11 @@ class IdsProtocol:
         self.base = VllmProtocol(force_include_usage) if base is None else base
 
     def of(self, request: bytes) -> IdsProtocol | PlainProtocol:
-        """This protocol if `request` is a network certifier's id request (`id_request_of`), else ``base``."""
+        """This protocol if `request` is a network attester's id request (`id_request_of`), else ``base``."""
         return self if self.id_request_of(request) else self.base
 
     def id_request_of(self, request: bytes) -> bool:
-        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it
+        """Whether `request` (its head and body as the server read them) is an id request as the network attester forwards it
         (`id_request_fields`) in the scan's B = P + 9-byte cells."""
         return id_request_fields(request, self.payload) is not None
 
@@ -293,7 +293,7 @@ class IdsProtocol:
 
     def error_end(self, error: str) -> None:
         """None, whatever ``error`` says: a failed stream stops after its ids so far, without `workload.TRAILER`, so the
-        network certifier sees it unterminated rather than ended early, and no server-chosen text leaves; the reason stays
+        network attester sees it unterminated rather than ended early, and no server-chosen text leaves; the reason stays
         in the server's record."""
         return None
 

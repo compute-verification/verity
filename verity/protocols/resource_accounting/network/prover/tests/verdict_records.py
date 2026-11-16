@@ -22,7 +22,7 @@ UNDER = ("5a" * 64, "c3" * 32)
 
 
 def checked(*registrations: object, under: tuple[object, object] = UNDER) -> str:
-    """A registrations' file as the offline check of a network certifier's run writes it: the line of what it was
+    """A registrations' file as the offline check of a network attester's run writes it: the line of what it was
     checked under, of its own format, then the registrations, one a line."""
     return "".join(json.dumps(x) + "\n" for x in (
         {"format": SV.CHECKED, SV.CHECKED_UNDER: {SV.KEY_SHA512: under[0], SV.SESSION: under[1]}}, *registrations))

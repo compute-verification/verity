@@ -1,4 +1,4 @@
-"""The network certifier with lengths rows (`NetworkCertifierParams.lengths`, `network_certifier`'s "The lengths rows"), driven tick by tick
+"""The network attester with lengths rows (`NetworkCertifierParams.lengths`, `network_certifier`'s "The lengths rows"), driven tick by tick
 on `test_network_certifier`'s harness. Each test holds a schedule with lengths rows to one rule of that section
 and the same schedule without them to what it did before they were a parameter."""
 
@@ -140,7 +140,7 @@ def request_cells(network_certifier, ordinal: int) -> list[tuple[int, int, bytes
 
 def test_a_connection_whose_client_failed_is_never_released():
     """A client whose last cell is cut short has failed (malformed) with its stream ended. Without lengths rows the
-    network certifier still cuts what it holds, releases it to the server with its place in the release order, and
+    network attester still cuts what it holds, releases it to the server with its place in the release order, and
     fails the connection in the same bucket. With them it cuts nothing more: no `END`, no place in the order, nothing
     for the server, and the connection after it takes the place."""
     whole, short = id_req(1, 3), cells(id_req(2, 40), B)[:-10]
@@ -360,7 +360,7 @@ def with_body(body: bytes) -> bytes:
 
 
 def no_id_requests() -> dict[str, tuple[bytes, int]]:
-    """Requests that are no canonical id request in the network certifier's cells, each with the cells the ingress
+    """Requests that are no canonical id request in the network attester's cells, each with the cells the ingress
     proof block still reads as a request's before the one it refuses. Among them: a request without `max_tokens` at
     its place, and one with an `ignore_eos` key, each with the content-length of its own body."""
     long, linked = id_req(2, 40), id_request(model="m", user="user-2", prompt=[2000 + k for k in range(40)],
@@ -391,10 +391,10 @@ def no_id_requests() -> dict[str, tuple[bytes, int]]:
 
 @pytest.mark.parametrize("name", sorted(no_id_requests()))
 def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clients(name):
-    """Beside an honest request, a request that is no id request in the cells. With lengths rows the network certifier
+    """Beside an honest request, a request that is no id request in the cells. With lengths rows the network attester
     cuts its cells only up to the first the ingress proof block wouldn't read, releases nothing of it (no `END`, no
     place in the release order, no byte for the server) and fails it as its client's (malformed), at its first egress
-    slot. It fails nothing an audit reads: every request cell the network certifier signed reads as a canonical id
+    slot. It fails nothing an audit reads: every request cell the network attester signed reads as a canonical id
     request's, the ingress proof blocks' reference takes every bucket, and the read of the records in the clear
     accepts every window. And it is no failure of the server's: the lengths and fails tables are those of the run
     without it, with no failed slot in them. Without lengths rows the same request is cut whole and released, the
