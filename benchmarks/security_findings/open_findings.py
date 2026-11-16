@@ -9,9 +9,10 @@ A check that can't read its thing where it runs (an agent VM's environment, anot
 `MAX_AGE_DAYS`) says so: the finding is `unread`, which the value counts as not closed and the output names apart from open.
 The value's mark is `measured` only when every finding is decided by a check of the thing itself (`tree`), and `partial`
 while any has no check, is unread, or is checked on the tree's declared state (`declared`), on machines partly through a
-recorded reading (`machine`) or on a recorded reading alone (`recorded`). It reads the machine it runs on and no other,
-needs no secret, and writes under `--out` (`out/` outside a research run). `--probe-store`, run on an agent VM, takes the
-store's reading.
+recorded reading (`machine`) or on a recorded reading alone (`recorded`). It reads the machine it runs on, and on a CPU
+machine the others its `PEERS` lists, over ssh as the agents' login with the cluster's key that machine holds; it needs no
+secret of its own, changes nothing, and writes under `--out` (`out/` outside a research run). `--probe-store`, run on an
+agent VM, takes the store's reading.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ import time
 import tomllib
 import urllib.error
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -44,7 +46,8 @@ KERNELS = HERE / "kernels.toml"
 DEPLOY = ROOT / "tools/research/src/research/pods/nebius/deploy.toml"
 METRIC = "infra/security-findings-open"
 #: what a check reads: this repository's own files, the thing the finding is about; the tree's declared state of a VM; each
-#: machine, the one it runs on itself and the others through a recorded reading; or a recorded reading alone
+#: machine, the one it runs on and those its `PEERS` lists live and the others through a recorded reading; or a recorded
+#: reading alone
 READS = ("tree", "declared", "machine", "recorded")
 #: how many days a recorded reading decides anything: an older one leaves its finding unread, and the check names the command
 MAX_AGE_DAYS = 7
@@ -59,6 +62,11 @@ AGENT_ENV_COMMAND = "compgen -e | grep -xE '" + "|".join(AGENT_KEYS) + "'"
 MACHINE_COMMAND = ("id -un; id -u; sudo -n id -u 2>/dev/null || echo refused; grep -m1 NoNewPrivs /proc/self/status | cut -f2; "
                    "uname -r; (. /etc/os-release && echo \"$VERSION_ID\") || echo unknown; apt-config dump | grep -E "
                    "\"^(APT::Periodic::Unattended-Upgrade|Unattended-Upgrade::(Allowed-Origins|Origins-Pattern|Package-Whitelist))\"")
+#: each CPU machine's list of the CPU machines, itself among them: a line a machine, its name, then ssh's options and
+#: destination, by which its agents' login reaches that machine with the cluster's key (`research deploy` writes it)
+PEERS = Path("/etc/vy/peers")
+#: ssh's options ahead of a line's own, which they override: no prompt, a bounded connect, and only a host key already known
+PEER_SSH = ("-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=yes")
 STORE_COMMAND = "uv run python benchmarks/security_findings/open_findings.py --probe-store"
 #: where the store probe copies to, from a key under it that doesn't exist
 SCRATCH = "scratch/security-findings"
@@ -247,23 +255,51 @@ def read_here() -> list[str]:
     return subprocess.run(["sh", "-c", MACHINE_COMMAND], capture_output=True, text=True, timeout=120).stdout.splitlines()
 
 
+def peers(path: Path | None = None) -> dict[str, list[str]]:
+    """{machine: ssh's options and destination for it} from `PEERS`, a line a machine; {} where this machine has none."""
+    try:
+        text = (path or PEERS).read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return {f[0]: f[1:] for f in (ln.split("#")[0].split() for ln in text.splitlines()) if len(f) >= 2}
+
+
+def read_peer(ssh: Sequence[str]) -> list[str] | None:
+    """`MACHINE_COMMAND`'s lines on the machine its `PEERS` line `ssh` reaches, as the login that line names; None when ssh
+    can't reach it, doesn't already know its host key, or it printed less than a reading. It changes nothing."""
+    try:
+        r = subprocess.run(["ssh", *PEER_SSH, *ssh, MACHINE_COMMAND], capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    lines = r.stdout.splitlines()
+    return lines if r.returncode != 255 and len(lines) >= 6 else None
+
+
 Judge = Callable[[Machine], tuple[bool | None, str]]
 
 
 def over_machines(root: Path, names: Sequence[str], judge: Judge, what: str) -> tuple[bool | None, str]:
-    """`judge` over each machine of `names`: on this run's own read when it runs on that machine and the read decides, else on
-    the recorded [machines] reading. Open when any machine is judged open, unread when any other is undecided or unread."""
+    """`judge` over each machine of `names`, on the first read of it that decides: this run's own when it runs on that machine,
+    then one over ssh when this machine's `PEERS` lists it, then the recorded [machines] reading. Open when any machine is
+    judged open, unread when any other is undecided or unread."""
     entry, when = reading(root, "machines", MACHINE_COMMAND)
     recorded = (entry or {}).get("output", {})
     if not isinstance(recorded, Mapping):
         raise ValueError("the machines reading's output is each machine's lines, by its name")
-    me = here()
+    me, ways = here(), peers()
+    reach = [n for n in names if n in ways]
+    with ThreadPoolExecutor(max_workers=max(1, len(reach))) as pool:
+        remote = dict(zip(reach, pool.map(lambda n: read_peer(ways[n]), reach)))
     bad: dict[str, list[str]] = {}
     unread: dict[str, list[str]] = {}
+    over_ssh = 0
     for name in names:
         closed, why = None, f"no fresh reading ({when})" if entry is None else "the reading holds none"
         if name == me:
             closed, why = judge(Machine.of(read_here()))
+        if closed is None and remote.get(name):
+            closed, why = judge(Machine.of(remote[name]))
+            over_ssh += closed is not None
         if closed is None and name in recorded:
             closed, why = judge(Machine.of(recorded[name]))
         if closed is not True:
@@ -272,6 +308,7 @@ def over_machines(root: Path, names: Sequence[str], judge: Judge, what: str) -> 
     def listed(groups: dict[str, list[str]]) -> str:
         return "; ".join(f"{why}: {', '.join(ns)}" for why, ns in groups.items())
     live = f"read {me} itself" if me in names else "read none of them itself (it runs on none)"
+    live += f" and {over_ssh} over ssh ({PEERS})" if over_ssh else ""
     counts = (f"{sum(map(len, bad.values()))} of {len(names)} machines {what}, {sum(map(len, unread.values()))} unread; {live}, "
               f"the rest {when if entry else 'unrecorded'}")
     detail = "; ".join(x for x in (listed(bad), f"unread: {listed(unread)}" if unread else "") if x)

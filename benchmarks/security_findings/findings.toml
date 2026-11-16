@@ -3,8 +3,8 @@
 # A finding is closed only by a check `open_findings.py` runs itself (its `CHECKS`, by the finding's id), and is open
 # otherwise. A finding with a check names it (`check`), says what it reads (`reads`: `tree`, this repository's own files, the
 # thing the finding is about; `declared`, the tree's declared state of something outside it; `machine`, each machine, the one
-# the check runs on itself and the others through a recorded reading; or `recorded`, a reading of `readings.toml` alone, taken
-# where the thing is) and how it decides (`how`). A finding with none says in one line what check would close it
+# the check runs on and the CPU machines its /etc/vy/peers lists read live, the others through a recorded reading; or
+# `recorded`, a reading of `readings.toml` alone, taken where the thing is) and how it decides (`how`). A finding with none says in one line what check would close it
 # (`would_close`).
 #
 # Never an address, a key, a token, the name of an auditor's machine or a provider's id here.
@@ -40,10 +40,11 @@ statement = "Agents have root on the control pod and the older CPU machines."
 check = "sudo-refused"
 reads = "machine"
 how = """On each CPU machine of the deploy map (not staged) and the control pod, as the agents' login: closed when no machine \
-gives it root (uid 0, or `sudo -n id -u` prints 0) and each refuses its sudo. The machine the metric runs on is read \
-there, by MACHINE_COMMAND; the others through the [machines] reading, since the run holds no key to another machine. A \
-refusal read with no new privileges or as another login decides nothing, nor does a reading older than MAX_AGE_DAYS: any \
-machine left so makes the finding unread."""
+gives it root (uid 0, or `sudo -n id -u` prints 0) and each refuses its sudo. MACHINE_COMMAND reads the machine the metric \
+runs on there, and each CPU machine that machine's /etc/vy/peers lists over ssh, as the agents' login with the cluster's key \
+and only at a host key already known; a machine read neither way (the control pod, a stopped one) is read through the \
+[machines] reading. A refusal read with no new privileges or as another login decides nothing, nor does a reading older \
+than MAX_AGE_DAYS: any machine left so makes the finding unread."""
 
 [[finding]]
 id = "security-updates-and-kernel"
@@ -53,8 +54,8 @@ reads = "machine"
 how = """On each CPU machine of the deploy map (not staged): closed when apt's effective configuration (`apt-config dump`) \
 runs unattended upgrades with Ubuntu's security pocket among the origins and no package allow-list (any `Package-Whitelist` entry, `-Strict` or not), and `uname -r`'s \
 series is maintained on the machine's release by kernels.toml (Ubuntu's kernel release schedule, its source). The machine \
-the metric runs on is read there; the others through the [machines] reading, which decides nothing once older than \
-MAX_AGE_DAYS. What security updates are still pending is not read."""
+the metric runs on is read there, and the CPU machines its /etc/vy/peers lists over ssh; the others through the [machines] \
+reading, which decides nothing once older than MAX_AGE_DAYS. What security updates are still pending is not read."""
 
 [[finding]]
 id = "store-key-writes"

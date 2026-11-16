@@ -4,10 +4,10 @@ only when every finding is decided by a check of the tree; tonight's list closes
 are pinned; the guard check takes only commands that run the guard from `/opt/agent-guard/`; the address check counts every
 tracked file the list doesn't except; a recorded reading decides only with its check's command, a reader and a time within
 seven days; the agent-env, store, root and updates checks decide as their findings say, the machine checks reading this
-machine itself and the others from the reading; a check that can't read its thing leaves the finding unread, which `main`
+machine itself, the machines its peers list names over ssh at known host keys only, and the others from the reading; a check that can't read its thing leaves the finding unread, which `main`
 counts not closed and names apart; and the list and its data name no address, key or auditor's machine.
 
-No test reads the clock or the network: the clock, this machine's reading and the store are stand-ins, the checks run on toy
+No test reads the clock or the network: the clock, this machine's reading, its peers' ssh and the store are stand-ins, the checks run on toy
 checkouts under `tmp_path`, and the script is imported with the repository's root on `sys.path` only through `monkeypatch`."""
 from __future__ import annotations
 
@@ -36,9 +36,13 @@ PUBLIC = ".".join(["81", "2", "3", "4"])
 
 
 @pytest.fixture
-def O(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def O(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
+    """The script, with no list of peers, so no check reaches another machine: a test that reads peers gives it its own list
+    and its own ssh."""
     monkeypatch.syspath_prepend(str(ROOT))
-    return importlib.import_module("benchmarks.security_findings.open_findings")
+    mod = importlib.import_module("benchmarks.security_findings.open_findings")
+    monkeypatch.setattr(mod, "PEERS", tmp_path / "no-peers")
+    return mod
 
 
 def stand_in(O: ModuleType, closed: bool | None) -> dict:
@@ -512,6 +516,73 @@ def test_the_machine_checks_read_this_machine_itself_and_the_others_from_the_rea
     readings.write_text("")
     closed, why = O.updates_and_kernel(root, {})
     assert closed is None and "read none of them itself (it runs on none)" in why
+
+
+def test_the_peers_list_is_a_line_a_machine_its_name_then_ssh(O: ModuleType, tmp_path: Path) -> None:
+    peers = tmp_path / "peers"
+    peers.write_text("# a comment\n\nvy-nebius-cpu-2 -i /k -o IdentitiesOnly=yes research@cpu-2.invalid  # two\nlonely\n",
+                     encoding="utf-8")
+    assert O.peers(peers) == {"vy-nebius-cpu-2": ["-i", "/k", "-o", "IdentitiesOnly=yes", "research@cpu-2.invalid"]}
+    assert O.peers(tmp_path / "none") == {}
+
+
+@pytest.mark.parametrize(("rc", "out", "got"), [(0, FIXED, FIXED), (1, FIXED[:6], FIXED[:6]), (255, FIXED, None),
+                                                (0, FIXED[:5], None)])
+def test_a_peer_is_read_over_ssh_without_a_prompt_and_only_at_a_known_host_key(O: ModuleType, monkeypatch: pytest.MonkeyPatch,
+                                                                                rc: int, out: list, got) -> None:
+    """Ours come first, so they hold over the line's own (ssh takes an option's first value): the line's `accept-new` can't take
+    a new host's key. A run that exits 255 is ssh's own failure; grep finding no apt line exits 1 and still read the machine."""
+    asked = []
+
+    def run(argv, **kw):
+        asked.append(argv)
+        return subprocess.CompletedProcess(argv, rc, "\n".join(out) + "\n", "")
+    monkeypatch.setattr(O.subprocess, "run", run)
+    line = ["-i", "/k", "-o", "StrictHostKeyChecking=accept-new", "research@cpu-2.invalid"]
+    assert O.read_peer(line) == got
+    (argv,) = asked
+    assert argv == ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=yes", *line,
+                    O.MACHINE_COMMAND]
+
+
+def test_a_peer_ssh_that_hangs_reads_nothing(O: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(argv, **kw):
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+    monkeypatch.setattr(O.subprocess, "run", run)
+    assert O.read_peer(["research@cpu-2.invalid"]) is None
+
+
+def test_the_machine_checks_read_each_listed_peer_over_ssh_ahead_of_the_reading(O: ModuleType, tmp_path: Path, now: float,
+                                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    """A machine its `PEERS` lists is read over ssh, and that read decides ahead of the reading; one ssh can't read, or whose
+    read is undecided, falls back to the reading; a machine no line names (the control pod) is read only there; and this
+    machine's own read, undecided under no new privileges, gives way to its line's."""
+    peers = tmp_path / "peers"
+    peers.write_text("".join(f"vy-nebius-cpu-{n} -i /k research@cpu-{n}.invalid\n" for n in (2, 10)), encoding="utf-8")
+    monkeypatch.setattr(O, "PEERS", peers)
+    answers: dict[str, list[str] | None] = {"research@cpu-2.invalid": FIXED, "research@cpu-10.invalid": None}
+    asked: list[str] = []
+    monkeypatch.setattr(O, "read_peer", lambda ssh: asked.append(ssh[-1]) or answers[ssh[-1]])
+    monkeypatch.setattr(O, "here", lambda: "an-agent-vm")
+    pod = ["research", "1001", "refused", "0", "6.8.0-147-generic", "22.04"]
+    root = _tree(tmp_path / "t", _machines(O, now - DAY, {"vy-nebius-cpu-2": STRICT, "vy-nebius-cpu-10": STRICT,
+                                                          "vy-control-verity": pod}))
+    closed, why = O.sudo_refused(root, {})
+    assert sorted(asked) == ["research@cpu-10.invalid", "research@cpu-2.invalid"]
+    assert closed is False and why == ("1 of 3 machines give the agents root, 0 unread; read none of them itself (it runs on "
+                                       f"none) and 1 over ssh ({peers}), the rest read by infra 1.0 days ago (sudo gives research "
+                                       "root: vy-nebius-cpu-10)")
+    answers["research@cpu-10.invalid"] = ["research", "1001", "refused", "1", *FIXED[4:]]
+    assert O.sudo_refused(root, {})[1].startswith("1 of 3"), "an undecided ssh read falls back to the reading"
+    answers["research@cpu-10.invalid"] = FIXED
+    assert O.sudo_refused(root, {}) == (True, "0 of 3 machines give the agents root, 0 unread; read none of them itself (it "
+                                              f"runs on none) and 2 over ssh ({peers}), the rest read by infra 1.0 days ago")
+    monkeypatch.setattr(O, "here", lambda: "vy-nebius-cpu-2")
+    monkeypatch.setattr(O, "read_here", lambda: ["research", "1001", "refused", "1", *FIXED[4:]])
+    answers["research@cpu-2.invalid"] = STRICT
+    closed, why = O.sudo_refused(root, {})
+    assert closed is False and why.endswith("(sudo gives research root: vy-nebius-cpu-2)")
+    assert "read vy-nebius-cpu-2 itself and 2 over ssh" in why
 
 
 def test_tonights_readings_decide_each_finding_with_the_checks_commands(O: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
