@@ -1098,7 +1098,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs", "negative_workers")}}
+                                    "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
@@ -1215,6 +1215,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")
+    p.add_argument("--plain", action="store_true", help="with --challenger and a stratified rate: plain sessions, not --zk "
+                   "(a5's plain audit, `a5.plain_refusal` its scope)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "

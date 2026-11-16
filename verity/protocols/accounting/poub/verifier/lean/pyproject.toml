@@ -8,6 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_sampled.py", "tests/test_honest_log.py",
+    "tests/test_gamma.py",
     "tests/test_line.py",
     "tests/test_p2.py",
     "tests/test_p2_parties.py",
@@ -34,6 +35,9 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/poub/verifier/coins.py", "verity/protocols/accounting/poub/verifier/receipts.py",
           "verity/protocols/accounting/poub/verifier/line.py",
           "verity/protocols/accounting/poub/verifier/pooled.py", "verity/protocols/accounting/poub/verifier/schedule.py",
+          # the γ terms' ledger and the session verifier that holds the Lean's to it (`test_gamma.py`)
+          "verity/protocols/accounting/poub/verifier/ledger.py", "verity/protocols/accounting/poub/verifier/timing.py",
+          "verity/protocols/accounting/poub/verifier/store.py", "verity/protocols/accounting/poub/verifier/session",
           "verity/protocols/accounting/poub/verifier/period.py", "verity/protocols/interface",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/device/challenger.py",
           "verity/protocols/proofs/spot/device/remote.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",

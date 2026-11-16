@@ -21,7 +21,7 @@ from tests.program.predict.test_node_window import ENGINE, GLM53, TARGET
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline.boundary_rows import Span
+from verity_vllm.pipeline.boundary_span import Span
 from verity_vllm.program.predict import class_window as CW
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND

@@ -510,7 +510,7 @@ class _Decoder:
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8, with_desc: bool = True,
                   C: int = 0, dead_free: bool = False, batched: bool = False, table_reads: bool = False, finish: Callable | None = None,
                   batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = (),
-                  klass: Any = None) -> BuildResult:
+                  seqlen_q: tuple[int, ...] = (), klass: Any = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -533,6 +533,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
     a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
     and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config.
+    `seqlen_q`: a batch-invariant request's launch context, per request step its launch's max_seqlen_q (the Build's `--launch-context
+    [n0, n1, …]`), in place of the one φ's workload gives it (`launch_rows`); the dense decoder's attention reads it.
     `klass`: a greedy request at its size class (`class_window.Selects`): its ``params()`` Inputs after the prompt, its selects
     in place of the token select, each decode fed its select's key, its check last, and its ``config()`` in the SRC config."""
     from verity_vllm.program.frontend import seed_rule as SEED
@@ -592,8 +594,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         model.batched, model.table_reads = True, table_reads
     batch = (launch_batch(phi, lp, t) if batch is None else batch) if wrapper == "request" else None
     in_launch(model, batch, net.model_class, chunks, t, entries=tuple(entries))
+    if seqlen_q and (wrapper != "request" or batch is not None):
+        raise ValueError("seqlen_q is a batch-invariant request's launch context, never a step's or beside a launch batch")
     if wrapper == "request" and isinstance(model, _Model):
-        model.ctx = launch_rows(phi, lp, t, C)
+        from verity_vllm.program.frontend.targets import parse_launch_context
+        model.ctx = parse_launch_context(list(seqlen_q)) if seqlen_q else launch_rows(phi, lp, t, C)
     if C:
         model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]

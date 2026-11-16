@@ -24,7 +24,9 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   --served-default --scan-m LO:HI` process per model of `glm53,dsv4-pro`, phase of `linear,f32out,router` and M range,
   the ranges tiling 1:HI (the router's from 17; HI the largest launch served, which becomes `m_max`), then its
   `--write-routes` over their scan.json files, which writes `cublas_routes.json` under that run's record (`CUBLAS_ROUTES["run_record"]`, which `evidence.json`'s `cublas_route_scan`
-  names too) and refuses a gap, an overlap or two scans' conditions that differ;
+  names too) and refuses a gap, an overlap or two scans' conditions that differ.  A shape another capture scans under the same
+  conditions (GLM-5.3's MTP eh_proj, `glm53_mtp_eh_proj_capture_gpu --add-routes`) is added after, under its own run record
+  (`CUBLAS_ROUTES["route_records"]`);
 * the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_aligned_splitk_rows` (the
   same over grid.z slices at an alignment, each slice's k-tiles residue first, with a bf16 or an f32 workspace),
   `cublas_serial_splitk_rows` and `cublas_serial_aligned_rows` (slices meeting through the bf16 output) and
@@ -60,7 +62,8 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
 LL_MAX_M = 16
 DEFAULT_LL_BF16_FMA = 1
 #: cuBLAS 12.9.1's default route on the H200 by "phase K N": [m0, m1, split] runs over M (split None: the non-split serial
-#: chain), as the capture's decode-batch scan (its run record `run_record`) mapped them
+#: chain), as the capture's decode-batch scan (its run record `run_record`) mapped them; a shape in `route_records` was scanned
+#: under the same conditions by the run whose record it names there
 CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
 _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
 #: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,

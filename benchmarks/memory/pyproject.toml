@@ -7,17 +7,28 @@
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
+[tool.verity.interface]
+core = "verity bench memory"
+
 [tool.verity.tests]
 # the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`),
 # settings.py is built on verity_config's registry, the result is written through the harness kit's writer, and a
-# number is printed or not by the reporting grid's rule for a row's error (`verity.protocol`)
+# number is printed or not by the reporting grid's rule for a row's error (`verity.protocol`); of `verity`, what
+# PoUB's verifier, which the command reads its record with, imports; --local serves the checkpoint core's pin names
 inputs = [
     "benchmarks/remote_session/summary.py",
+    "verity/protocols/accounting/pouw/verifier/lean/check/models.json",
     "verity/protocol.py", "verity/channel.py", "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
-    "benchmarks/harness/verity_bench/kit.py",
-    "benchmarks/harness/verity_bench/kit_report.py",
+    "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
+    "verity/device.py", "verity/protocols/accounting/poub/verifier", "hardware",
+    "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+    "verity/commitments/randomness", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
+    "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/__init__.py",
+    "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
+    "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/device/__init__.py",
+    "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
 ]

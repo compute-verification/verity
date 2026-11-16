@@ -34,7 +34,7 @@ selects carried and the n the rule gives cannot be two numbers.
 a narrower one is no row; the outputs that feed them have the same type, so the class Program's Calls agree in type.
 
 **The limits** reach every step's select and the length check from one committed source, so the bit and the check
-cannot be given two different limits: the class's `b.request` row, its first four fields (`boundary_rows.FIELDS`: the
+cannot be given two different limits: the class's `b.request` row, its first four fields (`boundary_span.FIELDS`: the
 prompt's length ``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``), 8 sixteen-bit leaves from leaf 0, which each
 of those units reads by one boundary read (`interface.Read`, ``step [0]`` across them: `LIMITS`, `request_reads`).
 
@@ -71,7 +71,7 @@ the serve work, a unit's rows computed for the request; it cannot make the audit
 
 **The length check** (`class_check`) keeps one bit and reads the last step's bit and count with the ids. The ids are the
 selects' ``o0``, zeros past n, so the served-ids boundary read of the selects' ``o0``
-(`node_window_reads.served_reads`) equals the `b.egress` row (`boundary_rows.egress_row` under a stop rule: the n ids,
+(`node_window_reads.served_reads`) equals the `b.egress` row (`boundary_span.egress_row` under a stop rule: the n ids,
 then O - n zeros, low word first) at every n, and the check needs no second output.
 
 **In the Program** each select is one Call of `ClassSelect_v1` and the check one of `ClassStopCheck_v1`, rows over the
