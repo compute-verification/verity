@@ -539,7 +539,7 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   trace, 30 on smallkv), and `window_map(…, order)` ranks each bucket's connections by order[i]. Every execution phase of the
   heavy trace's honest egress, served through the network attester's own egress at r = 1, is accepted through it (37 execution phases
   of 16 buckets, `test_the_heavy_traces_honest_egress_is_accepted_through_its_order`, on
-  `verity/protocols/resource_accounting/network/verifier/tests/fixtures/warden-heavy-order.json`), and a permutation other than the network
+  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/warden-heavy-order.json`), and a permutation other than the network
   attester's is refused (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`).
   In v4 the permutation is public with the map, in the named gap; at the target it is in the committed map's rows,
   which the compile slice's proof block holds to the advice. A server that admits in release order (a serve-openai
@@ -873,7 +873,7 @@ The audit (`Audit.check_link` on every egress link, `Audit.check_ingress_link` o
 Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, certified records) and
 `NetworkCheck.Records` (`verity/network-records/v3`, raw, committed and certified records). Their module docstrings give
 the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
-`status:<reason>`, `advice`, `mismatch`), and `verity/protocols/resource_accounting/network/verifier/network/tests/test_network_check_protocol.py` and
+`status:<reason>`, `advice`, `mismatch`), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_network_check_protocol.py` and
 `test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
 halt, and later execution phases are still checked.
 
@@ -947,8 +947,8 @@ so `en` is pinned by that slice's scan, and the carry across execution phases is
 and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
 `reference_charge` and `reference_window` give on 4,000 random instances each (`runs` in `../attester/program/lean/lean-audit.json`, their
-data checked by `verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_charge_lean_difftest.py` and
-`verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_lean_difftest.py`); it is not proved in Lean.
+data checked by `tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_charge_lean_difftest.py` and
+`tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_window_lean_difftest.py`); it is not proved in Lean.
 
 The bound charges the declared `c`, not the realized lengths, since a run counts if any advice within it explains it.
 Each run's egress must equal the Program's, which needs every egress frame tied, and which the tie gives only when no
@@ -1217,7 +1217,7 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
   execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
-  from execution phase 0 to their steps in execution phases 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+  from execution phase 0 to their steps in execution phases 1 and 2 (`tests/benchmarks/network_e2e/encodings/test_v1.py`).
 - **The end.** `ReplayClose` reads the session's last state row and execution-phase row and refuses a session that ends with a
   step to run or a decision unread (`close`). The compile slice's proof block charges each decision in the execution phase that
   commits it, A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where
