@@ -472,7 +472,7 @@ def test_install_refuses_what_the_tick_does_not_order_and_comes_off():
     assert not hasattr(g.sched, "_verity_tick") and "add_request" not in vars(g.sched)
 
 
-def test_watermark_lines_as_the_certifier_sends_them():
+def test_watermark_lines_as_the_network_attester_sends_them():
     assert sa.watermark_line(line(0, 0)) == (0, 0, ()) and sa.watermark_line(line(3, 7), (2, 5)) == (3, 7, ())
     assert sa.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
     assert sa.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them

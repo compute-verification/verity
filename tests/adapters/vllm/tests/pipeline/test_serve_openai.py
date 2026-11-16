@@ -132,7 +132,7 @@ def test_ids_frames_are_the_scans_id_events():
         proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
 
-def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
+def test_command_is_registered_and_defaults_to_the_setting_that_fits_network_certifications_plan():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.window_steps, opts.scheme) == (0, False, "verity_int8", 64, "rows-sha512")
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
