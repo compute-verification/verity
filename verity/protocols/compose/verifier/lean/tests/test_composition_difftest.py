@@ -1096,7 +1096,7 @@ def test_onsite_agrees(onsite_server, recorded):
     PoUS and PoUB-P2 on one store and on two, each often. What only whole cases hold: `onsite serve`, over its seven
     subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
     subprotocol is undecided beside a rejection, which the trial's rule would leave undecided
-    (`test_a_reference_without_reject_dominance_is_caught`). Its thousand cases reach what
+    (`test_a_reference_where_a_rejection_does_not_reject_is_caught`). Its thousand cases reach what
     `test_onsite_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
@@ -1233,7 +1233,7 @@ class Trial(R.TiedSame):
 
 @pytest.mark.slow
 @OPT_IN
-def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
+def test_a_reference_where_a_rejection_does_not_reject_is_caught(onsite_server, recorded):
     """The difftest tells the composition's rule from the trial's: the first case they differ on has a subprotocol that
     rejects and one that is undecided, under a commitment that binds their digests. It is not shrunk: a case is
     megabytes, and what is asserted of it holds as it was sampled."""

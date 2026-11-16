@@ -183,7 +183,7 @@ verdict of remote's. Onsite's PoUS and PoUB-P2 cases are on one store, but for P
 (`periods.OTHER_STORE`, a quarter of its cases aimed at acceptance), which onsite refuses beside PoUB-P2's unless it
 rejects already; `test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict` shows that its two ties' refusals change
 no other verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no subprotocol.
-`test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one in which a
+`test_a_reference_where_a_rejection_does_not_reject_is_caught` shows the difftest tells the rule above from one in which a
 rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another is undecided.
 `product` names the composites and refuses every other subset of their subprotocols
 (`test_product_names_only_the_composites`, H1's development composite's among them), and over onsite's
