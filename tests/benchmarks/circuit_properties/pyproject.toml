@@ -1,0 +1,34 @@
+[project]
+name = "verity-circuit-properties"
+version = "0.1.0"
+description = "Structural properties of a circuit's counted operations, measured exactly: a_out, a_in, |J|, s_x, and which a partition computes whole."
+requires-python = ">=3.12"
+# The circuits are verity.circuits' Programs; the reference layer is the served b1 registry's on bits.
+dependencies = ["verity"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["circuit_properties"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../../benchmarks/circuit_properties"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The constructed configurations' shapes are benchmarks/slowdown's (references.configs imports the slowdown calculator by path and loads its
+# registry), and test_smollm2_layer holds its SmolLM2-135M shapes to the measured layer (run.slowdown_shapes). The registry
+# reads the inference-only policy's calibrations and the H200 servers' cards (slowdown/params.py). The runner writes its metric into the run's result with
+# the harness kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`, which read `verity_config`).
+# `adapters/torch/verity_torch`: what `verity_vllm` imports.
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
+          "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
+          "benchmarks/slowdown/slowdown", "benchmarks/slowdown/data", "benchmarks/nci/calibrations.json",
+          "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
+          "adapters/torch/verity_torch", "verity/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
+          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py", "benchmarks/circuit_properties"]
