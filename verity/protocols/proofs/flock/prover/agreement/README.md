@@ -41,7 +41,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | the partition invariant and the width rule, on the verifier's own program | `Flock.Partition` (`checkCut`), `Flock.Qword`, `Flock.Qcall`, `Flock.Program`, `Flock.Extract`, `Flock.Sigma` |
 | hm96-sha512 rows, their nets, template queries, registered reads | `Flock.HmRow`, `Flock.HmNets`, `Flock.TemplateQuery`, `Flock.Registered`, `Flock.KnownRead` |
 | hidden outputs and links | `HmOut`, `HmLinks` (in `Flock/HmRow.lean`) |
-| the recursion's units and their composition | `Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`, `Flock.RecSetup`, `Flock.RecCompose`, and `VStar` |
+| the recursion's proof blocks and their composition | `Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`, `Flock.RecSetup`, `Flock.RecCompose`, and `VStar` |
 | the typed statement | `Flock.Typed`, `Flock.CircuitType`, `Flock.Layout`, `Flock.DeriveAll` (`deriveChecked`) |
 | the templated statement | `Flock.Tmpl` and its `Flock.Tmpl*` modules |
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
@@ -259,8 +259,8 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D10 | an `identifier` other than the verifier's own `--identifier F` |
 | D11 | an output group past its slot |
 | D12 | a statement form, sampling design or session the soundness proof doesn't cover (`Flock.ProvedScope`), upstream's plain proof files (`--upstream-plain`), and a `--zk` mask slot below 2^13 bits or met by Δ or a region |
-| D13 | a `rec-open` unit whose name, bits, rows or net aren't the verifier's |
-| D14 | a sample that doesn't take in full each unit reading a round's commitment |
+| D13 | a `rec-open` proof block whose name, bits, rows or net aren't the verifier's |
+| D14 | a sample that doesn't take in full each proof block reading a round's commitment |
 | D15 | an inner statement's registered description that isn't the registration |
 | D16 | a V* session whose instance labels aren't its sampled proof blocks |
 | D17 | a plain file in the form its statement doesn't pin, or a byte after a proof's end |
