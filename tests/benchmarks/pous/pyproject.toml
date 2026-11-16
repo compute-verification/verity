@@ -42,7 +42,6 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # the weight store's placement reads the committed configurations' hashes (`period.deployment`,
           # `memory_challenger.COMMITTED`), which say whether trusted-device's premise holds
           "tools/verity/cli/verity_cli/configurations.toml",
-          "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           # served_piece.py holds the served weights as C* through the vLLM adapter, which imports these
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/settings.py", "tools/config/verity_config/verity_settings.py", "adapters/vllm/verity_vllm/records/__init__.py",
