@@ -55,7 +55,7 @@ says. These are the directories that have one:
 | `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |
 | `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
 | `verity bench unit_walk` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds at each width |
-| `verity bench verifier_cost` | a verifier's time against the size of the description it reads and of the circuit that description unrolls to |
+| `verity bench verifier_cost` | a verifier's time against the size of the description it reads and of the circuit that description unrolls to, building the verifier it times where the checkout has none |
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
