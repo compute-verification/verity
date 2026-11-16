@@ -143,7 +143,7 @@ HISTORY_FILL = (1.4, 1.0, 2.0)
 SERVED_RUNS = ["r20261107-155724-3f53", "r20261111-162328-f498"]
 #: a share of serving: the mean over lifetime pairs, then its 95% interval
 TOPK_SHARE = (0.0837, 0.0713, 0.0961)
-TOPK_RUNS = ["r20261116-122320-c688"]
+TOPK_RUNS = ["r20261116-122320-c688", "r20261116-225304-47b9"]
 #: the serve tax's part a server pays only if it snapshots at each replay block's edge
 EDGE = "token commits and replay-block edge snapshot"
 #: batch-invariant kernels' throughput tax against stock compiled vLLM at saturation on one H200: the MoE's
@@ -324,8 +324,9 @@ def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
                       "engine against the same server with it off (prod-record over prod-trace), one engine on eight "
                       "H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions "
                       "at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% "
-                      "interval; its pass then bisected every wrong fast selection by one program, which its "
-                      "refinement replaces"}
+                      "interval; the old pass's cost, which bisects every wrong fast selection by one program: right "
+                      "for main today and an upper bound once the new select lands, until prod-record-bisect "
+                      "measures the new one"}
     invariant = {"part": "batch-invariant kernels", "status": "measured", "share": BATCH_INVARIANT[0],
                  "low": BATCH_INVARIANT[1], "high": BATCH_INVARIANT[2],
                  "source": "throughput against stock compiled vLLM at saturation on one H200, measured on these "
