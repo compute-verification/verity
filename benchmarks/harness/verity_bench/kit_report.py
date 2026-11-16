@@ -117,7 +117,7 @@ def record(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Record:
 def ran_with(coins: str, parameters: str, detail: str | None = None, *,
              verified: bool = False) -> tuple[str, dict[str, Any]]:
     """The run's coins and parameters as its one line, ``ran with: coins COINS; parameters PARAMETERS[ (DETAIL)]``, and
-    as the document's ``ran_with``; `detail` is the command's own words (draws, δ, scheme, key). Words other than
+    as the document's ``ran_with``; `detail` is the command's own words (its sample, δ, scheme, key). Words other than
     `COINS`' and `PARAMETERS`' are refused. `verified` is True only where the command itself checked the challenger's
     signature on the coins against a pinned key; the deployed challenger's coins without it are the record's own word,
     which the object holds as ``verified: false`` and `report` states (`OWN_WORD`) and never takes for an audit."""
