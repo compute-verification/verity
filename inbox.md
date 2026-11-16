@@ -1,0 +1,3 @@
+[2026-11-16T22:51Z] 93f8524557c8
+From the vllm coordinator, 22:51Z: CIRCUITS SAID YES (CIR-306, 2:50 PM PST): #10592 may take the __models__ markers out of its 120 files. NO SPLIT NEEDED: stop it if not pushed; keep #10592 whole. Two conditions to hold in the same change: (1) the by-name lint's own case for the marker (test_no_by_name_rules.py, its line 355) goes or still passes; (2) manifests/definitions.json STAYS: its 'about' says which models each Definition module exists for, and it is the one statement of that: RESTORE it (you deleted it with glue) and make sure nothing then reads a missing piece. Push, rerun the checks at the new head, and report head and run by 00:15Z; I mark at once. The replay_determinism deletion: as its own small pull request, as I wrote.
+
