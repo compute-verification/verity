@@ -19,8 +19,8 @@ stops included (`_kept_prover`).
   (`a5.window_trees`), as a served window's audit runs them: each of the kept prover's verifiers takes its tree
   through the audit's relay, and each session's tree is closed there after its evidence before the next session
   starts (FLOCK_CHALLENGER=0, a development run's, keeps each on a tree of its own). The audit then writes its case in
-  v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
-  (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
+  v2's per-member form with the challenger's key, the window's root and the coins, and v2's check refuses it, after
+  every other check of the form passed (`members.case_check`, `MULTI_REFUSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
 * **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
@@ -226,12 +226,12 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
-def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
+def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_refuses_the_case(tmp_path, binaries):
     """By default, FLOCK_CHALLENGER unset, the audit's two sessions take their coin trees from the session the
     sample's coins came from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
-    window's session's. On that case Lean's check accepts, with exit 0; with one proof file of the first session
+    window's session's. On that case Lean's check refuses with `MULTI_REFUSED`, every other check of the form having passed; with one proof file of the first session
     changed after its closing round, it rejects for the session's coins as the driver's check of the log does; and with
     the second session left out, the log shows a tree no session records, which both refuse
     (`challenger.UNUSED_TREE`). The Python run of the form (`members.members_run`) answers the same on all three:
@@ -272,7 +272,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     run, refused = twin(case, evidence)
     assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
     assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
-    assert M.case_check(case) == ("accept", M.run_reason(run, refused)) == ("accept", None)
+    assert M.case_check(case) == ("reject", M.run_reason(run, refused)) == ("reject", f"proofs: {M.MULTI_REFUSED}")
     # the second member's statement and its session taken out of the evidence, everything else as the audit wrote it
     first = {**evidence, "sessions": evidence["sessions"][:1],
              "proofs": {"statements": evidence["proofs"]["statements"][:1]}}

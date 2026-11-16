@@ -2,9 +2,10 @@
 
 A window of several members is audited in v2's per-member form of ``proofs`` (the parameters' ``members``, the
 evidence's ``statements``; `proofs.members_v2` writes it). `Spot.OneStageZk` reads a case in either form and decides
-a per-member one by `checkMembersAt`: it accepts where the form's run returns with every session accepted and v1's
-check at the coins accepts on the sessions' verdicts. `check` runs the executable's ``check`` on such a case and
-returns its verdict and reason.
+a per-member one by `checkMembersAt`: it accepts nothing. Where the form's run returns with every session accepted and
+v1's check at the coins accepts on the sessions' verdicts, it refuses (`MULTI_REFUSED`), after every other check of the
+form passed, until the form's soundness theorem is listed in the lock. `check` runs the executable's ``check`` on such a
+case and returns its verdict and reason.
 
 `members_run` is the Python of `OneStageZk.membersRun`, the part of that check that reads the per-member form: the
 statements' structure, the sessions' coins held to the trees the window's challenger session logged, each closed after
@@ -73,6 +74,8 @@ from .proofs import V2_EXE, LeanError, v2_executable
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
 EXITS = {"accept": 0, "reject": 1, "undecided": 2}
+MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
+                 "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})")
 
 
 def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: Sequence[Path] = ()) -> tuple[str, str | None]:
@@ -767,12 +770,14 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
 def run_reason(run: Run | None, refused: str | None) -> str | None:
     """The reason `check` rejects with on a case whose per-member run is `members_run`'s `(run, refused)`, where v1's
     check at the coins passes on everything else: the run's refusal under ``proofs:``, and None where the run
-    returned. There `check` accepts where every session accepted (`Run.all`), and where one did not, v1's check
-    answers by its verdict's name."""
-    return None if run is not None else f"proofs: {refused}"
+    returned. There `check` refuses with `MULTI_REFUSED` where every session accepted (`Run.all`), and where one did
+    not, v1's check answers by its verdict's name."""
+    if run is None:
+        return f"proofs: {refused}"
+    return f"proofs: {MULTI_REFUSED}" if run.all else None
 
 
-__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
+__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MULTI_REFUSED", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "members_run", "population_why", "run_reason", "unwired_why", "wired_roots"]

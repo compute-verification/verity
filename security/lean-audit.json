@@ -59860,11 +59860,12 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "d40f102326788faf4320a9e8875d2bff39d6e74644b7d430ddccffb5d556d7cb",
+   "digest": "e9c7248c9c78cdc248ecabb97806a3fc5c3c222df9d763bb3862baeb8f66a4bd",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.FORMS": "277fb91256a030d6dd998d03a7fb10f0cfdb3771d48d10ea9e599110280caa51",
     "Spot.OneStageZk.MEMBERS_LAID": "32419f405b60a05fd6d19bfafa3f1b18053d129e1c05aecd8d5783894052283e",
+    "Spot.OneStageZk.MULTI_REFUSED": "b27d9766a59f6ebeeb0732073a2763e1740b20089dafb9629ad38a9a61005dee",
     "Spot.OneStageZk.Member.rows": "6cd881efd26cb9477577ccc88a3a51a993fc1a07a18a3817ef57ba86b1a048a7",
     "Spot.OneStageZk.Member.sampled": "1bc5a059e781874f7a93e57a79f39431cb655deb772f6c195eeb9519dfe55a5b",
     "Spot.OneStageZk.Rows": "346303bcda7c2af8f18827f704196cdefce9655258cba0145120008fbec87b99",
@@ -59872,7 +59873,7 @@
     "Spot.OneStageZk.WIRES_TEMPLATE": "d5a3ead6f4592bbc37465092ca0fcf3e24dc2159f1cde216439bb2d78333a3cb",
     "Spot.OneStageZk.checkBlobs": "ff544fbc735b16c2b1c1045c9d788bba61521521ba21d54995e6537e40588e90",
     "Spot.OneStageZk.checkBlobsAt": "0580739ebc357459d8da351ee6a63099cd8ed19aa8959ae777d81e8e13843850",
-    "Spot.OneStageZk.checkMembersAt": "3cee0809ca8182bf6f9e0cae58aff8bdd6bc0c6a4dadb986aa293e34338378e2",
+    "Spot.OneStageZk.checkMembersAt": "833eb22fe3f024b1c51328b9bb5f75c58d28d458c7ba58fb968989381c740642",
     "Spot.OneStageZk.classHeld": "5db9b9f7414f80e39610b87f1cdabc9f8e14325eb769700a33b18bce8d580ce5",
     "Spot.OneStageZk.classPort": "a69efd9a6cca79a56cd16fe6a00eb0a158176cbf98e0fdaf16c848cead2fc7e9",
     "Spot.OneStageZk.classStep": "01cdfd16e91cb8fe48e48dd52c72ad3aa32b172abe301b6c574517de7e31a2e8",

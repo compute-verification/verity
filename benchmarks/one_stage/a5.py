@@ -1524,7 +1524,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's,
     each path once: a template's members share one circuit file, and v2 finds a blob by its digest (`Core.Blobs.get`).
     The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 checks a case of this form by
-    `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
+    `OneStageZk.checkMembersAt` (`members.case_check`), which refuses it after every other check has passed
+    (`MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the
     case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF

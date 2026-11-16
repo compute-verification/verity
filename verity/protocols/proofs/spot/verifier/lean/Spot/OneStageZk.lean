@@ -61,8 +61,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
   `sampleFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
-  accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
-  statement's check does (`checkMembersAt_accept`). v1's check reads the members there
+  accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`): where every statement's session accepted and v1's
+  check at the coins accepts on their verdicts, as the one statement's check does, it refuses, after every other
+  check of the form passed. It accepts only once its soundness theorem (`Verity.Sampled.MemberForm.spotSound_form`,
+  `soundnessAt_form`) is listed in the lock with its two premises (`ExecutionPhaseInstance.ExecutionPhaseRegistered`,
+  `RegisteredHolds`) named. v1's check reads the members there
   (`membersParamsOfJson_linked`), so its registration check refuses a registration under which a sample that ends
   misses a member, or a member's sampled proof blocks give two counts of link points (`link-points`). `protocol`
   reads either form (`paramsEitherOfJson`, `evidenceEitherOf`): `proofs` of the one statement's keys is read by
@@ -763,39 +766,47 @@ theorem membersRun_held {p : Params} {ms : Array Member} {c : OneStage.Commitmen
   obtain ⟨⟨⟩, hpop, -⟩ := Flock.HmNets.bind_ok h
   exact ⟨hord, hpop⟩
 
+/-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers one sample over several
+members' statements. -/
+def MULTI_REFUSED : String :=
+  "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' " ++
+    "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})"
+
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
-verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check: v1 accepts only verdicts
-that all accepted, and the run's own `all` says it again, so an acceptance reads the run. -/
+verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
+refused (`MULTI_REFUSED`), after every other check of the form passed. -/
 def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
   match membersRun p ms c e sts bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
-    | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
+    | .accept _ _ =>
+      .reject (if r.all then s!"proofs: {MULTI_REFUSED}" else "proofs: a session's verifier did not accept")
     | .reject why => .reject why
     | .undecided why => .undecided why
 
-/-- **What the per-member form's check accepts**: its run returned (`membersRun`) with every session accepted, and
-v1's check at the coins accepts on the run's verdicts, with the check's public output and profile. -/
+/-- **The per-member form accepts nothing**: whatever the parameters, the registration, the coins, the evidence and
+the blobs. -/
+theorem checkMembersAt_refuses (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray)
+    (e : Evidence) (sts : Array StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
+    checkMembersAt p ms c ξ e sts bs ≠ .accept pub prof := by
+  intro h
+  unfold checkMembersAt at h
+  split at h
+  · cases h
+  · split at h <;> cases h
+
+/-- **What the per-member form's check accepts**, which is nothing (`checkMembersAt_refuses`), so this holds of it
+vacuously: its run returned (`membersRun`) with every session accepted, and v1's check at the coins accepts on the
+run's verdicts, with the check's public output and profile. It is the statement the proofs read of an accept of the
+form, and it stays as the form's acceptance will state it. -/
 theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkMembersAt p ms c ξ e sts bs = .accept pub prof) :
     ∃ r, membersRun p ms c e sts bs = .ok r ∧ r.all = true ∧
-      OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  unfold checkMembersAt at h
-  split at h
-  · cases h
-  · rename_i r hr
-    split at h
-    · rename_i pub' prof' hc
-      split at h
-      · rename_i hall
-        cases h
-        exact ⟨r, hr, hall, hc⟩
-      · cases h
-    · cases h
-    · cases h
+      OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof :=
+  absurd h (checkMembersAt_refuses p ms c ξ e sts bs pub prof)
 
 /-- The refusal of parameters and evidence of two forms (`checkBlobsAt`). -/
 def FORMS : String :=

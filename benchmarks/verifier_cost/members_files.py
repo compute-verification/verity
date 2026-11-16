@@ -8,8 +8,9 @@ With --members, the case is a stand-in window's (`benchmarks/one_stage/members_s
 over two templates, half each, under ``stratified-rate:1/1``, so every member is sampled and shares its template's circuit
 file), audited as a served window's audit step runs it (``records_audit.py audit``
 on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) into DIR/audit, which writes the case. With --case, it
-is one a driver wrote (an audit's ``window/case-v2-members.json``). Either way v2's ``check`` must accept the case
-(`case_files.run`, each blob under a short name), so the pass `members-files-time` times is an accepted audit's; it
+is one a driver wrote (an audit's ``window/case-v2-members.json``). Either way v2's ``check`` must refuse the case
+with the per-member form's refusal (`members.MULTI_REFUSED`, `case_files.run`, each blob under a short name), which
+comes after every other check of it passed, so the pass `members-files-time` times is an audit's whole check's; it
 refuses otherwise. Prints one JSON line: the case's members, blobs and their bytes, the audit's seconds, and the
 check's seconds and peak RSS.
 """
@@ -61,15 +62,15 @@ def main() -> None:
     if (a.case is None) == (a.members is None) or (a.members is not None and not (a.bin and a.lean_bin)):
         ap.error("give --case, or --members with --bin and --lean-bin")
     import case_files as CF
-    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
 
     path, audit_s = (a.case, None) if a.case else audited(a.dir, a.members, a.bin, a.lean_bin)
     case = json.loads(path.read_text())
     got = CF.run(case, PF.v2_executable(), "check", a.dir / "check")
     line = json.loads(got["line"]) if got["line"] else {}
-    if got["rc"] != 0 or line.get("verdict") != "accept":
-        raise SystemExit(f"v2's check does not accept the case (exit {got['rc']}: {str(got['line'])[:1500]}), so its "
-                         f"pass is no accepted audit's and nothing is timed")
+    if got["rc"] != 1 or line.get("verdict") != "reject" or line.get("reason") != f"proofs: {M.MULTI_REFUSED}":
+        raise SystemExit(f"v2's check does not refuse the case as the per-member form (exit {got['rc']}: "
+                         f"{str(got['line'])[:1500]}), so some other check of it failed first and nothing is timed")
     params = json.dumps(case["params"], sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
     (a.dir / "params.json").write_text(params)
     (a.dir / "commitment.bin").write_bytes(bytes.fromhex(case["commitment"]))

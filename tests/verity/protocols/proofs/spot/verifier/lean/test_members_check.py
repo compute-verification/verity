@@ -1,6 +1,6 @@
 """The v2 executable's ``check`` on a case in the per-member form, as `one_stage.members.check` calls it: the audit's
 check, which reads a case in either form and answers its verdict. Here on cases its parsers refuse, which need no
-file; a case every session accepts, which it accepts, is a whole audit's, which `benchmarks/one_stage` runs."""
+file; a case every session accepts, which it refuses (`MULTI_REFUSED`), is a whole audit's, which `benchmarks/one_stage` runs."""
 from __future__ import annotations
 
 import json

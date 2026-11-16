@@ -9,8 +9,9 @@ member some sample misses, and the members share their template's circuit file. 
 (``records_audit.py audit`` on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case;
 `case_files.run` then runs v2's ``check`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds
 and peak, the members' staged directories with no circuit file of their own (each a file the per-member case named
-before each member named its template's), and the check's line, exit, seconds and peak, with ``accepted`` whether its
-verdict is accept. It exits 1 unless every window's audit exited 0 and v2's check accepted its case."""
+before each member named its template's), and the check's line, exit, seconds and peak, with ``refused`` whether its
+verdict is the per-member form's refusal (`members.MULTI_REFUSED`), which comes after every other check of the case
+passed. It exits 1 unless every window's audit exited 0 and v2's check refused its case so."""
 from __future__ import annotations
 
 import hashlib
@@ -34,7 +35,7 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R  # noqa: E402
 
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
@@ -102,7 +103,8 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
         got = CF.run(case, PF.v2_executable(), "check", work / "check")
         (d / "check.err").write_text((work / "check" / "stderr").read_text()[-20000:])
         line = json.loads(got["line"]) if got["line"] else {}
-        res["check"] = {**got, "accepted": got["rc"] == 0 and line.get("verdict") == "accept"}
+        res["check"] = {**got, "refused": got["rc"] == 1 and line.get("verdict") == "reject"
+                        and line.get("reason") == f"proofs: {M.MULTI_REFUSED}"}
     (d / "result.json").write_text(json.dumps(res, indent=1, sort_keys=True))
     return res
 
@@ -113,7 +115,7 @@ def main() -> int:
     for n in map(int, sizes):
         res = one(Path(root), n, Path(flock), Path(lean))
         print(json.dumps(res, sort_keys=True), flush=True)
-        passed = passed and res["audit"]["rc"] == 0 and res.get("check", {}).get("accepted") is True
+        passed = passed and res["audit"]["rc"] == 0 and res.get("check", {}).get("refused") is True
     return 0 if passed else 1
 
 

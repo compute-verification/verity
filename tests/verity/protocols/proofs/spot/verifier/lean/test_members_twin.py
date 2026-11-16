@@ -6,7 +6,7 @@ The files are stand-ins, so no member's files are held: an audit with nothing el
 circuit, which does not parse, on both sides and before any session, and each other row changes one thing and reads
 Lean's reason off the twin. An audit's sample holds a unit of each member (`Audit`'s `sampled`), so no statement is of
 a member it missed; where it misses a member that has a statement, both refuse that statement before any member's file
-is read (`OneStageZk.sampledHeld`). A case every session accepts, which Lean accepts, is a whole audit's, which
+is read (`OneStageZk.sampledHeld`). A case every session accepts, which Lean refuses (`MULTI_REFUSED`), is a whole audit's, which
 `benchmarks/one_stage` runs with the twin beside it.
 
 The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
