@@ -14,7 +14,6 @@ import shlex
 import subprocess
 import sys
 import tarfile
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -113,8 +112,8 @@ def test_a_part_s_files_are_every_mth_by_path_whatever_this_machine_measured():
 
 def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(doc):
     lb, agree = (next(t for t in doc["tasks"] if t["id"] == i) for i in (BUILD, AGREE))
-    tests = tomllib.loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
-    bins = [a for a in tests["artifacts"] if a.startswith(f"{build.LEAN}/.lake/build/bin/")]
+    flock = next(s for s in CHECK.SUITES.discover() if s.name == "verity-flock")
+    bins = [a for a in flock.artifacts if a.startswith(f"{build.LEAN}/.lake/build/bin/")]
     assert bins and set(bins) <= {o["path"] for o in lb["outputs"]}
     assert agree["vars"]["verify"] == next(o["path"] for o in lb["outputs"] if o["name"] == "verity-verify-proof")
 
