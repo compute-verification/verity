@@ -72,7 +72,10 @@ same sessions, which no second session replaces. With neither, one process does 
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
-   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
+   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`). The
+   close is trusted only under the key the configuration pins for it (`held_bandwidth.key_of`), or under
+   ``--bw-trusted-sha512``, a rehearsal's, which the summary names as the run's (``key_pin``), never under a key the
+   case lists; with neither, no session has a case and the bandwidth answer is undecided.
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
@@ -406,10 +409,12 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
              private: Path | None = None, pins: Sequence[Path] = PINS, protocol: str = period.PROTOCOL,
              rounds: int = ROUNDS, bw_party: str | None = None, bw_host: str = BW_PARTY_HOST,
              bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
-             bw_private: Path | None = None) -> dict[str, Any] | None:
+             bw_private: Path | None = None, bw_trusted_sha512: str | None = None,
+             deployment: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     """The piece's part on the card (module docstring, 1 to 3 and 6's session): the weights, setup, PoUS's session
     of ``rounds`` challenges and, with ``bw_party`` (the bandwidth party's command), PoUB-P2's over the held store
-    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s). Where they leave an answer
+    (`held_bandwidth.held`, under ``bw_request``, by default `held_bandwidth.request`'s, its close's key
+    `held_bandwidth.key_of`'s of ``deployment``, by default `from_runner()`'s, and ``bw_trusted_sha512``). Where they leave an answer
     already (weights that aren't the pin's, no salt, a session that didn't complete or ran under another id), it is
     written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
@@ -511,8 +516,10 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             if bw_party is not None:
                 _stamp(out, "PoUB's session start")
                 t = time.monotonic()
+                deployed = from_runner() if deployment is None else deployment
                 HB.held(s, node=node, party=bw_party, party_host=bw_host, sid=sid,
-                        request_=bw_request or HB.request(node.encode()), private=bw_private)
+                        request_=bw_request or HB.request(node.encode()), private=bw_private,
+                        trusted_sha512=HB.key_of(deployed, bw_trusted_sha512))
                 bandwidth = {"session_s": round(time.monotonic() - t, 3)}
                 _stamp(out, "PoUB's session done")
             (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
@@ -528,7 +535,8 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
 def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | None = None,
             deployment: Mapping[str, Any] | None = None, private: Path | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
             protocol: str = period.PROTOCOL, bw_out: Path | None = None, bw_private: Path | None = None,
-            bw_case_exe: str | None = None, case_exe: str | None = None) -> dict[str, Any]:
+            bw_case_exe: str | None = None, case_exe: str | None = None,
+            bw_trusted_sha512: str | None = None) -> dict[str, Any]:
     """The piece's part that needs no card (module docstring, 4 to 6): the answers to what `sessions` kept, read
     back from ``private``. First PoUB-P2's (`held_bandwidth.decide`, the Lean's with ``bw_case_exe``), to ``bw_out``
     (by default ``out``'s sibling ``bandwidth``) and ``bw_private``, then PoUS's on its case, written with
@@ -536,7 +544,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     id it answers under (a test signer's in tests), ``deployment`` what `trusted-device`'s premise reads
     (`period.deployment`: the configuration's hash, its pins and the committed set), by default `from_runner()`'s,
     ``trusted_sha512`` the challenger key it trusts, by default the one its pins give the memory challenger for PoUS
-    (none pinned: no session is accepted), ``case_exe`` the
+    (none pinned: no session is accepted), ``bw_trusted_sha512`` the key the bandwidth session's close is trusted
+    under, by default the one its pins give it (`held_bandwidth.key_of`), ``case_exe`` the
     run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict; without it the Python's
     reject or undecided stands and its accept is undecided (`period.unjudged`). What the sessions kept
     only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and
@@ -571,7 +580,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     if held["bandwidth"] is not None:
         bw = HB.decide(bw_private, bw_out, bind=HB.binding(repo, rev, window),
                        window=window, pous_case={"commitment": canonical_json_bytes(published.to_json()).hex()},
-                       case_exe=bw_case_exe)
+                       case_exe=bw_case_exe, trusted_sha512=bw_trusted_sha512, deployment=deployed)
         bandwidth = {"verdict": bw["verdict"], "out": str(bw_out)} | held["bandwidth"]
         print(HB.line(bw), flush=True)
         _stamp(out, "PoUB's answer done")
@@ -638,18 +647,19 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,
-        case_exe: str | None = None) -> dict[str, Any]:
+        case_exe: str | None = None, bw_trusted_sha512: str | None = None) -> dict[str, Any]:
     """The piece (module docstring) in one process, `sessions` and then `answers`: its answer, written with
     ``pous.json`` to ``out``; `Refusal` when none can be made."""
     early = sessions(serve_dir, window, out, hf_home=hf_home, device=device, p2_lib=p2_lib, node=node, party=party,
                      private=private, pins=pins, protocol=protocol, rounds=rounds, bw_party=bw_party, bw_host=bw_host,
-                     bw_request=bw_request, bw_out=bw_out, bw_private=bw_private)
+                     bw_request=bw_request, bw_out=bw_out, bw_private=bw_private,
+                     bw_trusted_sha512=bw_trusted_sha512, deployment=deployment)
     if early is not None:
         return early
     return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, deployment=deployment, private=private,
                    schemes=schemes,
                    protocol=protocol, bw_out=bw_out, bw_private=bw_private, bw_case_exe=bw_case_exe,
-                   case_exe=case_exe)
+                   case_exe=case_exe, bw_trusted_sha512=bw_trusted_sha512)
 
 
 def _address(text: str) -> tuple[str, int]:
@@ -710,6 +720,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
     bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
                                           "p2_case.answer's accept is undecided)")
+    bw.add_argument("--bw-trusted-sha512", help="the SHA-512 of the key the bandwidth session's close is trusted under, "
+                                                "a rehearsal's (default: the one VERITY_PINS pins for the bandwidth "
+                                                "verifier's bandwidth sessions; none: no session has a case)")
     bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
@@ -720,7 +733,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                             window_s=a.bw_window_s, deadline_s=a.bw_deadline_s)
     card = {"hf_home": a.hf_home, "device": a.device, "p2_lib": a.p2_lib, "node": node, "party": party,
             "rounds": a.rounds, "bw_party": bw_party, "bw_host": a.bw_host, "bw_request": bw_request}
-    both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private}
+    both = {"private": a.private, "bw_out": a.bw_out, "bw_private": a.bw_private,
+            "bw_trusted_sha512": a.bw_trusted_sha512}
     none = {"trusted_sha512": a.trusted_sha512, "bw_case_exe": a.bw_case_exe, "case_exe": a.case_exe}
     try:
         if a.answers:

@@ -116,6 +116,23 @@ def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_bef
             "store_root": registration["root"]}
 
 
+def close_key(case: Mapping[str, Any]) -> bytes | None:
+    """The public key the case's close names, None when its evidence holds no close that reads."""
+    try:
+        return bytes.fromhex(json.loads(bytes.fromhex(case["evidence"]))["close"]["public_key"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def trusting(case: Mapping[str, Any], key_sha512: str | None) -> dict[str, Any]:
+    """`case` with its params' trusted keys the verifier's and never the case's own, which whoever kept the case wrote:
+    the close's key when its SHA-512 is `key_sha512` (the key the configuration pins for the close, or one a rehearsal
+    names), else none, so the check refuses the close (`Poub.P2Protocol.closeRefusal`)."""
+    key = close_key(case)
+    trusted = [key.hex()] if key is not None and hashlib.sha512(key).hexdigest() == key_sha512 else []
+    return dict(case) | {"params": dict(case["params"]) | {"trusted": trusted}}
+
+
 def digest(case: Mapping[str, Any]) -> bytes:
     """`P2Protocol.Commitment.digest`: SHA-512 of `DIGEST_DOMAIN` and the case's commitment bytes."""
     return hashlib.sha512(DIGEST_DOMAIN + bytes.fromhex(case["commitment"])).digest()
@@ -221,5 +238,5 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
 
 
 __all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_JUDGE", "PROTOCOL",
-           "STORE_ROOT", "answer", "case_of", "chain", "close_of", "close_record", "digest", "head", "head_of",
-           "judged", "same_store", "serve", "store_root", "unjudged", "write"]
+           "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest", "head", "head_of",
+           "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]

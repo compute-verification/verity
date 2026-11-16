@@ -224,10 +224,19 @@ class Auditor:
 CONF = hashlib.sha512(b"a committed configuration").hexdigest()
 
 
-def _deployment(key: str) -> dict:
-    """A committed configuration (`CONF`) that pins ``key`` for the memory challenger's PoUS sessions."""
-    return {"configuration": CONF, "committed": frozenset({CONF}), "pins": [
-        {"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]}
+#: the key `p2_party_at_leaf`'s party signs the bandwidth session's close under
+BW_KEY = hashlib.sha512(ts.AtLeaf(b"p2-party-at-leaf").public_key).hexdigest()
+
+
+def _deployment(key: str, bw: str | None = BW_KEY) -> dict:
+    """A committed configuration (`CONF`) that pins ``key`` for the memory challenger's PoUS sessions and ``bw`` for
+    the bandwidth verifier's bandwidth sessions' close."""
+    scheme = "lms-sha512/n64-w1-h20/v0"
+    pins = [{"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": scheme}]
+    if bw is not None:
+        pins.append({"key-sha512": bw, "party": SP.HB.p2_parties.CLOSER_PARTY,
+                     "protocol": SP.HB.p2_parties.COMPONENT, "scheme": scheme})
+    return {"configuration": CONF, "committed": frozenset({CONF}), "pins": pins}
 
 
 def _judge(monkeypatch, kw: dict) -> None:
@@ -270,10 +279,12 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     trusted = kw.pop("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     kw.setdefault("deployment", _deployment(hashlib.sha512(auditor.signer.public_key).hexdigest()))
     card = {k: kw.pop(k) for k in ("rounds", "bw_party", "bw_host", "bw_request") if k in kw}
+    both = {k: kw[k] for k in ("bw_trusted_sha512",) if k in kw}
     _judge(monkeypatch, kw)
     early = SP.sessions(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                         party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
-                        private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, **card)
+                        private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, deployment=kw["deployment"],
+                        **card, **both)
     assert early is None
     between()
     with monkeypatch.context() as m:
@@ -918,6 +929,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
     assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
+    summary = json.loads((public / "bandwidth.json").read_text())
+    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "configuration")
+    assert summary[mc.PREMISE].startswith(f"holds: the session is signed under the key configuration {CONF} pins")
+    assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     assert _stamps(s.out) == [
         "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
@@ -1029,6 +1044,38 @@ def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(regis
     _, bw, _ = _bandwidth_files(s)
     assert bw["verdict"] == "reject" and bw["reason"].startswith(
         "the close is signed by a key that is not a trusted memory challenger's"), bw
+
+
+@pytest.mark.slow
+def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(registered, tmp_path, monkeypatch):
+    """A configuration that pins no key for the bandwidth close, and a run that names its own (``bw_trusted_sha512``):
+    the session's close is signed and checked under that key, and the summary says the run named it (``key_pin``
+    ``run``) and that `trusted-device` is a rehearsal's, never that it holds."""
+    s = registered
+    kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
+    pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
+    answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), bw_trusted_sha512=BW_KEY, **kw)
+    assert answer["verdict"] == "accept", answer["reason"]
+    _, bw, summary = _bandwidth_files(s)
+    assert bw["verdict"] == "accept", bw["reason"]
+    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "run")
+    assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
+
+
+@pytest.mark.slow
+def test_with_no_key_named_for_the_close_the_bandwidth_session_has_no_case(registered, tmp_path, monkeypatch):
+    """A configuration that pins no key for the bandwidth close and a run that names none: the party is given no
+    session id to sign a close under, no case is made, and the bandwidth answer is undecided naming why."""
+    s = registered
+    kw = _bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch))
+    pous = hashlib.sha512(kw["auditor"].signer.public_key).hexdigest()
+    answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), **kw)
+    assert answer["verdict"] == "accept", answer["reason"]
+    private, bw, summary = _bandwidth_files(s)
+    assert bw["verdict"] == "undecided" and bw["reason"].startswith(SP.HB.NO_KEY), bw
+    assert "key_pin" not in summary and not (private / p2_case.CASE).exists()
+    session = json.loads((private / SP.HB.SESSION).read_text())
+    assert session["session"] is None and "--session" not in session["party"]
 
 
 @pytest.mark.slow

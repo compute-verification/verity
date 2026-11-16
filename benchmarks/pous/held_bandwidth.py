@@ -11,7 +11,10 @@ declared them before that session, and the root the session bound. Its plan is t
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
 which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
 memory challenger claims in its session log before the first coin and under which it signs the case's close of the
-verifier's log (`p2_parties.Closer`).
+verifier's log (`p2_parties.Closer`), and the key that close must be signed under (``--trusted-sha512``, `key_of`: the
+configuration's pin for it, or the key a rehearsal names), which the party refuses its own key unless it is. `decide`
+reads the keys the close is trusted under from that pin and never from the case it answers, which the developer's
+private directory holds (`p2_case.trusting`); with no key named, no session has a case.
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -52,6 +55,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/
 
 import bandwidth as B
 
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
@@ -67,6 +71,8 @@ R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"
 #: the session's record, and its case until `decide` answers it, in the private directory
 SESSION, HELD = "session.json", "held-case.json"
+NO_KEY = ("no key is named for the bandwidth session's close: the configuration pins none for the bandwidth verifier's "
+          "bandwidth sessions, and the run names none")
 SCOPE = ("beside the served window: the session ran on the card after window {k} was served and PoUS's session bound the "
          "store, over that store as the PoUS piece encoded and held it, and was not interleaved with the engine's reads "
          "(serving is not hooked), so it certifies the session's own reads of the store, not the window's")
@@ -230,19 +236,30 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
     return out | {"public": public, "profile": profile}
 
 
+def key_of(deployment: Mapping[str, Any], trusted_sha512: str | None = None) -> str | None:
+    """The SHA-512 of the key a bandwidth session's close is trusted under: `trusted_sha512`, a rehearsal's own key,
+    else the one `deployment`'s pins (`period.deployment`'s) give the bandwidth verifier for its bandwidth sessions
+    (`p2_parties.CLOSER_PARTY`, `p2_parties.COMPONENT`), else None."""
+    pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
+    return trusted_sha512 or min(pinned, default=None)
+
+
 def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
-         private: Path) -> None:
+         private: Path, trusted_sha512: str | None = None) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
-    which the memory challenger signs the case's close; its port reached at `party_host`), under `request_`:
+    ``--pous-session`` and PoUS's session id `sid` are added, and with `trusted_sha512` (`key_of`) ``--session`` and a
+    fresh id for this session, under which the memory challenger signs the case's close, with ``--trusted-sha512``, the
+    key it signs under; without it, no session has a case; its port reached at `party_host`), under `request_`:
     the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
     opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to
     `private` (0700, files 0600), for `decide`. This is the part that reads the store."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
     (private / HELD).unlink(missing_ok=True)   # an earlier session's case is never this one's
-    p2_session = secrets.token_bytes(32)
-    command = f"{party} --pous-session {sid.hex()} --session {p2_session.hex()}"
+    p2_session = None if trusted_sha512 is None else secrets.token_bytes(32)
+    command = f"{party} --pous-session {sid.hex()}"
+    if p2_session is not None:
+        command += f" --session {p2_session.hex()} --trusted-sha512 {trusted_sha512}"
     with open(private / "prover.log", "a") as log_f:
 
         def log(m: str) -> None:
@@ -268,23 +285,45 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
         "registration": None if prover is None else p2_parties.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
-        "pous_session": sid.hex(), "session": p2_session.hex(), "party": command, "party_host": party_host,
+        "pous_session": sid.hex(), "session": None if p2_session is None else p2_session.hex(), "party": command,
+        "party_host": party_host,
         "setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3)}, 0o600)
 
 
+def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping[str, Any], host: str) -> dict[str, Any]:
+    """What the summary says of the key `case`'s close is signed under: its SHA-512 (``key_sha512``), whether it is the
+    trusted one (``key_pinned``), whose word named that one (``key_pin``: ``configuration`` where `deployment` pins it,
+    ``run`` where only the run named it), and `trusted-device`'s premise for it (`memory_challenger.trusted_device`),
+    which holds only for the pinned key under a committed configuration and reads rehearsal under any other."""
+    key = p2_case.close_key(case)
+    key_sha = None if key is None else hashlib.sha512(key).hexdigest()
+    pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
+    return {"key_sha512": key_sha, "key_pinned": key_sha == trusted_sha512,
+            "key_pin": "configuration" if trusted_sha512 in pinned else "run",
+            mc.PREMISE: mc.trusted_device(
+                deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT, key_sha,
+                f"the bandwidth verifier, which signs the close with the memory challenger's key on {host}",
+                configuration=deployment["configuration"], committed=deployment["committed"])}
+
+
 def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: Mapping[str, Any] | None = None,
-           case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S) -> dict[str, Any]:
+           case_exe: str | None = None, r_bytes_per_s: int | None = R_BYTES_PER_S, trusted_sha512: str | None = None,
+           deployment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The answer to the session `held` left in `private`, with no store and no card: the case and its answer to
     `private` (`p2_case.write`), the public answer and a summary to `public` (``answer.json``, ``bandwidth.json``); the
     public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
     (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it the session's reject or undecided stands and its accept is undecided
-    (`p2_case.unjudged`). The summary names the program whose verdict the answer is and the host it ran on
+    (`p2_case.unjudged`). The close is trusted only under `key_of(deployment, trusted_sha512)` (`deployment`,
+    `period.deployment`'s, by default no configuration), whatever keys the case lists (`p2_case.trusting`): with none,
+    the session is undecided (`NO_KEY`), and the summary says of the close's key what `key_record` says. The summary names the program whose verdict the answer is and the host it ran on
     (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
     same session can be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
+    deployed = period.deployment({}) if deployment is None else deployment
+    trusted_sha512 = key_of(deployed, trusted_sha512)
     doc = json.loads((private / SESSION).read_text())
     answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
     kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
@@ -297,6 +336,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     if record is not None and record != answer:
         out = _no("reject", f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
                             f"({answer.get('verdict')}); {scope}")
+    elif trusted_sha512 is None:
+        out = _no("undecided", f"{NO_KEY}; {scope}")
     elif kept is None:
         verdict = "undecided" if answer.get("verdict") in ("prover-error", "refused", None) else "reject"
         out = _no(verdict, f"the session made no case: {answer.get('verdict')}: {answer.get('reason')}"[:1000]
@@ -305,6 +346,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
         out = _no("reject", f"the bandwidth session's store is not PoUS's: {why}; {scope}")
     else:
         summary["same_store"] = pous_case is not None
+        kept = p2_case.trusting(kept, trusted_sha512)
+        summary |= key_record(kept, trusted_sha512, deployed, doc["party_host"])
         t = time.perf_counter()
         try:
             judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
@@ -337,5 +380,5 @@ def line(answer: Mapping[str, Any]) -> str:
     return f"BANDWIDTH: {answer['verdict']}: {answer['reason']}"
 
 
-__all__ = ["HELD", "Held", "SCOPE", "SESSION", "binding", "decide", "held", "line", "missing", "public_answer",
-           "request"]
+__all__ = ["HELD", "Held", "NO_KEY", "SCOPE", "SESSION", "binding", "decide", "held", "key_of", "key_record", "line",
+           "missing", "public_answer", "request"]
