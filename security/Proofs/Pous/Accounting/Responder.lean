@@ -194,6 +194,15 @@ theorem decodeLen_lengthCode {M : ℕ} {l : List Bool} (hl : l.length ≤ M) : d
   rw [decodeLen, dite_eq_left h]
   exact LengthCode M (Classical.choose_spec h).1 hl (Classical.choose_spec h).2
 
+/-- A help with at most `2^H` values has an `H`-bit code, injective on them. -/
+theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
+    (h : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) : ∃ c : α → Pous.Bits H, Set.InjOn c (Set.range help) := by
+  have hle : (Set.range help).encard ≤ (Set.univ : Set (Pous.Bits H)).encard := by
+    rw [Set.encard_univ, ENat.card_eq_coe_fintype_card]
+    simpa [Fintype.card_fun] using h
+  obtain ⟨c, -, hc⟩ := (Set.finite_range help).exists_injOn_of_encard_le hle
+  exact ⟨c, hc⟩
+
 
 theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
     (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
@@ -500,6 +509,25 @@ end
 
 end Responder
 
+open Responder in
+/-- **`B2` on a fixed schedule**, from `B2` at `t x = t`, `span = t k` and `τ = 0`. -/
+theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k : ℕ)
+    (W : Pous.Bits sch.n) (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
+    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Outcome sch k → α) (M H N : ℕ)
+    (hc : CausalFrom S) (ht : StrictMono t)
+    (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
+      (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
+    (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
+      (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j))
+    (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) (hN : M + 1 + H ≤ N) :
+    ∃ (A₁ : Pous.Preprocessor sch N) (A₂ : Pous.SeqResponderOn sch N 0 0 0),
+      ∀ x, (∀ j : Fin k, (S x).mem X (t j) ≤ M) →
+        Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
+            (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
+          List.ofFn fun j : Fin k => ans j ((S x).acts X (period t j)) := by
+  obtain ⟨A₁, A₂, hA⟩ := B2 sch k W S X (fun _ => t) (t k) ans help M 0 H N hc (fun _ j => ht (Nat.lt_succ_self j))
+    (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount (by omega)
+  exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
 
 open Responder in
 /-- **`B2Audit` on a fixed schedule**, from `B2Audit` at `t x = t`, `span = t k` and `τ = 0`. -/

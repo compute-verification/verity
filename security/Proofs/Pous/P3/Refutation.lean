@@ -426,6 +426,15 @@ theorem pr_prod_ge' {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [None
     c ≤ @pr (α × β) i (fun x => R x.1 x.2) :=
   (pr_prod_ge R c h).trans_eq (pr_congr_inst _ _ _)
 
+/-- The adversary answers both challenges 0 and 1 with probability at least `2^-448`. -/
+theorem pr_attack : (2⁻¹ : ℝ≥0∞) ^ 448 ≤ pr (fun ω : (p3Model 8 64).Ω =>
+    2 ≤ (Finset.univ.filter fun v =>
+      (A₂ (A₁ ω) v).run ((p3Model 8 64).answer ω) = topLabel chain8 W0 ω v).card) := by
+  refine le_trans ?_ (pr_mono fun ω (hω : Ev ω.2 7 ω.1) => ?_)
+  · exact pr_prod_ge' (α := KQ 8 64 → Lab 8 64) (β := Equiv.Perm (Lab 8 64)) (p3Model 8 64).fintypeΩ
+      (fun H P => Ev P 7 H) _ (by intro P; exact pr_Ev7 P)
+  · obtain ⟨H, P⟩ := ω
+    exact correct_of H P hω
 
 /-! ### The bound it beats -/
 

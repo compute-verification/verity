@@ -117,6 +117,17 @@ theorem pr_all_good_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (B ℓ β S k : �
 
 /-! ### Compression -/
 
+/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
+theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
+    ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
+  classical
+  obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := T) (β := Bits β) (by simpa using h)
+  refine ⟨fun x => if hx : x ∈ T then e ⟨x, hx⟩ else fun _ => false,
+    fun w => if hw : ∃ y, e y = w then hw.choose.1 else Classical.arbitrary X, fun x hx => ?_⟩
+  have hex : ∃ y, e y = e ⟨x, hx⟩ := ⟨_, rfl⟩
+  simp only [hx, dite_true, hex]
+  exact congrArg Subtype.val (e.injective hex.choose_spec)
+
 
 /-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
@@ -126,6 +137,26 @@ block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
+/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
+theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
+  by_cases hβ : S + B ≤ β
+  · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
+        (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ β - S - B) := by
+      intro x hx
+      rw [fits, Finset.mem_filter] at hx
+      rw [Finset.mem_product, Finset.mem_filter]
+      exact ⟨Finset.mem_univ _, Finset.mem_univ _, by omega⟩
+    refine (Finset.card_le_card hsub).trans ?_
+    rw [Finset.card_product, Finset.card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
+    calc 2 ^ S * _ ≤ 2 ^ S * (2 ^ B * 2 ^ (β - S - B)) := Nat.mul_le_mul_left _ (card_patches_le B ℓ _)
+      _ = 2 ^ β := by rw [← pow_add, ← pow_add]; congr 1; omega
+  · have : fits S B ℓ β = ∅ := by
+      ext x
+      rw [fits, Finset.mem_filter]
+      simp only [Finset.mem_univ, true_and, Finset.notMem_empty, iff_false]
+      omega
+    rw [this, Finset.card_empty]
+    exact Nat.zero_le _
 
 /-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=

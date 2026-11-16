@@ -128,6 +128,22 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
 /-! ### The threshold `p₀` -/
 
 
+open Classical in
+/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
+theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
+    (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
+    pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
+  have hgb := Finset.card_filter_add_card_filter_not (s := Finset.univ) good
+  rw [Finset.card_univ, Fintype.card_fin] at hgb
+  have hr := good_le_p₀ B ℓ β S _ _ hB hgb (by omega)
+  have hB0 : (B : ℝ≥0∞) ≠ 0 := by exact_mod_cast hB.ne'
+  rw [pr_def, Fintype.card_fin, ENNReal.div_le_iff hB0 (ENNReal.natCast_ne_top _)]
+  calc ((Finset.univ.filter good).card : ℝ≥0∞)
+      = ENNReal.ofReal ((Finset.univ.filter good).card : ℝ) := (ENNReal.ofReal_natCast _).symm
+    _ ≤ ENNReal.ofReal (p₀ β S B ℓ * B) := ENNReal.ofReal_le_ofReal hr
+    _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
+        rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
+
 /-! ### Programs -/
 
 section progMap

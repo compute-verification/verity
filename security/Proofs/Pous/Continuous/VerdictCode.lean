@@ -312,6 +312,13 @@ theorem misses_eq (vs : List PousCheck.Verdict.RoundVerdict) :
   intro v _
   cases v <;> rfl
 
+/-- **The code accepts as the memory challenger does**: `accepts M` of the verdicts is `contAccepts M` of any records
+with them. -/
+theorem accepts_iff {M : ℕ} {vs : List PousCheck.Verdict.RoundVerdict} {rs : List ContRecord}
+    (hrs : rs.map (·.verdict) = vs.map toCV) :
+    PousCheck.Verdict.accepts M vs = true ↔ contAccepts (M : ℝ) rs := by
+  rw [contAccepts, records_filter, hrs, misses_eq, PousCheck.Verdict.accepts, decide_eq_true_iff]
+  exact Nat.cast_le.symm
 
 theorem fits_map {os : List PousCheck.Verdict.Opening}
     (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) :
@@ -320,5 +327,24 @@ theorem fits_map {os : List PousCheck.Verdict.Opening}
   obtain ⟨o', ho', rfl⟩ := List.mem_map.1 ho
   exact hfit o' ho'
 
+/-- **The code's verdict unit outputs what the code accepts**: on the openings of `K ≤ 2³²` rounds of the unit's
+widths, `prog`'s output, run by the code, is `accepts M` of the code's verdicts. -/
+theorem prog_eval {K M LIMIT : ℕ} {os : List PousCheck.Verdict.Opening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
+    (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) :
+    (PousCheck.Verdict.prog K M LIMIT).eval (PousCheck.Verdict.encode os) =
+      [PousCheck.Verdict.accepts M (PousCheck.Verdict.verdicts LIMIT os)] := by
+  rw [← eval_eq, prog_eq, encode_eq, verdictProg_eval (by rw [List.length_map, hK]) hK32
+    (fits_map hfit), ← verdicts_eq, misses_eq, PousCheck.Verdict.accepts]
+
+/-- **The code's verdict unit decides `contAccepts`**: on the openings of `K ≤ 2³²` rounds of the unit's widths, its
+output, run by the code, is `1` iff the memory challenger with tolerance `M` accepts the records the code's verdicts
+are. -/
+theorem prog_accepts {K M LIMIT : ℕ} {os : List PousCheck.Verdict.Opening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
+    (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) {rs : List ContRecord}
+    (hrs : rs.map (·.verdict) = (PousCheck.Verdict.verdicts LIMIT os).map toCV) :
+    (PousCheck.Verdict.prog K M LIMIT).eval (PousCheck.Verdict.encode os) = [true] ↔ contAccepts (M : ℝ) rs := by
+  rw [← eval_eq, encode_eq]
+  rw [verdicts_eq] at hrs
+  exact verdict_accepts (verdictIs_prog K M LIMIT) (by rw [List.length_map, hK]) hK32 (fits_map hfit) hrs
 
 end PousVerdict.Code

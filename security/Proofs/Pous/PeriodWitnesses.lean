@@ -491,6 +491,14 @@ theorem periodHeld_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
     · simp [playStrings, certifiedAudit, certifiedCommitment, ha]
     · simp [playStrings, certifiedAudit, certifiedCommitment, hb]
 
+/-- **`periodHeldDeployed`'s certified honest instance**: `periodHeld_certified`, at the deployed budget. -/
+theorem periodHeldDeployed_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
+    DeviceModel honestRun certifiedAudit honestStrategy RING_D RING_Q RING_L 1 ∧
+      Instantiates certifiedAudit honestStrategy ∧
+      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
+      ((∃ ω, certifiedAudit.Accepts ω ∧ ¬ certifiedAudit.Break ω) ∨ PlayCollision certifiedAudit) :=
+  periodHeld_certified hP
+
 
 /-- **`periodCapacity` is nontrivial**: at the empty period (`emptyRun`), whose capacity verdict accepts every window
 and whose account holds nothing, the certificate `HONEST_S` is not sound per run at `δ + ε_max`: every window is

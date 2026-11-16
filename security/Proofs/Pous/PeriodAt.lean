@@ -106,6 +106,14 @@ theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [F
   exfalso
   omega
 
+/-- **`periodHeldAt` holds at the honest instance**: its device premise, `ringDeviceAt_honest`. -/
+theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
+    {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
+    RingDeviceAt N pt r P D Q L round :=
+  ringDeviceAt_honest N pt r P D Q L round hfull
 
 /-- **`periodHeldAt` is nontrivial**: at every block count, an event that holds on every capacity coin exceeds its
 bound `δ + ε_max`. -/

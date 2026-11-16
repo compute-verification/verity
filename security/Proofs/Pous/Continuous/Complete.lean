@@ -231,5 +231,21 @@ theorem honest_hit (s : ContState sch.B) (i : Fin sch.B) :
 
 end
 
+/-- **The honest responder is accepted at every tolerance `f₀ ≥ 0`**: `ContinuousComplete` at `q = 0`. -/
+theorem honest_complete (sch : Scheme M) (D Q D_late Q_late n : ℕ) (W : Bits sch.n) (arr : ℕ → ℕ) (f₀ : ℝ)
+    (hf : 0 ≤ f₀) :
+    pr (fun x : Outcome sch n =>
+        ¬ contAccepts f₀ (contRecords (honest sch) D Q D_late Q_late W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2
+          x.1 arr .start (List.ofFn x.2.2))) = 0 := by
+  refine le_antisymm (le_trans (continuous_complete sch D Q D_late Q_late n 0 W (honest sch) arr
+    (fun a h _ => le_of_eq ?_) f₀) (le_of_eq ?_)) (zero_le)
+  · refine le_antisymm (le_trans (pr_mono fun i hi => hi (honest_hit D Q D_late Q_late W _ _ a.1 arr _ i))
+      (le_of_eq pr_false')) (zero_le)
+  · refine Finset.sum_eq_zero fun m hm => ?_
+    rw [Finset.mem_filter] at hm
+    have : m ≠ 0 := fun h0 => by
+      rw [h0, Nat.cast_zero] at hm
+      exact absurd hm.2 (not_lt.2 hf)
+    rw [zero_pow this, mul_zero, zero_mul]
 
 end PousContinuous

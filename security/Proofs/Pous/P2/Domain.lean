@@ -175,6 +175,31 @@ theorem card_eval_eq (B p : ℕ) (j : Fin B) (x y : Fin p) :
   rw [h]
   simp only [hc, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_comm]
 
+/-- **The code blocks are uniform on `[0, p)`**: each value `v < p` is block `j` of the code with probability
+`1/p`, and by `m1p_code` no value `≥ p` is. -/
+theorem m1p_code_uniform (B w p b : ℕ) [NeZero B] (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w)
+    (W : Bits (B * b)) (j : Fin B) (v : Fin p) :
+    pr (fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v) = (p : ℝ≥0∞)⁻¹ := by
+  classical
+  have hp0 : 0 < p := lt_of_lt_of_le (Nat.two_pow_pos _) hb
+  have hiff : ∀ ω : (permsp B w p).Ω, bitsVal (((m1p B w p b).enc W ω ()).2 j) = v ↔
+      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩ := by
+    intro ω
+    rw [m1p_code B w p b hb hp2, ← Fin.ext_iff, Equiv.symm_apply_eq, eq_comm]
+  have hcard := card_eval_eq B p j v ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩
+  obtain ⟨c, hc⟩ : ∃ c, (univ.filter fun ω : PousGen.Om B (Fin p) =>
+      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩).card = c := ⟨_, rfl⟩
+  rw [hc] at hcard
+  have hc0 : c ≠ 0 := by
+    rintro rfl
+    exact Fintype.card_ne_zero (α := PousGen.Om B (Fin p)) (by rw [← hcard, zero_mul])
+  rw [pr_def]
+  have e1 : (univ.filter fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v).card = c := by
+    rw [← hc]; exact PousGen.card_filter_congr _ _ _ _ hiff
+  have e2 : Fintype.card (permsp B w p).Ω = p * c := by rw [mul_comm]; exact hcard.symm
+  rw [e1, e2, Nat.cast_mul, ENNReal.div_eq_inv_mul,
+    ENNReal.mul_inv (Or.inl (by exact_mod_cast hp0.ne')) (Or.inl (ENNReal.natCast_ne_top _)), mul_assoc,
+    ENNReal.inv_mul_cancel (by exact_mod_cast hc0) (ENNReal.natCast_ne_top _), mul_one]
 
 /-! ### Query trees over `[0, p)` -/
 

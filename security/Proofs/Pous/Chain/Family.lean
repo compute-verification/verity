@@ -283,6 +283,20 @@ theorem shared_breaks_S (N : ℕ) [NeZero (N * 2 ^ 9)] (d : ℕ) (salt : Bits 25
   rw [pr_eq_one hacc] at h2
   exact absurd h2 (not_le.2 hlt)
 
+/-- **A shared domain breaks the store at every segment count `N ≥ 2`**, for every in-degree, round budget, `k` and
+`ε` (`SharedDomainBreaks` at `N = 448`). At `N = 1` the shared domain is `dom`, which is injective. -/
+theorem shared_domain_breaks_fam (N : ℕ) [NeZero N] (hN : 2 ≤ N) (d : ℕ) (salt : Bits 256) (D Q k : ℕ)
+    (ε : ℝ≥0∞) :
+    ¬ Pous.Meets (chainBandSeg N (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))) .sequential D Q k ε := by
+  intro hM
+  obtain ⟨hε, -, -, -, hsec⟩ := hM
+  refine shared_breaks_S N d salt D Q k _ _ _ (by omega) ?_ (delta_add_lt_one hε) hsec
+  show 2 ^ 9 * 524288 ≤ ⌊Params.ρ * (((N * 2 ^ 9) * 524288 : ℕ) : ℚ)⌋₊
+  apply Nat.le_floor
+  unfold Params.ρ
+  push_cast
+  have : (2 : ℚ) ≤ N := by exact_mod_cast hN
+  nlinarith
 
 theorem topoDAG_eq_of_par {n : ℕ} {G H : TopoDAG n} (h : G.par = H.par) : G = H := by
   cases G; cases H; cases h; rfl

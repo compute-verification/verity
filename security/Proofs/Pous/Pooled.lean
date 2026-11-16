@@ -93,6 +93,37 @@ theorem shortAccepted_le (D Q L : ℕ)
     (periodHeld D Q L hP2 ι α ΩW ΩQ (d u) (r u x) (P u x) (τ u x) round S (hdev u x) (hinst u x) (hS u x)
       (o u x))
 
+open Classical in
+/-- **PoUS pooled over `U` windows, Chernoff form.** Under `PeriodHeld`'s premises, with each window's strategy under the
+device model and the instantiation (`DeviceModel`, `Instantiates`), each window fixed before its capacity coins
+(`FixedBefore`) and every window's certificate fitting the ring game's state bound: at least `M` windows accepted with no break while short (`ShortAccepted`) has probability `P` with
+`P · z^M ≤ (1 + (z − 1)(δ + ε_max))^U` for every `z ≥ 1`. -/
+theorem pooledShort (D Q L : ℕ)
+    (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
+    (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
+    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
+      Pous.EndToEnd.S)
+    (M : ℕ) {z : ℝ≥0∞} (hz : 1 ≤ z) :
+    prCoin (fun x => M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) * z ^ M ≤
+      (1 + (z - 1) * ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal)) ^ U :=
+  Periods.prCoin_count_mul_pow_le _ (fixedBefore_adapted hfix S) hz
+    (shortAccepted_le D Q L hP2 hfix round S τ hdev hinst hS) M
+
+open Classical in
+/-- **PoUS pooled over `U` windows, binomial form**: at least `M` windows accepted short with probability at most
+`C(U, M) (δ + ε_max)^M`. -/
+theorem pooledShort_choose (D Q L : ℕ)
+    (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
+    (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
+    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
+      Pous.EndToEnd.S)
+    (M : ℕ) :
+    prCoin (fun x => M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) ≤
+      U.choose M * ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal) ^ M :=
+  Periods.prCoin_count_le_choose _ (fixedBefore_adapted hfix S)
+    (shortAccepted_le D Q L hP2 hfix round S τ hdev hinst hS) M
 
 /-- **PoUS pooled over `U` windows, at `δ'`** (`Pous.Period.PooledShortLog`): with `p = δ + ε_max`, at least `M`
 windows accepted short has probability at most `δ'` once `M ≥ ((z − 1) U p + ln(1/δ')) / ln z` for some `z > 1`, so out
@@ -103,6 +134,31 @@ theorem pooledShort_log : PooledShortLog := by
     (Periods.prCoin_count_le_of_log _ (fixedBefore_adapted hfix S) (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
       (shortAccepted_le D Q L hP2 hfix round S τ hdev hinst hS) hz hδ' hM)
 
+open Classical in
+/-- **PoUS pooled over `U` windows, sure shortness**: every window accepted with no break while at least `M` of them
+are short on every capacity coin (`ResourceAccounting.Run.CapacityShort`, fixed before the window's capacity coins) has
+probability at most `(δ + ε_max)^M`. -/
+theorem pooledSureShort (D Q L : ℕ)
+    (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
+    (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)
+    (hdev : ∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) (hinst : ∀ u x, Instantiates (P u x) (τ u x))
+    (hS : ∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
+      Pous.EndToEnd.S)
+    (M : ℕ) :
+    prCoin (fun x => (∀ u, (P u x).Accepts ((o u x).1, (o u x).2, x u) ∧
+        ¬ (P u x).Break ((o u x).1, (o u x).2, x u)) ∧
+      M ≤ (Finset.univ.filter fun u => (r u x).CapacityShort S ((o u x).1, (o u x).2, x u)).card) ≤
+      ENNReal.ofReal ((Params.δ : ℝ) + Params.εMax.toReal) ^ M := by
+  refine Periods.prCoin_forall_count_le_pow
+    (Ω := fun _ => (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
+    (fun u x => (P u x).Accepts ((o u x).1, (o u x).2, x u) ∧ ¬ (P u x).Break ((o u x).1, (o u x).2, x u))
+    (fun u x => (r u x).CapacityShort S ((o u x).1, (o u x).2, x u)) ?_ ?_
+    (fun u x => (prCoin_mono fun a h => ⟨h.1.1, h.1.2, h.2 _⟩).trans
+      (shortAccepted_le D Q L hP2 hfix round S τ hdev hinst hS u x)) M
+  · intro u x x' hx
+    simp only [hfix.2.1 u x x' fun i hi => hx i hi.le, hfix.2.2 u x x' fun i hi => hx i hi.le, hx u le_rfl]
+  · intro u x x' hx
+    simp only [ResourceAccounting.Run.CapacityShort, hfix.1 u x x' hx, hfix.2.2 u x x' hx]
 
 /-! ## The honest and nontrivial lemmas of `pooledShort_log` -/
 
