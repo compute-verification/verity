@@ -70,7 +70,7 @@ theorem repOk_at (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (sp
 of them (`rep_rounds_of`), each of at most `2^16` coins (`RoundsOk`) and `|d| + 2^16` bytes (`rep_bytes`). -/
 theorem streamsLe_at (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
-    (hkm : st.c.kLog ≤ st.m) (hpm : spec.mPts = st.mPts) {D : ℕ} (hD : ∀ rep, (spec.domain t rep).toUTF8.size ≤ D)
+    (hkm : st.c.kLog ≤ st.m) (hpm : spec.mPts = st.mPts) {D : ℕ} (hD : ∀ rep < 2, (spec.domain t rep).toUTF8.size ≤ D)
     (hDl : D < 10 ^ 19) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (tr : Trace)
     (tape : TapeZk) (streams : Array (Array Round))
     (hv : Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v)
@@ -92,7 +92,7 @@ theorem streamsLe_at (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} (h
     obtain ⟨i, -, rfl⟩ := Array.mem_map.1 ha
     simp [hpm]
   have ht0 : spec.tables[0]! = t := by rw [ht]; rfl
-  have hd : (spec.domain spec.tables[0]! j).toUTF8.size ≤ D := by rw [ht0]; exact hD j
+  have hd : (spec.domain spec.tables[0]! j).toUTF8.size ≤ D := by rw [ht0]; exact hD j hj
   have hR := rep_rounds_of L0.verifier h64 st tr h25 h35 hms hkm tape 0 (spec.domain spec.tables[0]! j).toUTF8 r v
     cm _ e j ic hin hj prior ws l p t' l' hgo
   have hB := rep_bytes h64 st tr h25 h35 hms hkm tape 0 (spec.domain spec.tables[0]! j).toUTF8 r v cm _ e j ic hin hj
@@ -113,7 +113,7 @@ theorem record_size_le (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} 
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (JsonRT.helloJ own) = .ok hz)
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hkm : st.c.kLog ≤ st.m) (hreg : st.regions.size ≤ 1024) (hpm : spec.mPts = st.mPts) (hpt : spec.points ≤ 2)
-    {D L : ℕ} (hD : ∀ rep, (spec.domain t rep).toUTF8.size ≤ D) (hDl : D < 10 ^ 19) (hL : NamesLe spec L)
+    {D L : ℕ} (hD : ∀ rep < 2, (spec.domain t rep).toUTF8.size ≤ D) (hDl : D < 10 ^ 19) (hL : NamesLe spec L)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {k : ℕ} (r : Fin k → Coin)
     {rec : String × Array ByteArray} {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS fun j => (Claims.coinSeq r j).bytes) (Hashes.ofSha512 (Claims.hOf H)) spec
@@ -165,7 +165,7 @@ theorem recordFitsZk_of (h64 : Claims.Out64 H) {x : Claims.Msg} {spec : SessionS
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (JsonRT.helloJ own) = .ok hz)
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hkm : st.c.kLog ≤ st.m) (hreg : st.regions.size ≤ 1024) (hpm : spec.mPts = st.mPts) (hpt : spec.points ≤ 2)
-    {D L : ℕ} (hD : ∀ rep, (spec.domain t rep).toUTF8.size ≤ D) (hDl : D < 10 ^ 19) (hL : NamesLe spec L)
+    {D L : ℕ} (hD : ∀ rep < 2, (spec.domain t rep).toUTF8.size ≤ D) (hDl : D < 10 ^ 19) (hL : NamesLe spec L)
     (hfit : recBound spec hz t ct st.mPts D L < 2 ^ 64) :
     RecordFitsZkAt H x spec #[st] := by
   intro w ω r record proofs hsim
