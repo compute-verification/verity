@@ -117,17 +117,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (  
 #: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
 
-KNOWN_FAILURES = {
-    "program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
-        "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
-    "engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
-        "15 inv_freq elements differ at D=96; the model expects 14",
-    "program/test_ref_prims.py::test_gelu_ref_vs_torch[none-bf16]":
-        "exact GELU against torch CPU: max ulp 128, normalised error inf",
-    "program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
-        "exact GELU against torch CPU: max ulp 875,646,710, normalised error nan",
-}
-
 #: PoUW's H1 checks the int8 arm's records with the arm's own GEMM and dequantization, as the option hands them in at install
 use_int8_arm(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
 
@@ -155,8 +144,6 @@ def pytest_collection_modifyitems(items) -> None:
     sweep = pytest.mark.skip(reason="VERITY_VLLM_BOOLEAN_SWEEPS=1: a random Boolean-vs-word sweep (all of them: about 19 minutes "
                                     "of test time)")
     for item in items:
-        if reason := KNOWN_FAILURES.get(item.nodeid):
-            item.add_marker(pytest.mark.xfail(reason=f"known failure on main: {reason}", strict=False))
         if not SWEEPS and "boolean_sweep" in item.keywords:
             item.add_marker(sweep)
 

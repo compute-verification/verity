@@ -38,7 +38,7 @@ says. These are the directories that have one:
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
-| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`) |
+| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`) for each block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof benchmark by layer, Flock, with zero knowledge, with sampling and with recursion, the benchmark result for each layer read from its own run's output (`layers`). From a clone, in order: the adapter's bootstrap, the three partition files and the Flock, zero-knowledge and sampling runs of `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table"; the recursion job, `bash benchmarks/recursion_e2e/job.sh K=2048 N=2 GPU=0 FLOCK_WORK=DIR` (`benchmarks/prove/README.md`'s "On a machine of your own"); then `verity bench prove layers --flock A --zk B --sampling C --recursion E` on the four runs' `OUT` directories |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
@@ -137,7 +137,10 @@ The core benchmarks take and print the same things in the same form. Each rule i
    (`kit.report`'s `measured`), under the `id` of a metric of its directory's `metrics.toml` (a variant of one
    number, such as a clock reading, is that metric's `member`), and the metric's `goal` is the benchmark's goal. Only
    a run of ours through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and
-   `result.json`.
+   `result.json`. A number is measured once, by the run that measured it: a command that reprints another run's record
+   passes that run's id (`kit.report(..., from_run=RUN)`), and the kit then prints and writes the document but writes no
+   measurement. Under a research run each measurement also holds the `command` the run was launched as, from its
+   `job.json`.
 
 **A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
 made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
@@ -145,7 +148,7 @@ made_up=True)`: the line `a made-up record, not a run's` is printed under the au
 and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
 
-`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
 
 A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
@@ -339,7 +342,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
-| `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
+| `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
 
 ### Memory
