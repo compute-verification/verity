@@ -323,7 +323,7 @@ def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch)
 
 def test_a_field_of_every_row_of_a_mixed_tuple_array_is_checked_by_structure(monkeypatch):
     """A batch's argument that reads one field of each row of an earlier batch's output (a `Strided` over a mixed-width tuple
-    array, the field wider than the residue cap) is decided by the field's widths, not leaf by leaf: at its own width it passes
+    array, the field wider than the residue limit) is decided by the field's widths, not leaf by leaf: at its own width it passes
     with `_Widths.leaf` refusing any call, and read at another width or shifted into the next field it is refused."""
     rows, k, s = 64, 6144, 48
     row = TupleT((Array(k, S8), Array(s, S32)))

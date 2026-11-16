@@ -19,7 +19,7 @@ k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products,
 are shifts of the 16-bit significand products, the same integers), reading each W row once for all the rows, with the GIL released;
 where it cannot be built, `_chain` computes it in numpy over a W side (values and exponents, transposed) prepared once per weight
 buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place).  Either hands back the same
-coordinates.  Coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the cap `VERITY_DENSE_THREADS` sets when this
+coordinates.  Coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the limit `VERITY_DENSE_THREADS` sets when this
 module is imported, `use_threads`); the words do not depend on the split or the path.
 `gemm_dot_rows` is `Gemm_v2`'s batch form under kernel "rows": a step's logits rows against the one W by one `gemm_rows`.
 """
@@ -273,7 +273,7 @@ _THREADS: list[int] = [MAX_THREADS]
 
 
 def use_threads(n: int | str | None) -> None:
-    """Cap the chain's threads at `n` (at import, `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
+    """Limit the chain's threads at `n` (at import, `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
     `MAX_THREADS`."""
     try:
         k = MAX_THREADS if n is None else int(n)
@@ -286,7 +286,7 @@ use_threads(os.environ.get("VERITY_DENSE_THREADS"))
 
 
 def threads() -> int:
-    """The chain's threads: the cap (`use_threads`, else `MAX_THREADS`), at most this process's CPUs."""
+    """The chain's threads: the limit (`use_threads`, else `MAX_THREADS`), at most this process's CPUs."""
     return max(1, min(len(os.sched_getaffinity(0)), _THREADS[0]))
 
 

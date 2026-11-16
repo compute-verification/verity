@@ -2,7 +2,7 @@
 as the v7 taps write it.
 
 The kernel materialises the selected classes into one flat u32 buffer (`VERITY_TAP=3`, the M1 stream) whose layout is
-arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block cap): `StreamLayout` below mirrors `Verity_mat_layout` in
+arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block limit): `StreamLayout` below mirrors `Verity_mat_layout` in
 `verity_tap.h`, and every canonical (class, slab, row, col | block, lane | d) position is one word.  The tap exactness
 properties and the hidden source's tests place a word by it; no library module reads it.
 """

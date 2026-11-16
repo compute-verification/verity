@@ -81,7 +81,7 @@ def test_apply_softcap_follows_mufu_tanh_rules():
     # zero (padded key column) -> +0 exactly
     assert oracle.apply_softcap(0, cap_bits) == 0
     # huge score: s * c >= 8 -> saturates at exactly +1.0 / -1.0
-    big = P.bits_of(np.float32(50.0 * 16 * 9))     # (s * scale / cap) = 9 >= 8
+    big = P.bits_of(np.float32(50.0 * 16 * 9))     # (s * scale / limit) = 9 >= 8
     assert oracle.apply_softcap(big, cap_bits) == 0x3F800000
     assert oracle.apply_softcap(big | 0x80000000, cap_bits) == 0xBF800000
     # a table word (0.6): equals the measured MUFU.TANH, which is NOT RN32(tanh)

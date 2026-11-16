@@ -110,7 +110,7 @@ def test_the_two_readers_the_device_cases_measure_with_read_the_kernels_files(tm
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
 def test_exact_pool_blocks_are_shared_across_fork_not_copied():
     """The C2 sampled replay forks evaluator children while the frozen pool is live.  Linux >= 5.9 copies DMA-pinned
-    PRIVATE pages eagerly at fork (at B8: 59,350 MiB per child, cgroup at the cap, 20 OOM-killed children); the pool's blocks are
+    PRIVATE pages eagerly at fork (at B8: 59,350 MiB per child, cgroup at the limit, 20 OOM-killed children); the pool's blocks are
     MAP_SHARED mappings, which fork shares -- measured on cp-h100 with a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB,
     shared-registered -> +336 (the child's RssShmem 2,048 = the shared pages).  Here: a child that reads a 1 GiB block adds far less
     than the block to the cgroup's anon, and sees the block as RssShmem, not RssAnon."""

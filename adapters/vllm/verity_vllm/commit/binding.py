@@ -337,7 +337,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     registered-input identity.  Returns (identities, header) where header carries the manifest's own digest for the record.
     `request_steps` = {r<i>: engine steps the request EXECUTED (its executed prefix of record: arrival .. arrival +
     executed_prefix_len)}: an identity of a listed request at an engine step outside its prefix is programmed-but-unexecuted -- NOT required
-    (counted in header `programmed_not_executed_n`).  The manifest itself stays the Program's (cap shape); only the requirement is placed."""
+    (counted in header `programmed_not_executed_n`).  The manifest itself stays the Program's (limit shape); only the requirement is placed."""
     with open(path) as f:
         doc = json.loads(f.read())
     rows = doc.get("entries") or doc.get("rows") or doc.get("identities")   # the rows, under the first of their spellings that holds any
@@ -617,7 +617,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     slot `overlaps`; (3) every sampled-ids slot is bound once per declared request.  Request-local identity ranges are otherwise blind to
     WHICH block a request was bound to, so this check is what makes relabel / duplicate-into-slot fail named.  B=1 manifests declare no
     composition: skipped, recorded.
-    `request_steps` = {r<i>: executed engine steps}: the declared composition (the Program's cap shape) is read
+    `request_steps` = {r<i>: executed engine steps}: the declared composition (the Program's limit shape) is read
     over each request's executed prefix of record -- a request that stopped (EOS + LAG rows) is dropped from the later steps' expectation,
     so a row of it committed there is `unexpected` (execution past the stop) and its absence is not `missing`; a step no request executes
     is skipped (recorded as `steps_not_executed`).
@@ -625,7 +625,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     Program's CAP shape and is read UNRESTRICTED; the EXECUTED packed member is tiled by the ACTIVE members only, in the record's row
     order, cursor == its live rows (the record composition unchanged); a bot-by-enablement entry is its OWN row space -- a tensor of its
     own, exactly one per (absent request, declared rows) per step, `element_offset` never read into the tiling -- and the UNION multiset
-    {(request, rows)} over executed + padding must equal the declared cap composition; a request with BOTH an executed block and a
+    {(request, rows)} over executed + padding must equal the declared limit composition; a request with BOTH an executed block and a
     padding entry at one step FAILS (double binding); a padding entry for a request the executed prefix of record places AT that step
     FAILS (padding inside the prefix); sampled-ids slots are checked over the executed member, the padding counted beside."""
     steps = man_hdr.get("engine_steps")

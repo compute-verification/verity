@@ -341,7 +341,7 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     assert _legacy(bn) > 23325 * MiB and _legacy(bn) // MiB == 29615, _legacy(bn) // MiB
     assert bx["raw_kept_bytes"] > 5440526844 and bx["levels_bytes"] > 6268967168                   # kept raw and levels each cover their measurement
     assert bn["raw_kept_bytes"] == 0 and bn["replay_bytes"] == bn["levels_bytes"] + bn["learn_budget_bytes"] + bn["picks"] * 256
-    # B8 workload of record: 365/633/11/1024/817/449/165/73 at step 0 (one prefill of 3,537 tokens), caps up to 128
+    # B8 workload of record: 365/633/11/1024/817/449/165/73 at step 0 (one prefill of 3,537 tokens), limits up to 128
     reqs8 = [{"prompt_token_ids": list(range(n)), "arrive_step": 0, "max_tokens": c}
              for n, c in zip((365, 633, 11, 1024, 817, 449, 165, 73), (128, 113, 95, 35, 121, 3, 9, 2))]
     s8 = schedule_stream_bound(asz, reqs8, {"max_tokens": 128})

@@ -81,7 +81,7 @@ class Unsupported:
 
 
 class Limits:
-    """Caps that turn an expensive answer into Unsupported rather than into an unbounded computation."""
+    """Limits that turn an expensive answer into Unsupported rather than into an unbounded computation."""
     max_intervals: int = 5_000_000       # tier-B partition sweep (interval endpoints)
     max_members_exact: int = 4_096       # per-member exact out() before falling back to Unsupported
     max_items_per_part: int = 1_000_000

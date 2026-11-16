@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     plan of four; the sharded plan unit over a shard of 32 blocks missing at most two; the memory-map unit with two values,
     one written block of eight slots, over 16 registered blocks, 8 written values at two epochs (the plan's 16 layout
     entries), four written blocks and four windows. Every clause's comparison is there at each binding, a re-key's old block
-    and its cap among them; a larger one repeats them. A block's payload is `BLOCK_BITS` wide at any binding, so the
+    and its limit among them; a larger one repeats them. A block's payload is `BLOCK_BITS` wide at any binding, so the
     memory-map unit's whole lowering (about 100,000 ANDs) is over the default budget: its correspondence and pin are checked
     with ``--lower-max-ands 120000``."""
     from verity.circuits.defs import bind

@@ -111,7 +111,7 @@ def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float
     the OS.
     The block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies DMA-pinned PRIVATE pages eagerly at fork()
     (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks (its evaluator Pool) would get its own copy
-    of the whole frozen pool at fork time -- on a 59,350 MiB pool, cgroup anon 135 -> 239 GB (the cap) in a minute and 20 OOM-killed
+    of the whole frozen pool at fork time -- on a 59,350 MiB pool, cgroup anon 135 -> 239 GB (the limit) in a minute and 20 OOM-killed
     children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered -> +336, the
     child's RssShmem 2,048 = the shared pages).  Shared mappings are never copy-on-write, so children read the committed store in place,
     as on torch's (also MAP_SHARED) blocks; the cgroup accounts them as shmem, like torch's."""

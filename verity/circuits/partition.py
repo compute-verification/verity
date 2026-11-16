@@ -64,8 +64,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 PartitionStatus = Literal["exact", "overlap", "outside", "gap", "unsupported"]
 
-MAX_LISTED = 64  # cap on listed indices / examples inside a verdict (totals are always reported)
-LIMITS = Limits()  # the caps a check takes when its caller passes none
+MAX_LISTED = 64  # limit on listed indices / examples inside a verdict (totals are always reported)
+LIMITS = Limits()  # the limits a check takes when its caller passes none
 
 
 # ---------------------------------------------------------------------------------------------------------

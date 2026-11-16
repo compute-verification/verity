@@ -372,7 +372,7 @@ def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs
 def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_its_runs(monkeypatch, cap, least):
     """The memo of a document's parameter operands builds the columns the Builder without it builds and the reads the reader this
     replaced gives, for operands that are one list again, a copy of it, equal runs that are other objects, more operands sharing a
-    first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any cap."""
+    first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any limit."""
     monkeypatch.setattr(pv, "RESOLVE_MEMO_RUNS", cap)
     monkeypatch.setattr(pv, "RESOLVE_MEMO_MIN", least)
     rng = random.Random(13)

@@ -12,7 +12,7 @@ output stops at the first length L, 1 to T, at which
 
 and n = L, the cell the egress record's END goes in (n DATA cells, then END; the finish reason isn't sent).  When no length up
 to T stops, n = T and finish is 0: the request runs on.  ``max_tokens`` below 1 never stops.  The order is vLLM d9105ea8's
-`check_stop`: the last id against the stop ids first, then the two length caps.
+`check_stop`: the last id against the stop ids first, then the two length limits.
 
 The comparisons are signed i32 and ``max_model_len - prompt_len`` wraps, so the function is total on every word (`reference`
 is it exactly).  On the served domain (``max_tokens``, ``prompt_len`` and ``max_model_len`` in [0, 2^31), any ids) it is the
@@ -21,7 +21,7 @@ shortest prefix that rule ends when finish isn't 0 (1 its "eos", 2 and 3 its "le
 when finish is 0.
 
 The body (`stop`) is written once over its steps; `boolean_stop_rule.StopRule_v2` is it on gates.  It finds the first stop id
-with one select a position from the last position down (T + 1 when none), and the length caps without a compare a position:
+with one select a position from the last position down (T + 1 when none), and the length limits without a compare a position:
 the first length that reaches ``max_tokens`` is ``max_tokens``, and the first that reaches the model's length is
 ``max_model_len - prompt_len``, at least 1.  A position costs NSTOP equality tests and a select of small constants.
 

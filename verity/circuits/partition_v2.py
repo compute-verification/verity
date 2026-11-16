@@ -486,7 +486,7 @@ def decode(rs: Sequence[bytes]) -> Advice:
 
 def predicates(width: int | None = WIDTH, recompute: str = "refuse", max_gates: int | None = None,
                max_in_bits: int | None = None, canonical: Mapping[str, Any] | None = None, grid_bits: int = GRID_BITS) -> dict[str, Any]:
-    """The public predicates: the limit on a unit's bits out or none, the recompute rule, the caps on a unit's circuit, the
+    """The public predicates: the limit on a unit's bits out or none, the recompute rule, the limits on a unit's circuit, the
     canonical query whose unit counts bound each entry's, and the grid."""
     return {"width": width, "recompute": recompute, "max_gates": max_gates,
             "max_in_bits": max_in_bits, "canonical": dict(canonical) if canonical is not None else None, "grid_bits": grid_bits}
@@ -688,7 +688,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
             wide = [[u, b, c] for u, (b, c) in enumerate(zip(ob, og)) if b > width]
             if wide:
                 fail("unit-too-wide", {"entry": j, "definition": fn.id, "units": wide[:_MAX_LISTED], "n": len(wide)})
-        # G7: the shapes, and the caps
+        # G7: the shapes, and the limits
         ucs = G.activation(fn).circuits(en.owner)
         want = _classes(uc.shape for uc in ucs)
         if (en.shape, en.classes) != want:

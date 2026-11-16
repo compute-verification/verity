@@ -1,7 +1,7 @@
 """`verity.circuits.boundary` against the explicit oracle `query_ast.oracle_out` / `oracle_in` on the expanded circuit.
 
 Every exact answer must equal the oracle; every bound must be >= the exact `w_out`; every `Unsupported` must be on a
-case named here (produced by tightening the module caps).  The Programs use test-local primitives: a GEMM (a batch of
+case named here (produced by tightening the module limits).  The Programs use test-local primitives: a GEMM (a batch of
 coordinates, each a call of an accumulator chain), paired batch reads, a dead parameter, an embedding gather over a
 strided table view, fan-out, dead and re-returned nested returns, pass-through returns (batch members, scan carries and
 xs), Input gates, axis-1 and strided batch arguments."""
@@ -509,12 +509,12 @@ def test_embedding_gather_is_analytic():
 
 
 # --------------------------------------------------------------------------------------------------------------
-# named Unsupported cases (produced by tightening the module caps)
+# named Unsupported cases (produced by tightening the module limits)
 # --------------------------------------------------------------------------------------------------------------
 
 
 def test_unsupported_unresolved_consumer_members(monkeypatch):
-    """A consumer whose members read non-affine references beyond the per-member cap is `_Lazy`: exact answers stay
+    """A consumer whose members read non-affine references beyond the per-member limit is `_Lazy`: exact answers stay
     exact while the consumer is wholly outside the part (its union is exact), become `Unsupported` when the part
     splits it, and the bound stays sound either way."""
     monkeypatch.setattr(B, "_MEMBER_CAP", 1)
@@ -547,7 +547,7 @@ def test_unsupported_unresolved_consumer_members(monkeypatch):
 
 
 def test_unsupported_index_incomplete(monkeypatch):
-    """Pass-through canonicalisation beyond its cap leaves the index incomplete: every exact query on the
+    """Pass-through canonicalisation beyond its limit leaves the index incomplete: every exact query on the
     specialization is `Unsupported("index_incomplete")`; the bound falls back to the declared widths."""
     monkeypatch.setattr(B, "_PASSTHROUGH_CAP", 0)
     wrap = comp("TWrapI", [("x", V32)], Tuple(V32, V32), lambda Bd, S, x: tuple_of(Bd.call(Mul32, x, x), x))
@@ -620,7 +620,7 @@ def test_partial_member_reads_of_nested_parameters():
 
 
 def test_unsupported_inexact_nested_reads_propagate(monkeypatch):
-    """When a cap leaves a nested specialization's parameter reads conservative, the enclosing bodies must not treat
+    """When a limit leaves a nested specialization's parameter reads conservative, the enclosing bodies must not treat
     the over-approximation as exact: every producer wired into that parameter becomes an unresolved consumer edge
     (`Unsupported("unresolved_consumer")`), the other parameter stays exact, and the bounds stay sound."""
     monkeypatch.setattr(B, "_MEMBER_CAP", 1)
@@ -641,14 +641,14 @@ def test_unsupported_inexact_nested_reads_propagate(monkeypatch):
         assert B.out_gates(Part(sc, frozenset({(1, m)}))).reason == "unresolved_consumer"
         assert B.w_out_bound(Part(sc, frozenset({(0, m)}))) == 32
     assert B.in_gates(Part(sc, frozenset({(2, 0)}))).reason == "used_params"
-    # the call's outputs feed the root's column batch `z` (3 columns > cap, partial reads): unresolved there too
+    # the call's outputs feed the root's column batch `z` (3 columns > limit, partial reads): unresolved there too
     assert B.out_gates(Part(sc, frozenset({(2, 0)}))).reason == "unresolved_consumer"
     for j in range(2):  # inside mid the batches read their (exact) callee normally; their returns' escape is undetermined
         for m in range(3):
             p = Part(mid, frozenset({(j, m)}))
             assert B.in_gates(p) == oracle.in_(part_gates(p)) and B.out_gates(p).reason == "unresolved_consumer"
     assert B.out_gates(Part(sc, frozenset({(4, 1)}))) == oracle.out(part_gates(Part(sc, frozenset({(4, 1)}))))  # z's members: exact
-    # the root's own axis-1 batch over the M Input node (3 columns > cap, partial reads): a `_Lazy(exact=False)` edge
+    # the root's own axis-1 batch over the M Input node (3 columns > limit, partial reads): a `_Lazy(exact=False)` edge
     assert any(isinstance(d, B._Lazy) and not d.exact and jp == 3 for jp, d in B.consumer_index(sc.spec).consumers(("n", 1)))
     # deep: the inexactness crosses two levels (outer's batch of mid over its parameters, then the root's call)
     P_ = _nested_partial_program(deep=True)
@@ -664,7 +664,7 @@ def test_unsupported_inexact_nested_reads_propagate(monkeypatch):
 
 
 def test_unsupported_boundary_too_large(monkeypatch):
-    """`Limits.max_intervals` caps the boundary leaves an exact query enumerates: beyond it `out_gates` / `in_gates` /
+    """`Limits.max_intervals` limits the boundary leaves an exact query enumerates: beyond it `out_gates` / `in_gates` /
     `w_out` / `explain` are `Unsupported("boundary_too_large")`; `w_out_bound` falls back to the declared output widths
     (batch members and scan carries + ys), which stays >= the oracle."""
     step = comp("TStepL", [("carry", V32), ("x", V32)], Tuple(V32, V32),

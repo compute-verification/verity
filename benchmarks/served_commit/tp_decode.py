@@ -20,7 +20,7 @@ One engine process per arm (``--arm``), since the row size is a module constant 
 
 A batch's requests are the workload's request with its prompt rotated by ``--rotate`` tokens per request, at the workload's
 prompt length
-and cap, all arriving at once; every request decodes to its cap (``ignore_eos``), so a batch's runs have the same steps. Per run,
+and limit, all arriving at once; every request decodes to its limit (``ignore_eos``), so a batch's runs have the same steps. Per run,
 `runs.jsonl` has the step walls and outputs, and `phases` reads TTFT (the mean over the requests, and the time to the batch's last
 first token) and the decode TPOT (the mean step wall once every request decodes) from them. A Commit run passes its gate when its
 tokens equal the batch's first control run's, every rank has a 64-byte root, no collector error and no step that bounded staging
@@ -49,7 +49,7 @@ ROOT_BYTES = hashlib.sha512().digest_size
 
 
 def requests_at(wl: dict[str, Any], batch: int, rotate: int) -> list[dict[str, Any]]:
-    """``batch`` requests from the workload's first: its prompt rotated by ``rotate`` tokens per request, its cap, all at step 0."""
+    """``batch`` requests from the workload's first: its prompt rotated by ``rotate`` tokens per request, its limit, all at step 0."""
     base = wl["requests"][0]
     ids = [int(t) for t in base["prompt_token_ids"]]
     keep = {k: base[k] for k in ("max_tokens", "temperature", "top_p", "top_k", "seed") if k in base}

@@ -73,7 +73,7 @@ and casts with ``__float2bfloat16``. The 1-stage kernel reads ranks 0, 1, ..., W
 owner + 1, ... mod WORLD (`custom_owners`).
 
 Past FlashInfer's 0.5 MiB at TP 8 on sm_90, `CudaCommunicator.all_reduce` hands a bf16 tensor to torch's symmetric memory (to
-64 MiB) with vLLM's custom all-reduce on (vLLM's default) or off, its cap with symmetric memory on being below FlashInfer's. At
+64 MiB) with vLLM's custom all-reduce on (vLLM's default) or off, its limit with symmetric memory on being below FlashInfer's. At
 4, 6 or 8 ranks on cc 9.0 that is `torch.ops.symm_mem.multimem_all_reduce_` (torch 2.13 `CUDASymmetricMemoryOps.cu`): rank r
 issues ``multimem.ld_reduce.relaxed.sys.global.add.acc::f32.v4.bf16x2`` over its slice of ``round_up(SIZE, 16 * WORLD) / WORLD``
 elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The NVSwitch reduces the WORLD payloads in f32 in an

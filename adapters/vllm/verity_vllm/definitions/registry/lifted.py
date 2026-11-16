@@ -654,7 +654,7 @@ def l_is_eos(E: int) -> PrimitiveDefinition:
 
 
 def l_emit_next(H: int = 1) -> PrimitiveDefinition:
-    """`LEmitNext[H=<h>]_v1(emit: Value<2>, is_eos: Value<2>) -> Value<2>`: `e_{t+1} = h_t AND e_t AND NOT b_t` with the cap term
+    """`LEmitNext[H=<h>]_v1(emit: Value<2>, is_eos: Value<2>) -> Value<2>`: `e_{t+1} = h_t AND e_t AND NOT b_t` with the limit term
     `h_t = [t < C]` a construction-time STATIC of the gate (built with `H = 1` at every slot that has a successor; the `H = 0` member exists so
     the final transition can be replayed -- both next bits false -- and is never fitted).  Never bot; an invalid bit -> `INV_1`."""
     if H not in (0, 1):
@@ -1443,7 +1443,7 @@ class ServedPrefixFailure(ValueError):
 
 def activity_prefix(tokens: Sequence[int], eos_set: Sequence[int], n_events: int, *, w: int = 32) -> int:
     """`a_r`: the least event `s ∈ [1, n_events)` with `tokens[s−1]` an Active member of `eos_set`, else `n_events`
-    (the cap: every event Active).  `tokens` are lifted words (`0‖id` or ⊥) or plain ids; `tokens[0]` is the prefill's event,
+    (the limit: every event Active).  `tokens` are lifted words (`0‖id` or ⊥) or plain ids; `tokens[0]` is the prefill's event,
     which is unconditionally live  — the scan therefore reads `tokens[s−1]` for `s ≥ 1` only.  A function of the
     committed values, never of a flag or of `n_r`."""
     eos = set(int(e) for e in eos_set)
@@ -1469,7 +1469,7 @@ def served_count(out: Sequence[int], *, w: int = 32) -> int:
 
 def expected_served(a_r: int, n_events: int, lag: int) -> int:
     """The number of executed (committed, Active) events the profile predicts: `a_r` under `LAG = 0`; `a_r + 1` under `LAG = 1` when the
-    request stopped on an EOS before the cap (the placeholder step's discarded sample is an executed event), `cap` otherwise."""
+    request stopped on an EOS before the limit (the placeholder step's discarded sample is an executed event), `cap` otherwise."""
     check_lag(lag)
     return min(a_r + lag, n_events) if a_r < n_events else n_events
 
@@ -1488,7 +1488,7 @@ def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int],
     """The pre-challenge ⊥ assignment rule: from the **served** Active tokens `served[0..n_r−1]` (the
     prefill's event plus `n_r − 1` decode events), the full fixed `out[0..n_events−1]` is `0‖served[s]` for `s < n_r` and
     `enc(⊥)` for `s ≥ n_r` — admissible only if `n_r = a_r` with `a_r` derived from the served tokens themselves (the event
-    after the committed EOS, or the cap).  A shortfall or excess is a named failure; nothing is filled with ⊥ silently."""
+    after the committed EOS, or the limit).  A shortfall or excess is a named failure; nothing is filled with ⊥ silently."""
     n_r = len(served)
     if n_r < 1 or n_r > n_events:
         raise ServedPrefixFailure(request, n_r, n_events, f"served count outside [1, {n_events}]")

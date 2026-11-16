@@ -1,5 +1,5 @@
 """`glm53_multimem_replay` over a synthetic capture record in the capture's layout, at hidden 512 (`tp_allreduce.CAPTURED`
-given a 512-wide multimem entry, FlashInfer's cap at 0): the kept words, the models' at the pinned tree, are GO on the word
+given a 512-wide multimem entry, FlashInfer's limit at 0): the kept words, the models' at the pinned tree, are GO on the word
 Definition, the Boolean vectors and the model, the chain told apart and the probe decoded again; one kept word off the tree, a
 launch the capture did not pass, pins that are not CAPTURED's, a launch on another route are NO-GO by name."""
 from __future__ import annotations

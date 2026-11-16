@@ -154,7 +154,7 @@ def test_unreadable_manifest_is_an_error_not_no_context():
         LC.shape_contexts({"requests": [{"foo": 1}]})
     with pytest.raises((KeyError, TypeError, ValueError)):
         LC.shape_contexts({"sweep": {"input_lengths": [8, 1024]}})
-    # a shape the workload does not have is genuinely "no context" (the row's default build_request of the longest prompt / largest cap)
+    # a shape the workload does not have is genuinely "no context" (the row's default build_request of the longest prompt / largest limit)
     assert LC.spec_for({"sweep": {"input_lengths": [8, 1024], "output_caps": [15, 69]}}, 1024, 127) == ""
 
 

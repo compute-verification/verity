@@ -218,7 +218,7 @@ def test_a_cgroups_inactive_page_cache_counts_as_left(tmp_path):
 
 def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
     """`--mem-gb 149` (a 160 GB worker) with the parent holding its 9.6 GiB task list leaves 139.4 GiB for the targets, so a
-    151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits.  `--mem-gb` is a cap, never more than the
+    151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits.  `--mem-gb` is a limit, never more than the
     machine has free: a check slot's mem= on a node whose other check already took most of it leaves only what is free."""
     monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     monkeypatch.setattr(cli, "_rss_gb", lambda: 9.6)

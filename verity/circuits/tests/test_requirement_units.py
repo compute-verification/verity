@@ -2,7 +2,7 @@
 read only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
 layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; the sharded plan
 unit on a store of weights, a gathered table and filler past one shard; each clause's negative refused; and a re-key at the
-lifetime cap, one pass a window, accepted, and one window early refused."""
+lifetime limit, one pass a window, accepted, and one window early refused."""
 
 from __future__ import annotations
 
@@ -400,7 +400,7 @@ MOVED, AT = 0, 2
 def rekeyed(case, life, moved=MOVED):
     """The spread layout with written value ``moved`` re-keyed at step 2 into a fresh block N + 5 of step 2 at its slot: its
     epoch-1 layout entry, its old block freed at 2 and the new one at its last structural reader. Each step's map arguments under the
-    lifetime cap ``life`` and the toy's pass row, the layout row and the new block."""
+    lifetime limit ``life`` and the toy's pass row, the layout row and the new block."""
     req, (layout, store) = case.req, case.layouts["spread"]
     v = case.positions[moved]
     old, new = layout.block[v], MAP.N + len(case.positions)
@@ -426,7 +426,7 @@ def test_the_cap_is_the_stale_bound_in_step_form() -> None:
     """Over every schedule of passes at steps 0 .. 5 in consecutive windows, with windows to spare (T = 6), appends of 1, 0,
     2, 1, 1 and 0 blocks a step and L of 1 .. 3: a block written at step s is below the stale bound of the first pass after
     a re-key's step r (N plus the counts of the appends that joined a window L or more before it; none if no pass follows
-    r) iff s is below the cap the pass row gives at r. An append joins the window of the first pass after its step."""
+    r) iff s is below the limit the pass row gives at r. An append joins the window of the first pass after its step."""
     steps, counts = 6, [1, 0, 2, 1, 1, 0]
     S = SimpleNamespace(**{**vars(MAP), "T": steps})
     blocks = [s for s in range(steps) for _ in range(counts[s])]
@@ -449,10 +449,10 @@ def test_the_cap_is_the_stale_bound_in_step_form() -> None:
 @pytest.mark.slow
 def test_a_rekey_at_the_cap_is_accepted_and_one_window_early_is_refused(case) -> None:
     """Value 0's block, written at step 0, joined window 1; re-keyed at step 2, whose first pass after is window 3, it is 2
-    windows old. At L = 2 (cap 1 at step 2) every step's map unit accepts, and every step's plan unit with step 3 reading
+    windows old. At L = 2 (limit 1 at step 2) every step's map unit accepts, and every step's plan unit with step 3 reading
     the value at epoch 1, in the new block; a step-3 plan reading the old block, or the new one at epoch 0, is refused.
-    At L = 3 (cap 0) the re-key is one window early, and step 2's map unit refuses it; a pass row dating window 0's last
-    pass a step later (cap 1) accepts it, which only the row's binding to the record's passes refuses. The references
+    At L = 3 (limit 0) the re-key is one window early, and step 2's map unit refuses it; a pass row dating window 0's last
+    pass a step later (limit 1) accepts it, which only the row's binding to the record's passes refuses. The references
     agree."""
     req, (layout, _store) = case.req, case.layouts["spread"]
     assert PI == [0, 1, 2, 3] and [RU.rekey_cap(MAP, PI, L, AT) for L in (2, 3)] == [1, 0]
@@ -478,10 +478,10 @@ def test_a_rekey_at_the_cap_is_accepted_and_one_window_early_is_refused(case) ->
 
 @pytest.mark.slow
 def test_a_rekey_s_old_block_is_held_to_its_slot_its_write_and_the_cap(case) -> None:
-    """Step 2's re-key of value 0, accepted at L = 2 (cap 1), returns 0 when the new block holds the value in another slot
-    than the old one, when its old block is a registered one, or one step 2 itself writes (at L = 0, cap 3, which that
+    """Step 2's re-key of value 0, accepted at L = 2 (limit 1), returns 0 when the new block holds the value in another slot
+    than the old one, when its old block is a registered one, or one step 2 itself writes (at L = 0, limit 3, which that
     block's write step is below), and when no pass follows its step (the pass row's last window's pass at step 2). Value 2
-    (A's step-1 value, written at step 1) re-keyed at step 2 is refused at cap 1: its block is one window too young. Its
+    (A's step-1 value, written at step 1) re-keyed at step 2 is refused at limit 1: its block is one window too young. Its
     write step forged to 0 in the map row passes step 2's unit, and its writer, step 1's, refuses it. The reference agrees
     on each."""
     maps, _lam, new = rekeyed(case, 2)

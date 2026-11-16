@@ -37,8 +37,8 @@ bound.  `w_out_bound` never returns `Unsupported`: it uses the same index with o
 returned leaf sourced in the part, and on any internal limit falls back to the sum of the declared output widths of the
 items (sound: a gate can only leave a member through the member's outputs).
 
-Limits (`parts.Limits` plus the module caps below) turn expensive answers into `Unsupported`, never into a wrong one.
-In particular a callee whose reads of a parameter are only known conservatively (a cap tripped while listing partial
+Limits (`parts.Limits` plus the module limits below) turn expensive answers into `Unsupported`, never into a wrong one.
+In particular a callee whose reads of a parameter are only known conservatively (a limit tripped while listing partial
 per-member reads) makes every producer wired into that argument an unresolved edge (`_Lazy(exact=False)`) in the
 enclosing body, recursively upwards: exact queries touching those producers are `Unsupported`; the other arguments and
 every other part stay exact.
@@ -727,7 +727,7 @@ def _used_params(spec: SpecializedDefinition) -> tuple[Intervals, ...]:
 
 def used_param_intervals(spec: SpecializedDefinition) -> tuple[Intervals, ...]:
     """Per parameter, the leaf intervals read (transitively) by some gate of `spec`'s body — the compact form of
-    `used_param_leaves`, O(#runs) even for a weight tensor.  Raises `BoundaryLimit("used_params")` when a cap left
+    `used_param_leaves`, O(#runs) even for a weight tensor.  Raises `BoundaryLimit("used_params")` when a limit left
     some parameter's reads inexact (see `ConsumerIndex.used_exact`)."""
     return _used_params(spec)
 

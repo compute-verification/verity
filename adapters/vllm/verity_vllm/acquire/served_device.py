@@ -128,7 +128,7 @@ def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)
 def fa3_splits(qlens: list[int], klens: list[int], *, NH: int, KVH: int, D: int, split_cap: int, sms: int) -> dict[str, Any]:
     """FA3's tile and per-request split count for one varlen launch (vllm-flash-attn 506341a1: `tile_size_fwd_sm90`, the
-    static `num_splits_heuristic` (or the static cap a full graph fixes) and `prepare_varlen_num_blocks`' dynamic split,
+    static `num_splits_heuristic` (or the static limit a full graph fixes) and `prepare_varlen_num_blocks`' dynamic split,
     blocks per split = ceil(total m x n blocks x 1.1 x KVH / SMs) in f32 with div.full)."""
     g = NH // KVH
     max_q, max_k = max(qlens), max(klens)

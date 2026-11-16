@@ -216,7 +216,7 @@ def main() -> None:
 
 def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict,
                caps: list[int], beside_rows: list[int]) -> dict[str, Any]:
-    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's CTAs; at the row
+    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each limit's CTAs; at the row
     sizes of beside_rows also all-pad leaves and the commit (whole-grid at both priorities, and capped) beside each busy loop."""
     hs, hs_hi, bs = streams
     window = data.numel()

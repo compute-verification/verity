@@ -126,7 +126,7 @@ def _digests(t: torch.Tensor) -> list[bytes]:
 
 
 class _RowStep:
-    """`RowStep`: the step's frame domain and salt key (`max_blocks`, the launch cap, changes no byte)."""
+    """`RowStep`: the step's frame domain and salt key (`max_blocks`, the launch limit, changes no byte)."""
 
     def __init__(self, dom, ks: bytes) -> None:
         self.dom, self.ks, self.max_blocks = dom, ks, 0

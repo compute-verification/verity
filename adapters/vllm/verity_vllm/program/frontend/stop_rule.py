@@ -69,7 +69,7 @@ def of(finished: str, output_len: int, T: int, stops: Iterable[int], *, max_toke
 def body_refusal(params: Mapping[str, Any]) -> str | None:
     """Why a request body's own stop fields leave its length unchecked, naming the fix; None where they don't. Under ignore_eos
     vLLM's `SamplingParams.update_from_generation_config` keeps only the body's `stop_token_ids` as stop ids, so with those refused
-    such a request has none: its rule reads the length caps alone, and a finish on a stop id is refused (`of`)."""
+    such a request has none: its rule reads the length limits alone, and a finish on a stop id is refused (`of`)."""
     if params.get("stop") not in (None, []):
         return (f"stop strings {params['stop']!r}, which vLLM's detokenizer matches and no request Program checks, so its length "
                 f"would be unchecked advice. The fix: a length rule over the stop strings' token sequences beside "
