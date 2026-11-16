@@ -17,6 +17,7 @@ inputs = [
     "benchmarks/harness/verity_bench/overhead.py",
     # overhead.paired calls the kit's, which reads its settings
     "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
     "benchmarks/harness/verity_bench/overhead_node.py",
     "tools/config/verity_config",
@@ -42,18 +43,18 @@ inputs = [
     # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
     # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
     # beside them and the grid and certificate `head_check` reads
-    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
-    "verity/protocols/accounting/certifier/__init__.py",
-    "verity/protocols/accounting/certifier/prover/__init__.py",
-    "verity/protocols/accounting/certifier/prover/window_charge.py",
-    "verity/protocols/accounting/certifier/verifier/__init__.py",
-    "verity/protocols/accounting/certifier/verifier/arith_encode.py",
-    "verity/protocols/accounting/certifier/verifier/charge_chain.py",
+    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+    "verity/protocols/resource_accounting/network/__init__.py",
+    "verity/protocols/resource_accounting/network/prover/__init__.py",
+    "verity/protocols/resource_accounting/network/prover/window_charge.py",
+    "verity/protocols/resource_accounting/network/verifier/__init__.py",
+    "verity/protocols/resource_accounting/network/verifier/arith_encode.py",
+    "verity/protocols/resource_accounting/network/verifier/charge_chain.py",
     "adapters/vllm/verity_vllm/compiler/replay_chain.py",
-    "verity/protocols/accounting/certifier/verifier/head_check.py",
-    "verity/protocols/accounting/certifier/verifier/certificate.py",
-    "verity/protocols/accounting/certifier/verifier/grid.py",
-    "verity/protocols/accounting/certifier/verifier/schedule.py",
+    "verity/protocols/resource_accounting/network/verifier/head_check.py",
+    "verity/protocols/resource_accounting/network/verifier/certificate.py",
+    "verity/protocols/resource_accounting/network/verifier/grid.py",
+    "verity/protocols/resource_accounting/network/verifier/schedule.py",
     # the chain checks import SPOT's produced and registered row helpers
     "verity/protocols/proofs/spot/__init__.py",
     "verity/protocols/proofs/spot/verifier/__init__.py",

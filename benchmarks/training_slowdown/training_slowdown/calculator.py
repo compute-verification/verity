@@ -158,7 +158,7 @@ def _bound(c_gates: float, k_bits: float, work: dict | None, b=None) -> dict:
 def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None) -> tuple:
     """M (`work.he_of_rows`) read as the calculator's products and priced, and the calculator's choice on it at (c,
     he's k) and |C| (`min_cut.slowdown_of`: the sub-work of its `SUBWORKS` and the F at which its bound is largest, with
-    its term `rho`, the least blocks times c/|C| before the floor at 1, and 0 where no choice is positive), as a record,
+    its `term`, the least blocks times c/|C| before the floor at 1, and 0 where no choice is positive), as a record,
     beside the calculator's `Bound` there (None where none binds).
 
     How it reads M: each operand is charged its β, a weight's at most `beta_code` (the run record's code bits a trained
@@ -192,12 +192,12 @@ def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: f
     common = {"K_thr": got.K_thr, "beta_k": bk, "beta_code": beta_code, "first_steps": first, "r_step": he["r_step"],
               "subsets": got.terms}
     if got.choice is None:
-        return {"rho": 0.0, "subset": None, "beta_w": None, "beta_x": None, "beta": None, "b_y": None, "F": None,
+        return {"term": 0.0, "subset": None, "beta_w": None, "beta_x": None, "beta": None, "b_y": None, "F": None,
                 "alpha": None, "N": 0.0, "O": 0.0, "macs_share": 0.0, "below_width": False,
                 "code_bound": False} | common, None
     M = [groups[i] for i in got.products]
     macs = sum(g["macs"] for g in M)
-    return {"rho": got.term, "subset": got.choice, "beta_w": got.beta_w, "beta_x": got.beta_x,
+    return {"term": got.term, "subset": got.choice, "beta_w": got.beta_w, "beta_x": got.beta_x,
             "beta": math.sqrt(got.q), "b_y": got.b_y, "F": got.F, "alpha": got.alpha, "N": got.N, "O": got.O,
             "code_bound": beta_code is not None and any(
                 w and beta_code < b for g in M for b, w in zip(g["beta"], g.get("weight", ()))),
@@ -299,7 +299,7 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     code = bits / he["trained_weights"] if bits and he.get("trained_weights") else None
     figure, chosen = _figure(he, c, gates, (run or {}).get("tau_bits"), code)
     if figure["subset"] is None:
-        return out | {"slowdown": 1.0, "binds": "none", "term": figure["rho"], "figure": figure}
+        return out | {"slowdown": 1.0, "binds": "none", "term": figure["term"], "figure": figure}
     b = _bound(c, k, {x: figure[x] for x in WORK} | {"C_gates": gates}, chosen)
     return out | {"slowdown": b["slowdown"], "binds": "products" if b["slowdown"] > 1 else "none",
-                  "term": figure["rho"], "bound": b, "figure": figure}
+                  "term": figure["term"], "bound": b, "figure": figure}

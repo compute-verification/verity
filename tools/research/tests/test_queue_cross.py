@@ -570,3 +570,21 @@ def test_a_crossing_that_leaves_a_word_its_map_renames_only_in_other_files_is_re
     assert r["why"].endswith(": d.py:3 zed (-> zeta)")
     assert f"  refused #1 {old[:12]}: {Q.RESTACK}: stale-words: " in Q.cross_table(report)
     assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == old
+
+
+def test_the_root_suite_crossed_is_its_own_tests_and_not_the_suites_mirrored_beside_them(tmp_path, monkeypatch):
+    """Once suites mirror the tree under `tests/`, `pytest tests` collects them all as the root suite: the cross runs `tests/`
+    less each directory the root suite doesn't own (`suite_layout.root_owns`), so a mirrored suite's failure is not the root's."""
+    monkeypatch.setattr(Q, "CROSS_ROOT_SUITE", ["tests", "-m", "not slow"])
+    files = {"tests/test_root.py": "def test_root():\n    pass\n", "tests/lint/test_lint.py": "def test_lint():\n    pass\n",
+             "tests/tests/test_t.py": "def test_t():\n    pass\n",
+             "tests/tools/research/test_q.py": "def test_q():\n    assert False\n"}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    assert Q.root_suite(tmp_path) == ["tests", "-m", "not slow", "--ignore=tests/tools"]
+
+    def run(argv: list[str], cwd: Path) -> tuple[subprocess.CompletedProcess, str]:
+        return subprocess.run(argv, cwd=cwd, capture_output=True, text=True), ""
+    assert Q.pytest_failures(run, sys.executable, tmp_path, Q.root_suite(tmp_path)) == {}
+    assert list(Q.pytest_failures(run, sys.executable, tmp_path, Q.CROSS_ROOT_SUITE)) == ["tests/tools/research/test_q.py::test_q"]

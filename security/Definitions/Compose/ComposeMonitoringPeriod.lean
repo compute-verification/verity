@@ -189,9 +189,6 @@ structure Outcomes (C B : Type) (m s Np n : ℕ) (V : Type) where
   rel : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
   right : Paths (Paths C m × B) n → Fin n → Fin Np → (ℕ → V) → Prop
 
-/-- `Outcomes` under its former name, kept while queued changes still read it; nothing here reads it. -/
-abbrev PeriodRun := Outcomes
-
 /-- **Window `w` is credited** on the period's coins `x`: it and every earlier window had every sampled tile's proof
 accepted. The period stops at its first window with a refused proof, with no retry, and credits the windows before
 it. -/

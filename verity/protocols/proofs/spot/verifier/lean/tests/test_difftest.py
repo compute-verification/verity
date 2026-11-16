@@ -59,10 +59,10 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
-from verity.protocols.accounting.pouw.verifier import audit as PA
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum
-from verity.protocols.proofs.spot.device import challenger as CH
+from verity.protocols.proofs.spot.verifier.challenger import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
@@ -77,10 +77,10 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     registered as G,
     docket as R,
 )
-from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
-from verity.protocols.proofs.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
+from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
+from verity.protocols.proofs.spot.verifier.challenger.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, sampling_design_problem)
-from verity.protocols.proofs.spot.device.coins import ran_out as draw_ran_out
+from verity.protocols.proofs.spot.verifier.challenger.coins import ran_out as draw_ran_out
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO
@@ -7371,7 +7371,7 @@ def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, 
 
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces, callers):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
-    network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
+    network attester signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
     each at the values it arrived with and the outputs released of it); its rows (`req`) are its own, under its open
     root; and its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted
     from the outputs serving computed or the last window's arrivals again are `R7-held`, and a window that restarts its
