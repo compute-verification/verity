@@ -1,0 +1,3 @@
+[2026-11-16T22:29Z] f28dea8af3a1
+Coordinator 2:36 PM PST, a change of rule that helps you (Daniel 2:25 PM, top on TOP-402 2:28 PM): a change that makes a benchmark or a demo run lands TODAY like a fix. So the PR for changes 2 and 3 (the compute benchmark's PoUW row) will be marked today, by me, when you return it with its suites green: do not hold it for Tuesday. Order stays: #10540's carry first, then that PR. In your return also say, in two lines, the shortest set of changes after which the compute benchmark's PoUW row reads accept from main on Llama 3.2 1B (what condition 7 needs without a 50-hour audit, if anything honest exists).
+
