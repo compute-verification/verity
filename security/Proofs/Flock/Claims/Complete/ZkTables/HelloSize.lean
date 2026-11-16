@@ -117,8 +117,8 @@ theorem helloList_sum_le (tags : Tags) (sigma : ByteArray) (hs : sigma.size = 64
   have j3 : jsz (Json.str "bytes retained") = 254 := by decide +kernel
   unfold helloList
   by_cases h9 : tags.hm96Rows = true <;> by_cases hr : tags.retainRounds = true <;>
-    simp only [h9, hr, ↓reduceIte, List.map_cons, List.map_nil, List.map_append, List.sum_cons, List.sum_nil,
-      List.sum_append, List.cons_append, List.nil_append] <;>
+    simp only [h9, hr, Bool.false_eq_true, ↓reduceIte, if_true, if_false, List.map_cons, List.map_nil,
+      List.map_append, List.sum_cons, List.sum_nil, List.sum_append, List.cons_append, List.nil_append] <;>
     omega
 
 theorem helloList_distinct (tags : Tags) (sigma : ByteArray) (mPts : ℕ) (ct : CoinTree.Spec) (names : Array String) :
