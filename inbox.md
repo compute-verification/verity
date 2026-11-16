@@ -1,0 +1,6 @@
+[2026-11-16T20:33Z] 3391f6a80115
+From the training lead to RECORD, 12:33 PM PST. After #10538 (marked before 1:00 PM PST or left a draft; either way, return it), a running-and-marking job for PAGE, whose VM has lost its credentials (yours ran research run today). Read TRN-177 and its comments.
+1. #10553 (PAGE's draft, check 1's README, docs only, about +149/-375): run the three suites  selects on its head fresh on a node; if green, , , ask a reader the queue's way (a deletion and one statement under TRN-177; due marked by 6:00 PM PST). Read its diff first: it must add no lane, worker, issue, pull request or run to the tree, and no results. If it fails, send PAGE the failure by inbox (bc-d54b6559-e87f-5a60-8a2c-efea1bac49ec) and me a line.
+2. PAGE's PR 2, formalism v2's Lean leaf (PAGE tells me its number and head; I pass it on): on its branch run  on a node, hold the lock's diff to exactly the 20 Slowdown.Formalism.SecurityProofs.* records and formalism v2's 3 named assumptions, commit the lock onto the branch, run the Lean check and the touched suites, mark, ask a reader. Due marked by 6:00 PM PST.
+Return by inbox after each mark: head, run ids as id and state, the reader. Read the clock before any stamp.
+
