@@ -30,7 +30,7 @@ from research.vqueue_slim import (CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CH
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
                                   step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
@@ -1950,6 +1950,29 @@ def test_a_step_read_whole_is_inherited_only_when_the_run_beside_the_base_s_chec
 
 def test_a_key_is_none_for_a_commit_git_cant_read(world):
     assert key(world.origin, "0" * 40, "preflight-lock") is None is key(world.origin, "0" * 40, "preflight-lints")
+
+
+#: a workspace as the root's `tests/` mirroring the tree leaves it: each member's tests at `tests/<its directory>` (a virtual
+#: member `NAME-tests` beside the member, or a suite with no distribution), the repository's own suite beside them
+MIRRORED = {
+    "pyproject.toml": '[project]\nname = "verity"\n\n[tool.uv.workspace]\nmembers = ["tools/research", "tests/tools/research", '
+                      '"adapters/vllm", "tests/adapters/vllm/tests"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "tools/research/pyproject.toml": '[project]\nname = "research"\n',
+    "tools/research/src/research/q.py": "",
+    "tests/tools/research/pyproject.toml": ('[project]\nname = "research-tests"\ndependencies = ["research"]\n\n'
+                                            '[tool.pytest.ini_options]\ntestpaths = ["."]\n'),
+    "tests/tools/research/test_q.py": "",
+    "adapters/vllm/pyproject.toml": '[project]\nname = "verity_vllm"\ndependencies = ["research"]\n',
+    "adapters/vllm/x.py": "",
+    "tests/adapters/vllm/tests/pyproject.toml": ('[project]\nname = "verity-vllm-tests"\ndependencies = ["verity-vllm"]\n\n'
+                                                 '[tool.pytest.ini_options]\ntestpaths = ["."]\n\n[tool.verity.tests]\n'
+                                                 'inputs = ["hardware", "tools/config/x.py"]\n'),
+    "tests/adapters/vllm/tests/test_v.py": "",
+    "hardware/cards.toml": "", "tests/hardware/test_cards.py": "", "tools/config/x.py": "",
+    "tests/verity/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/verity/test_a.py": "",
+    "tests/test_root.py": "",
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+}
 
 
 def test_a_suite_may_read_the_tests_of_each_path_it_reads_where_they_mirror_the_tree(world):
