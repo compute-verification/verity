@@ -225,8 +225,9 @@ weighted total Ω_*. Uniformly over the programs, the initial information and th
 $$ \Pr\big[\,A(x) \text{ reaches the target} \;\wedge\; |A| < T_{\max} \;\wedge\; \neg\,\mathrm{Core}(A, x)\,\big]
    \;\le\; \eta. $$
 
-Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce a reference
-circuit. Coverage doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
+Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce the reference
+training
+algorithm. Coverage doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
 can't escape every analysed structure. The question it answers is a trade-off: as a method reduces the updated state or
 dependence the policy restricts, how much more computation does it need for the same target? That full-parameter
 training is the unrestricted optimum isn't enough: if a compact-state method reaches the target at twice the cost and
