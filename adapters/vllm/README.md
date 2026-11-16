@@ -21,7 +21,7 @@ Verity itself knows nothing of vLLM.
   `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
   the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
-  Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
+  Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network attester follow where each has its piece,
   and it ends with one record of every verdict. The launcher's header gives each step, and
   `adapters/vllm/tools/served_run/README.md` says what the run establishes.
 - **`verity-vllm COMMAND`** (`verity_vllm/pipeline/cli.py`, or `python -m verity_vllm.pipeline.cli`): every tool here is a
@@ -161,6 +161,16 @@ regression, skipped unless `VERITY_REGRESSION=1`.
 vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
 relative to this directory, so run them from here. The suite runs remotely like every suite
 (`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+
+To serve on a machine of your own, run `bash adapters/vllm/verity_vllm/ops/serve_fresh.sh` from a clone (`--dry-run` first
+shows every path and step). It builds the environment, fetches the public Llama 3.2 1B and makes its INT8 checkpoint, serves
+one request with every value committed, and seals it, all under `./.verity-work` (or `--work DIR`). The tree does not make
+the machine: an H100 or H200 (the row is H200's, compute capability 9.0), the CUDA 12.9 toolkit with `nvcc` (where it lacks
+the math headers the script takes them from the environment's NVIDIA wheels), `uv`, 35 GB free (the install holds the
+environment twice until it removes its cache, where the disk can't hardlink), and network access to GitHub, PyPI,
+download.pytorch.org, Hugging Face (no token) and the store's public site. Building the six CUDA taps is the longest step:
+it builds the attention taps for the row's head size (64) only, with one compile job per CPU the script may run on
+(`MAX_JOBS`, which the dry run prints), so its time falls with the CPUs you give it.
 
 ## Vocabulary
 

@@ -59,11 +59,12 @@ K=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["window"])'
 # Flock (plain sessions, a stratified sample of every unit of layer 0's SiluMul_v2 at step 1)
 OUT=$RESEARCH_RUN_DIR/flock/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_PLAIN=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
-  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24_stratified.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 # zero knowledge (--zk behind the Lean ZK server, every unit sampled, audited from the window's records alone)
 OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_RECORDS=1 \
   PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
   env -u PYTHONPATH bash benchmarks/prove_path/run.sh
 ~~~
 
@@ -71,11 +72,18 @@ OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windo
 `prove_path.py audit --plain`, whose partition's rule must be a stratified rate. Each run writes `$OUT/ran_with.txt`, the
 line naming its coins and parameters (`prove_path.py ran-with`).
 
+The forged run commits its own window with one unit's value flipped (`--forge`, default member 0's unit 0), so its
+partition needs that unit in the window and sampled, not units other than the honest run's. A served window of steps 1 to
+2 has no unit at step 24, so the forged partition above is the honest one's steps with every unit sampled, which is also
+what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py forged-partition`, kept as
+`$OUT/forged-partition.json`). One naming steps outside the honest partition's is refused before any build. A run with
+`PP_ONLY=honest` prints `PROVE-PATH {"name": "…-forged", "ran": false, "why": "PP_ONLY=honest: no forged run"}`.
+
 ## What changes when Programs come from advice
 
 A declared run's audit (`../one_stage/a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.protocols.accounting.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.resource_accounting.network.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Docket binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
@@ -152,7 +160,7 @@ step units are its sampled class. On the statements in scope (`ScopeAcc`), at ev
 Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
 the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
+- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network attester's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
   the incorrect proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation

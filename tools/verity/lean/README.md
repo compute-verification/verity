@@ -164,7 +164,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -264,7 +264,20 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 - **A lift is not a change** when the type, with `G` unfolded once, hashes to the record's (`lifted_into`,
   `Facts.lean`'s `liftOf`); `--lift` writes lifts into the four-name form (`lift`).
 - **A move is not a change**: `--update --moved MOVES.json` compares the build with the records under the old names
-  (`review`, `facts_of`, `move_errors`, `Facts.lean`).
+  (`review`, `facts_of`, `move_refusals`, `Facts.lean`). Both ways take the longest moved prefix, and a name of the lock
+  or of the compared texts that does not come back to itself is refused, as are two names of one section that land on
+  one (`section_collisions`), a map in which one entry's new name is at, under or over another's old name (a chain or
+  a swap: split it into two passes), and a name of the moves file that is not a Lean name (`name_error`: an unescaped
+  component must be an identifier or a number as `String.toName` reads it). The premises (`open`, `domain`,
+  `assumptions`), `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each entry's fields kept;
+  a moved premise's definition is compared in its `reads` record, and one that no record holds is a statement change,
+  since its `digest` hashes the new names. A move is held to the locks of the
+  change's base (HEAD and its merge-base with main, `base_revs`, and each `--base REV` beside them; a commit without
+  the lock is reported and skipped, and any other failure to read it refuses): a moved name may not land on
+  a name they hold, and a guarantee whose new name they record with another statement is a statement change, though the
+  change deleted that record by hand. The lock's names are checked at startup, before anything is written, and again by
+  the judge; the run writes every package's lock at its end, or none when a move is refused in any (`write_staged`:
+  each beside its own first, then each renamed over it).
 - **Merging**: `merge.py` merges `lean-audit.json` entry by entry and leaves git's conflict only at its three guards;
   a merged record is a candidate, which the Lean check rebuilds, so a merge that is clean but wrong (a definition that
   changed on one side without a guarantee there reading it, while the other side's new guarantee reads it) fails there

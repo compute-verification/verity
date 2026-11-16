@@ -669,7 +669,8 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None, ask
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
     ``priority``, a train check's, only the priority ones), and the state in a few words; with ``min_mem`` (`train_gb`), only
-    the slots whose mem= holds it count. ValueError when no check can run there: a document has an error, the slots file lists
+    the slots whose mem= holds it count, and a share of a slot (`slot.takes`) only for a shard whose ``ask`` its mem= holds.
+    ValueError when no check can run there: a document has an error, the slots file lists
     no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, the machine's deadline
     is nearer than FULL_CHECK_S, or, for a shard with an ``ask`` (`shard_ask_gib`), its slice (`slot.slice_gib`) can't be read
     or is under the ask: slot.py raises a slot's mem= to the ask and waits for that much free, which such a slice never has."""
@@ -700,6 +701,11 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None, ask
         if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
             raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
                 f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")
+        # a share of a slot (slot.py's share=) takes only a run that asks no more than its mem=: `slot.takes`
+        if not (mine := [s for s in mine if not s.get("share") or (ask and ask <= s["mem"])]):
+            raise ValueError(f"every slot in {check['file']} this check could take is a share of a slot (share=), for a run "
+                             f"that asks at most its mem=, and this one " + (f"asks {ask} GiB" if ask else "names no ask")
+                             + ": it takes a whole slot")
         free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")

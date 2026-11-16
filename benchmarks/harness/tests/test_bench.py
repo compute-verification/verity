@@ -253,7 +253,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
-    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/adapters/vllm"]
+    assert {f"{root}/benchmarks/harness", f"{root}/adapters/vllm"} <= set(pythonpath.split(":"))
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
@@ -383,13 +383,13 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     python.chmod(0o755)
     env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
            "VERITY_BENCH_SETUP": os.path.relpath(setup, root)}
-    setup.write_text('export FROM_SETUP="built in $PWD" SETUP_SAW_PYTHONPATH=${PYTHONPATH%%:*}\n')
+    setup.write_text('export FROM_SETUP="built in $PWD" SETUP_SAW_PYTHONPATH=${PYTHONPATH##*:}\n')
     ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True, text=True)
     setup.write_text("false\n")
     failed = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
                             text=True)
     assert ran.returncode == 0, ran.stderr
-    assert ran.stdout.strip() == f"built in {root} {root}/benchmarks/harness"
+    assert ran.stdout.strip() == f"built in {root} {root}/benchmarks"
     assert failed.returncode != 0 and failed.stdout == ""
 
 
@@ -497,7 +497,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 

@@ -32,9 +32,9 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 #: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/clear"))
 settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -45,10 +45,10 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 
 def capture(args) -> int:
     import torch
-    from verity.protocols.accounting.pouw.verifier.audit import weights_root
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -94,15 +94,15 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
 def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
-    from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []
@@ -142,9 +142,9 @@ def _tiles(d: Path, jobs: int) -> dict:
     import verify_run as VR
     from verity.commitments import Commitment
     from clear_audit import Transcript, Verifier
-    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
     import clear_work as CW
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PM
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)

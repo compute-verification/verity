@@ -1251,7 +1251,7 @@ def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
 def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
     """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
     `lms.DEPLOYED`'s, and without the record no word is stated."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
                                     "at W=4, H=5, not the deployed W=1, H=20)")
@@ -1269,6 +1269,31 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     (f := tmp_path / "key.json").write_text(json.dumps(record(1, 20)))
     assert PP.main(["ran-with", "--challenger", gate, "--challenger-key", str(f)]) == 0
     assert capsys.readouterr().out.strip() == PP.ran_with(gate, record(1, 20))
+
+
+def test_the_served_forged_partition_forges_at_the_honest_partitions_steps_and_refuses_one_outside_them(tmp_path, capsys):
+    """A served window of steps 1 to 2 has no unit at step 24: the forged partition is by default the honest one's templates
+    and scope with every unit sampled (for steps 1 to 2, the step-1 `_all` files under each design), and a given one at
+    steps the honest partition doesn't hold is refused, naming the fix, where its commit would raise after the honest arm."""
+    part = HERE.parent
+
+    def doc(name: str) -> dict:
+        return json.loads((part / f"llama32_1b_silu_mul_v2_i8192_l0_{name}.json").read_text())
+
+    assert PP.served_forged_partition(doc("step1"), None, "rate") == doc("step1_all")
+    assert PP.served_forged_partition(doc("step1_all_stratified"), None, "stratified-rate") == doc("step1_all_stratified")
+    assert PP.served_forged_partition(doc("step1_all"), doc("step1_all"), "rate") == doc("step1_all")
+    for honest, forged, design in (("step1", "step24", "rate"), ("step1_all_stratified", "step24_stratified", "stratified-rate")):
+        with pytest.raises(SystemExit, match=re.escape("names steps [24, 25], outside the honest partition's [1, 2]")) as e:
+            PP.served_forged_partition(doc(honest), doc(forged), design)
+        assert "Unset PP_FORGED_PARTITION" in str(e.value) and f"({design}:1/1)" in str(e.value)
+    unscoped = {k: v for k, v in doc("step1_all").items() if k != "scope"}
+    with pytest.raises(SystemExit, match="names steps unscoped"):
+        PP.served_forged_partition(doc("step1"), unscoped, "rate")
+    assert PP.served_forged_partition(unscoped, None, "rate") == unscoped
+    assert PP.main(["forged-partition", "--honest", str(part / "llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json"),
+                    "--design", "stratified-rate"]) == 0
+    assert json.loads(capsys.readouterr().out) == doc("step1_all_stratified")
 
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
@@ -2022,7 +2047,7 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
     (serve / "h1").mkdir(parents=True)
     layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}

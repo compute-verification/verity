@@ -27,18 +27,18 @@ import test_pouw_pearl_c_work as PCW
 import test_pouw_registration as TR
 from verity.errors import InvalidArtifact
 from verity.circuits.silicon import fp32
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.verifier import identifier as I
-from verity.protocols.accounting.pouw.verifier import registration as R
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.verifier import identifier as I
+from verity.protocols.resource_accounting.compute.pouw.verifier import registration as R
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "prover" / "clear"))
+# the clear audit is a reference tool (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 from clear_audit import Prover
 import clear_work as CW
 
@@ -1049,7 +1049,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     """`PearlC4(hashing="h3")` is `pearl_c`'s -h3: hm96-sha512 trees, the SHA-512 leaf and tickets, and row i's E_A is line
     0 of `row_seed` over row i's SHA-512 digest (`pearl_c.row_digest`), so it moves with that row's bytes and position
     alone and not with root_A, which keys only the tickets.  B's side and seed_B are h0's."""
-    from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     s, h0 = V.scheme("nvfp4", True, "h3"), V.scheme("nvfp4", True)
     assert (s.name, s.commitment_hash) == ("pearl-c-nvfp4-v0-h3", "hm96-sha512")

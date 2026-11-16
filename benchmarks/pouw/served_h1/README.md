@@ -3,7 +3,7 @@
 H1 receipts beside vLLM's int8-exact GEMM on one GPU: what the receipts cost a served Llama-3.1-8B int8 window, and
 whether the GPU's receipts are the reference's bit for bit. The window here (`serve.py`) is a padded H1 + fx1 window in
 the static form, with in-process coins or a development session's; it is not useful-work credit, and the gated served
-window of record is vLLM's H1 path (`verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`). `serve.py`'s docstring
+window of record is vLLM's H1 path (`verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`). `serve.py`'s docstring
 states the window's tables, units, coins and credit rule.
 
 **Hardware:** an RTX PRO 6000 node (sm_120). `arch.sh`, which the GPU jobs source, builds the kernels for the node's
@@ -42,7 +42,7 @@ The verifier's check of a window's live coins, from the challenger's own run, is
 handed to it) are the jobs' programs. `coins.py` (the live coins and their check),
 `commit.py` (the window's tables), `credit.py` (the padded-window credit), `producer.py` (`h1u.cu`'s units kernel),
 `partials.py` and `lane_refs.py` (option A's lane partials) are what they import. Other directories load some of them by
-path: `verity/protocols/proofs/spot/device/challenger_session.py` reads `coins.py`, and `benchmarks/hash/dither/` reads `coins.py`, `commit.py`, `credit.py`, `serve.py` and `lane_refs.py`.
+path: `verity/protocols/proofs/spot/verifier/challenger/challenger_session.py` reads `coins.py`, and `benchmarks/hash/dither/` reads `coins.py`, `commit.py`, `credit.py`, `serve.py` and `lane_refs.py`.
 Each of these modules' `__all__` lists the names other files read through it, the tests' included, except underscore
 names; anything else in it may change without notice. Their tests are the `test_served_h1*.py` files,
 `test_partials.py` and `test_lane_refs.py` under `benchmarks/pouw/tests/`.
