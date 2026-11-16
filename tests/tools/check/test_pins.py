@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("pins_under_test", HERE.parent / "pins.py")
+spec = importlib.util.spec_from_file_location("pins_under_test", HERE.parents[2] / "tools" / "check" / "pins.py")
 P = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = P
 spec.loader.exec_module(P)

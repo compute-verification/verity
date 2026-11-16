@@ -21,7 +21,8 @@ from verity_bench import kit
 
 ROOT = Path(__file__).resolve().parents[3]
 BENCHMARKS = ROOT / "benchmarks"
-HARNESS = BENCHMARKS / "harness" / "pyproject.toml"
+#: the suite's own pyproject.toml, which declares its inputs
+HARNESS = Path(__file__).resolve().parent / "pyproject.toml"
 HEADINGS = ("## What you may change", "## What is fixed", "## How a cheating change is refused")
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 RUN = "r20000101-000000-aaaa"

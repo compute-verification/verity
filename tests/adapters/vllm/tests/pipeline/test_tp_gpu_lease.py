@@ -446,7 +446,7 @@ def _run(tmp_path: Path, script: str) -> tuple[int, dict, str]:
 
     def run_tl(to: int, argv: list[str]) -> int:
         with open(log, "a") as f:
-            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT, cwd=(Path(__file__).parents[5] / "adapters" / "vllm")).returncode
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT, cwd=Path(__file__).resolve().parents[2]).returncode
 
     rc, rec = GL.run(str(tmp_path), str(log), tp_commit(script), 600, env, run_tl)
     return rc, rec, log.read_text()
