@@ -1,7 +1,7 @@
 # The vLLM integration's workloads
 
 A workload file is a fixture in the evidence store, not in the tree. The tree keeps each one's name and digest
-here, in `SHA256SUMS`, and its id in `artifacts.json`. A row `generation.toml` lists is also made from the tree alone:
+here, in `SHA256SUMS`, and its id in `artifacts.json`. A workload `generation.toml` lists is also made from the tree alone:
 `verity-vllm workload ROW`, given its checkpoint's tokenizer.json (the Hugging Face cache's snapshot or `--tokenizer`),
 writes the file `SHA256SUMS` names, byte for byte.
 

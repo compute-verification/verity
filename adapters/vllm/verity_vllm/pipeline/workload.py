@@ -1,11 +1,11 @@
 """`verity-vllm workload`: the one deterministic heterogeneous workload generator of the sweep.
 
-    verity-vllm workload <row-id> [--tokenizer <snapshot dir or tokenizer.json>]      (a row `workloads/generation.toml` lists)
+    verity-vllm workload <row-id> [--tokenizer <snapshot dir or tokenizer.json>]      (a workload `workloads/generation.toml` lists)
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--shared-prefix N] [--lengths-only] [--check] --out workloads/<row-id>.json
 
-A row `generation.toml` lists needs only its id: the table states what the id doesn't give (the checkpoint, the tokenizer's
+A workload `generation.toml` lists needs only its id: the table states what the id doesn't give (the checkpoint, the tokenizer's
 sha256, the target, the reasons, the note's prefix, the arrival rule), the output is byte for byte the file `SHA256SUMS` names,
 and a flag that disagrees with the table or the id is refused by name.
 
@@ -442,7 +442,7 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     row: str | None = option("row", nargs="?", default=None, metavar="ROW",
-                             help="the row id (or --row-id); a row workloads/generation.toml lists needs no other flag")
+                             help="the row id (or --row-id); a workload workloads/generation.toml lists needs no other flag")
     row_id: str | None = option("--row-id", default=None)
     hf_repo: str | None = option("--hf-repo", default=None)
     revision: str | None = option("--revision", default=None)
