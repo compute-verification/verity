@@ -1089,13 +1089,14 @@ def callers_lint_at(rev: str) -> types.ModuleType:
     return lint
 
 
-def public_callers(c: Change, was_at: str = CALLERS_LIST) -> tuple[list[str], list[str]]:
+def public_callers(c: Change, was_at: str = CALLERS_LIST, to: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
     """(each command P16's ``public`` table gains in the change, a new one or one with another caller, whose caller doesn't
     run it in the change's tree, with what is wrong; each whose caller does): as the base's P16 lint finds a call (its
     ``runs``), so a public command is a declaration the gate checks rather than an exception it holds.  The base's table is
-    its list at ``was_at``, where the base holds the list the change moves."""
-    was, now = public_commands(c.lo, was_at), public_commands(c.hi)
-    added = {k: v for k, v in now.items() if was.get(k) != v}
+    its list at ``was_at``, where the base holds the list the change moves, and a caller the change renames (``to``: old
+    path to new) is the base's caller where the change puts it."""
+    was, now, to = public_commands(c.lo, was_at), public_commands(c.hi), to or {}
+    added = {k: v for k, v in now.items() if v not in (was.get(k), to.get(was.get(k, "")))}
     if not added:
         return [], []
     runs = callers_lint_at(c.lo).runs
@@ -1488,7 +1489,7 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         moved = {new: old for old, new in to.items()}
         placed_before = carried(before, moved)
         grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
-        uncalled, public = public_callers(c, moved.get(CALLERS_LIST, CALLERS_LIST))
+        uncalled, public = public_callers(c, moved.get(CALLERS_LIST, CALLERS_LIST), to)
     noqa_grows = c.noqa_added > c.noqa_removed
     early = bool(grown or bad or uncalled or noqa_grows)
     inherited: list[str] = []

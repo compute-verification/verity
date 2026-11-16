@@ -2335,16 +2335,18 @@ def test_a_list_moved_out_of_the_lint_directories_is_read_where_the_change_puts_
 def test_a_lint_directory_moved_into_the_lint_directories_brings_its_lists_and_public_table(repo):
     """The tests move: the lint directory stood elsewhere at the base, and the change moves it, its list and P16's list in,
     the lint edited on the way.  The base's list is read where the base holds it, so its two entries are the head's two,
-    and P16's public table is the base's, so no command is new and no caller is checked."""
+    and P16's public table is the base's, its caller moved with the rest, so no command is new and no caller is checked."""
     old = "adapters/vllm/tests/lint"
     lint, listed = f"{old}/{Path(LINT).name}", f"{old}/allowlists/{Path(P01).name}"
     callers = f"{old}/allowlists/{Path(G.CALLERS_LIST).name}"
     repo.commit("the lints where they stood", {
-        P01: None, lint: TOY_LINT, listed: repo.git("show", f"HEAD:{P01}") + "\n", callers: _callers(ROW),
-        "benchmarks/row.sh": "verity-vllm row --x 1\n", "adapters/vllm/verity_vllm/a.py": "A = 'BAD'\n",
+        P01: None, lint: TOY_LINT, listed: repo.git("show", f"HEAD:{P01}") + "\n", callers: _callers({"row": f"{old}/row.sh"}),
+        f"{old}/row.sh": "verity-vllm row --x 1\n", "adapters/vllm/verity_vllm/a.py": "A = 'BAD'\n",
         "adapters/vllm/verity_vllm/b.py": "B = 'BAD'\n"})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("the lints move in", {lint: None, listed: None, callers: None, LINT: TOY_LINT + "\n# moved\n",
-                                      P01: repo.git("show", f"HEAD:{listed}") + "\n", G.CALLERS_LIST: _callers(ROW)})
+    row = f"{G.TESTS}row.sh"
+    repo.commit("the lints move in", {lint: None, listed: None, callers: None, f"{old}/row.sh": None,
+                                      LINT: TOY_LINT + "\n# moved\n", P01: repo.git("show", f"HEAD:{listed}") + "\n",
+                                      G.CALLERS_LIST: _callers({"row": row}), row: "verity-vllm row --x 1\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2), c["why"]
