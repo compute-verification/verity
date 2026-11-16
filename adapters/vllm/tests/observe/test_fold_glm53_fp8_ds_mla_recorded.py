@@ -10,9 +10,9 @@ d9105ea80, eager): the 256-row prefill and one decode row at position 256.  Its 
   conversion is staging, and FlashMLA's `sparse_decode_fwd` is `FlashMlaV32Decode_v1` a row over the request's cache rows; the
   indexer's invisible logits allocation and its top-k then place as on the bf16 cache, and nothing of either step is refused or left
   unread;
-* the decode step's fold is the predicted step of the row's rank 0 over an `fp8_ds_mla` cache (`aot.predict`, M 1 at position 256),
-  Call for Call in order, but for what a step Program can't hold: it reads no history (`build.build_program` takes no prefix on a
-  step), so each indexer layer's logits read its own key alone where the served row reads its history's 257;
+* the decode step's fold is the predicted step of the row's rank 0 over an `fp8_ds_mla` cache, Call for Call in order: the step
+  its advice row gives (`segment.step_of`: M 1 at position 256 after a history of 256), whose indexer logits read the 257 keys
+  the served row read;
 * on the bf16 cache the patterns form exactly what they formed before the FP8-cache patterns were added (a digest of each
   resolution of the bf16 launches `test_fold_glm53_dsa_launches` builds).
 """
@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.codec import descriptor_id, encode_program
+from verity.protocols.resource_accounting.network.verifier import advice as I1
 
 from tests.observe import test_fold_glm53_dsa_launches as B
 from verity_vllm.check.match import program_compare as PC
@@ -45,10 +46,13 @@ from verity_vllm.observe.log import read_log
 from verity_vllm.program.predict import aot
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.phi import Phi, _refuse_unstated
+from verity_vllm.program.predict.segment import step_of
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_fp8_ds_mla.rank0.jsonl.gz"
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 LAYERS, INDEXERS, PROMPT = 78, 21, 256
+#: the Calls of rank 0's served decode step
+DECODE_CALLS = 4722
 FP8_KINDS = ("_fused_norm_rope_kernel", "concat_mla_q", "ConvertReqIndexToGlobalIndexKernel", "sparse_decode_fwd")
 
 
@@ -79,33 +83,33 @@ def test_both_steps_fold_every_fp8_cache_launch_and_nothing_is_refused_or_unread
 
 
 def _predicted_decode() -> list[str]:
-    """Rank 0's predicted step over an fp8_ds_mla cache at the capture's decode (M 1 at position 256), T-normalised specs in order."""
+    """Rank 0's predicted step over an fp8_ds_mla cache at the capture's decode, its advice row (request 0, one row at position 256
+    after its prompt), T-normalised specs in order."""
     w = json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     hf = json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text())
     layout = _refuse_unstated({"kv_cache_dtype": "fp8"}, hf.get("model_type"), (9, 0))
     base = S.phi_of({"row": ROW, "workload": w}, config=str(HF_CONFIG_DIR / "GLM53.config.json"))
     phi = Phi.from_json({**base.to_json(), "tp": {**base.tp, "rank": 0}, "engine": {**base.engine, "kv_cache_dtype": layout}})
     assert RowEngine.of(w).revision and layout == "fp8_ds_mla"
-    view = RootView("predicted", encode_program(aot.predict(phi, "step", M=1, pos0=PROMPT).program), {}, tok_node=0, compact=True)
+    M, pos0, C = step_of(I1.StepAdvice((I1.Row(0, "decode", PROMPT, 1),)))
+    view = RootView("predicted", encode_program(aot.predict(phi, "step", M=M, pos0=pos0, C=C).program), {}, tok_node=0, compact=True)
     return [PC._norm_T(view.inst[i]["spec"]) for s in view.steps for i in s]
 
 
 @pytest.mark.slow
 def test_the_decode_step_s_fold_is_the_predicted_step_call_for_call():
     """Minutes (the fold, then the rank's step prediction over 78 layers): the only test that holds the served FP8-cache step to
-    the Program the predictor writes ahead of it. A step Program reads no history, so on each indexer layer its logits and their
-    length read one key where the served row reads its history's PROMPT + 1; nothing else differs."""
+    the Program the predictor writes ahead of it, at its served key count: every one of the step's 4,722 Calls is the served one,
+    in order, each indexer layer's logits and their length at the history's PROMPT + 1 keys."""
     r = _fold()
     served = [PC._norm_T(descriptor_id(r.body.nodes[i["node"]].fn)) for i in r.instances if int(i["step"]) == 1]
     predicted = _predicted_decode()
     sm = difflib.SequenceMatcher(None, predicted, served, autojunk=False)
     apart = [(predicted[i1:i2], served[j1:j2]) for op, i1, i2, j1, j2 in sm.get_opcodes() if op != "equal"]
-    keys = PROMPT + 1
-    history = (["DsaMqaLogits_v3{N=1,H=32,D=128}", "Const32[0x00000001]_v1"],
-               [f"DsaMqaLogits_v3{{N={keys},H=32,D=128}}", f"Const32[0x{keys:08x}]_v1"])
     hp, hs = collections.Counter(predicted), collections.Counter(served)
-    assert len(predicted) == len(served) and apart == [history] * INDEXERS, {
+    assert len(served) == DECODE_CALLS and predicted == served, {
         "unmatched_predicted": dict(hp - hs), "unmatched_served": dict(hs - hp), "first": apart[:6]}
+    assert served.count(f"DsaMqaLogits_v3{{N={PROMPT + 1},H=32,D=128}}") == INDEXERS
 
 
 def _canon(r) -> object:

@@ -516,8 +516,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
     (`prefix_params`): a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose prefill computes rows
     C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
-    the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
-    traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
+    the `last_token` Input (`common.request_passes`), or a step whose rows have its sequence's first C = pos0 positions as their
+    history (`segment.step_of`: a served step's, its indexer rows scoring C + 1 .. C + M keys as served); on that decoder their SRC
+    config holds `{"history": C}`, and no Build traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
     before the prefill's last, which no sample reads. A stochastic request takes its seed rule's `seed_rule.PARAMS` after its
     seed, at its policy's ``rid``, and checks the rule (`seed_rule.check`); `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
@@ -549,9 +550,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
                          "table_reads is the batched form's (DSA's long rows by table reads)")
     dense = type(net) is _Decoder
-    if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
-        raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
-                            f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
+    if C and (not hasattr(net, "prefix_params") or dense and (wrapper, kind, world) != ("request", "greedy", 1)
+              or wrapper == "step" and C != pos0):
+        raise Unexpressible(f"vocabulary cannot express: a history of {C} on a {kind} {wrapper} at pos0 {pos0} at TP{world} of the "
+                            f"{net.model_class} decoder (a request's, greedy on one rank of the dense or fused-MoE decoder, or on the "
+                            f"sparse-attention decoder a request's or a step's of its rows' positions before pos0, C = pos0)")
     resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else prompt_rows
