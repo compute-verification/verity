@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """Pearl+'s -h3 tile unit and its pieces at the smallest cap instance, a 1 × 1 tile of a one-column unit at K = 256
+    """Pearl+'s -h3 tile unit and its pieces at the smallest inert-work bound instance, a 1 × 1 tile of a one-column unit at K = 256
     (two promotion windows, `inert_bound._promoted`) on the H100's record, forming v1 under -h3: a row's admission
     (`PearlPlusAdmit_v1`) and A's salt-dead counts (`PearlPlusSaltDead_v1`) on words and on bits, the core
     (`PearlPlusTileCore_v1`, its σ `_v2`), the digest's hm96 leaf opening at a depth-1 tree (`PearlPlusTileLeaf_v1`), and the

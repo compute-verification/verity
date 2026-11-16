@@ -71,7 +71,7 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 
 
 def test_gamma_is_the_lean_twins():
-    """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
+    """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (inert-work bound 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
     from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
     from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
@@ -200,7 +200,7 @@ def test_h200_session_runs_the_tables_shapes():
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
     and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
-    gives up the passes' rows over inert work cap, then verifies them at the verdict's samples and checks their outputs in full.
+    gives up the passes' rows over inert-work bound, then verifies them at the verdict's samples and checks their outputs in full.
     With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
     rc.txt."""
     sh = (HERE / "h200.sh").read_text()
@@ -232,7 +232,7 @@ def test_h200_session_runs_the_tables_shapes():
     ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
 def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
     """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
-    while the verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap, VOLUNTEER defaults to 1 and
+    while the verdict glm53_passes.py verify takes rejects a pass on a sampled row over its inert-work bound, VOLUNTEER defaults to 1 and
     one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
     other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
     tree, out = tmp_path / "tree", tmp_path / "out"
@@ -717,8 +717,8 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
 
 
 def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured(retained, tmp_path):
-    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over inert
-    work cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
+    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over inert-work
+    bound, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
     verifier's check under it."""
     from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 

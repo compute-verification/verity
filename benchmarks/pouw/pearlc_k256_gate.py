@@ -17,7 +17,7 @@ saving per word (an existence count, P1's convention) and per fragment (what the
 cells' credit (`PearlC.credit_of` at n = 6,144, GLM-5.3's down projections); an undebited atom costs `atom_units` (40), a
 peel step 16 BF16 MACs (32).  A cell is the tile's credited words (rows passing the noise floor and liveness).  Each cell
 also reports whether the verifier accepts it: its replayed inert work within ρ of its credit (`tile_inert_bound_ok`), and every
-credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_inert_share_at`),
+credited row's within its row inert-work bound of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_inert_share_at`),
 under seven flagged atom-words over a 64-column tile, where ρ would allow under two.
 
 The gate passes when every in-domain cell's fragment saving (cross-group residual plus peel), accepted or not, is at most
@@ -31,7 +31,7 @@ weight slices) adds a family ``glm-w2-NAME`` per slice: those rows as B, with t(
 census with the replayed inert work) passes its own criterion, every ``gate*.json`` passes, and ``slices.json``
 (`pearl_c_sm90/glm53_slices.py`) covers every down projection.  A weight row failing the per-row rules is excluded (bound,
 no credit), so the slices' failing share is reported, not gated.  ``verdict.json`` also reports the honest tiles' acceptance
-(Gaussian and the w2 samples): how many of them -h3's row cap rejects before any row is given up.
+(Gaussian and the w2 samples): how many of them -h3's row inert-work bound rejects before any row is given up.
 """
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     A, B = A8[ii.ravel()], B8[jj.ravel()]
     credit = Fraction(s.credit_of(Shape(1, k, N_CREDIT)), N_CREDIT)
 
-    # ---- the ticket chain: every skip set, the served inert work, the cap
+    # ---- the ticket chain: every skip set, the served inert work, the inert-work bound
     final = chain_masks(A, B)
     c_words = np.array(checked.c, dtype=np.uint32).ravel()
     assert (final[0] == c_words.view(np.float32)).all(), "the census's atom disagrees with the served chain"

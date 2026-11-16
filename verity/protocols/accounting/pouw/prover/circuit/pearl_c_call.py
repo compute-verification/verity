@@ -26,7 +26,7 @@ parameters. On the codes and the factors a row is PoUW's row unit (`verity.proto
 `Pc8RowB` at the same atom and promotion period, R = 32), row A with its line derived; a row's admission (the unit's
 ``ok``) is not here, and reads the statistics a row returns. R, the basis' rank, is 32 in a call and a static so that
 circuit-check binds a row small; a cell takes its factors sixteen at a time, so there R is a multiple of 8. A tile's
-caps, its leaf and the unscale are not here either.
+inert-work bounds, its leaf and the unscale are not here either.
 
 Each has a word form (``_v1``) and a Boolean version (``_v2``), the σ of the word form. A row is far over the 65,536 ANDs a
 Boolean Definition is lowered whole at, and is no proof block: `units` lays a Boolean Definition out in the Definitions

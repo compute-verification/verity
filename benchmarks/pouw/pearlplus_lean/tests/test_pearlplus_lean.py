@@ -167,7 +167,7 @@ def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
 
 
 def test_a_row_over_its_inert_bound_and_its_give_up(exe, tmp_path):
-    """Under the zero key a credited row is over its row cap: under ``reject`` the run is rejected; under ``uncredited``
+    """Under the zero key a credited row is over its row inert-work bound: under ``reject`` the run is rejected; under ``uncredited``
     (the default) it is accepted, each tile over its inert-work bound ok with its bound's reason and credited nothing,
     the credit taking X_O, the samples on such tiles, at a larger ε.  Given up (V-EX), every tile passes; more given-up rows
     than V-EX allows, or records unlike the published root, are refused before the coin."""
@@ -223,7 +223,7 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     """E's ∀ over the credited columns both ways (`inert_elements`, `Rule.rowElements`): under the zero key, credited row
     11 of the first call has atom-words flagging its blocks 0 … 3, all in one column.  On 16 x 16 tiles some of the row's
     16 credited words flag each block and the rest don't, so no block is inert and its inert work is the chain's, 160, over
-    its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
+    its row inert-work bound, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
     four blocks, so every element of the row is inert and the tile's inert work is 672, 160 without the term.  The Lean's
     verdicts are the Python's on both, under each ``over_cap`` rule."""
     cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),

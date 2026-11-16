@@ -1,10 +1,10 @@
 """The repository suite's bookkeeping tests (`BOOKKEEPING`) report what they find as a `Bookkeeping` warning and pass:
 the tree stays landable, and a later PR fixes the finding.  Bookkeeping is what can be put right after
 landing without any claim being false meanwhile: lane names in code text, retired terms, dead doc paths, naming conventions,
-stale allowlist entries, Markdown over its cap, an ignore line over a tracked file, a Lean file with no module docstring,
+stale allowlist entries, Markdown over its inert-work bound, an ignore line over a tracked file, a Lean file with no module docstring,
 past its length or with a heartbeat override that says no reason.  A scan's own tests (that it reads each form) stay plain tests and fail, and
 so does a bookkeeping test that raises anything but a failed check (its scan broke), and anything that can make a claim false
-or can't be undone (a secret, a blob over its cap, an import across the boundaries): ruff's errors among them, which
+or can't be undone (a secret, a blob over its inert-work bound, an import across the boundaries): ruff's errors among them, which
 `test_repo_ruff.py`'s `test_no_ruff_error` keeps failing, and a new `maxHeartbeats 0`, which `test_lean_bar.py`'s
 `test_no_new_unlimited_heartbeats` does.  The ratchet gate calls the lints' `test_no_new*` functions itself,
 outside pytest, so it still refuses what they find.  `tests/test_bookkeeping.py` holds the list to the tree."""

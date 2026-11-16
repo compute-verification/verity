@@ -1,6 +1,6 @@
 """The honest inert work of a served pass at its scheme's inert-work share ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
-(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed inert work and the cap that rule compares it to
+(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed inert work and the inert-work bound that rule compares it to
 (`clear_work._inert_work_and_bound`: ρ times the credited cells' credit) recorded.  CPU only.
 
   python benchmarks/pouw/pearl_c_vllm/served_inert_work.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
@@ -9,17 +9,17 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 - **Strata** are a pass's matmul shapes (m, k, n).  Each gets its `--tiles` N: its matmuls in a seeded random order,
   cycled, and a uniform tile of each, so a stratum of 32 matmuls at N = 128 gives each matmul 4 tiles and one of 2,048 gives
   64 of its matmuls 1 each.
-- **Per tile:** the verdict at the scheme's cap; the inert work and the cap of its credited cells and their ratio (over 1 is a
-  rejection); the inert work's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
+- **Per tile:** the verdict at the scheme's inert-work bound; the inert work and the inert-work bound of its credited cells and their ratio (over 1 is a
+  rejection); the inert work's share of the cells' credit, the inert-work bound over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the inert work's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_inert_work.tile_inert_work`, rev1's
   `laterZeroPromos`), whose adds the inert work already holds, P3's forming elements (``inert_elements``, each
   fs·|cols|/n of inert work), and the words' products that no salt makes count (``mends``, one MAC each:
-  `pearl_c_inert_work.word_mend`).  Under a format with the row cap (-h3) the rule also caps each
+  `pearl_c_inert_work.word_mend`).  Under a format with the row inert-work bound (-h3) the rule also inert-work bounds each
   credited A row (`clear_work.row_inert_bound`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's inert work over
-  its cap (the tile rule checked as far as it ran: the rows up to the first one over).
+  its inert-work bound (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
-  columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
+  columns × kept k, from the records), with the share over each inert-work bound within the stratum taken from its sample.
 
 **Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs:
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
@@ -303,7 +303,7 @@ def _measure(item) -> dict:
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
-        # the tile rule's first (inert work, cap) is the tile's; under the row cap (-h3) one per credited A row follows it
+        # the tile rule's first (inert work, inert-work bound) is the tile's; under the row inert-work bound (-h3) one per credited A row follows it
         tile, chains = _SEEN[0] if _SEEN else (_INERT_WORK_AND_BOUND(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
@@ -316,8 +316,8 @@ def _measure(item) -> dict:
 
 
 def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
-    """The tile rule's (inert work, cap) as a tile's line records them: their ratio, and the inert work's share of the credited cells'
-    credit, the cap over ρ.  That credit is `clear_work.tile_inert_bound`'s `creditDevRev1` share, so the first promotion add is
+    """The tile rule's (inert work, inert-work bound) as a tile's line records them: their ratio, and the inert work's share of the credited cells'
+    credit, the inert-work bound over ρ.  That credit is `clear_work.tile_inert_bound`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap
     return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
@@ -567,7 +567,7 @@ def input_bound(row: dict, delta: float) -> tuple[float, str]:
 def measure_inputs(path: Path, per_linear: int, census_max: int, draws: int, seed: int, jobs: int, out_dir: Path, opts: dict,
                    label: str | None = None) -> list[dict]:
     """Per-input mode on one pass: every chosen input's tiles measured over `jobs` forked workers, a line a tile, then a row
-    an input with its failures at the scheme's cap (a tile whose openings hold and the tile rule rejects), `W` and
+    an input with its failures at the scheme's inert-work bound (a tile whose openings hold and the tile rule rejects), `W` and
     `w_max`.  The bound is added once every pass's inputs are known (`m`)."""
     label = label or path.parent.name
     job = load(path, light=bool(opts.get("resumed_only")), coins=opts.get("coins"))

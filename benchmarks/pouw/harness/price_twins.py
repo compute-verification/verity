@@ -17,8 +17,8 @@ are read, and `_short` gives one key for both. Its key is
   n, k        a linear's (n, k) at any batch m, for a twin stated on `pearlCDomainDevNK` (``_n6144k4096``), its shape None
   layout      a served layout's linears, for a twin stated on `pearlCDomainDevShapes` (``_llama31_8b`` on
               `llama31_8bLinears`), the gap the max over them; its shape, n and k None
-  cap         FP8 v1 and v2's inert-work share ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``InertShare1000``
-              and ``Rev1InertShare1000`` are 1/1,000); a lookup reads the statement's cap (`INERT_SHARES`), and the others are history
+  inert-work bound         FP8 v1 and v2's inert-work share ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``InertShare1000``
+              and ``Rev1InertShare1000`` are 1/1,000); a lookup reads the statement's inert-work bound (`INERT_SHARES`), and the others are history
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
 left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
@@ -368,7 +368,7 @@ def statement(line: str | None, version: str | None) -> str | None:
 
 def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int | None, k: int | None,
            reading: str = "forming-credited", cap: Fraction | None = None, layout: str | None = None) -> dict:
-    """The gap at both FP32 prices for one attempt: the twins of its statement, priced path and shape, at the statement's cap
+    """The gap at both FP32 prices for one attempt: the twins of its statement, priced path and shape, at the statement's inert-work bound
     (`INERT_SHARES`; ``cap`` reads another, as history), the larger published.  The shape is the cube n³ when n = k is 8192 or
     16384, else the linear (n, k) at any m; ``layout`` (``llama31_8b``) reads a served layout's twin instead, whose gap
     is the max over its linears.  ``missing`` says what kept it from publishing."""

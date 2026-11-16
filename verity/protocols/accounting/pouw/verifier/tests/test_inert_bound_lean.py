@@ -1,7 +1,7 @@
-"""Lean's integer form of the cap circuit's tests (`security/Proofs/Pouw/PearlC/InertBound/IntForm.lean`) against the scheme:
+"""Lean's integer form of the inert-work bound circuit's tests (`security/Proofs/Pouw/PearlC/InertBound/IntForm.lean`) against the scheme:
 its `IntPrices` are the devices' prices, and each kernel-checked pin in `InertBound/Pins.lean` is what Python computes at that
 shape: `creditInt` is `PearlC(forming="v1").credit_of`, and `inertBoundPin` / `inertBoundPinTop` are `inert_bound._inert_bound_constants` at the device's
-g, prices and cap (that test skips where `verity.protocols.accounting.pouw.prover.circuit.inert_bound` is absent)."""
+g, prices and inert-work bound (that test skips where `verity.protocols.accounting.pouw.prover.circuit.inert_bound` is absent)."""
 from __future__ import annotations
 
 import ast
@@ -55,7 +55,7 @@ def test_credit_pins_are_credit_of():
 
 def test_inert_bound_pins_are_inert_bound_constants():
     """Each `inertBoundPin` pin is `_inert_bound_constants(k, tm, tn, n, rho, dev)` (`inertBoundPinTop`: with the table's last entry alone), on the
-    device's g and at ρ = 1/rho its cap, with `InertBoundDomain` and `InertBoundFits` at the same shape; each refused shape raises."""
+    device's g and at ρ = 1/rho its inert-work bound, with `InertBoundDomain` and `InertBoundFits` at the same shape; each refused shape raises."""
     inert_bound = pytest.importorskip("verity.protocols.accounting.pouw.prover.circuit.inert_bound", reason="the cap circuit is `verity.protocols.accounting.pouw.prover.circuit.inert_bound`'s")
     for name, stmt in _theorems("pin_").items():
         domain = re.search(r"InertBoundDomain (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)", stmt)

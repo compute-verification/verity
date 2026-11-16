@@ -25,7 +25,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: (case, row, role, k or (TM, TN)): the four element rows in both trees at k = 64 and 4,096 (in role X a row-seg row of
-#: one short segment and of several), the tile digests, the ok rows, the cap's rows: the salt-dead counts (row-seg, one
+#: one short segment and of several), the tile digests, the ok rows, the inert-work bound's rows: the salt-dead counts (row-seg, one
 #: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
 #: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row; and
 #: the row_k cut's six rows in both trees, and the audit execution phase's side rows (fp8-pi) in both trees, in role X one short

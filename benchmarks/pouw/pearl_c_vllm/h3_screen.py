@@ -14,7 +14,7 @@ poisoned digests).  ``check`` holds them to the reference (`pearl_c.PearlC`):
   row i is ``sample_line(seed_i, 0, 0, 0)``, and each padding row r's is ``sample_line(seed_A, 0, 0, r)``;
 - every tile of each pass is `Verifier.check_tile`'s: openings, then the leaf recomputed by the reference (E_A per row from
   the row's own seed), so the honest passes' leaves are the reference's bit for bit and the control's are not;
-- and `verify_run`'s audit of each pass, recorded (its tile rule includes -h3's row cap, which an honest row can exceed).
+- and `verify_run`'s audit of each pass, recorded (its tile rule includes -h3's row inert-work bound, which an honest row can exceed).
 
 Writes ``screen.json`` in DIR, and exits 0 only when every eager call matches, every honest tile checks and each control
 fails some tile.

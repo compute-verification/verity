@@ -1,7 +1,7 @@
 """Pearl-C's Python accounting is the Lean's on every pinned FP8 price twin (`harness/price_twins.json`) and on the H100's
-rev1 pins, as exact rationals: the gap, the credit, and the inert work cap the verifier's tile rule admits (`clear_work.tile_inert_bound`).
+rev1 pins, as exact rationals: the gap, the credit, and the inert-work bound the verifier's tile rule admits (`clear_work.tile_inert_bound`).
 The verifier must admit no more than the rule its guarantee is proved for, rev1's (`DeviceRev1.lean`: `creditDevRev1`,
-`tileInertWorkRev1`, `wrefDevRev1K`), so a credit or cap that drifts from it fails here, as the first promotion add of every
+`tileInertWorkRev1`, `wrefDevRev1K`), so a credit or inert-work bound that drifts from it fails here, as the first promotion add of every
 word did before rev1.  A pinned twin of a statement this file doesn't price (a hot start's, Pearl-C4's) fails too, until it
 has a Python counterpart here."""
 
@@ -29,7 +29,7 @@ import clear_work as CW
 
 import price_twins as P
 
-GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
+GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every inert-work bound (`gapFromTTOut`)
 ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
 DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
 #: the twins' price records by FP32 add price, each with the cast its W_ref already holds: Lean's `Prices.sm120`
@@ -47,7 +47,7 @@ H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
 
 
 def scheme_of(twin: dict) -> C.PearlC:
-    """The twin's device record as a scheme: v1's G = 4 or v2's no promotion, at the twin's prices and cap."""
+    """The twin's device record as a scheme: v1's G = 4 or v2's no promotion, at the twin's prices and inert-work bound."""
     d = DEVICES[twin["statement"]]
     return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]), hashing="h0")
 
@@ -59,8 +59,8 @@ def cast_offset(twin: dict) -> Fraction:
 
 def gamma(s: C.PearlC, n: int, c: Fraction, reading: str, kind: str) -> Fraction:
     """The gap at n³ from the scheme's W_ref and credit, as the Lean states it per reading: the unit's or a tile's least credit
-    over `wrefDevRev1K d c`.  A tile's credit is (1 − ρ)·credit·share whatever the cap reads, so a chain-cap tile's gap is
-    the forming-credited one; the chain cap's unit (v2's `DeviceChainInertBound`) reads the inert work against ρ·`chainCreditDev`."""
+    over `wrefDevRev1K d c`.  A tile's credit is (1 − ρ)·credit·share whatever the inert-work bound reads, so a chain-cap tile's gap is
+    the forming-credited one; the chain inert-work bound's unit (v2's `DeviceChainInertBound`) reads the inert work against ρ·`chainCreditDev`."""
     sh = Shape(n, n, n)
     w, credit, rho = s.wref(sh) + c * n * n, Fraction(s.credit_of(sh)), s.cap
     if reading == "forming-credited" or (reading == "chain-cap" and kind == "tile"):
@@ -96,7 +96,7 @@ def test_gamma_is_the_pinned_twins(twin):
                          ids=lambda t: t["pin"].removeprefix("Pouw.PearlC."))
 def test_credit_and_inert_bound_are_the_pinned_twins(twin):
     """The Lean's credit, solved from the pinned gap alone, is `credit_of`; the unit's inert-work share ρ·credit is its cells' and a
-    tile's cap is ρ·credit·tileShare, `tile_inert_bound`'s on v1 (v2 has no inert work rule, so its tile cap is the cells' credit)."""
+    tile's inert-work bound is ρ·credit·tileShare, `tile_inert_bound`'s on v1 (v2 has no inert work rule, so its tile inert-work bound is the cells' credit)."""
     s, n, c = scheme_of(twin), twin["shape"], cast_offset(twin)
     sh, rho = Shape(n, n, n), s.cap
     credit = lean_credit(Fraction(twin["gamma"]), n, rho, Fraction(s.prices.forming_a_only), c)
@@ -131,7 +131,7 @@ def test_gamma_is_the_pinned_linear_and_layout_twins(twin):
 
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
-    """`pearl-c-h100-v1`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
+    """`pearl-c-h100-v1`'s gap at the inert-work bound is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
     (`REPO_LEMMAS`)."""
     pins, defs = P.lemmas(P.REPO_AUDIT.parent)
     sig, lifted = P._statement(pin, pins[pin], defs)

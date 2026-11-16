@@ -18,11 +18,11 @@
 # layers for llama32_1b, 16, and one for glm53, whose in-domain linears aren't one layer's); TIMING=0 ends the lease after the
 # capture, timing nothing.  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
-# (VOLUNTEER=1) glm53_passes.py volunteer gives up prefill's and decode's rows over inert work cap in their records on this
+# (VOLUNTEER=1) glm53_passes.py volunteer gives up prefill's and decode's rows over inert-work bound in their records on this
 # machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
 # debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
 # every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), by default exactly while the
-# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap (`served_passes.py volunteer-needed
+# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its inert-work bound (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
 # exit 2; otherwise to 0, none), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's

@@ -1,6 +1,6 @@
 """Pearl-C's work sampling design (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the inert work under the cap, and under -h3 each credited row's too), samples keyed by the execution phase's sampling coin
+excluded rows fail, the inert work under the inert-work bound, and under -h3 each credited row's too), samples keyed by the execution phase's sampling coin
 after the commitment, and the audit."""
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def test_the_band_rule_a_voluntary_row_zeroes_its_band():
 
 
 def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket():
-    """Proofs' counterexample to a band rule in the cap alone: a 64 × K × 64 record with 64 real rows and voluntary A row 5
+    """Proofs' counterexample to a band rule in the inert-work bound alone: a 64 × K × 64 record with 64 real rows and voluntary A row 5
     is one 64 × 64 tile, which a per-row rule credits 63 rows of and so samples, and the band rule credits none.  The band
     rule is in `UnitRecord.credited`, which the ticket weight reads, so the tile has no ticket and is never sampled: every
     sample lands on the other record's tile."""
@@ -119,7 +119,7 @@ def test_the_band_rule_a_padding_row_zeroes_its_block():
 
 
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
-    """On sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
+    """On sm_120 at its inert-work bound the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
     c = 218/25 − 8953/1000, Lean's definitions restated here in exact fractions, on both served models' four linears at
     once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the sample is unchanged."""
     add, bf16, fs, qa, g, r, c = Fraction(1047, 125), 2, 40, 2, 4, 32, Fraction(218, 25) - Fraction(8953, 1000)
@@ -152,9 +152,9 @@ def formed(k: int) -> tuple[int, list[int], int]:
 
 
 def test_tile_inert_bound_is_the_cells_share_of_the_units_credit():
-    """The per-tile statement's cap (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
-    |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile caps sum to
-    ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile.  At sm_120's prices the cap
+    """The per-tile statement's inert-work bound (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
+    |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile inert-work bounds sum to
+    ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile.  At sm_120's prices the inert-work bound
     is sm_120's credit."""
     sm120 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", prices=C.SM120_PRICES, hashing="h0")
     for scheme, kept in ((S, K), (S, 64), (sm120, K)):
@@ -297,7 +297,7 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
     check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
     which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
-    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): by the band rule the padded rows take their block
+    504 on 8-column tiles (V-EX's ⌈n/64⌉ inert-work bound holds the tile's 8 rows): by the band rule the padded rows take their block
     of 64 columns, 448 … 503, so its 7 tiles have no ticket and the credit is the other blocks' 448 columns, under the
     real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their exclusion
     tile is the padded one."""
@@ -359,8 +359,8 @@ def test_v_ex_is_a_no_op_on_pearl_c():
 
 def test_audit_under_hashing_h3():
     """The work sampling design's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
-    the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
-    which rows pass the row cap changes with the salts; under this salt key row 4 is over it, and a sampled tile holding
+    the honest prover has given up (`volunteer`) the A row over its row inert-work bound.  Each row's seed reads the hiding roots, so
+    which rows pass the row inert-work bound changes with the salts; under this salt key row 4 is over it, and a sampled tile holding
     it fails until it is given up."""
     h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
     epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes([10]) * 32)
@@ -426,8 +426,8 @@ def test_aligned_spike_unit_is_rejected_by_the_inert_bound():
 
 
 def test_h3_bounds_each_credited_row_as_well_as_the_tile():
-    """-h3's row cap (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
-    72 among 31 Gaussian rows, on spiked B, is over 10x its own cap while the 32-row tile's inert work is under 3/4 of the
+    """-h3's row inert-work bound (`TTOutRowSeed.lean`'s (C2)), its seeds keyed on SHA-512 row digests: one A row with aligned spikes of
+    72 among 31 Gaussian rows, on spiked B, is over 10x its own inert-work bound while the 32-row tile's inert work is under 3/4 of the
     tile's (at 300 its forming elements alone put the tile over).
     h0's tile rule accepts the tile and -h3's audit refuses it for that row; V-EX gives the row up, and by the band rule
     that row takes its band of 64 rows, here the whole tile, so the audit then accepts with no credit."""
@@ -478,10 +478,10 @@ def _census_tile(scheme, spikes: list[float | None], k: int, n: int = 4):
 
 
 def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
-    """At the H100 record's census k = 256, -h3 caps each credited row's inert work at 4ρ of its
+    """At the H100 record's census k = 256, -h3 inert-work bounds each credited row's inert work at 4ρ of its
     cells' credit (`pearlCTilesDevRev1RowInertBoundAt` at ρr = 1/100) and the tile's at ρ.  A row at 3.66ρ in a tile at 0.23ρ is
-    accepted (the ρ row cap refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row cap, and 16 rows each
-    under 4ρ that put the tile over ρ are refused by the tile cap."""
+    accepted (the ρ row inert-work bound refused it), a row at 7.3ρ in a tile at 0.46ρ is refused by the 4ρ row inert-work bound, and 16 rows each
+    under 4ρ that put the tile over ρ are refused by the tile inert-work bound."""
     m = 16
     h3 = C.PearlC(tile=(m, 4), forming="v1", hashing="h3")
     assert h3.census_ks == (256,) and h3.row_inert_share_at(256) == 4 * h3.cap == Fraction(1, 100)
@@ -503,7 +503,7 @@ def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
 
 
 def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
-    """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
+    """At every k >= k_min the row inert-work bound stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
     without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
     shape, under 4ρ, passes."""
     m = 16

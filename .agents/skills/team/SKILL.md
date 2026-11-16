@@ -54,7 +54,7 @@ fast-forwards `main` to one with no new failure:
   --body-file F`). A new head needs a new mark and a new review unless its own diff, whitespace too, is unchanged (`git
   patch-id --verbatim`), as after merging `main`. `research queue status` says what each PR waits for and lists those
   naming no issue. The mark's preflight refuses a head that conflicts or that drive.toml's `landing_gates` refuse; a
-  Markdown file over its cap, the vLLM ratchet gate and a marked PR the head doesn't merge with only
+  Markdown file over its inert-work bound, the vLLM ratchet gate and a marked PR the head doesn't merge with only
   warn. A `hold` label keeps a PR out.
 - Before marking, run the suites your change touches (the testing skill's pre-mark run), plus a suite's slow tier when
   you changed its core; no Lean records run of your own. Prefer small PRs.

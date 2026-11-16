@@ -1,12 +1,12 @@
 """V-EX's honest remedy on a retained Pearl-C pass (`pouw_pearl_c_device`'s), before its sampling coin: every tile's inert work
-replayed word by word from the pass's own files, the rows that leave a tile or a credited row over its cap given up
+replayed word by word from the pass's own files, the rows that leave a tile or a credited row over its inert-work bound given up
 (`clear_work.volunteer_words`), and the manifest's records rewritten with them.
 
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
 - **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited inert work, or a credited row's, is
-  over its cap, its over-cap rule ``reject`` (`served_passes.over_inert_bound_rule`): the pipelines ask ``served_passes.py
+  over its inert-work bound, its over-cap rule ``reject`` (`served_passes.over_inert_bound_rule`): the pipelines ask ``served_passes.py
   volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
   credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
   hand.
@@ -26,9 +26,9 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
   counts stops the step.
 
-Writes ``volunteer.json`` beside the manifest (the rows over a cap before, the rows given up, what the count caps leave over,
+Writes ``volunteer.json`` beside the manifest (the rows over an inert-work bound before, the rows given up, what the count inert-work bounds leave over,
 the records' root before and after, the credit kept, and on the device its counts' source and seconds) and exits 0 only
-when no tile is left over a cap.
+when no tile is left over an inert-work bound.
 """
 from __future__ import annotations
 
@@ -225,7 +225,7 @@ def _over(p: VR.Pass, records, counts) -> list[dict]:
 
 
 def volunteer(path: Path, coins: CoinCommitment, jobs: int, device: Path | None = None, cross_check: int = CROSS_CHECK) -> dict:
-    """Give up the pass's rows over a cap, rewriting its manifest at `path` (records and their root) when any are new; with
+    """Give up the pass's rows over an inert-work bound, rewriting its manifest at `path` (records and their root) when any are new; with
     `device` (debit_sm90.cubin) the words' counts are the device's (`words_device`)."""
     p = VR.load(path, coins)
     counts, on = words_device(p, jobs, device, cross_check) if device is not None else (words(p, jobs), None)

@@ -26,7 +26,7 @@ work, so attention and the LM head are never credited. A rejected answer credits
 ``--credit``. The credited share is not part of the declared share, and the two are never added.
 
 The replay (``--replay S --replay-cpus N``) is the prover's CPU cost beside those GPU shares: before the sampling coin it
-replays every tile of its passes, as much work as checking every tile, to give up the rows over a cap
+replays every tile of its passes, as much work as checking every tile, to give up the rows over an inert-work bound
 (`volunteer_pass.py`), and took S seconds on N cores. It is stated as the cores it takes to keep pace with the serving
 (core-seconds a second of the wall), never as a share of θ. Pearl+'s served piece takes S and N from its
 ``served_passes.py volunteer`` document (`served_verdicts.pearlplus`), against its timed call's wall.

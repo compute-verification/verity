@@ -1,5 +1,5 @@
 """Pearl-C's inert work replay (`pearl_c_inert_work`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
-checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
+checked from scratch on skips, additive over a tile's words, and over the inert-work bound on the aligned-spike tile."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def spiked_rows(k: int, count: int, seed: int, spike: float | None) -> list[byte
 @pytest.mark.parametrize("spike", [300.0, None])
 def test_aligned_spike_tile_is_over_the_inert_bound(spike):
     """The negative control: the R = 300 aligned-spike tile, formed by the scheme's own `encode`, passes the domain and has
-    74.6% of its atom-words flagged, about 15x the cap; without spikes the inert work is far below it."""
+    74.6% of its atom-words flagged, about 15x the inert-work bound; without spikes the inert work is far below it."""
     k, t = 4096, 4
     s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
     ctx = Context(b"\x11" * 32, Matmul(0, Shape(t, k, t), 0), b"\x22" * 32, b"\x33" * 32)
@@ -120,7 +120,7 @@ def elements_by_definition(ops) -> int:
 
 
 def test_salt_dead_is_the_circuits_bit():
-    """`salt_dead` is the hidden cap's bit (`circuit.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
+    """`salt_dead` is the hidden inert-work bound's bit (`circuit.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
     accumulators from ±0, where the ends are f32(α·x) ± 88·c_β, to past ±448, where both saturate to one code."""
     rng = random.Random("pearl-c/salt-dead")
     beta = P.f32_bits(P.f32(0.37))

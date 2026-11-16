@@ -6,10 +6,10 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """The prototype of Pearl-C's per-tile cap: its row (pc8's with the salt-dead counts), its word and a one-word tile at
+    """The prototype of Pearl-C's per-tile inert-work bound: its row (pc8's with the salt-dead counts), its word and a one-word tile at
     k = 256 (two promotion windows) on sm_120, the split's units (the strip, the word unit, a tile row's digests and sums,
     the tile and its tally) at the same k, and a tile row's digests and sums at the deployed 64 columns (two chunks).  The
-    per-row cap (v2): the one-word tile and its tally at ρr = 1/250 on sm_120, the call and check with one row a side, and
+    per-row inert-work bound (v2): the one-word tile and its tally at ρr = 1/250 on sm_120, the call and check with one row a side, and
     the tally `inert_bound.served` serves on `pearl-c-h100-v1-h3` at its census k = 256 (64 × 64 at n = 6,144, ρr = 4ρ)."""
     from verity.circuits.defs import bind
     from verity.protocols.accounting.pouw.prover.circuit import inert_bound, pc8

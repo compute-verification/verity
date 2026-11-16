@@ -35,9 +35,9 @@ O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, a
 writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
 it (``timed``), the timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close
 (``close_s``: what retaining completes behind the steps, waited for there), the engine steps, the
-caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out`` and ``DIR/served.json``,
+inert-work bounds, the install's ``max_step_tokens`` and whether every pass is within the inert-work bounds, to ``--out`` and ``DIR/served.json``,
 and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
-within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
+within its inert-work bounds.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
 so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
 (``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the challenger gate) the
 in-process challenger's coins and the install's hm96 salt key are sampled from fixed streams (`seeded`), so its
@@ -52,25 +52,25 @@ one without its roots).
 
 ``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
-the pass's records, the rows that leave a tile or one of its credited rows over its inert work cap, which the serve's screen
+the pass's records, the rows that leave a tile or one of its credited rows over its inert-work bound, which the serve's screen
 can't see (the inert work reads the noised codes); the transcript is the serve's.  With ``--device`` (pearl_c_sm90's
 debit_sm90.cubin, on this node's H100 or H200) the words' counts are the card's (`volunteer_pass.words_device`), and
 every ``--device-check``-th tile (default `volunteer_pass.CROSS_CHECK`) and each tile with a word the card marks
 non-finite are replayed on the CPU too and held equal.  It writes each pass's outcome and seconds to ``--out`` as each
 pass ends (``done`` once all have), with the node it ran on and, on the device, the cubin, that rate and what it
-replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
+replayed (``device``), prints one line and exits 0 only when no pass has a tile left over an inert-work bound; it refuses a serve that
 retained none, and any once the verifier's coin is flipped (``DIR/coin.json``).
 
 ``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_inert_bound_rule`) where the verdict a pipeline calls (``run``,
 the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass at a time) rejects a run on
-a sampled tile with a credited row or tile over its inert work cap under ``--over-cap`` (default: the verdict's own rule), and
+a sampled tile with a credited row or tile over its inert-work bound under ``--over-cap`` (default: the verdict's own rule), and
 ``no`` and the rule where it credits such a row nothing instead.  The pipelines (`served_pearlplus.sh`,
 `pearl_c_sm90/h200.sh`) ask it before they serve: they run ``volunteer`` exactly when it says ``yes``, and refuse to skip
 it then.
 
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
-pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
+pass that step didn't finish or left over an inert-work bound.  A dropped pass credits nothing and its MACs stay in what the run
 declared.  It refuses once the coin is flipped.  With ``--window-record W`` (a tied run) it drops the warm-up's rounds too
 (``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes Pearl+'s window record W
 over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
@@ -196,7 +196,7 @@ VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "vol
                   "credit_kept", "device")
 #: what `volunteer`'s document sums of its passes' ``device``
 DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
-#: Pearl+'s rules for a sampled tile with a credited row or tile over its inert work cap (``verify --over-cap``, `verify_run`'s
+#: Pearl+'s rules for a sampled tile with a credited row or tile over its inert-work bound (``verify --over-cap``, `verify_run`'s
 #: ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's under the first
 OVER_INERT_BOUND = ("reject", "uncredited")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
@@ -507,7 +507,7 @@ def volunteer(args: argparse.Namespace) -> int:
 
 def over_inert_bound_rule(verdict, rule: str | None = None) -> str:
     """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a sampled tile with a credited row or
-    tile over its inert work cap, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
+    tile over its inert-work bound, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
     where it takes no ``over_cap``, a verdict without it having that one rule."""
     took = inspect.signature(verdict).parameters.get("over_cap")
     if took is None:

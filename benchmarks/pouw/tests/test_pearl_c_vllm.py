@@ -903,7 +903,7 @@ def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
     (``details["max_step_tokens"]``).  A step scheduled over it is refused before its forward runs, leaving the open pass
-    empty and nothing committed; a step at the limit commits as one pass, within both caps."""
+    empty and nothing committed; a step at the limit commits as one pass, within both inert-work bounds."""
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -1081,9 +1081,9 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's inert work isn't stated, so clear_work can't
     audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
-    keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
-    h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
-    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
+    keys (about 2 in 15) a credited row of a sampled tile is over its own inert-work bound, which the sampling design and verify_run both reject.  On the
+    h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's inert-work bound admits
+    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its inert-work bound).
     The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
     `live`'s root over the weights' root (`live_coin`), and the manifest names that execution phase (``pass_index``).  `seed` samples
@@ -1794,7 +1794,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
 
 def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes(tmp_path):
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
-    own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
+    own inert-work bound (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
     gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
     every tile then passes the verifier's check, and a second run changes nothing."""
     VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
@@ -1821,9 +1821,9 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
 
 
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
-    """The pipelines give the rows over inert work cap up before the coin exactly where ``served_passes.py volunteer-needed``
+    """The pipelines give the rows over inert-work bound up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
-    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
+    inert-work bound: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
     (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
     it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
     give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any."""
@@ -1922,7 +1922,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
 
 
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
-    """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
+    """A pass whose rows over an inert-work bound are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
     of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
     pass published their root, the verdict refuses before it takes its coin."""
     VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
@@ -2105,7 +2105,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
 
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
-    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
+    each pass with calls that served.json names: a pass with a credited row over its inert-work bound (`proved_pass` under the h100
     record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
     its document names the node it ran on; a serve that retained no pass is refused."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
@@ -2164,7 +2164,7 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
 
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
-    left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
+    left over an inert-work bound): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
     its coin against their commitment (``coin.json``).  The same retention again takes the same source, never another;
     ``retain`` and ``volunteer`` refuse once the coin is flipped, and a retention changed behind them is refused
     (``after-coin``) before any replay, whichever way it changed."""
@@ -2741,7 +2741,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
 
 
 def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_is_spent():
-    """Of two credited rows of one band over their row caps, the one further over is given up as an A row, and the band
+    """Of two credited rows of one band over their row inert-work bounds, the one further over is given up as an A row, and the band
     rule leaves the other no credit, so it needs no B row.  With V-EX's ⌈m/64⌉ = 2 A rows of a 128-row unit already
     spent, the row furthest over gives up the B row holding its flagged atom-word, whose block of 64 columns is the
     weight's every column, and no tile is left over."""
@@ -2843,8 +2843,8 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
 
 
 def test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan():
-    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, one a band, since an A row
-    given up takes its band out and leaves every other band's rows' sums and caps as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
+    """`volunteer_words` gives up a unit's A rows over their inert-work bounds from one scan of its tiles, one a band, since an A row
+    given up takes its band out and leaves every other band's rows' sums and inert-work bounds as they were: on seeded counts with more rows over their inert-work bounds than ⌈m/64⌉ allows, filler
     rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
     s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
     rng = np.random.default_rng(7)
@@ -3193,7 +3193,7 @@ def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own
     assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
     fails = [t for t in lines if not t["ok"]]
     assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] for t in lines)
-    # an honest row can exceed its own cap (-h3's row cap, k 128 here), and the served path volunteers no rows
+    # an honest row can exceed its own inert-work bound (-h3's row inert-work bound, k 128 here), and the served path volunteers no rows
     assert all("the row cap" in t["reason"] for t in fails) and (not fails or CW.row_inert_bound(s))
     for row in doc["inputs"]:
         failures = sum(t["matmul"] == row["matmul"] for t in fails)
@@ -3616,7 +3616,7 @@ def test_served_inert_work_batch_replay_and_resume_record_the_scalar_lines(hones
 
 
 def test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_credit():
-    """served_inert_work's credit is the tile rule's cap over ρ, `creditDevRev1`'s share of the credited cells, with the first
+    """served_inert_work's credit is the tile rule's inert-work bound over ρ, `creditDevRev1`'s share of the credited cells, with the first
     promotion add of every word out once: every share it records is `tileInertWorkRev1` over that credit, none with the add
     taken out a second time."""
     s = PPD.scheme_of(SCHEME)

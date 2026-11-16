@@ -250,7 +250,7 @@ def test_registry_and_domain():
 
 
 def test_the_census_k_is_in_v1s_domain_only():
-    """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's cap
+    """The H100 record's census k = 256 (GLM-5.3's down projections per TP8 rank) is in -h3 v1's domain, where a row's inert-work bound
     is 4ρ, and no other k under 1,024 is; v0, h0 and sm_120's record have no census k."""
     h3 = get("pearl-c-h100-v1-h3")
     params = dict(h3.certificate.parameters)

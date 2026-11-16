@@ -357,7 +357,7 @@ def test_row_rules_and_inert_work(fmt):
     assert not F.row_passes(f, [0] * 1024)                      # a_E rounds to zero
     one = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024), 1024)
     two = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, (1, 2 * f.block + 1)), 1024)
-    # screened blocks no longer fail the row (the one-in-64 cap is gone): the inert work charges them
+    # screened blocks no longer fail the row (the one-in-64 inert-work bound is gone): the inert work charges them
     assert sum(F.dead_blocks(f, one)) == 1 and sum(F.dead_blocks(f, two)) == 2 and F.row_passes(f, one) and F.row_passes(f, two)
     assert not F.row_passes(f, F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, value=2.0 ** 16), 1024))
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
@@ -366,7 +366,7 @@ def test_row_rules_and_inert_work(fmt):
     clean = F.tile_inert_work(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
     # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare samples (a trace, under
-    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
+    # 10^-4 units against an inert-work bound of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's inert-work bound
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are inert), 3 rows x 3 columns'
@@ -412,7 +412,7 @@ def witness_elements(s, ops) -> int:
 
 @pytest.mark.parametrize("blocks", (2, 4))
 def test_a_row_the_old_inert_bound_rejected_is_admitted_and_debited_on_the_witness(blocks):
-    """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
+    """Screened blocks past D-SS's retired one-in-64 inert-work bound, on A alone: the row is credited, item 4 charges only the
     witness's salt-dead and inert elements (not every element of a screened block), no block pair
     is screened, and the tile stays under ρ."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
@@ -483,7 +483,7 @@ def test_item_3_charges_per_element_where_both_codes_are_salt_dead():
 def test_item_3_never_charges_more_than_its_block_form(a_blocks, b_blocks):
     """On spiked tiles (each spike at 9.75ρ salt-dead, the rest of its block live) and a Gaussian control: the per-element
     count is at most `block` per co-screened block pair (`saltDead4_screened`), and on four co-screened blocks it is their
-    four spikes, 4 units, where the block form charged 64 and failed the tile's cap (about 56 units)."""
+    four spikes, 4 units, where the block form charged 64 and failed the tile's inert-work bound (about 56 units)."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(a_blocks, b_blocks)
     s.tile_inert_bound(record, ops, range(4), range(4))
     d = s.last_inert_work
@@ -573,7 +573,7 @@ def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
 @pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
 def test_f1_prime_charges_the_base_split_rows_past_the_inert_bound(family):
     """F1′: the spike rows, which the support witness reads as salt-live (every other item 0),
-    and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
+    and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the inert-work bound, while
     the Gaussian side carries nothing."""
     f, k, n = F.NVFP4, 1024, 4096
     rows = [family(i) for i in range(4)]
@@ -724,7 +724,7 @@ def r1_tile():
 
 def test_r1_uncredits_a_row_whose_own_inert_work_passes_its_cell_bound():
     """R1: the spike row's own F1′ passes ρ·(its cell credit), so it must be
-    declared excluded; declared so, the tile passes, since the Gaussian rows' inert work is far under the cap.  Credited, it
+    declared excluded; declared so, the tile passes, since the Gaussian rows' inert work is far under the inert-work bound.  Credited, it
     fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
     prover's declaration finds exactly row 0."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
@@ -779,8 +779,8 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
 
 
 def test_r1_and_the_tile_inert_bound_read_the_discounted_credit(monkeypatch):
-    """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
-    unit of n = 1,024 (β = 0.50%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
+    """R1's per-row bound and the tile inert-work bound are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
+    unit of n = 1,024 (β = 0.50%) the inert-work bound and the bound fall by exactly the credit's ratio to the undiscounted one."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     k, n = record.k_kept, record.matmul.shape.n
     disc = s.credit_of(Shape(1, k, n))
@@ -827,7 +827,7 @@ def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
     """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form:
     0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
     formula gave 0.808 / 0.707 / 0.619 / 0.542.  At the domain's corner (m = 2^24, k = 2^16, n = 2^18, the claimed n
-    cap) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
+    inert-work bound) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
     at 8k³, far from honest tiles' 0.13–0.30."""
     f = F.NVFP4
     assert F.INT8_LEAF_SLOTS == 2
@@ -1083,7 +1083,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 def test_the_work_sampling_design_audits_pearl_c4_under_h3():
     """The work sampling design on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
     and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
-    whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
+    whether a row passes -h3's row inert-work bound changes with the salts: under this salt key none is over it, and the honest
     prover gives up nothing (`volunteer`)."""
     s = V.scheme("nvfp4", True, "h3")
     epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=bytes(32))
@@ -1120,7 +1120,7 @@ def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
 def test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows():
     """A voluntary row doesn't shelter the others from R1: a row declared credited over R1's bound still fails its tile.
     The spike row itself may be given up instead of excluded.  By the band rule a voluntary row takes its band's credit,
-    so a tile whose rows share its band has nothing under the cap; a credited row of the next band still has its cap, and
+    so a tile whose rows share its band has nothing under the inert-work bound; a credited row of the next band still has its inert-work bound, and
     a tile whose credited rows' inert work passes it fails."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
@@ -1168,11 +1168,11 @@ def failures(s, epoch, prover, tr, splits, records) -> set[str]:
 
 
 def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
-    """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose inert work puts tile position 7 at 20
-    units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
+    """`volunteer`, the honest prover's remedy for a tile over the inert-work bound, on a scheme whose inert work puts tile position 7 at 20
+    units per word against an inert-work bound of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
     `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
     over), and the audit accepts; without it the tile fails.  Declared without the transcript, row 15 is credited and
-    fails R1 whatever `volunteer` gives up, and giving up both rows passes V-EX's count cap, one A row at m = 32."""
+    fails R1 whatever `volunteer` gives up, and giving up both rows passes V-EX's count inert-work bound, one A row at m = 32."""
 
     class Heavy(F.PearlC4):
         def tile_inert_bound(self, record, ops, rows, cols):
@@ -1199,7 +1199,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
 
 
 def test_volunteer_leaves_r1s_rows_to_the_declaration():
-    """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the cap, and `volunteer` gives
+    """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the inert-work bound, and `volunteer` gives
     up nothing."""
     s = F.PearlC4("nvfp4", k_min=128, tile=(16, 16), n_min=16)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
@@ -1280,7 +1280,7 @@ def test_h3_is_the_default_and_h0_is_named():
 
 
 def test_the_h0_caps_are_one_400th():
-    """Pearl-C4's own cap is Pearl-C's at sm_120's prices, 1/400 (`test_pouw_pearl_c_sm120`)."""
+    """Pearl-C4's own inert-work bound is Pearl-C's at sm_120's prices, 1/400 (`test_pouw_pearl_c_sm120`)."""
     assert C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0").cap == Fraction(1, 400) == F.PearlC4(hashing="h0").cap
 
 

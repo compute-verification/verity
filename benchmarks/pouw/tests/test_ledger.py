@@ -290,7 +290,7 @@ def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = T
 
 
 def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path):
-    """A twin pinned as `X : G` is the twin its old theorem was: the gap, cast, prices and cap read off `G`'s body."""
+    """A twin pinned as `X : G` is the twin its old theorem was: the gap, cast, prices and inert-work bound read off `G`'s body."""
     audit, lean = lifted_audit(tmp_path)
     (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
     old = P.parse(LIFTED_OLD, PINS[LIFTED_OLD])
@@ -369,7 +369,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
     # the panel's published figures, each from its pin, the larger of the two prices;
-    # v1's at its cap then, 1/400
+    # v1's at its inert-work bound then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),
     ("pearl-c-sm120/v1", "cast-8", "forming-credited", "0.51105%", "1047/125"),
@@ -416,7 +416,7 @@ LLAMA = {(6144, 4096): ("508661/135634400", "851373343/226641700000"),
 @pytest.mark.parametrize("nk", list(LLAMA), ids=lambda nk: f"n{nk[0]}k{nk[1]}")
 def test_v1_publishes_at_llama_3_1_8b_s_linears_from_both_price_twins(nk):
     """A linear (n, k) that isn't a pinned cube reads its own twins, at any batch m: Llama-3.1-8B's four at the cast 8.72
-    and the cap 1/1,000 (`ServedFadd8Rev1Gap` at FADD 8.00, `ServedRev1Gap` at the loop price), the larger published."""
+    and the inert-work bound 1/1,000 (`ServedFadd8Rev1Gap` at FADD 8.00, `ServedRev1Gap` at the loop price), the larger published."""
     (n, k), (issue, loop) = nk, LLAMA[nk]
     g = P.lookup(P.load(), "pearl-c-sm120/v1", "cast-8.72", n, k)
     assert g["missing"] == [] and g["pins"] == ["pinned"] and (g["shape"], g["layout"]) == (None, None)
