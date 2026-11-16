@@ -84,7 +84,7 @@ What each one checks, and the Lean or the test that reads it.
 
 - `duo_kernel.c`, driven by `duo_kernel_sweep.py`: duo's all-state kernel at small widths, the word runs that leave a
   committed value unchanged on every start state
-  (`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/README.md`).
+  (`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/DESIGN.md`).
 - `duo_proj.c`: word runs whose served receipts differ by one constant on every start state. Cited by `Receipt.lean`,
   for the three-word constant kernel beside `DuoWordProjNoKernel`.
 - `fold_kernel.c`, driven by `fold_kernel_check.py`: the whole all-state kernel K_R of the same-word R-round XOR-in fold
