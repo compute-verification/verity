@@ -6,7 +6,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ADMISSIONS,
     COIN_ROUND,
     H1_SCHEME,
@@ -23,7 +24,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     verifier_coins,
     window_refusals,
 )
-from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import handle
 
@@ -71,7 +71,9 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
                          "session on the root the window's salt follows (pouw_h1_window.Gate)")
     served = raw.get("served")
     if served is not None:
-        from verity.protocols.accounting.pouw.prover.serving import Served
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+            Served,
+        )
         if not isinstance(served, Served) or served.registered or served.refused:
             raise ValueError("pouw setting 'served' is a fresh pouw_h1_served.Served: each call's A and z/y tables and "
                              "the weights' B committed as the window Program's registered values")

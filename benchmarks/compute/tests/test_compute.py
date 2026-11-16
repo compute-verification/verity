@@ -38,8 +38,9 @@ SHARE = CREDITED / TOTAL
 #: the revision of the benchmark's load (load.toml), which the fixture's policy registers
 REVISION = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
 #: the fixture's coins and parameters as the kit's line prints them, an in-process run's at development parameters
-RAN_WITH = ("ran with: coins in-process; parameters development (draws 459, delta 1/100, scheme pearl-c-h100-v1-h3, "
-            "sample from the serving machine, salt coins from in-process, Lean verdict development)")
+RAN_WITH = ("ran with: coins in-process; parameters development (sample size 459, delta 1/100, "
+            "scheme pearl-c-h100-v1-h3, sample from the serving machine, salt coins from in-process, "
+            "Lean verdict development)")
 #: the fixture's own statement that it is made up (its `job.json`'s ``made_up``), and the line that prints it
 SAYS = json.loads((RECORD / "job.json").read_text())["made_up"]
 MADE_UP = [C.kit.kit_report.MADE_UP, C.made_up_text(SAYS)]
@@ -139,15 +140,22 @@ def bench(store: FakeStore, *argv: str) -> int:
     return C.main(list(argv), store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
 
 
-def no_number(capsys, why: str) -> dict:
-    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start), that the
-    record states no coins and that this is no audit, and its document, with nothing on stderr."""
+def no_number(capsys, why: str, said: str | None = None) -> dict:
+    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start), the coins
+    the record states (`said`, where given, is that line), that this is no audit, and its document, with nothing on
+    stderr. A record that doesn't say who flipped its coins has the line naming what it does state at the end."""
     out, err = capsys.readouterr()
     lines = out.splitlines()
     assert err == "" and lines[0].startswith(f"compute: no number: {why}"), (out, err)
-    assert lines[1:3] == ["ran with: not stated", "a measurement, not an audit"]
+    assert lines[1].startswith("ran with: ") and lines[2] == "a measurement, not an audit"
+    assert said is None or lines[1] == said
     doc = json.loads(lines[-1])
-    assert lines[3:-1] == ([C.kit.kit_report.MADE_UP, C.made_up_text(doc["made_up_says"])] if doc.get("made_up") else [])
+    up = [C.kit.kit_report.MADE_UP, C.made_up_text(doc["made_up_says"])] if doc.get("made_up") else []
+    rest = lines[3:-1]
+    assert rest[:len(up)] == up
+    stated = rest[len(up):]
+    assert stated == [] if lines[1] != "ran with: not stated" else \
+        len(stated) <= 1 and all(x.startswith("  coins as the record states them") for x in stated)
     assert doc["value"] is None and doc["no_number"] == lines[0].removeprefix("compute: no number: ")
     assert doc["audit"] is False
     return doc
@@ -215,7 +223,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": WHY}
     assert C.RESTS_ON == ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates "
-                          "refuted: that a credited MAC was computed is an open premise, not a proved guarantee")
+                          "refuted: that a credited MAC was computed is an open assumption, not a proved guarantee")
     # the answer's ε and δ are sampling's, and the document names them so: it has no `epsilon` or `delta` of the credit
     assert (doc["epsilon_s"], doc["delta_s"]) == ("1/100", "1/100") and not {"epsilon", "delta"} & set(doc)
     assert doc["withdrawn"] == [] and store.pulled == [[RUN, f"art:{RUN}"]]
@@ -303,6 +311,19 @@ def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_numb
     store.add(RUN, a_record(tmp_path, **edits))
     assert bench(store, "--from", RUN) == 1
     no_number(capsys, why)
+
+
+@pytest.mark.parametrize("launcher, said", [(None, RAN_WITH),
+                                            ("local", RAN_WITH.replace("coins in-process", "coins local challenger"))])
+def test_a_refused_record_still_says_the_coins_it_states(store, tmp_path, capsys, launcher, said):
+    """With no number the line under the refusal is still who flipped the coins as the record states it, never
+    ``not stated`` where the record says: the fixture's in-process coins, or the launcher's local challenger."""
+    edits = {"LEAN": None} | ({} if launcher is None else {"RAN": ran(challenger=launcher, development=True)})
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--from", str(record)]):
+        assert bench(store, *argv) == 1
+        no_number(capsys, f"the record holds no {C.LEAN}", said)
 
 
 @pytest.mark.parametrize("edits, missing", [({"LEAN": None}, C.LEAN), ({"LEAN_CHECK": None}, C.LEAN_CHECK),
@@ -1027,8 +1048,8 @@ def of_record(argv: list[str]) -> list[str]:
     return [*argv[:-1], "--of-record", argv[-1]]
 
 
-#: the fixture's detail before its coins: its draws, δ and scheme
-DETAIL = "draws 459, delta 1/100, scheme pearl-c-h100-v1-h3"
+#: the fixture's detail before its coins: its sample size, δ and scheme
+DETAIL = "sample size 459, delta 1/100, scheme pearl-c-h100-v1-h3"
 #: the edits that make the fixture's coins live: a challenger's sample and salt coins, and the Lean verifier of record
 LIVE = {"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger"),
         "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))}
@@ -1047,16 +1068,16 @@ def ran(**said) -> str:
      (f"ran with: coins in-process; parameters development ({DETAIL}, sample from a challenger, salt coins from "
       "in-process, Lean verdict development)")),
     ({"ANSWER": lambda d: (d["profile"].pop("draws"), d["profile"].pop("delta"))},
-     ("ran with: coins in-process; parameters development (draws not stated, delta not stated, scheme "
+     ("ran with: coins in-process; parameters development (sample size not stated, delta not stated, scheme "
       "pearl-c-h100-v1-h3, sample from the serving machine, salt coins from in-process, Lean verdict development)")),
     ({"RAN": ran(challenger="local", development=True)}, RAN_WITH.replace("coins in-process", "coins local challenger")),
     ({"RAN": ran(challenger="in-process", development=True)}, RAN_WITH),
     ({**LIVE, "RAN": ran(challenger="local", development=True)},
      (f"ran with: coins local challenger; parameters development ({DETAIL}, sample from a challenger, salt coins from "
-      "challenger, Lean verdict of record)")),
+      "challenger, Lean verdict of record against the local challenger's key)")),
 ])
 def test_the_ran_with_line_says_who_drew_the_coins_as_the_record_states_it(store, tmp_path, capsys, edits, said):
-    """Under the number, the kit's line: who drew the coins is the launcher's ``challenger`` where the record holds
+    """Under the number, the kit's line: who flipped the coins is the launcher's ``challenger`` where the record holds
     `out/compute-run.json`, else ``in-process`` where the sample is the node's or the salt coins in-process; the
     parameters are development; the detail is the record's own words, each `not stated` where it holds none.
     ``a measurement, not an audit`` follows, always. Both ways of reading the record print it."""
@@ -1081,7 +1102,8 @@ def test_a_challengers_coins_whose_challenger_the_record_does_not_name_are_not_s
         salt = "salt coins from challenger" if edits["DEVELOPMENT"] is not None else "salt coins: not stated in the record"
         assert text[1:3] == ["ran with: not stated", "a measurement, not an audit"]
         assert text[5] == (f"  coins as the record states them, which doesn't say whose challenger: sample from a challenger, "
-                           f"{salt}; Lean verifier run as of record; parameters: draws 459, delta 1/100, development")
+                           f"{salt}; Lean verifier run as of record; parameters: sample size 459, delta 1/100, "
+                           "development")
         assert doc["ran_with"] is None and doc["audit"] is False and "deployed" not in "\n".join(text)
 
 
@@ -1135,7 +1157,8 @@ def test_no_record_prints_an_audit(tmp_path, capsys, local, pieces, launcher):
     text, doc, _ = printed(capsys)
     assert rc == (2 if "deployed" in launcher else 0)
     if rc == 0:
-        assert text[1].endswith(("not stated", "Lean verdict development)", "Lean verdict of record)"))
+        assert text[1].endswith(("not stated", "Lean verdict development)", "Lean verdict of record)",
+                                 "Lean verdict of record against the local challenger's key)"))
         assert text[2] == "a measurement, not an audit" and doc["audit"] is False and "deployed" not in "\n".join(text)
 
 

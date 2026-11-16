@@ -20,9 +20,9 @@ independent with given guessing probabilities, which is the ideal tile and the i
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting.BoundSketch
+open ResourceAccounting.BoundSketch
 
 /-- **A relay that ends knowing an inner product over `𝔽_p^n` exchanges about half the inputs' joint entropy beyond
 `n·log₂ p`.** For every prime `p`, finite index set `ι` (`n = |ι|`), distributions `μ` of the block side's input and
@@ -34,7 +34,7 @@ protocol `π`: the probability that `π`'s output is `⟨x, y⟩` is at most `1/
 tiles with independent inputs are one inner product over `𝔽_p^{t·n}`, whose joint min-entropies add. Both sides may
 compute without bound; a randomized protocol, public or private coins, is an average of deterministic ones.
 
-Proof: `Accounting.SecurityProofs.InnerProductRelay`: Cauchy–Schwarz over the side that outputs, then
+Proof: `ResourceAccounting.SecurityProofs.InnerProductRelay`: Cauchy–Schwarz over the side that outputs, then
 `Σ_c ([c = ⟨x, y⟩] − 1/p)([c = ⟨x, y'⟩] − 1/p)` summed over `x` is `p^n(1 − 1/p)` at `y = y'` and `0` otherwise,
 since a nonzero linear form on `𝔽_p^n` has `p^{n−1}` zeros; each bit sent splits one side's weight in two.
 
@@ -69,7 +69,7 @@ tile of a pass costs nothing, since `M` is public either way; two receipts whose
 against the tile side the store's (the codec's work, charged as rebuilds). `M` is fixed before the protocol: a mask
 fixed for the window is a public matrix, and leaves residency to the generic-mix game's fresh mix.
 
-Proof: `Accounting.SecurityProofs.BoundSketchRelay`, from `InnerProductRelay` on the sketch's trace
+Proof: `ResourceAccounting.SecurityProofs.BoundSketchRelay`, from `InnerProductRelay` on the sketch's trace
 `Σ_i v_i[i] = ⟨E, B⟩`, at `n = r·m`.
 
 Frozen (no-function): as `InnerProductRelay`. -/
@@ -80,4 +80,4 @@ def BoundSketchRelay : Prop :=
       ∑ E, ∑ B, μ E * ν B * (if π.eval E B = sketch E B then (1 : ℝ) else 0) ≤
         1 / p + 2 ^ π.bits * Real.sqrt (κE * κR * (p : ℝ) ^ (r * m))
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

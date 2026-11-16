@@ -196,7 +196,7 @@ def test_the_runner_runs_by_path_from_any_directory(tmp_path):
 
 def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
                                                                                                capsys):
-    """One number a scenario, the lower bound: the hardware multiple over the reference at its MFU (3.04 remotely at
+    """One number a scenario, the lower bound: the GPU-hours over the reference's at its MFU (3.04 remotely at
     the H200, its padded size ratio under reference efficiency, a hair under the best attack's 3.042) and the inference overhead beside it (not modeled); the
     best known attack only in the attacks table, never as an interval's end. No comparator: no protocol gives 1."""
     monkeypatch.setattr(sys, "path", list(sys.path))

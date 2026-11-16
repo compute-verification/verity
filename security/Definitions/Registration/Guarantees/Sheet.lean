@@ -6,7 +6,7 @@ public import Definitions.Registration.Assumptions.Sheet
 # What the data-sheet axioms give (trusted)
 
 Statements over A1–A7 (`Definitions.Registration.Assumptions.Sheet`), each `def G : Prop`,
-proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
+proved as `ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
 
 * `SheetDIdealFloor`: Theorem D-ideal (2.7♭) on the data-sheet machine, its (I1)–(I5) replaced by A1–A7 at the ½
   floor.
@@ -14,9 +14,9 @@ proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **Theorem D-ideal (2.7♭) on the data-sheet machine.** As `DIdealFloor` for a model whose machine is sheet `Sh`'s,
 at SCALAR-ROUTE's floors `q, q_T ≤ ½` and `b_T ≤ 0`, with (I1)–(I5) replaced by A1–A7 and (I6)–(I8) kept: outside an
@@ -38,4 +38,4 @@ def SheetDIdealFloor : Prop :=
       1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
         Z.epsJl Fl lam p (δ - S * (δbind + nπ * δzk)) S) ≤ δ
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

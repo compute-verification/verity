@@ -8,10 +8,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from verity.channel import Message, MessageTypes, Refused
-from verity.protocols.accounting.certifier.prover import workload as certifier
-from verity.protocols.accounting.pous.prover import workload as pous
-from verity.protocols.accounting.pouw.prover import workload as pouw
 from verity.protocols.proofs.spot.prover import workload as spot
+from verity.protocols.resource_accounting.compute.pouw.prover import workload as pouw
+from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
+from verity.protocols.resource_accounting.network.prover import workload as certifier
 
 __all__ = ["TYPES", "append", "body", "line", "lines", "read", "write"]
 

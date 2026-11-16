@@ -43,6 +43,18 @@ from verity_bench.exfiltration_text import (
 )
 from verity_bench.served_table import RUN_OF_RECORD
 
+#: a word `exfiltration/v3` keeps in the document's inputs (their `part` and `source`) until a format version, and the
+#: Glossary's word the print says for it (GLOSSARY.md, Older names)
+HELD_WORDS = {"network certifier": "network attester"}
+
+
+def _said(text: str) -> str:
+    """A document's input field as the print says it: each held word (`HELD_WORDS`) in the Glossary's."""
+
+    for held, word in HELD_WORDS.items():
+        text = text.replace(held, word)
+    return text
+
 
 def _amount(x: Any, error: float | None) -> str:
     """A figure's amount as a table prints it: `NO_BOUND` where its error, summed over everything it covers, is 1 or
@@ -202,9 +214,9 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
 
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
-    by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
+    by side for every scope and monitoring period. The network attester's figures of record come first; a figure
     that is under a label is printed in a line, a row or a column that carries that label, as the document gives
-    it. Every line of the network certifier's and of the two together carries its errors and the δ of the scans they
+    it. Every line of the network attester's and of the two together carries its errors and the δ of the scans they
     sum, and a figure whose error is 1 or more is printed as `NO_BOUND`, with no amount."""
 
     share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]
@@ -237,8 +249,8 @@ def render(doc: Mapping[str, Any]) -> str:
     on = f"modeled, on an assumed class of at most {_n(cert['response_ids'])} ids a response"
     if eps < 1:
         scan = next(r for r in cert["rows"] if r["row"] == "scan")
-        certifier = [
-            f"- **the network certifier's part: {_n(sums['scan']['certifier_GB'])} GB** ({on}) {TOGETHER['scan']}, "
+        attester = [
+            f"- **the network attester's part: {_n(sums['scan']['certifier_GB'])} GB** ({on}) {TOGETHER['scan']}, "
             f"{_n(scan['term'][of]['bits_a_request'])} bits a request, and "
             + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {_called(name, charged)}" for name in record if name != "scan")
             + f", each at D_j = {of}, its term of record, and each failing with at most ε = {_p(eps)} over the world's "
@@ -248,10 +260,10 @@ def render(doc: Mapping[str, Any]) -> str:
                "assumes by default, the scan's is "
                + (f"{_n(default['value'])} {default['unit']}." if default["eps"] < 1 else
                   f"{NO_BOUND}, at an ε of {_n(default['eps'])}.")),
-            *(f"- the network certifier's part {clause}; ε = {_p(eps)}."
+            *(f"- the network attester's part {clause}; ε = {_p(eps)}."
               for clause in _labelled(year, "certifier_GB", set_time, charged))]
     else:
-        certifier = [(f"- **the network certifier's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
+        attester = [(f"- **the network attester's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
                      "and at 1 or more it bounds nothing, so no amount is printed under any of its rows.")]
     if error < 1:
         together = [
@@ -274,23 +286,23 @@ def render(doc: Mapping[str, Any]) -> str:
         f"planner's row `{doc['row']}`{what}, read at the audit budget where its total is {_pct(share)} of the compute, "
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
-        f"{_n(head['requests'])} requests, the count the network certifier's part is over."),
+        f"{_n(head['requests'])} requests, the count the network attester's part is over."),
         f"- {_readers(share)}",
         f"- {_how(head['priced'])}.",
         f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
         *assumed,
-        *certifier,
+        *attester,
         *together,
         "- the output count: "
         + (f"{_n(count['GB'])} GB ({count['mark']}), {_n(count['bits_a_request'])} bits a request" if eps < 1 else
-           f"{NO_BOUND} ({count['mark']}), under the network certifier's ε")
+           f"{NO_BOUND} ({count['mark']}), under the network attester's ε")
         + ". Until a served audit has sampled a stop block the server chooses a response's output count, and the network "
-        f"certifier's row `{count['row']}` charges it as its schedules. "
+        f"attester's row `{count['row']}` charges it as its schedules. "
         + (f"The sums under {_names(at_zero)} take it at 0{held}, as they price no advice." if at_zero else
            f"No sum takes it at 0: those under {_names(would)} hold it too, their stop class charged its whole schedule.")
         + ("" if stop is None else f" The stop class's verdicts of record (`{stop['record']}`, "
            f"{', '.join(stop['runs']) or 'no run read'}): {stop['said']}."),
-        f"- the stop class of the network certifier's rows {_names(charged['rows'])} is charged "
+        f"- the stop class of the network attester's rows {_names(charged['rows'])} is charged "
         + ("below its schedule" if charged["below"] else "its whole schedule" if not charged["held_phases"] else
            f"below its schedule on {_n(charged['held_phases'])} execution phase(s) of a link and its whole schedule on "
            "every other execution phase of a monitoring period")
@@ -304,7 +316,7 @@ def render(doc: Mapping[str, Any]) -> str:
           "its row's schedules read 0:",
         *(f"  - {line}" for line in charged["why"]),
         (f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
-        f"certifier's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
+        f"attester's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
         f"{_p(delta['value'])}, summed over every link's execution phases, {_n(year['phases'])} of them: {_p(eps)}. "
         f"The two together fail with at most the sum of both, {_n(error)}. A figure whose error, summed over "
         f"everything it covers, is 1 or more is printed as \"{NO_BOUND}\", with that error and no amount."),
@@ -324,12 +336,13 @@ def render(doc: Mapping[str, Any]) -> str:
         *([] if stop is None else [
             (f"- the stop class: {', '.join(stop['runs']) or 'no run read'} (`{stop['record']}`): "
             f"{len(stop['verdicts'])} verdicts, {stop['said']}")]),
-        ("- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
+        ("- the network attester's part and the requests both parts count over (modeled or assumed, read from the tree, "
         "not records): `verity bench certifier_term`'s inputs, among them the request it counts and what that request "
         "is, in the table below"), "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
-                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
+                [(_said(i["part"]), i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]),
+                  _said(i["source"]))
                  for i in doc["inputs"]]), "",
         *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
@@ -347,11 +360,11 @@ def render(doc: Mapping[str, Any]) -> str:
                       _part(p["priced"]["beta"]), way, _part(x["share"]), str(len(x["families"])),
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
                      for p in planned for way, x in p["priced"]["ways"].items()]), "")),
-        "## The network certifier's part over the world's year", "",
+        "## The network attester's part over the world's year", "",
         (f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
         f"class of at most {_n(cert['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
         f"jitter, and the term of record is the one at D_j = {of}. The term at D_j = {set_time}, and every figure of a "
-        f"row whose name carries it, is printed only under the network certifier's label, \"{card}\". The entries are "
+        f"row whose name carries it, is printed only under the network attester's label, \"{card}\". The entries are "
         "the compute side's. Each row carries the δ of its scans and its ε over the world's year, their sum over every "
         "link's execution phases; a row whose ε is 1 or more has no amount."), "",
         *(f"- {name} ({'; '.join(filter(None, (k['standing'], k.get('mark'))))}): {k['counts']}"
@@ -366,18 +379,18 @@ def render(doc: Mapping[str, Any]) -> str:
                   _n(delta["value"]), _n(r["eps"])) for r in cert["rows"]]), "",
         f"The entries as the scan's check charges them: {cert['entries_rule']}.", "",
         "## Each monitoring period over all compute: the two parts side by side, in GB", "",
-        f"The network certifier's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
+        f"The network attester's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
         "to it, or the entries where the row charges them and they are fewer. The output count is the schedules of "
         f"the row `{count['row']}`, what a response's output count is charged while the server chooses it "
         f"({count['mark']}): "
         + (f"the sum under {_names([name for name in at_zero if name in record])} takes it at 0{held}."
            if any(name in record for name in at_zero) else "no sum of this table takes it at 0."), "",
         ("Each part's amounts are followed by its error over the line's scope and monitoring period: the compute "
-        "audit's δ; the network certifier's ε, its scans' δ summed over every link of the scope and every execution "
+        "audit's δ; the network attester's ε, its scans' δ summed over every link of the scope and every execution "
         "phase of the period; and `together`'s, the sum of the two. A figure whose error is 1 or more is printed as "
         f"\"{NO_BOUND}\"."), "",
         *_table(("compute", "period", "GPU-seconds", "requests", "compute audit", "bits a request", "compute audit's δ",
-                 *(f"certifier, {name}" for name in record), "scan's δ", "certifier's ε",
+                 *(f"network attester, {name}" for name in record), "scan's δ", "network attester's ε",
                  *(f"together, {name}" for name in record), "together's error", f"output count ({count['mark']})"),
                 [(p["compute"], p["period"], _n(p["gpu_seconds"]), _n(p["requests"]),
                   _n(p["compute_audit"] and p["compute_audit"]["GB"], "no rows of record"),
@@ -389,15 +402,17 @@ def render(doc: Mapping[str, Any]) -> str:
                   _amount(p["output_count"]["GB"], p["eps"]))
                  for p in doc["periods"]]), "",
         f"## Each monitoring period over all compute, {card}: in GB", "",
-        f"No amount of this table is of record. Each is under the network certifier's label, \"{card}\", which its "
+        f"No amount of this table is of record. Each is under the network attester's label, \"{card}\", which its "
         f"column carries: every amount of a row that carries the label, and every other row's at D_j = {set_time}."
         + (f" The sum under {_names([name for name in at_zero if name in labels])} takes the output count "
            f"at 0{held} too." if any(name in labels for name in at_zero) else "")
         + " A line's errors are those of the table above.", "",
         *_table(("compute", "period",
-                 *(f"{part}, {name}, {label}" for name, label in labels.items() for part in ("certifier", "together")),
-                 *(f"{part}, {name}, D_j = {set_time} {card}" for part in ("certifier", "together") for name in record),
-                 "scan's δ", "certifier's ε", "together's error"),
+                 *(f"{part}, {name}, {label}" for name, label in labels.items()
+                   for part in ("network attester", "together")),
+                 *(f"{part}, {name}, D_j = {set_time} {card}" for part in ("network attester", "together")
+                   for name in record),
+                 "scan's δ", "network attester's ε", "together's error"),
                 [(p["compute"], p["period"],
                   *(_amount(p["together"][name][key], p[e]) for name in labels for key, e in ERRORS.items()),
                   *(_amount(p["together"][name]["with_set_time_card"][key], p[e]) for key, e in ERRORS.items()

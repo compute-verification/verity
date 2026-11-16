@@ -63,7 +63,7 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The window's δ doesn't read the widening** (`ExecutionPhase.sessionDelta_extend`). -/
 theorem ExecutionPhase.delta_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) (cr : ℝ) : (W.extend S).delta t cr = W.delta t cr := by
@@ -136,7 +136,7 @@ holds), which places each gate at its files' place (`place`), and
 whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and the window the
 deployment runs at each parameters (`window`), whose bound's parameters `θ` fixes. A deployed instance fills
 `signer`, `read` and `place` at its construction; no theorem takes any of them as a hypothesis of its own. -/
-structure ExecutionPhaseInstance (d : Accounting.Device ι) (α : Type) [Fintype α] where
+structure ExecutionPhaseInstance (d : ResourceAccounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
@@ -462,7 +462,7 @@ on the committed files at the published share, more than the window's `ε` share
 incorrect at the projected strategy (`JointAuditV5.incorrectSet`). -/
 def ClaimTransfers : Prop :=
   ∀ θ F W, I.executionPhases θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
-    ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.extractOf K θ F c σ)
+    ¬ ResourceAccounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.extractOf K θ F c σ)
         (I.base.certOf θ).ε → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (I.base.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card : ℝ)
@@ -499,7 +499,7 @@ population. -/
 theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
   intro θ F W hW hR c σ hI he
   rw [I.extractOf_some K hW c σ] at hI
-  have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
+  have hcard : (ResourceAccounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
         (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
           (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))).card ≤
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card :=
@@ -508,7 +508,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
       (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
       (I.base.read θ F) (I.base.Opens θ F c) _ (K.project W θ F c σ) (h.reads θ F W hW hR c σ he)
   have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
-      ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
+      ((ResourceAccounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
         (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
           (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))).card : ℝ) :=
     not_le.1 hI

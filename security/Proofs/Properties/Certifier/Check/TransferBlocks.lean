@@ -56,7 +56,7 @@ Its two lemmas:
 
 * honest: `transferBlocksAcceptMeans_honest`, the converse, that an execution phase proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a network certifier
+  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a network attester
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
@@ -64,7 +64,7 @@ Its two lemmas:
   proof block's row commitments (`ExecutionPhaseOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
 * nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every execution phase doesn't have the property
-  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a network certifier
+  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a network attester
   execution phase with no findings, which isn't proved.
 -/
 
@@ -167,7 +167,7 @@ theorem certified_spec {c : Case} (h : certified c = true) : ExecutionPhaseCerti
 
 theorem synced_spec {c : Case} (h : synced c = true) : ExecutionPhaseSynced c := by
   cases hk : c.kind with
-  | networkCertifier => simp only [ExecutionPhaseSynced, hk]
+  | networkAttester => simp only [ExecutionPhaseSynced, hk]
   | plain | served =>
     simp only [synced, hk] at h
     simp only [ExecutionPhaseSynced, hk]
@@ -242,7 +242,7 @@ theorem certified_of {c : Case} (h : ExecutionPhaseCertified c) : certified c = 
 
 theorem synced_of {c : Case} (h : ExecutionPhaseSynced c) : synced c = true := by
   cases hk : c.kind with
-  | networkCertifier => simp only [synced, hk]
+  | networkAttester => simp only [synced, hk]
   | plain | served =>
     simp only [ExecutionPhaseSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
@@ -355,12 +355,12 @@ theorem transferBlocksAcceptMeans_honest :
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
-/-- **An honest network certifier execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a network certifier link): one
+/-- **An honest network attester execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a network attester link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem transferBlocksAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
-      c.kind = .networkCertifier w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
+      c.kind = .networkAttester w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
       CertifierSigned c k → ExecutionPhaseProved c → ExecutionPhaseOpened c →
       (verdict c).map Verdict.accepted = .ok true ∧ ExecutionPhaseVerdict c := by
   intro c w N W H toy I seed k hk hmake hkey ⟨hpub, hsize, hall⟩ hp ho
@@ -377,7 +377,7 @@ theorem transferBlocksAcceptMeans_honest_certifier :
 
 theorem transferBlocksAcceptMeans_by : TransferBlocksAcceptMeans ↔ TransferBlocksAcceptMeansBy verdict := Iff.rfl
 
-/-- A network certifier execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
+/-- A network attester execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
   link := ""
   run := ""
@@ -404,10 +404,10 @@ def unproved (w : ByteArray) : Case where
   session := .empty
   egress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
-  kind := .networkCertifier w
+  kind := .networkAttester w
 
 /-- **No verifier that accepts every execution phase has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
-verifier accepts a network certifier execution phase with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
+verifier accepts a network attester execution phase with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
 theorem transferBlocksAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ TransferBlocksAcceptMeansBy v := by
   intro v hall h
   obtain ⟨-, fs, hf, -⟩ := (h (unproved .empty) (hall _)).1.1

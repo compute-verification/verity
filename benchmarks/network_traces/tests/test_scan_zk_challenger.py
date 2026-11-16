@@ -17,10 +17,10 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = ROOT / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "tests" / "stub_serve.py"
 
 
-from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 from benchmarks.network_traces import zk_drivers  # noqa: E402
 
 zk_drivers.install()
@@ -63,7 +63,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     carry = sz.carry_of(pg, setup.cls, [], honest.members[0].ports["sin"])
 
     LC = sz.proof_drivers.drivers().local_challenger
-    A = LC._module("a5_auditor", LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    A = LC._module("a5_auditor", LC.TREE / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **kw: [sys.executable, str(STUB), *real(*a, **kw)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))

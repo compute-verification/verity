@@ -188,11 +188,11 @@ class Part:
     at: dict[str, float] = field(default_factory=dict)   # at other vectors, by name
 
 
-PINNED = ("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
+PINNED = ("ResourceAccounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
           "sampled tile's receipt from committed data and the round's coins and compares it with the committed one, so a "
           "wrong receipt fails whenever its tile is sampled and nothing is left to guess; what a right receipt cost is "
           "FILL-OPT's")
-PFILL = ("Accounting.Guarantees.FillerLuck.FillerBlocksDeficit (and FillerLuckAt): pfill's cell check, a short cell "
+PFILL = ("ResourceAccounting.Guarantees.FillerLuck.FillerBlocksDeficit (and FillerLuckAt): pfill's cell check, a short cell "
          "right with probability at most ½ + 2^(−3/2)")
 
 
