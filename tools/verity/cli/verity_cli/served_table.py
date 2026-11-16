@@ -1,7 +1,7 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each demo's subprotocols and the
 configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
-on a machine (`live`). Pearl+ has no piece yet, so `verity run` refuses remote by name (``no-party``).
+on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
 
@@ -74,6 +74,7 @@ NOT_YET = "memory-accounting/onsite-memory-verdicts"
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
+PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 ONSITE = "verity/onsite/v0"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
@@ -107,6 +108,19 @@ def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
     if type(k) is not int or k < 1:
         raise Refused("params", f"challenges is a positive integer, not {k!r}")
     return {"challenges": k}
+
+
+_CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
+
+
+def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    if extra := sorted(set(params) - {"class", "tie-uniform"}):
+        raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: class, tie-uniform)")
+    if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
+        raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
+    if type(params["tie-uniform"]) is not bool:
+        raise Refused("params", f"tie-uniform is true or false, not {params['tie-uniform']!r}")
+    return {k: params[k] for k in ("class", "tie-uniform") if k in params}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -155,7 +169,10 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
+    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
+                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
+              channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
+              needs=frozenset({"windows"}), params=_pearlplus_params, default_params={"tie-uniform": False}),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
@@ -210,7 +227,7 @@ HEADERS = {
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
-        "and the auditor's on its own machine. `verity run` refuses it by name until each party has its piece."),
+        "and the auditor's on its own machine. `verity run THIS --dry-run` resolves every party."),
 }
 HEADER = HEADERS["onsite_full"]
 
@@ -386,6 +403,21 @@ def _pouw(cfg, params, bound):
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
 
 
+def _pearlplus(cfg, params, bound):
+    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": bound["gate"],
+             "PEARLC_CHALLENGER_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+    hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
+    if "class" in params:
+        w = cfg["workload"]["params"]
+        slots, _, outputs = (int(x) for x in params["class"].split(","))
+        if (slots, outputs) != (w["slots"], w["window-steps"]):
+            raise Refused("params", f"Pearl+'s class {params['class']} is {slots} requests of {outputs} output tokens, "
+                                    f"and the workload's slots and window-steps are {w['slots']} and {w['window-steps']}: "
+                                    f"state slots = {slots} and window-steps = {outputs}, or a class that agrees")
+        hooks |= {"V3C_CLASS": params["class"], "CLASSES": params["class"]}
+    return hooks | ({"PEARLPLUS_TIE_UNIFORM": "1"} if params["tie-uniform"] else {})
+
+
 #: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
 #: header names
 WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger:PROTOCOL",
@@ -452,6 +484,15 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "the gate's; served_verdicts.py pouw checks them against the gate's session under its key",
                        reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pouw),
         VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
+    },
+    "pearl-plus": {
+        CHALLENGER: Piece("pearl-plus", CHALLENGER, GATE, "the gate: each epoch's Pearl+ salt from a session of its own"),
+        WORKERS: Piece("pearl-plus", WORKERS, SERVED_WINDOW, "Pearl+ on the workload's engine (POUW=pearlplus, "
+                       "PEARLPLUS_TIE=1): each engine step's passes retained under the gate's salts, Pearl+'s window "
+                       "record tied to the execution phase, then its verdict and the Lean verifier "
+                       "(served_pearlplus.sh)", scripts=(PEARLPLUS_SCRIPT,), reaches=CHALLENGER,
+                       binds=("gate", "peer", "key-sha512"), optional=("lane", "main-file"), hooks=_pearlplus),
+        VERIFIER: Piece("pearl-plus", VERIFIER, CHECK, "Pearl+'s row"),
     },
     "inference-only": {
         VERIFIER: Piece("inference-only", VERIFIER, CHECK, "the inference-only policy's row: no served window produces "
