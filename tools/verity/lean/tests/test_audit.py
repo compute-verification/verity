@@ -4641,7 +4641,7 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
                                                 "kind": "def", "hash": "5" * 32}]})
     assert A.witness_failures({**soundness[0], "witnesses": {}}, soundness[1], WOWN)[0].startswith(
         "witnesses: P.sound lists no witnesses that it says something, and the rule holds it to them (it reads "
-        "Properties.Verity.Soundness.Sound, the one theorem's vocabulary)")
+        "Properties.Verity.Soundness.Sound, protocol soundness's vocabulary)")
 
 
 def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():

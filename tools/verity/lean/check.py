@@ -2329,7 +2329,7 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
         if SCOPE_COMPONENT in m.split("."):
             return "acceptance", f"it reads the claim {parent(r['name'])}"
         if under(SCOPE_MODULES, m):
-            return "acceptance", f"it reads {parent(r['name'])}, the one theorem's vocabulary"
+            return "acceptance", f"it reads {parent(r['name'])}, protocol soundness's vocabulary"
     for r in reads:
         if r.get("name", "").split(".")[-1].lower().startswith(VERIFIER_PREFIXES):
             return "acceptance", f"it reads {r['name']}, a verifier's acceptance"
