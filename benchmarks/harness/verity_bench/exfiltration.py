@@ -127,7 +127,7 @@ import argparse
 import importlib.util
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -182,7 +182,7 @@ from verity_bench.exfiltration_common import (
     _reader,
 )
 from verity_bench.exfiltration_document import _inputs, _row_label, build
-from verity_bench.exfiltration_planner import _sources, at_share, rows_of_record
+from verity_bench.exfiltration_planner import _sources, at_share, record_job, record_run, rows_of_record
 from verity_bench.exfiltration_render import render
 from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _listed, _n, _names, _p, _part, _pct, _table
@@ -330,10 +330,29 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
                       "source", [DOCUMENT])
 
 
-def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+class _Commits:
+    """The one call `spot_status.status` makes of a store, answered from a run's record directory: the commit its
+    `job.json` says the run ran (`computation.tree_sha`), where it says one."""
+
+    def __init__(self, record: Path):
+        self.run = record_run(record)
+        self.commit = (record_job(record).get("computation") or {}).get("tree_sha")
+
+    def get_attempt(self, run: str) -> dict | None:
+        return {"source": {"commit": self.commit}} if run == self.run else None
+
+
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None,
+         report: Callable[..., int] | None = None) -> int:
     """`verity bench exfiltration`: print the two parts (`render`), or with ``--json`` their document (`build`).
     `metrics`: a runner's metric ids, each for the figure of `FIGURES` it names, which under a research run
-    (`RESEARCH_RUN_DIR` set) `record` writes into the run's result; the print is the same."""
+    (`RESEARCH_RUN_DIR` set) `record` writes into the run's result; the print is the same.
+
+    With ``--from`` (a run's record directory, or a run id where research is installed: `kit.record`), the rows of
+    record are that record's, read with no store (`build`'s ``record``), and `report`, the runner's call of
+    `kit.report`, prints and writes them: ``report(doc, text, made_up=..., withdrawn=...)``, its exit code the
+    command's. A record whose `job.json` says it is made up (``made_up``, what it says of itself) is reported as made
+    up, and the print says what it says."""
 
     ap = argparse.ArgumentParser(
         prog="verity bench exfiltration",
@@ -367,12 +386,21 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                          "share of compute it measures is printed beside the given share, with the compute audit's part "
                          f"at it (default: none, and the share is \"{NO_RUN}\")")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
+    ap.add_argument("--from", dest="record", metavar="DIR",
+                    help="read the planner's rows from one run's record directory (its job.json and out/), with no "
+                         "store; a run id is fetched to one first where research is installed")
     a = ap.parse_args(argv)
+    if a.record is not None and (a.json or report is None):
+        ap.error("--from prints the figure and its document through the runner (benchmarks/exfiltration/run.py), "
+                 "without --json: run `verity bench exfiltration --from DIR`")
     try:
+        rec = None if a.record is None else kit.record(a.record)
         served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only)
-        doc["spot_holes"] = spot_status.status(doc["runs"]) if served is None else spot_status.served(served)
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only,
+                    record=None if rec is None else rec.path)
+        doc["spot_holes"] = (spot_status.served(served) if served is not None else
+                             spot_status.status(doc["runs"], store=None if rec is None else _Commits(rec.path)))
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
@@ -383,6 +411,16 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         shown = served_row.account(served)
     if shown is not None:
         doc["served_run"] = shown
+    if rec is not None:
+        said = record_job(rec.path).get("made_up")
+        text = render(doc)
+        if said:
+            doc["made_up_says"] = str(said)
+            head, _, rest = text.partition("\n")
+            text = f"{head}\n  what the record says of itself: {said}\n{rest}"
+        text += ("" if shown is None else "\n\n" + served_row.render(shown)) + "\n\n" + spot_status.render(doc["spot_holes"])
+        assert report is not None
+        return report(doc, text, made_up=bool(said), withdrawn=rec.withdrawn)
     if metrics and settings.is_set("RESEARCH_RUN_DIR"):
         try:
             record(doc, metrics)
