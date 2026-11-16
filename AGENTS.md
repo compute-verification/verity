@@ -10,7 +10,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 The tree is in the layout below. `tests/tree.toml` is the layout of record, and `tests/test_tree.py` holds the tree to
 it; a line marked "Target, not yet" says what the layout of record has and the tree does not.
 
-- `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
+- `verity/`: the distribution `verity` (the root `pyproject.toml`; `verity/README.md` outlines it). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
     `spot` and `recursion` on it, `spot_flock` on those and `spot_flock_recursion` on top, what the other protocols call
