@@ -120,8 +120,6 @@ public import Proofs.ResourceAccounting.Served
 public import Proofs.Pous.Obligation
 public import Proofs.Compose.Additive
 public import Proofs.Slowdown.Coverage
-public import Proofs.Slowdown.ServingBlocks
-public import Proofs.Slowdown.ServingBlocks.Witnesses
 public import Proofs.ResourceAccounting.Defs.Actual.Source
 public import Proofs.ResourceAccounting.Defs.Localization
 public import Definitions.Pous.P2.Cost
@@ -148,7 +146,6 @@ change to the guarantee, or to a definition it reads, changes its record.
 * `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
 * `BandwidthOfAudit`: `BandwidthAudit.lean`; `Bandwidth.SecurityProofs.AuditRO`: `Bandwidth/AuditRO.lean`.
 * `AccelAdditive`: `Additive.lean`.
-* `ServingBlocks.ServingBlockBound`: `ServingBlocks.lean`.
 
 ## Where to look
 
