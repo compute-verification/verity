@@ -24,11 +24,20 @@ verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ~~~
 
+On Llama 3.2 1B and one H200, the job that writes its cost and its replay match:
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model llama32-1b \
+  --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
+~~~
+
 - **The arms.** A job serves stock, stock a second time and ours, each a server lifetime of its own. For a model
   whose recipe the benchmark holds (GLM-5.3, `--model glm53`) they are the arms at the recipe's settings: `prod`,
   stock vLLM as its recipe starts it on these cards; `prod-again`; and `prod-record`, which adds the scheduler's step
   trace and keeps each request's prompt ids and served ids. For any other model the benchmark refuses those arms, and
-  the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings. `--again none` serves
+  the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings, with `record-ids` in
+  place of `record` for a model with ids (Llama 3.2 1B, `--model llama32-1b`): it keeps each request's ids, which a
+  replay under vLLM's client reads. `--again none` serves
   stock once: the cost then has no noise floor. `--stock none` serves ours alone, a first start of it and its replay:
   there is then no cost, and under vLLM's client the benchmark's own cost step ends the runner with 1 for want of a
   stock arm, which the job takes as no failure where ours served its load.
@@ -86,7 +95,10 @@ benchmark's own measurement (a sessions load, a value, the same work on both sid
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
 record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
-that line is measured. Otherwise the result holds no entry under an id.
+that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost and the replay match are points of the
+same two ids, older than their other models; the 1B has no speculative decoding, so no advice line. Each point names
+its `model` (the checkpoint, `repo@revision`) and its `hardware` (the cards it was served on). Otherwise the result
+holds no entry under an id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
 where a replayed token or step differs from the served one. One kind of served step is no difference, and the report
