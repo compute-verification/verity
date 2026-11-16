@@ -90,6 +90,15 @@ def load_name(file: str | Path) -> str:
     return "_".join(parts if len(parts) > 1 else ("pouw", *parts))
 
 
+@pytest.fixture
+def no_gpu(monkeypatch):
+    """A host whose harness-kit stamp names no card (``"none"``), whatever GPUs the test's host has."""
+    from verity_bench import kit
+
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    monkeypatch.setattr(kit.shutil, "which", lambda name: None)
+
+
 def load(file: str) -> ModuleType:
     """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
     name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its
@@ -115,13 +124,4 @@ def _outside_any_run(monkeypatch):
     """A benchmark's `run_result.write` writes into ``$RESEARCH_RUN_DIR``: under a `research run` of the suites that is the
     run's own result.json, which a test's verdict must never replace."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-
-
-@pytest.fixture
-def no_gpu(monkeypatch):
-    """A host whose harness-kit stamp names no card (``"none"``), whatever GPUs the test's host has."""
-    from verity_bench import kit
-
-    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
-    monkeypatch.setattr(kit.shutil, "which", lambda name: None)
 
