@@ -34,7 +34,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   vendor.
 - **The auditor** has two parts, both on auditor devices that the developer doesn't control: its **challenger** (the
   live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `verity-verify-proof` for each sampled
-  proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
+  proof block, and `remote-v1 check` for the verdict). The challenger is the one auditor-trusted device remote relies on
   (`trusted-device`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
@@ -52,21 +52,21 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
-| PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`inference_only/verifier/inference_only/lean`) | `verity/inference-only/v0` |
+| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
-The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run, window] components`
-(`remote-v1`), which
-`Verity.SoundnessOf` reads, and v0, `protocol = tiedSameB "verity/remote/v0" tied [windows] components`, which no
+The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied ties components`
+(`ties = [run, executionPhase]`; the executable `remote-v1`, `RemoteV1Main.lean`), which
+`Verity.SoundnessOf` reads, and v0, `protocol = tiedSameB "verity/remote/v0" tied [executionPhases] components`, which no
 soundness theorem covers and no configuration names. Pearl+'s run names its record's digest, tied to the policy's by `V1.run`; its check doesn't
 read that record yet. The policy and SPOT commit to the run's record, which names the registered circuit; once
 the cases fit, two different records reject remote whatever the subprotocols answer (`Core.Composition.same`). v0's
-period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.windows`): every window of
+period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.executionPhases`): every window of
 the period must name the policy's record as its Commit record (`executionPhaseRecords`), and a window on another record rejects
-remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
-(`RemoteMain.lean`). The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). The
-product's rule and its difftest are the composition's ([README](composition/README.md),
+remote unless it rejects already. v0's executable is `remote` (`RemoteMain.lean`); each runs as
+`id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve`. The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). The
+product's rule and its difftest are the composition's ([README](../lean/README.md),
 `verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`).
 
 ## Lifecycle
@@ -393,7 +393,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 | SPOT over a monitoring period | `Flock.Guarantees.IntegrityMonitoringPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The slowdown over remote, per period | `Slowdown.Guarantees.SlowdownRemote` (`security/Definitions/Slowdown/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
-| The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
+| The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from two open targets and the two statements on the committed files (the open gap, above) | — |
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Slowdown.Slowdown.remoteSlowdown`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Slowdown.Assumptions.PouwSound` among them), with
@@ -462,9 +462,9 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
   verifier reads is the challenger's for the live run, and its sample file is the verifier's own.
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
-  (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
+  (`ecr/sha-512`), in `security/Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
-- `trusted-device` (`Verity.Assumptions.TrustedDevice`, `Definitions/Core/Assumptions.lean`): the challenger is
+- `trusted-device` (`Verity.Assumptions.TrustedDevice`, `security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
 - `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
@@ -547,7 +547,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. The remote demo
+**No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote demo
 is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
 run runs both halves on one served run, PoUW's as a development run:
 
