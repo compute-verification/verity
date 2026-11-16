@@ -1271,6 +1271,31 @@ def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_p
     assert capsys.readouterr().out.strip() == PP.ran_with(gate, record(1, 20))
 
 
+def test_the_served_forged_partition_forges_at_the_honest_partitions_steps_and_refuses_one_outside_them(tmp_path, capsys):
+    """A served window of steps 1 to 2 has no unit at step 24: the forged partition is by default the honest one's templates
+    and scope with every unit sampled (for steps 1 to 2, the step-1 `_all` files under each design), and a given one at
+    steps the honest partition doesn't hold is refused, naming the fix, where its commit would raise after the honest arm."""
+    part = HERE.parent
+
+    def doc(name: str) -> dict:
+        return json.loads((part / f"llama32_1b_silu_mul_v2_i8192_l0_{name}.json").read_text())
+
+    assert PP.served_forged_partition(doc("step1"), None, "rate") == doc("step1_all")
+    assert PP.served_forged_partition(doc("step1_all_stratified"), None, "stratified-rate") == doc("step1_all_stratified")
+    assert PP.served_forged_partition(doc("step1_all"), doc("step1_all"), "rate") == doc("step1_all")
+    for honest, forged, design in (("step1", "step24", "rate"), ("step1_all_stratified", "step24_stratified", "stratified-rate")):
+        with pytest.raises(SystemExit, match=re.escape("names steps [24, 25], outside the honest partition's [1, 2]")) as e:
+            PP.served_forged_partition(doc(honest), doc(forged), design)
+        assert "Unset PP_FORGED_PARTITION" in str(e.value) and f"({design}:1/1)" in str(e.value)
+    unscoped = {k: v for k, v in doc("step1_all").items() if k != "scope"}
+    with pytest.raises(SystemExit, match="names steps unscoped"):
+        PP.served_forged_partition(doc("step1"), unscoped, "rate")
+    assert PP.served_forged_partition(unscoped, None, "rate") == unscoped
+    assert PP.main(["forged-partition", "--honest", str(part / "llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json"),
+                    "--design", "stratified-rate"]) == 0
+    assert json.loads(capsys.readouterr().out) == doc("step1_all_stratified")
+
+
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
     `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ (the engine's args among its

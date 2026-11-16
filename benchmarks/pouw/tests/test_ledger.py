@@ -326,6 +326,59 @@ def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_pat
     assert (twin["pin"], twin["source"], twin["status"]) == (old, P.LEAN_STORE, "pinned")
 
 
+STORE_OLD = next(iter(PINS))
+REPO_NEW = f"Pouw.PearlC.{P._short(STORE_OLD)}"
+REPO_NEW_SOURCE = f"""namespace Pouw.PearlC
+
+@[expose] public section
+
+theorem {REPO_NEW.removeprefix("Pouw.PearlC.")}
+    (h : True) : True := h
+
+end
+
+end Pouw.PearlC
+"""
+
+
+def test_a_store_row_takes_the_repository_s_name_of_its_key_and_keeps_every_other_field(tmp_path):
+    """A row's pin is the declaration the repository's Lean has under its key (`renamed`), whatever its source, in `build`
+    and `refresh` alike: the store's `pearlCGamma…` comes out under the repository's `pearlCGap…InertShare1000_…`, with
+    its source, type hash, status and gap the store's. Of a key the repository declares twice (a theorem and its lift)
+    a row takes the declaration in its pin's namespace, the theorem for a `Pouw.PearlC.` pin and the lift for a
+    `Pouw.SecurityProofs.PearlC.` one; a pin in neither namespace keeps its spelling, and so do two rows that would take
+    one name. The checked-in table is a fixed point."""
+    audit, lean = lifted_audit(tmp_path)
+    (lean / "lean-audit.json").write_text(json.dumps(audit))
+    (lean / "Proofs" / "Pouw" / "PearlC").mkdir(parents=True)
+    (lean / "Proofs" / "Pouw" / "PearlC" / "Gap.lean").write_text(REPO_NEW_SOURCE)
+    store = tmp_path / "store"
+    for rel in (P.LEAN_STORE, *P.STAGED):
+        (store / rel).parent.mkdir(parents=True, exist_ok=True)
+        (store / rel).write_text(json.dumps({"pins": {STORE_OLD: PINS[STORE_OLD]} if rel == P.LEAN_STORE else {}}))
+    (read,) = P.extract({STORE_OLD: PINS[STORE_OLD]}, P.LEAN_STORE, {STORE_OLD: PINS[STORE_OLD]["type_hash"]})
+    want = P._jsonable(read) | {"pin": REPO_NEW}
+    built = P.build(store, lean / "lean-audit.json")
+    assert [t for t in built["twins"] if t["source"] == P.LEAN_STORE] == [want]
+    as_read = built | {"twins": [P._jsonable(read) if t == want else t for t in built["twins"]]}
+    assert P.refresh(as_read, lean / "lean-audit.json") == built == P.refresh(built, lean / "lean-audit.json")
+
+    lift = REPO_NEW.replace("Pouw.PearlC.pearlCGap", "Pouw.SecurityProofs.PearlC.Gap")
+    (lean / "Proofs" / "Pouw" / "Lift.lean").write_text(f"theorem {lift} : True := trivial\n")
+    names = P.repository_names(audit, lean)
+    assert names[P._short(STORE_OLD)] == (REPO_NEW, lift)
+    assert [t for t in P.build(store, lean / "lean-audit.json")["twins"] if t["source"] == P.LEAN_STORE] == [want]
+    lifted = STORE_OLD.replace("Pouw.PearlC.pearlCGamma", "Pouw.SecurityProofs.PearlC.Gamma")
+    assert P.renamed([{"pin": lifted, "gamma": "g"}], names) == [{"pin": lift, "gamma": "g"}]
+    elsewhere = [{"pin": STORE_OLD.replace("Pouw.PearlC.", "Pouw.PearlC.Old.")}]
+    assert P.renamed(elsewhere, names) == elsewhere
+    twins = [{"pin": STORE_OLD}, {"pin": STORE_OLD.replace("Gamma", "Gap")}]
+    assert P.renamed(twins, {P._short(STORE_OLD): (REPO_NEW,)}) == twins
+
+    doc = json.loads(P.TABLE.read_text())
+    assert P.renamed(doc["twins"], P.repository_names(json.loads(P.REPO_AUDIT.read_text()), P.REPO_AUDIT.parent)) == doc["twins"]
+
+
 def test_a_lemma_at_a_device_record_is_a_pinned_twin_of_its_proof_s_name(tmp_path):
     """A statement that left the guarantees for the lemmas beside its proof (`REPO_LEMMAS`) is the twin its guarantee was,
     under the same name, with no type hash: its body read as a lifted guarantee's, and pinned."""
