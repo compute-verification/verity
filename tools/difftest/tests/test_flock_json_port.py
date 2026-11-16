@@ -385,11 +385,10 @@ def _fixture_texts(p: Path) -> list[str]:
     out = []
     for t in texts:
         out.append(t)
-        try:
-            c = D.canonical(json.loads(t))
-        except (ValueError, TypeError):
-            continue
-        if c != t:
+        floats: list[str] = []
+        value = json.loads(t, parse_float=lambda s: floats.append(s) or float(s),
+                           parse_constant=lambda s: floats.append(s) or float(s))
+        if not floats and (c := D.canonical(value)) != t:
             out.append(c)
     return out
 
