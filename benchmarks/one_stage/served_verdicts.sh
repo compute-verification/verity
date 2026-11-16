@@ -277,10 +277,11 @@
 # and PoUW's period case once each of its windows names R (`served_cases.py`). The
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # DAY=N (off by default: unset, serve-openai writes what it wrote before) declares day N's one circuit in DAY_LOG, the
-# deployment's registration log kept across runs, before the model loads (serve-openai's --day, `serve_day`): DAY_PROGRAM,
-# the SHA-512 of the program the day's windows register, DAY_BLOCKS its block Definitions, and DAY_PARAMS the log's
-# {auditor, composite} (needed for a new log). A second declaration of the day, to another circuit, is refused by the
-# log's check (duplicate-declaration) and the serve doesn't start; the same one again (a rerun within the day) is the day's.
+# deployment's registration log, which holds one compiler for its life, before the model loads (serve-openai's --day,
+# `serve_day`): DAY_PROGRAM, the SHA-512 of the program the day's windows register, DAY_BLOCKS its block Definitions, and
+# DAY_PARAMS the log's {auditor, composite} (needed for a new log). A second declaration of the day, to another circuit, is
+# refused by the log's check (duplicate-declaration) and the serve doesn't start; the same one again (a rerun within the
+# day) is the day's.
 # Each H1 W names the declaration, an R of another program is refused at its close, and V3c's audit runs R2 against the
 # log's declarations (records_audit's --day). Under H1_TIE DAY_PROGRAM is V3C_CLASS's window circuit's at H1's tables, R's
 # `program` (h1/w<k>/record.json), which the model, the class and H1's layout alone fix. A deferral carries the day: DAY

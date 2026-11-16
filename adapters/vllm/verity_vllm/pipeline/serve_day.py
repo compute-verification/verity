@@ -214,7 +214,8 @@ def register(path: Path, item: Mapping[str, Any], params: tuple[str, S.Auditor] 
         try:
             entry = _chained(path, composite, log, auditor, G.Information((item,)))
         except G.Refused as e:
-            was = f": it registers {json.dumps(held[0], sort_keys=True)} already, and registers each item once" if held else ""
+            was = (f": it registers {json.dumps(held[0], sort_keys=True)} already, and registers each item once; a new "
+                   "log (a new DAY_LOG) takes this one") if held else ""
             raise ValueError(f"the log refuses the item, {e}{was}") from None
         return Item(item, entry.digest(), path, "now")
 
@@ -223,8 +224,10 @@ def register_compiler(run: Path, item: Mapping[str, Any], log: str | os.PathLike
                       params: str | os.PathLike | None = None) -> Item | None:
     """B's item (kind ``builder``) registered in the log the serve run ``run`` declared its day in (module docstring):
     the log its `FILE` names, or ``log``, a copy of it, held to the declaration `FILE` names, under ``params`` (the
-    log's parameters, as ``--day-params``). A log registers one compiler for its life: a deployment whose compiler
-    changes (its adapter code, or ℓ) starts a new log. None for a run that declared no day and is given no ``log``:
+    log's parameters, as ``--day-params``). A log registers one compiler for its life, and the digest covers the whole
+    content of ``adapters/vllm`` and ``verity``, serve.json's φ, the default seed, ℓ and the transfer gates: after any
+    commit touching them, a docstring included, a kept log refuses the next run's, and a new log takes it. None for a
+    run that declared no day and is given no ``log``:
     nothing is registered. ValueError, naming the log, where it isn't the run's or refuses the item (`register`)."""
     file = Path(run) / FILE
     if not file.exists():

@@ -117,6 +117,7 @@ def test_a_log_that_registers_another_compiler_refuses_this_one_and_no_advice_is
     with pytest.raises(ValueError, match="refuses the item, entry 2: duplicate-information") as e:
         ADV.write(out, compiler=OTHER)
     assert json.dumps(ADV.builder_item(C), sort_keys=True) in str(e.value) and str(tmp_path / "log.json") in str(e.value)
+    assert "a new log (a new DAY_LOG) takes this one" in str(e.value)
     assert (tmp_path / "log.json").read_bytes() == body and not (out / "advice").exists()
     assert _view(tmp_path)[0]["builder"] == ADV.builder_item(C)
 
