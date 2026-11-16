@@ -643,10 +643,10 @@ def n1_pool_loops(proc: Path = Path("/proc")) -> dict[str, set[tuple[str, str]]]
             if not _n1_lease_loop((p / "cmdline").read_bytes().split(b"\0")):
                 continue
             raw = (p / "environ").read_bytes()
-        except (FileNotFoundError, ProcessLookupError):
-            continue
         except OSError as e:
-            raise LookupError(f"can't read the environment of n1_lease.py loop {p.name}: {type(e).__name__}") from None
+            if not isinstance(e, (FileNotFoundError, ProcessLookupError)):
+                raise LookupError(f"can't read the environment of n1_lease.py loop {p.name}: {type(e).__name__}") from None
+            continue
         if not raw:  # exited since its cmdline was read
             continue
         env = {}

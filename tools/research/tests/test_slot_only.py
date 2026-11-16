@@ -466,8 +466,10 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = [{"src": e.get("template", ""), **e} for e in tomllib.loads((nebius / "deploy.toml").read_text())["file"]]
-    on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
-                                                                            "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
+    on: dict[str, list[str]] = {}
+    for e in rows:
+        if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service", "/vy-auditor-only.timer", "/11-vy-admin.conf")):
+            on.setdefault(e["path"], []).extend(e["nodes"])
     locked_cpu = [n for e in rows if e["path"] == "/usr/local/sbin/vy-lockout" for n in e["nodes"] if n.startswith("vy-nebius-cpu-")]
     assert on == {**{p: hosts for p in ("/etc/vy/auditor", "/etc/systemd/system/vy-auditor-only.service",
                                         "/etc/systemd/system/vy-auditor-only.timer")},

@@ -22,6 +22,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -226,13 +227,29 @@ def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
             "k": k, "n": n}
 
 
+class NoLake(RuntimeError):
+    """`lake` isn't on PATH, so the package's executables can't be built here."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "`lake` isn't on PATH, and the check is Lean, built here from this tree with `lake build`: install elan "
+            "(https://github.com/leanprover/elan), which installs the toolchain "
+            f"{(PACKAGE / 'lean-toolchain').read_text().strip()} that {PACKAGE.relative_to(P.ROOT)}/lean-toolchain "
+            "names, and run again")
+
+
+def need_lake() -> None:
+    """Raise `NoLake` where `lake` isn't on PATH."""
+    if shutil.which("lake") is None:
+        raise NoLake
+
+
 def lake_built(exe: str) -> Path:
     """The package's executable ``exe``, built first with `lake`."""
     try:
         build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
     except FileNotFoundError:
-        raise RuntimeError("`lake` isn't on PATH, so the Lean check can't be built: install the toolchain "
-                           f"{(PACKAGE / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
+        raise NoLake from None
     if build.returncode:
         raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
                            + (build.stdout + build.stderr)[-2000:])

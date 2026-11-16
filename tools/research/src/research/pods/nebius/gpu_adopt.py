@@ -62,7 +62,9 @@ def gpu_index() -> dict[str, int]:
 def parent(pid: int) -> int | None:
     try:
         return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
-    except (OSError, IndexError, ValueError):
+    except (OSError, IndexError, ValueError) as e:
+        if Path(f"/proc/{pid}").exists():
+            print(f"gpu_adopt: pid {pid}'s parent unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 

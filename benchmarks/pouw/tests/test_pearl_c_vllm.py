@@ -33,9 +33,6 @@ from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as 
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-
-torch = pytest.importorskip("torch")
-
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
 from verity.protocols.accounting.pouw.verifier.audit import (
@@ -69,6 +66,8 @@ from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity_torch.pouw.pearl_c import run_device as PPDR
+
+torch = pytest.importorskip("torch")
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))

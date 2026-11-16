@@ -1,0 +1,12 @@
+# The load this benchmark's number is of. `run.py` counts the served model's MACs at it and refuses (exit 2) a record
+# whose inference-only policy registers another model, revision or class, so a run for this benchmark serves this load.
+# Changing it changes the benchmark: every earlier number was of the load it held then.
+
+# the served model, as the policy's `serve` names it, and its checkpoint's revision
+model = "unsloth/Llama-3.2-1B"
+revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
+
+# the class, as the policy's `class` registers it and served_verdicts.sh's V3C_CLASS writes it (SLOTS,PROMPT,OUTPUTS)
+slots = 4    # requests a window serves, one a slot (SLOTS, and REQUESTS = SLOTS)
+prompt = 32  # prompt tokens of each request (PROMPTS 32:32: every prompt this long)
+outputs = 4  # output tokens of each request (MAX_TOKENS)

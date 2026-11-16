@@ -641,10 +641,11 @@ STALE_WHY = ("no fill runner runs (status.txt is 9630 s old), and gpu-lease show
 GL = "/run/gpu-lease"
 
 
-def _leases(tmp_path: Path, owners: dict[int, str], waits: dict[str, str] = {}, live: tuple[int, ...] = (), gpus: int = 8):
+def _leases(tmp_path: Path, owners: dict[int, str], waits: dict[str, str] | None = None, live: tuple[int, ...] = (),
+            gpus: int = 8):
     """gpu-lease's directory under tmp_path: `gpus` locks, owner lines and wait files, and /proc entries for the `live` pids."""
     _put(tmp_path, {**{f"{GL}/{i}.lock": "" for i in range(gpus)}, **{f"{GL}/{i}.owner": o + "\n" for i, o in owners.items()},
-                    **{f"{GL}/{name}": w + "\n" for name, w in waits.items()}})
+                    **{f"{GL}/{name}": w + "\n" for name, w in (waits or {}).items()}})
     for p in live:
         (tmp_path / "proc" / str(p)).mkdir(parents=True, exist_ok=True)
 
@@ -669,8 +670,8 @@ def test_node_2_with_no_fill_runner_is_read_as_quiet_from_gpu_lease_s_state_and_
     ({}, {}, (), 1, "2026-10-03T20:10Z 30\n", "window 2026-10-03T20:10Z (30 min) is on or starts within 1800 s"),
     ({}, {}, (), 1, "2026-10-03T19:00Z 45\n", "window 2026-10-03T19:00Z (45 min) is on or starts within 1800 s"),
     ({4: "pid=14 run=- who=t since=x timed=1 cmd=bench"}, {}, (14,), 1, None,
-     f"lease 4.owner of pid 14 is timed (gpu-lease --timed)"),
-    ({i: f"pid=7 run=- who=w since=x cmd=all" for i in range(8)}, {}, (7,), 1, None, "pid 7 holds all 8 GPUs"),
+     "lease 4.owner of pid 14 is timed (gpu-lease --timed)"),
+    ({i: "pid=7 run=- who=w since=x cmd=all" for i in range(8)}, {}, (7,), 1, None, "pid 7 holds all 8 GPUs"),
     ({}, {"wait.ns.31": "pid=31 n=8 run=- who=w since=x"}, (31,), 1, None, "waiter wait.ns.31 wants all 8 GPUs"),
     ({}, {"wait.ns.31": "pid=31 run=- who=w since=x"}, (31,), 1, None, "waiter wait.ns.31 does not say how many GPUs it wants"),
     ({2: "who=x since=y"}, {}, (), 1, None, f"gpu-lease owner line {GL}/2.owner names no pid"),

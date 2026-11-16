@@ -46,6 +46,10 @@ def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_
     monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r2")
     assert SPANS.check_memory(tmp_path) == {}, "a cgroup that isn't the named scope (a shared session) is other runs' too"
     monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    # the scope is gone when the check ends: what it held without the page cache and the CPU seconds it used are kept too
+    (cg / "memory.stat").write_text("anon 30000000000\nfile 95049999999\nshmem 5000000000\nslab_reclaimable 7\n")
+    (cg / "cpu.stat").write_text("usage_usec 46800000000\nuser_usec 40000000000\nnr_periods 0\n")
+    assert SPANS.check_memory(tmp_path) == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0, "mem_held_gb": 30.0, "cpu_s": 46800.0}
     monkeypatch.setattr(SPANS, "check_memory", lambda root=Path("/"): {"mem_peak_gb": 312.4, "mem_current_gb": 120.0})
     log = SPANS.SpanLog(tmp_path, trace_id="r-test")
     log.step({"step": "pytest", "status": "passed", "rc": 0, "seconds": 1.0, "ended_utc": "2026-10-14T20:00:00Z"})
@@ -53,6 +57,50 @@ def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_
     got = lines(tmp_path)
     assert got[1]["attributes"]["mem_peak_gb"] == 312.4 and got[-1]["attributes"] == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0}
     assert all(list(line) == FROZEN_KEYS for line in got)
+
+
+def scope_files(cg: Path, usage_s: float, anon_gib: float, file_gib: float) -> None:
+    cg.mkdir(parents=True, exist_ok=True)
+    (cg / "cpu.stat").write_text(f"usage_usec {int(usage_s * 1e6)}\nuser_usec 1\n")
+    (cg / "memory.stat").write_text(f"anon {int(anon_gib * 2 ** 30)}\nfile {int(file_gib * 2 ** 30)}\nshmem 0\n")
+
+
+def test_a_scope_watch_keeps_the_busiest_minute_and_the_highest_anon_in_the_slot_record(tmp_path):
+    """The figures outlive the scope in the run's slot.json, beside what slot.py wrote: cores over the busiest 60 s, not an
+    average over a step, and `anon` at its highest, not at a step's end."""
+    cg, record = tmp_path / "check-b-r1.scope", tmp_path / "slot.json"
+    record.write_text(json.dumps({"state": "held", "slot": "b", "reserves_gib": 340}) + "\n")
+    now = [0.0]
+    watch = SPANS.ScopeWatch(cg, record, clock=lambda: now[0])
+    for t, usage, anon, file in ((0, 0, 4, 1), (30, 60, 30, 2), (60, 600, 80, 9), (70, 610, 20, 70), (130, 1000, 10, 2)):
+        now[0] = t
+        scope_files(cg, usage, anon, file)
+        watch.tick()
+    (cg / "cpu.stat").unlink()
+    watch.tick()
+    watch.write()
+    doc = json.loads(record.read_text())
+    assert {k: doc[k] for k in ("state", "slot", "reserves_gib")} == {"state": "held", "slot": "b", "reserves_gib": 340}
+    unread = doc["used"].pop("unread")
+    assert doc["used"] == {"cores_max": 10.0, "anon_max_gib": 80.0, "samples": 5, "every_s": SPANS.WATCH_EVERY_S, "missed": 1}
+    assert unread.startswith("FileNotFoundError: "), "a reading that failed says why in the record, and the check goes on"
+
+
+def test_a_scope_watch_starts_only_in_the_checks_own_scope_inside_a_run(tmp_path, monkeypatch):
+    cg = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope"
+    scope_files(cg, 1, 1, 1)
+    (tmp_path / "proc/self").mkdir(parents=True)
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope\n")
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    assert SPANS.ScopeWatch.start(tmp_path) is None, "outside a research run there is no slot record to keep it in"
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r2")
+    assert SPANS.ScopeWatch.start(tmp_path) is None, "a cgroup that isn't the named scope is other runs' too"
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    watch = SPANS.ScopeWatch.start(tmp_path)
+    watch.stop()
+    assert json.loads((tmp_path / "slot.json").read_text())["used"]["samples"] >= 1
 
 
 def test_every_line_has_exactly_the_frozen_keys_and_flat_scalar_attributes(tmp_path):

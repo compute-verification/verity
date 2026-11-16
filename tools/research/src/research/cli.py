@@ -124,7 +124,8 @@ with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the sourc
 tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a private `git clone --shared` of the source root at its HEAD,
 outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
 run.cwd_basis record it.  A `--cwd source` workload that builds Lean waits for the tree's lock (research/treelock.py, job.json
-run.lean_tree_lock), so two Lean builds never share a `.lake` at once.  It exits with the workload's status; with
+run.lean_tree_lock), so two Lean builds never share a `.lake` at once; it takes the lock once it holds its check slot and GPU
+lease, never while it waits for either.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  So a workload shell script that pipes
 without `pipefail`, which exits with the pipe's last command's status, is refused (exit 2) unless --allow-pipe (research/pipefail.py).
 Harness flags pass through unchanged
@@ -376,6 +377,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    from . import launcher
+
+    if why := launcher.refusal(ns.source):
+        print(why, file=sys.stderr)
+        return 2
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2
@@ -745,7 +751,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id),
                                                    list({**clone_env, **env_map, **dict.fromkeys(key_env)}), ns.job_namespaces)]
     if tree_lock:
-        spawn = [*treelock.wrap(tree_lock, source_root), *spawn]
+        at = _past_waits(_request(ns.remote_json) if ns.claimed else {}, spawn)
+        spawn = [*spawn[:at], *treelock.wrap(tree_lock, source_root), *spawn[at:]]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         if ns.job_user:
@@ -1093,6 +1100,20 @@ def _request(remote_json: str | None) -> dict:
     return req if isinstance(req, dict) else {}
 
 
+def _past_waits(req: dict, spawn: list[str]) -> int:
+    """How many leading words of a workload's argv are wrappers that wait for one of the machine's resources before the rest
+    runs: the request's GPU lease (a queued phase's workload wrap, a direct run's `remote.gpu_lease_wrap`), then a check slot
+    (`[env CHECK_SLOTS=POOL] python3 SLOT [OPTS] --`, `--pool`'s or the command's own). The shared tree's Lean lock goes after
+    them (research/treelock.py): a run waiting in a line holds no tree."""
+    from .pods.nebius import slot_only
+
+    lease = [*(req.get(remote.QUEUE_WORKLOAD_WRAP) or []), *remote.gpu_lease_wrap(req)]
+    n = len(lease) if lease and spawn[: len(lease)] == lease else 0
+    if slot_only.through_slot(spawn[n:]):
+        n = spawn.index("--", n + (4 if spawn[n] == "env" else 2)) + 1
+    return n
+
+
 def _stated_limit(ns: argparse.Namespace) -> dict | None:
     """`--mem-limit-gb` as the launch request and the run's memory mark carry it: the GB and who stated them."""
     return {"gb": ns.mem_limit_gb, "by": ns.lane} if ns.mem_limit_gb is not None else None
@@ -1317,10 +1338,11 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
+    from . import launcher
     from .auto import AUTO_NODE, AUTO_PROJECT
 
     if not ns.source:
-        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        top = subprocess.run(launcher.git("rev-parse", "--show-toplevel"), capture_output=True, text=True, env=launcher.git_env())
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
@@ -1515,8 +1537,11 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     """For a Lean records run from the tree ``source``, that tree's `lean-deps-urls.json` (`url_file`), written in a temporary
     directory: the presigned URLs of the newest recorded checks', mark audits' and records runs' artifact bundles
     (`shared_bundles`) and of the pinned dependency bundles. None for any other run, a tree without `LEAN_AUDIT`, or a store
-    that signs nothing; a failure sends none, and the run then builds what its node lacks."""
-    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not (source / LEAN_AUDIT).is_file():
+    that signs nothing; a failure sends none, and the run then builds what its node lacks. Under a trusted launcher tree
+    (research.launcher) it is that tree's `LEAN_AUDIT`, whose URLs are of that tree's pins and the heads it holds."""
+    from . import launcher
+
+    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not ((source := launcher.code(source)) / LEAN_AUDIT).is_file():
         return None
     try:
         spec = importlib.util.spec_from_file_location("research_lean_audit_urls", source / LEAN_AUDIT)

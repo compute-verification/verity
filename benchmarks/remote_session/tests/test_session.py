@@ -58,14 +58,22 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
 def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
     """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
     reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
-    declares that alone, and its memory line carries no error."""
-    lean_stands_in.unwritten(monkeypatch)
+    declares that alone, and its memory line carries no error. Each reading, and the declaration, carry the Python
+    ledger's apart (`python_ledger`), the one the Lean's answer would decide, which is the decided reading's whole."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    lean_stands_in.agree(monkeypatch)
+    (decided,), _ = run("honest")
+    lean_stands_in.unwritten(monkeypatch)
     (r,), _ = run("honest")
     lg, why = r["ledger"], coins.undecided("γ terms")
-    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
+    assert r["accepted"] and all({k: v for k, v in lg[n].items() if k != "python_ledger"}
+                                 == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
                                  for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
-    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
+    assert {k: v for k, v in lg["declared"].items() if k != "python_ledger"} == {"undecided": why}
+    assert verifier.memory_error(lg) is None
+    assert set(lg["spec"]["python_ledger"]) == set(decided["ledger"]["spec"])
+    assert set(lg["declared"]["python_ledger"]) == set(decided["ledger"]["declared"])
+    assert isinstance(lg["spec"]["python_ledger"]["gamma"], float)
 
 
 @pytest.mark.parametrize("outcome", ["rejected", None, "error"])
@@ -835,7 +843,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     ticking = TickingBackend.run_pass
 
     def run_pass(self, seed: bytes, plan=None):
@@ -1275,7 +1283,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import hashlib
     import json
 
@@ -1303,7 +1311,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
     """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
     roots to, so its replay is the paced session's: accepted, with its record's pace."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import json
 
     import replay
@@ -1326,7 +1334,7 @@ def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifier
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean"))
     import json
 
     import replay
