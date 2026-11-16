@@ -356,7 +356,7 @@ remote holds the manifest and every blob at the right size, its content checked 
 (`verify`), and `replicas.verified` says which. A missing `[remote]` makes the store local-only; a present but unusable one is
 `ConfigError`, so a broken vault never looks like no vault. `fetch` reads local objects, then the repo replica
 (`artifacts.json`), then the remote, checking every byte. The detail of all four, with the minting paths and the push
-algorithm: `remote-replicas/README.md`.
+algorithm: `remote-replicas/DESIGN.md`.
 
 ### 7.2 Remote-first: write-through, verdicts, refresh, parity
 
