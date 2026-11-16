@@ -41,7 +41,7 @@ parts = 3
 inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/verity_settings.py",
           "tools/difftest", "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
-          "verity/protocols/registration/verifier/registration.py", "verity/protocols/registration/verifier/lean", "verity/device.py", "verity/tests", "verity/channel.py", "verity/runtime",
+          "verity/protocols/registration/verifier/registration.py", "verity/protocols/registration/verifier/lean", "verity/device.py", "tests/verity", "verity/channel.py", "verity/runtime",
           "verity/protocols/compose/verifier/onsite", "verity/protocols/compose/verifier/remote", "verity/protocols/interface",
           "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/workload_classification/training_detection/inference_only/verifier", "verity/protocols/resource_accounting/network",

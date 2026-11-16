@@ -5,7 +5,7 @@
 #   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean verifier, a venv), PoUW's pouw-leaf-own-window
-#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean, which
+#      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean, which
 #      unrolls the unit and so is no part of the verifier), built beside the Lean verifier's sources
 #   2. leaf.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
@@ -47,7 +47,7 @@ if [ -z "${H1L_J10R:-}" ]; then
 fi
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(lean_key "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"

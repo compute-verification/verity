@@ -12,7 +12,7 @@ untraced = ["tests/test_requirement_difftest.py"]
 # by name (`verity.protocols.resource_accounting.compute.pouw.prover`), whose imports reach PoUB's record, PoUW's circuits, SPOT's
 # service, the commitments and the hashes; `lake` builds this package against the difftest harness's Lean, required by
 # path, and the base packages the harness requires (`Base.Canon` and what it imports). The memory-map test, which holds
-# the vLLM adapter's builder to this package's Lean, is the adapter's (`adapters/vllm/tests/commit/`).
+# the vLLM adapter's builder to this package's Lean, is the adapter's (`tests/adapters/vllm/tests/commit/`).
 inputs = ["verity/circuits", "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/errors.py", "tools/difftest", "adapters/vllm/verity_vllm/definitions",
           "adapters/vllm/verity_vllm/__init__.py", "verity/channel.py",
