@@ -84,7 +84,7 @@ root (`epochOpenRoot` of its weights' root and its `pass_index`, computed by the
 beacon; either way the manifest's salt is the execution phase's, and
 the execution phase's context names the pass by its SHA-512. A certified execution phase's verifier holds the network attester's salt for
 the PoUW execution phase its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), the execution phase's stream and prover, and
-the record the certifier made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
+the record the attester made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
 `salt.pouw_record`), and passes only a pass whose salt is `pouwSalt` of them (`salt.pouw_salt`) over those weights, a v3
 manifest; no other verifier passes a v3 manifest. The difftest's pass cases (below) hold honest certified
 execution phases and a mutation per certified refusal too. `drawCheck` holds the execution phase's sampled proof blocks to the execution phase's sampling coin,
@@ -162,7 +162,7 @@ execution phases and one mutation per refusal, the case's own framing among them
 undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
-every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
+every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest samples, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live execution phase's
 round roots and coins, read through the challenger's session (its record and close signed under the execution phase's pinned key,
