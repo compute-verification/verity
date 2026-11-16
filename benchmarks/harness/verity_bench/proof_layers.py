@@ -524,9 +524,9 @@ def read_a5(d: Path, result: Result) -> None:
     coins = summary.get("coins") or {}
     said = (f"summary.json coins.challenger {coins['challenger']}" if coins.get("challenger") else
             f"A5 line's verdicts {', '.join(challengers)}, a challenger per sampled member" if challengers else "")
-    drew = next((x[len("COINS "):] for x in text if x.startswith("COINS ")), None)
-    if drew and drew.startswith("draw: one local challenger session"):
-        clauses = drew.split("; ")
+    line = next((x[len("COINS "):] for x in text if x.startswith("COINS ")), None)
+    if line and line.startswith("draw: one local challenger session"):
+        clauses = line.split("; ")
         result.said("local challenger", None,
                  "summary.txt COINS " + "; ".join(clauses[:1] + [c for c in clauses[1:2] if c.startswith("sessions: ")]))
     else:
