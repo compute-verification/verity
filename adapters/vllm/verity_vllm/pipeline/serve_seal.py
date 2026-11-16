@@ -179,11 +179,11 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     from verity_vllm import settings
     from verity_vllm.commit.committer.host_retention import retain_exclude_families
     from verity_vllm.engine import vllm_adapter as va
-    from verity_vllm.engine.handle import model_runner
+    from verity_vllm.engine.handle import engine_of, model_runner
     from verity_vllm.pipeline import commit as C, commit_attach as CA
 
     run_id = f"{label}:{opts.run_id}"
-    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model, vllm_config=engine_of(llm.vllm).vllm_config,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     spec = opts.retention.retain_exclude
     manifest, args = manifest_of_record(opts), committer_args(opts)
