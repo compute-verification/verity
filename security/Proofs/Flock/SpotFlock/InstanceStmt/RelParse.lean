@@ -108,6 +108,16 @@ theorem parse_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
   rewrite [readOf_x hn hr, Option.bind_some, show _root_.Flock.Readable.Read.parse (ins r).read = _ from hpar]
   rfl
 
+/-- **The deployed parser reads a message the verifier's parser reads** (stated at variables, so the message is not unfolded). -/
+theorem parse_of {m : _root_.Claims.Msg} {p : _root_.Flock.Readable.Parsed}
+    (h : _root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) m = some p) :
+    (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse m =
+      some (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) := by
+  change (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) m).map
+    (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = _
+  rw [h]
+  rfl
+
 /-- **A one-table statement whose model the trace satisfies is in the deployed relation.** Stated at any statement `st`,
 so the table's numbers (`Tab.Fits`) are read off `st` as a variable: at the concrete statement, the unifier would unfold
 it (`Stmt.m` reads the public file) to compare them. -/

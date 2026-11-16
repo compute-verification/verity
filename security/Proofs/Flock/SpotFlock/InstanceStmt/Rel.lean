@@ -109,11 +109,7 @@ theorem rel_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
       ((Hidden.setupHidden_specCC hd).unitFacts ht).parse ((Hidden.setupHidden_specCC hd).unitFacts ht).check
   have hS := TraceRegions.satisfies_regions_x hd ht hrf hpin0 hn L R
     (facts_stX r _ _ _ _ _ _ _ _ _ _ _ _ _ _ (da_stF r)) (regionFacts_stF r)
-  refine ⟨_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation (pF r), ?_, ?_⟩
-  · change (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) (x r)).map
-      (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = _
-    rw [parse_x hn hr]
-    rfl
-  · exact relS_of_stmt (p := pF r) (st := stF r) rfl L (zOf_wX r) hS
+  exact ⟨_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation (pF r), parse_of (parse_x hn hr),
+    relS_of_stmt (p := pF r) (st := stF r) rfl L (zOf_wX r) hS⟩
 
 end SpotFlock.InstanceStmt.Rel
