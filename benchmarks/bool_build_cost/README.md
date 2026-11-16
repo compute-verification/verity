@@ -1,30 +1,27 @@
 # The Boolean Build's cost against the word Build's
 
-`run.py` takes one workload's Calls as their word specializations (`WORKLOADS`: Qwen3-0.6B's B1 / 256-token prompt / 32-token
-output workload, `qwen3-06b`, or the `small` case), and their Boolean versions (`verity.circuits.ops.boolean.versions.boolean_version`, as the Boolean Build's lift
-calls them). For each of the two, word and Boolean (`--ir`), it measures:
+A workload's circuit can be written over words or over bits. This benchmark asks how much the bit version costs: it
+takes one workload's Calls as their word specializations and as their Boolean versions, and for each measures the
+descriptor of one Program that calls every specialization once, and the time to compute the `Q_word_v1{16,32}`
+proof-block rule of every Definition under them. The root body of a workload's Program, with its KV-cache references,
+is not in this Program.
 
-- `descriptor`: the descriptor of one Program calling every specialization once, which writes each Definition once, as a
-  workload's does. It records the bytes the Program digest hashes (`codec.descriptor_size`), the digest, and the largest Definitions
-  and families.
-- `rules`: the `Q_word_v1{16,32}` proof-block rule of every Definition under them, scheduled as the manifest's prefetch schedules them
-  (`verity.circuits.word.prefetch`, by depth, largest first), timed per Definition in its worker. It records the verdict and
-  a digest of each rule.
+## Try it
 
-The root body of a workload's Program, with its KV-cache references, is not in this Program. `rules-<ir>.jsonl` gets one line per
-rule as it finishes.
+~~~sh
+verity bench bool_build_cost --workload small --part descriptor --out DIR
+~~~
 
-A Boolean head is tens of millions of bit gates, so run the `rules` part on a machine with 16 cores and 160 GB:
+This needs no GPU and takes seconds. It prints the descriptor's size and digest for the word and the Boolean
+version, and writes each as `DIR/<ir>.json`. The other workload, `qwen3-06b`, is Qwen3-0.6B's B1 workload with a
+256-token prompt and a 32-token output; its descriptor part also runs on a VM.
+
+The `rules` part is the heavy one. A Boolean head is tens of millions of bit gates, so run it on a machine with 16
+cores and 160 GB:
 
 ~~~text
 uv sync --all-packages --extra torch-cpu
 uv run benchmarks/bool_build_cost/run.py --workload qwen3-06b --jobs 16 --out DIR
 ~~~
 
-`--t 1,52,65` keeps only the attention specializations of those key lengths. `--part descriptor` is light enough for a VM.
-
-## Interface
-
-- **Provides:** `run.py`, a command, and the result it writes under `--out`.
-- **Loaded by:** nothing.
-- **Loads:** `verity.circuits`, `verity_vllm.definitions`, and the vLLM integration's `verity_vllm.query.program_view`.
+`run.py`'s docstring gives every option and what each file it writes holds.
