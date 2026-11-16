@@ -1,25 +1,22 @@
 # f32 reference primitives, on every input
 
-`run.py` evaluates a primitive of `verity_vllm.definitions.registry.ref_prims` on all 2^32 binary32 words, in one of two modes.
-A pass is 0 mismatches over `[0, 2^32)`.
+A binary32 primitive has only 2^32 inputs, so it can be checked on all of them. This benchmark does that for a
+primitive of the vLLM adapter's reference primitives (`verity_vllm.definitions.registry.ref_prims`), in one of two
+modes. A pass is 0 mismatches over `[0, 2^32)`.
 
-- `log`, `exp`: the correctly rounded evaluator against MPFR's correctly rounded result (gmpy2 at 24 bits, emin -148, emax
-  128, subnormalized, nearest even; a NaN is 0x7FC00000). It runs the registered evaluator itself, uncached: `log` is
-  `f32_log_rn_bits` (`F32LogRn_v1`), `exp` `f32_exp_rn_bits` (`F32ExpRn_v1`).
-- `boolean WORD`: the Boolean version of the word primitive `WORD` (`boolean_version`, so `F32Sqrt` checks `F32Sqrt_v2`),
-  evaluated bit-sliced, against the word primitive's own evaluator. `WORD` maps one 32-bit word to one.
+- `log`, `exp`: the correctly rounded evaluator against MPFR's correctly rounded result.
+- `boolean WORD`: the Boolean version of the word primitive `WORD`, evaluated bit-sliced, against the word primitive's
+  own evaluator.
+
+## Try it
 
 ~~~text
+verity bench f32_exhaustive boolean F32Sqrt --out DIR --lo 0x3f800000 --hi 0x3f900000
 uv run --with gmpy2 benchmarks/f32_exhaustive/run.py log --out DIR [--procs N] [--lo 0x0 --hi 0x100000000]
-uv run benchmarks/f32_exhaustive/run.py boolean F32Sqrt --out DIR [--procs N] [--lo 0x0 --hi 0x100000000]
 ~~~
 
-`DIR/exhaustive-<fn>.json` (`exhaustive-boolean-WORD.json`) holds the range, the inputs checked, the mismatch count and up to
-1000 mismatches (the input and the two words). `--procs` defaults to every CPU the process may run on. The 100-digit
-`decimal` evaluators make a whole range a CPU node's work, so split it with `--lo` and `--hi` across runs.
+The first checks the Boolean square root on 2^20 inputs in about a second, with no GPU. Each prints a line with the
+inputs checked and the mismatches, and writes `DIR/exhaustive-<fn>.json`, which also holds up to 1000 mismatches.
 
-## Interface
-
-- **Provides:** `run.py`, a command, and the result file it writes.
-- **Loaded by:** nothing.
-- **Loads:** `verity_vllm.definitions` (`registry`, `boolean`), `verity.circuits.evaluation` and gmpy2.
+The 100-digit `decimal` evaluators make a whole range a CPU node's work, so split it with `--lo` and `--hi` across
+runs. `run.py`'s docstring gives MPFR's settings and every option.
