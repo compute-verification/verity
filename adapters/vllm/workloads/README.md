@@ -1,6 +1,6 @@
-# The vLLM integration's row workloads
+# The vLLM integration's workloads
 
-A row's workload file is a fixture in the evidence store, not in the tree. The tree keeps each one's name and digest
+A workload file is a fixture in the evidence store, not in the tree. The tree keeps each one's name and digest
 here, in `SHA256SUMS`, and its id in `artifacts.json`.
 
 ## Interface

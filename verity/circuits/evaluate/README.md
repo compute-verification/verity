@@ -15,28 +15,30 @@ this package adds the primitives. It is code, so it requires nothing of `securit
 - `Evaluate/Scalar.lean`: the scalar primitives (`verity.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
-  proved in `security/Proofs`, as the certifier's are, since code never requires `security/`.
+  proved in `security/Proofs`, as network accounting's are, since code never requires `security/`.
 - `Evaluate/Fp32.lean`, `Evaluate/Casts.lean`: the FP32 and BF16 arithmetic (`verity.circuits.ops.fp32`,
   `mufu.DivFullScaleA_v1`, and the vLLM integration's `F32Sub`, `F32Sqrt`, `F32MaxRef`, `F32GtStrict`, `F32FmaRm`,
   `F32CeilFtz`, `I32ToF32` and `DivFullScaleA_v2`) and the casts of `verity.circuits.ops.prims`: copies of
   `security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
   does not, each naming which. The `_v1` add, sub, mul and div return numpy's NaN on x86-64 (`Evaluate.Fp32.hostNan`),
   which Security does not state.
-- `Evaluate/TC/`: the seven tensor-core dot steps of `verity.circuits.ops.prims` (`Dots.lean`: Ampere's and Hopper's BF16,
-  Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
-  `security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
-  `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
-  and the FP4 primitives' rules outside the scale-group model (NaN scales, non-finite accumulators, MXFP4's overflow to
-  `±inf`) are transcribed from the Python; Security has none yet.
+- `Evaluate/TC/`: the seven tensor-core dot steps of `verity.circuits.ops.prims` (`Dots.lean`: Ampere's and Hopper's
+  BF16, Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean`
+  of `security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of
+  `security/Definitions/Pouw/Fp8Atom/{E4M3,Atom}.lean` and `security/Definitions/Pouw/PearlC/Sm120.lean`
+  (`tc_dot_total_e4m3`), `Fp4.lean` of `security/Definitions/Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2
+  step and the FP4 primitives' rules outside the scale-group model (NaN scales, non-finite accumulators, MXFP4's
+  overflow to `±inf`) are transcribed from the Python; Security has none yet.
 - `Evaluate/Words.lean`: PoUW's `Pouw*` word primitives and the three `Ncp*` (six copied from
   `security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
   `NvLogf`, Gumbel and `TopPNumkeep`, libdevice's FTZ steps as the host's doubles compute them, and Philox.
   `Evaluate/Mufu.lean` (with `MufuFits.lean`): the eight MUFU primitives, each a bit rule around its table held as the
   unit's interpolant. `Evaluate/Decimal.lean`: `F32ExpRn`, `F32LogRn`, `F32ErfRn` and `F32TanhRn`, decimal arithmetic at
-  100 digits half to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`, `act.py`'s stored `GeluErfBf16` region): SiLU,
-  RoPE's outputs, tanh, the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and
-  tanh call the host C library's `exp` and `tanh` on doubles, as the Python's `math` does, so their words are the
-  Python's on the same host and may differ on another. Security defines none of these but six of `Words`.
+  100 digits half to even. `Evaluate/Act.lean` (with `GeluErfTable.lean`,
+  `adapters/vllm/verity_vllm/definitions/registry/act.py`'s stored `GeluErfBf16` region): SiLU, RoPE's outputs, tanh,
+  the GELUs, the registered tables `gelu_tanh_bf16` and `tanh_rn`, and the lazy families. SiLU and tanh call the host C
+  library's `exp` and `tanh` on doubles, as the Python's `math` does, so their words are the Python's on the same host
+  and may differ on another. Security defines none of these but six of `Words`.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
   (`Difftest.serve`, [harness](../../../tools/difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
@@ -72,6 +74,6 @@ for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP3
 range, and on their captures (the L40S SiLU and RoPE slices, the H100 and L40S log probe, test_mufu's fingerprints and the
 RTX 4090 tanh sample); the MUFU tables against the library's SHA-512 and the registered tables against Flock's SHA-256;
 `TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges;
-a registered input bound like a run input; and explicit examples: the pinned
-2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from their Python definitions (up to the Ampere BF16 tensor-core
-step), and malformed programs and inputs.
+a registered input bound like a run input; and explicit examples: the pinned 2-bit adder of
+`verity/circuits/tests/boolean_vectors.json`, Boolean Definitions traced from their Python definitions (up to the
+Ampere BF16 tensor-core step), and malformed programs and inputs.

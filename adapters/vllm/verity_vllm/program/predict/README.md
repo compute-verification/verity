@@ -1,17 +1,17 @@
 # verity_vllm.program.predict
 
-A Build's Programs predicted ahead of time from a row's facts, without tracing, and what is built on the prediction. The
-package's docstring lists every module.
+A Build's Programs predicted ahead of time from a workload's facts, without tracing, and what is built on the
+prediction. The package's docstring lists every module.
 
 ## Interface
 
-- **Provides:** the predicted Program (`build`) of a row's facts φ (`phi`; `score.phi_of` reads a row's from its
-  declared inputs) and its comparison with the traced one (`aot`); a row's ahead-of-time Build (`aot`, `compiled`),
-  with the names the audit reads written down from φ (`naming`); `steps`, which compiles a served run's advice into the
-  Programs its committed rows must pass, with what one served engine step calls for (`step_needs`); a served window as
-  its class's one Circuit (`window_circuit`, with `window_class`, `window_rows`, `window_weights` and `scan_state`); the
-  checkpoint tie of the weights registration (`weights_tie`); a day's inference blocks counted from its windows' circuit
-  records (`block_counts`); and the commands `verity-vllm predict`, `verity-vllm block-counts` and
+- **Provides:** the predicted Program (`build`) of a workload's facts φ (`phi`; `score.phi_of` reads a workload's from
+  its declared inputs) and its comparison with the traced one (`aot`); a workload's ahead-of-time Build (`aot`,
+  `compiled`), with the names the audit reads written down from φ (`naming`); `steps`, which compiles a served run's
+  advice into the Programs its committed rows must pass, with what one served engine step calls for (`step_needs`); a
+  served window as its class's one Circuit (`window_circuit`, with `window_class`, `window_rows`, `window_weights` and
+  `scan_state`); the checkpoint tie of the weights registration (`weights_tie`); a day's inference blocks counted from
+  its windows' circuit records (`block_counts`); and the commands `verity-vllm predict`, `verity-vllm block-counts` and
   `verity-vllm weights-tie`.
 - **What others import:** code outside the integration imports the seven modules `tests/test_vllm_public_api.py` names
   public (`block_counts`, `naming`, `scan_state`, `step_needs`, `window_class`, `window_rows` and `window_weights`),
@@ -26,7 +26,8 @@ package's docstring lists every module.
   `benchmarks/one_stage`, `benchmarks/route_capture`, `benchmarks/spot_proved`, `adapters/vllm/tools` and a test of
   `verity/circuits/requirement`; the command line (`pipeline.cli`) loads `cli`, `block_counts` and `weights_tie` by
   name. No module of the Build, the Match or the Commit imports it.
-- **Loads:** `verity.circuits`, `verity_vllm.definitions`, `verity.commitments.periods` and `verity.commitments`; the
-  certifier's modules under `verity.protocols.resource_accounting.network`, and SPOT's under `verity.protocols.proofs.spot.verifier`;
-  and the integration's `program`, `config`, `pipeline`, `engine`, `check`, `records`, `observe`, `acquire`, `query`,
-  `protocols`, `correspondence`, `target_family` and `errors`, with `commit` inside a function.
+- **Loads:** `verity.circuits`, `verity_vllm.definitions`, `verity.commitments.periods` and `verity.commitments`;
+  network accounting's modules under `verity.protocols.resource_accounting.network`, and SPOT's under
+  `verity.protocols.proofs.spot.verifier`; and the integration's `program`, `config`, `pipeline`, `engine`, `check`,
+  `records`, `observe`, `acquire`, `query`, `protocols`, `correspondence`, `target_family` and `errors`, with `commit`
+  inside a function.
