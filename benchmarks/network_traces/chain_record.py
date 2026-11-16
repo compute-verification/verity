@@ -726,7 +726,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     if v.get("accepted") is not True:
         raise SystemExit(f"leak: {run}'s end isn't accepted, and the gate holds only an accepted end's requests to "
                          "the number its request asked for")
-    params, cls = W.NetworkCertifierParams(**dep["params"]), SZ.CLASS
+    params, cls = W.NetworkAttesterParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window + 1
     sampled = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units

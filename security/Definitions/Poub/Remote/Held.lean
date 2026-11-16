@@ -26,7 +26,7 @@ A paced session (`Pace`) groups the passes: group `g`'s passes are `[first ω g,
 `released ω g` (`s_g`) and `ended ω g` is `e_g = max(its last root's arrival, s_(g + 1))`. Groups `g < C` are credited
 and group `C` closes them.
 
-What the session shows read, at an outcome, the bandwidth audit's claim (`Accounting.PeriodRun.Holds` at `.poub`):
+What the session shows read, at an outcome, the bandwidth audit's claim (`ResourceAccounting.PeriodRun.Holds` at `.poub`):
 
 * `read ω p`: the registered blocks pass `p` read on the node, those of its plan whose receipts are correct, each in
   node memory or on a chip at a tick of the pass;
@@ -40,7 +40,7 @@ What the session shows held, at an outcome:
 
 @[expose] public section
 
-namespace Accounting.Remote.Held
+namespace ResourceAccounting.Remote.Held
 
 open Finset
 
@@ -152,4 +152,4 @@ noncomputable def fill (ω : Ω) (N : ℕ) (W : ℝ) : ℝ :=
 
 end Pace
 
-end Accounting.Remote.Held
+end ResourceAccounting.Remote.Held

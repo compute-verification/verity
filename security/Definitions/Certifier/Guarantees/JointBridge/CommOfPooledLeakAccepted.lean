@@ -34,11 +34,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The network certifier's per-period guarantee, pooled over a monitoring period of sampled audits (trusted)
+# The network attester's per-period guarantee, pooled over a monitoring period of sampled audits (trusted)
 
 `CommOfPooledLeakAccepted` is the network audit's `Sound`, the coins model's per-period guarantee, for a run whose
-communication audit is the network certifier's monitoring period of `m` sampled audits
-(`Accounting.JointBridge.RealizesCommOfPooledLeakAccepted`), in the pooled reading: at the error of
+communication audit is the network attester's monitoring period of `m` sampled audits
+(`ResourceAccounting.JointBridge.RealizesCommOfPooledLeakAccepted`), in the pooled reading: at the error of
 `NetTiming.Guarantees.PooledLeakAccepted`, `e^(−q·Fmax) + Σ_i e_i + Σ_i e'_i`, whose first term is paid once over the
 monitoring period, where the reading per phase, the guarantee beside this one, pays its `δ` in every execution phase.
 It is conditional on `PooledLeakAccepted`'s two inputs at each execution phase (`hesc`, `hleak`), which no proof
@@ -47,17 +47,17 @@ discharges yet, so it bounds no deployed run until one does.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Bridge
+namespace ResourceAccounting.Guarantees.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge
+open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The network certifier's per-period guarantee, pooled** (conditional on its two inputs at each execution phase).
-On a run that realizes the network certifier's monitoring period of `m` sampled audits at the claim `c.K`
+/-- **The network attester's per-period guarantee, pooled** (conditional on its two inputs at each execution phase).
+On a run that realizes the network attester's monitoring period of `m` sampled audits at the claim `c.K`
 (`RealizesCommOfPooledLeakAccepted`: the network audit's own coins are the `m` verification phases' coins, the deployed
-network certifier runs its code on its host, `trusted-device`, the realization's `trusted`, and the claim is the
+network attester runs its code on its host, `trusted-device`, the realization's `trusted`, and the claim is the
 period's good event at the bound `Fmax` on its incorrect proof blocks), given
 
 * `hesc`, the miss probability given the earlier phases' coins, at the realization's `acc` and `W` and at every
@@ -66,7 +66,7 @@ period's good event at the bound `Fmax` on its incorrect proof blocks), given
   design's detection probability of one incorrect proof block in an execution phase. SPOT's guarantee at each
   verification phase, given what came before it, is what gives it;
 * `hleak`, the leak relation at that incorrect set (`PhaseLeaks` at the realization's `op`, `acc`, `W` and `record`):
-  over the period's coins, execution phase `i`'s audit accepts while its observations in the network certifier's
+  over the period's coins, execution phase `i`'s audit accepts while its observations in the network attester's
   record fail `LeakAt` at `W_i` with probability at most `e' i`. `LeakAt` is read at the phase's operator at the
   record's earlier phases: the period's operator `R.op` is fixed before the period, and execution phase `i`'s reads
   only the execution phases closed before its own. The leak guarantee of one sampled audit, on live coins and at the
@@ -87,4 +87,4 @@ def CommOfPooledLeakAccepted : Prop :=
     (hleak : PhaseLeaks lay k reg Dj R.sw R.Pw R.ρ R.op Set.univ R.acc R.W R.record e'),
     r.Sound c p .network (Real.exp (-(q * Fmax)) + ∑ i, e i + ∑ i, e' i)
 
-end Accounting.Guarantees.Bridge
+end ResourceAccounting.Guarantees.Bridge

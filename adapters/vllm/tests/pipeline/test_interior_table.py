@@ -482,7 +482,7 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
         _interior(reg, first, rec, drawn, spans=spans, links=(SUPPLIES[0], *OPERANDS))
 
 
-def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
+def test_a_sampled_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
     """`kept_table` commits a kept table's rows again under its kept salts (`boundary_tables.Served`, as `load` gives it) to
     round 1's entry, and refuses a kept table whose rows commit to another. No program reads the table, so it is under
     `UNREAD`."""

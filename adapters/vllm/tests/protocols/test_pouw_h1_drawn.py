@@ -358,7 +358,7 @@ def _seeded():
 
 
 @pytest.mark.slow
-def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accepts_them(served, monkeypatch, capsys):
+def test_a_served_windows_sampled_calls_are_staged_proved_and_credits_proved_accepts_them(served, monkeypatch, capsys):
     DR, d, tmp = served
     assert _stage(DR, d, tmp, weights_key=tmp / "wkey", recompose=True) == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
@@ -506,7 +506,7 @@ def test_a_window_without_its_receipts_or_a_unit_whose_receipt_is_not_the_regist
 
 
 @pytest.mark.slow
-def test_a_lanes_form_ks_drawn_units_are_staged_as_their_lanes_and_combine_and_credit_accepts_them(lanes_served,
+def test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_combine_and_credit_accepts_them(lanes_served,
                                                                                                    monkeypatch, capsys):
     """Each sampled proof block at a lanes-form K is staged as `leaf_lanes.statements` on the committed lane and combine files,
     its partials one produced record under the window's sample, its registered files credit's own; credit's lanes form

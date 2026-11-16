@@ -18,23 +18,23 @@ every product, is a reference, not an answer.
   its twins, never a verdict of their own (Verdicts of record, below).
 - **The top-level guarantees**, stated under `security/Definitions/` and proved as `SecurityProofs.G` under
   `security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
-  miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
-  domain D, int7 weight entries) under the Ω_max bound (each unit's reference work at most Ω_max times its matrix
+  miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 proof blocks, a layout in the
+  domain D, int7 weight entries) under the Ω_max bound (each proof block's reference work at most Ω_max times its matrix
   products'), with at most 2^64 oracle calls. That bound is where TT is conjectured, and the reduction does not use it;
   read past it, TT's error formula gives 2^−48 at 2^80 calls, which no statement claims:
   1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
      scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
      (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
-  2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
+  2. `ResourceAccounting.Guarantees.ComputeOfPouwPerRun` (`Pouw/Guarantees/PerRun.lean`): the same certificate and error
      as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
-     `Accounting.BudgetAbort`.
-  3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): in each verification phase
+     `ResourceAccounting.BudgetAbort`.
+  3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Compose/Guarantees/PeriodBinding.lean`): in each verification phase
      of a credit period the openings fail to bind with probability at most |L|·√(q/2^256 + κ), L every position of the
      credit period. That is one phase's bound, and the credit period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
      κ is not yet bounded, and no deployed |L| is stated.
   4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
-     e^{−D/4}. No premise.
+     e^{−D/4}. No assumption.
 
   The rest of what is proved, what is open and every named assumption: Security assumptions and guarantees, below.
 
@@ -56,7 +56,7 @@ PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)
   sends the verifier the commitment, and opens each challenge once, only after the verifier has recorded what it
   follows: the salt after the prover's root, the sampling challenge after the registration. It trusts nothing it
   receives. It is the one auditor-trusted device PoUW relies on (`trusted-device`); the auditor-party assumptions
-  (`Accounting.Assumptions.Parties`) state no PoUW challenger yet.
+  (`ResourceAccounting.Assumptions.Parties`) state no PoUW challenger yet.
 - **The verifier** is the auditor's own check, the Lean `pouw-check` (`PouwCheck.check`, with the Python of the same
   names as its reference). It holds the phase's commitment, records the prover's root and registration, forwards each
   challenge to the prover once it opens against the commitment (`coins.coin_reason`), and decides the phase on the
@@ -179,9 +179,9 @@ Each scheme module's docstring states its steps and roundings, with pinned vecto
 ## Security assumptions and guarantees
 
 PoUW's security property is stated at the adversary's advantage ε, with failure probability δ: what an adversary
-spends is at least the honest work of its correct units over 1 + ε, except with probability δ (the game's and
+spends is at least the honest work of its correct proof blocks over 1 + ε, except with probability δ (the game's and
 Pearl-C's, in `security/Definitions/Pouw/Advantage.lean`). The proofs carry it as the gap g = ε/(1 + ε), the same
-property: an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g)
+property: an adversary of cost T wins when its correct proof blocks' honest work exceeds T/(1 − g)
 (`security/Definitions/Pouw/Game/Defs.lean`), and a lemma in `security/Proofs/Pouw/Advantage.lean` proves the two forms
 equivalent. The honest overhead γ is a cost, never a share of the bound: the honest prover's busy SM-time is at most
 (1 + γ) times the fastest stock time for the same MACs, capped at γ ≤ 10 at each operating point (`GLOSSARY.md`).
@@ -205,15 +205,15 @@ reads. Proved:
 - **The two S8 guarantees** (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`) bound the credit of the tensor-clock
   record `devH100Tensor`, the H100 record with its SM pipes priced per second at the 1830 MHz tensor clock beside the
   1980 MHz SM clock: `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` at g = 5040227/775520000 (0.650%,
-  ε = 0.654%) and `…S8_8192` at 8192³ (0.538%). Their open premises are `w1-complete-h100` (W1 on the H100 with INT8
+  ε = 0.654%) and `…S8_8192` at 8192³ (0.538%). Their open assumptions are `w1-complete-h100` (W1 on the H100 with INT8
   at those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
   good-tile credit at least as likely to exceed any threshold; the device reading's FP32 price is refuted on the H200,
-  so this premise is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
+  so this assumption is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
   audit tile over that W1 setting, falsification test `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`). They do
   not cover what is served: `pearl-c-h100-v1-h3` pays by the per-clock record `devH100`, about 1.5% more, and at the
   two-clock reading no statement of this form covers that credit, since the honest program with its first promotion
   skipped falls about 1% under TT_OUT's threshold for it. TT_OUT rev1 is refuted by proofs' red-team rating, so both
-  guarantees are implications from refuted premises.
+  guarantees are implications from refuted assumptions.
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
   `security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
   sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts
@@ -221,15 +221,15 @@ reads. Proved:
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
 - **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's over every device record, per
-  unit, per audit tile and under Flock's hidden audit (`Pouw.SecurityProofs.PearlC.GapDevRev1K`, `SampledDevRev1K`,
+  proof block, per audit tile and under Flock's hidden audit (`Pouw.SecurityProofs.PearlC.GapDevRev1K`, `SampledDevRev1K`,
   `HiddenFlockDevRev1K`), whose gap is `1 − (1 − 1/400)/ω` for a kernel within `ω` of the capped credit on the shapes
   served. Each statement at a record's numbers (`devSm120v1`, `devSm120v2`, `devH100`, `devFp4Sm120`) is a lemma, in
   `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`. The row seed's reduction and the barrier are lemmas, in `security/Proofs/Pouw/Lemmas/PearlC.lean` and `security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
-- **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
-  `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
-  `Accounting.SecurityProofs.PouwLocalOff`.
+- **Compute accounting reads PoUW** through `ResourceAccounting.SecurityProofs.ComputeOfPouw`,
+  `ResourceAccounting.SecurityProofs.ComputeOfPouwPerRun`, `ResourceAccounting.SecurityProofs.PouwEndToEndPerRun` and
+  `ResourceAccounting.SecurityProofs.PouwLocalOff`.
 
 Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.ExecutionPhaseDelta`, and
 `Pouw.Guarantees.Window.ServiceMissProb` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);

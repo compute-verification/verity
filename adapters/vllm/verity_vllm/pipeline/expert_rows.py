@@ -432,7 +432,9 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        registered_commit,
+    )
 
     param = bnk_param(label, K)
     if param not in committer["nonces"]:

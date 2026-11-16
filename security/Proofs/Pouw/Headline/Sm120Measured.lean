@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.Headline.EpsJl
 public import Proofs.Pouw.Headline.Sm120
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # sm_120's headline on its measured vector
@@ -31,9 +31,9 @@ The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofL
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Headline
+namespace ResourceAccounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
 /-- VF3s-16's row `r` as rationals, by class index. -/
 def vfCoef (r i : ℕ) : ℚ := Sparse.coeff (Sm120Measured.vf3s16.getD r []) i
@@ -286,12 +286,12 @@ theorem sm120m_unfolded :
   have hm := mul_le_mul_of_nonneg_right hY (by norm_num : (0 : ℝ) ≤ 1 - 41 / 48000)
   linarith
 
-end Accounting.SecurityProofs.TS.Headline
+end ResourceAccounting.SecurityProofs.TS.Headline
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
-  Accounting.SecurityProofs.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- sm_120's headline on VF3s-16 with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces take:
 `Whole.dIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and
@@ -339,9 +339,9 @@ theorem sm120MeasuredHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.
 
 /-- sm_120's headline on VF3s-16: `sm120MeasuredHeadline_bind` at binding `√δ_fork`, from the fork form by
 `Whole.moved_le_sqrt` (`BindingOfFork`). -/
-theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline := by
+theorem Sm120MeasuredHeadline : ResourceAccounting.Guarantees.TS.Sm120MeasuredHeadline := by
   intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   exact sm120MeasuredHeadline_bind Pl G Uf pf (Real.sqrt δfork) δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL
     hOf (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

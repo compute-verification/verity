@@ -21,7 +21,7 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
-#include "../../verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh"
+#include "../../verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sha512.cuh"
 
 #ifndef WT_FIELD
 #define WT_FIELD 1279

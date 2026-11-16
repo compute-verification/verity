@@ -17,5 +17,5 @@ gate (with `gcc`), and `gamma.py`. `sq.sh` needs one GPU and `ifma.sh` an AVX-51
 **Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's
 CSVs and the build logs into their output directory. **Backs:** these rates are
 the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
-the named assumption `Accounting.Remote.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Remote.Held`
+the named assumption `ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling`, which `ResourceAccounting.Guarantees.Remote.Held`
 and `HeldOverTime` take.

@@ -24,13 +24,13 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
-                                  step_test, suite_kind, traced_reads, unnamed)
+                                  step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
@@ -1112,6 +1112,63 @@ def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_cov
         assert got == Verdict(PASS)
 
 
+def _ended_remote(d: Path, final: tuple[str, ...] | None = None) -> None:
+    """``d`` as the local copy of a remote run that ended, which a fetch begun after its end brought ``final``'s files to
+    (`landing.FINAL`) when given."""
+    from research.landing import FINAL
+
+    (d / "remote.json").write_text(json.dumps({"remote_run_dir": f"/scratch/{d.name}", "machine": "m1"}))
+    (d / "status.json").write_text(json.dumps({"state": "done", "rc": 1}))
+    if final is not None:
+        (d / FINAL).write_text(json.dumps({"names": list(final)}))
+
+
+@pytest.mark.parametrize("rows", [True, False])
+def test_a_failed_suite_step_with_no_suite_record_is_pending_until_the_runs_final_fetch(world, monkeypatch, tmp_path, rows):
+    """lean-suites failed in an ended run whose copy holds no suite record of it: which suites failed, and whether an allowance
+    at the base covers them, is unknown until a fetch begun after the run ended brings its suite reports, so the check is
+    pending, its verdict unkept, never a fail.  Once that fetch brought them, it passes on the rows the allowance covers, and
+    with none fails on the step's unnamed test."""
+    from research.landing import EVIDENCE
+
+    allowing = {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=allowing)
+    rec = start(h.d, sha, base, shards=1)
+    d = _slim(h, tmp_path, lean_suites="")
+    _ended_remote(d)
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec
+    _ended_remote(d, ("steps.jsonl", "suites.json"))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec
+    if rows:
+        (d / "suites-lean.json").write_text(json.dumps([PKG]))
+    _ended_remote(d, EVIDENCE)
+    got = judge(h.d, rec)
+    if rows:
+        assert got == Verdict(PASS) and "lean-suites" in rec["verdict"]["passed"]
+    else:
+        (f,) = got.failed
+        k = key(h.q.workdir, sha, "lean-suites") or f"{sha}:lean-suites"
+        assert (got.state, f.task, f.tests, got.ended) == (FAIL, "step lean-suites", {unnamed(k)}, True)
+
+
+def test_a_failed_suite_step_with_no_suite_record_fails_the_check_early_only_once_its_shard_s_final_fetch(
+        world, monkeypatch, tmp_path):
+    """A shard still runs circuit-check and an ended one failed pytest with no suite record of it in its copy: the check is
+    pending, not failed early, until a fetch begun after that shard ended brings its suite reports; with none there then,
+    it fails on pytest's unnamed test."""
+    from research.landing import EVIDENCE
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),), failed=((2, "pytest"),))
+    _ended_remote(h.evidence[1])
+    assert judge(h.d, rec) == Verdict(PENDING) and "early" not in rec and "verdict" not in rec
+    _ended_remote(h.evidence[1], EVIDENCE)
+    (f,) = judge(h.d, rec).failed
+    k = key(h.q.workdir, sha, "pytest") or f"{sha}:pytest"
+    assert (f.task, f.tests) == ("step pytest", {unnamed(k)}) and rec["early"]["state"] == FAIL
+
+
 @pytest.mark.parametrize("own", [False, True])
 def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infra(world, monkeypatch, tmp_path, own):
     """A kill (a step's exit 137, on a suite that names no test) is the machine's fault unless an allowance at the base covers
@@ -1940,3 +1997,17 @@ def test_combine_takes_the_candidates_state_from_its_table_with_both_verdicts_fa
 def test_combine_refuses_a_state_it_has_no_rule_for():
     with pytest.raises(ValueError, match="no verdict has state 'passed'"):
         combine(Verdict(PASS), Verdict("passed"))
+
+
+def test_a_suite_may_read_the_tests_of_each_path_it_reads_where_they_mirror_the_tree(world):
+    """`suite_reads` is what `suites.inputs_of` lets the suite's guard allow: its directory, its declared inputs and what the
+    members it depends on ship, each with its tests at `tests/X` where the commit has them (`suite_layout.mirrors`)."""
+    sha = world.change(MIRRORED)
+    reads, dirs = suite_reads(world.dev, sha, "tests/adapters/vllm/tests")
+    own = {"tests/adapters/vllm/tests", "hardware", "tools/config/x.py", "adapters/vllm", "tools/research"}
+    assert reads == frozenset(own | {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "pyproject.toml",
+                                     *SUITE_RUNNER, *ENV})
+    assert {"tests/hardware", "tests/adapters/vllm", "tests/tools/research", "hardware"} <= dirs
+    assert "tools/config/x.py" not in dirs and "tests/tools/config/x.py" not in reads
+    assert suite_reads(world.dev, sha, "tests/verity")[0] == frozenset({"tests/verity", "pyproject.toml", *SUITE_RUNNER, *ENV})
+    assert suite_reads(world.dev, sha, ".") == (None, frozenset())

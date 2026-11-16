@@ -45,7 +45,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.network.prover.workload import TRAILER, id_event
+from verity.protocols.resource_accounting.network.prover.workload import (
+    TRAILER,
+    id_event,
+)
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from verity_vllm.config import UsageError, option
@@ -292,9 +295,9 @@ async def serve(front: Front, listen: tuple[str, int], *, announce: Callable[[tu
 @dataclass(frozen=True, kw_only=True)
 class Options:
     upstream: str = option("--upstream", help="the server's HOST:PORT: vLLM's own OpenAI server")
-    listen: str = option("--listen", default="127.0.0.1:18746", help="the HOST:PORT the network certifier connects to")
+    listen: str = option("--listen", default="127.0.0.1:18746", help="the HOST:PORT the network attester connects to")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
+                             help="each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     log: str | None = option("--log", default=None, help="append each id request's record to this file (JSON lines)")
 

@@ -2,7 +2,7 @@
 
     python scripts/charge_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/charge/instances.jsonl`, one instance per line as `NetworkCertifier.AdviceV1.ChargeDifftest.rawOfJson` reads
+Writes `DIR/charge/instances.jsonl`, one instance per line as `NetworkAttester.AdviceV1.ChargeDifftest.rawOfJson` reads
 it, and `DIR/charge/python.jsonl`, the same line's results from the checkout's
 `verity.protocols.resource_accounting.network.verifier.arith_encode`: `reference_charge` window by window from the instance's carry, each
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges

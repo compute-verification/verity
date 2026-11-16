@@ -1,4 +1,4 @@
-# DS-100 as a data sheet: each constant the data-sheet machine (`Accounting.TS.Sheet.machine`) reads on the B200, its
+# DS-100 as a data sheet: each constant the data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) reads on the B200, its
 # value, the document that states it and its grade, and each DS-100 class's tensor form or pipe. A value the card file
 # holds (model.toml's `card`) is read from it, `card = "EXPR"` as in theta.toml, beside its grade and source.
 # `machine-model sheet --device sm_100` derives every DS-100 line from it and checks them against census/DS-100.csv;

@@ -1,29 +1,29 @@
 module
 
 public import Definitions.Pouw.PouwWitness
-public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.ResourceAccounting
 public import Proofs.Pouw.Witness
 import Proofs.Pouw.Prob
 
 /-!
 # PoUW's compute guarantees say something (witnesses)
 
-`Accounting.Guarantees.ComputeOfPouw` and `Accounting.Guarantees.ComputeOfPouwPerRun`:
+`ResourceAccounting.Guarantees.ComputeOfPouw` and `ResourceAccounting.Guarantees.ComputeOfPouwPerRun`:
 
 * honest (one lemma for both): the milestone's sixteen units are in `D1.m1Domain`, and the output-priced model, where
-  TT holds and the honest reference runs at `≤ W_ref` (`Pouw.Proofs.ttWitness`), truncates (`Accounting.BudgetAbort`):
+  TT holds and the honest reference runs at `≤ W_ref` (`Pouw.Proofs.ttWitness`), truncates (`ResourceAccounting.BudgetAbort`):
   the copy runs the program and commits its transcript when its committed units' GEMMs fit the budget, and blanks
   otherwise (`PouwWitness.truncated`);
 * nontrivial: on a device with no capacity and an idle schedule, a run whose every audit accepts does no work, so its
   compute audit accepts short of the certificate `W = 1` with probability 1, above the error 0
-  (`Accounting.PouwWitness.acceptAllRun`).
+  (`ResourceAccounting.PouwWitness.acceptAllRun`).
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.PouwWitness
+open ResourceAccounting.PouwWitness
 
 namespace PouwWitness
 
@@ -62,7 +62,7 @@ theorem calls_truncated (prog : (Pouw.outputPriced Q R S).Prog) (b : ℝ) (H : Q
   rfl
 
 /-- **The output-priced model truncates.** -/
-theorem outputPriced_budgetAbort : Accounting.BudgetAbort (Pouw.outputPriced Q R S) := by
+theorem outputPriced_budgetAbort : ResourceAccounting.BudgetAbort (Pouw.outputPriced Q R S) := by
   refine ⟨fun prog H U act σ s => ?_, fun prog U act b hb => ⟨truncated prog b, fun H σ s => ?_⟩⟩
   · rw [outputPriced_cost]
     exact Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _
@@ -84,7 +84,7 @@ open PouwWitness
 /-- **`ComputeOfPouwPerRun`'s and `ComputeOfPouw`'s premises hold at the milestone, in the output-priced model**: the
 model truncates, and the sixteen units are in the domain. -/
 theorem ComputeOfPouwPerRun_honest :
-    Accounting.BudgetAbort (Pouw.outputPriced Pouw.D1.M1Q Pouw.D1.M1R Pouw.Salt) ∧
+    ResourceAccounting.BudgetAbort (Pouw.outputPriced Pouw.D1.M1Q Pouw.D1.M1R Pouw.Salt) ∧
       Pouw.Proofs.M1.sixteen.InDomain Pouw.D1.m1Domain :=
   ⟨outputPriced_budgetAbort, Pouw.Proofs.M1.sixteen_inDomain⟩
 
@@ -109,4 +109,4 @@ theorem ComputeOfPouwPerRun_nontrivial :
   · intro x
     exact ⟨trivial, by simp [acceptAllRun_work], id⟩
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

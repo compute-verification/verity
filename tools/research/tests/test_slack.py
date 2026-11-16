@@ -1191,6 +1191,19 @@ def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatc
     assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
+def test_send_reply_and_ask_refuse_a_first_line_stamped_ahead_of_the_clock_and_post_nothing(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromisoformat("2026-11-15T10:25:30+00:00"))   # 2:25 AM PST
+    root = fake.add(COORD, text="a thread", username="ci", bot_id=BOT)["ts"]
+    for argv in (["send", "--as", "infra", "--to", "@ci", "--kind", "fyi"], ["reply", "--as", "infra", "--thread", root],
+                 ["ask", "--as", "infra", "--to", "@ci"]):
+        rc, _, err = run(capsys, *argv, "--text", "infra, 2:28 AM PST: node 2 is free")
+        assert rc == 2 and "the first line says 2:28 AM PST and it is 2:25 AM PST: write the time " \
+                           "`TZ=America/Los_Angeles date` gives now, leave the time out, or, if it is a time to come, put " \
+                           "`by`, `at` or `ETA` before it" in err
+    assert len(fake.messages[COORD]) == 1
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra, 2:25 AM PST: free")[0] == 0
+
+
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
     ours = fake.add(COORD, text="x", username="infra", bot_id=BOT)
     renamed = fake.add(COORD, text="x", username="not-a-handle", bot_id=BOT)
@@ -4317,13 +4330,63 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
             return {"issue": {"state": {"type": "backlog"}, "comments": {"nodes": nodes}}}
 
     monkeypatch.setattr(linear, "Linear", Fake)
-    assert slack.issue_state("INF-1", "infra", {}) == (False, "in Backlog, no comment but the asker's") and "body" in asked[0]
+    assert slack.issue_state("INF-1", "infra", [], {}) == (False, "in Backlog, no comment but the asker's") and "body" in asked[0]
     nodes.append({"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "@circuits: on it"})
-    assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by circuits")
+    assert slack.issue_state("INF-1", "infra", [], {}) == (True, "commented on by circuits")
     nodes[1:] = [{"botActor": {"userDisplayName": "infra"}, "user": None, "body": "still waiting"}]
-    assert slack.issue_state("INF-1", "infra", {})[0] is False
+    assert slack.issue_state("INF-1", "infra", [], {})[0] is False
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
-    assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by Daniel Reuter")
+    assert slack.issue_state("INF-1", "infra", [], {}) == (True, "commented on by Daniel Reuter")
+
+
+def test_an_asks_issue_is_answered_only_by_a_comment_from_a_handle_the_ask_names_or_its_worker(monkeypatch):
+    """A third lane's nudge on the issue was its only comment and stopped the unanswered-ask alert though the lane asked
+    had not answered.  With handles named, only a comment from one of them or its worker (`HANDLE/NAME`) answers; with none
+    named, any comment but the asker's does; and one issue asked of different handles is judged for each."""
+    from research import linear
+    nodes: list[dict] = []
+
+    class Fake:
+        def gql(self, q, v):
+            return {"issue": {"state": {"type": "backlog"}, "comments": {"nodes": nodes}}}
+
+    monkeypatch.setattr(linear, "Linear", Fake)
+    by = lambda who: {"botActor": {"userDisplayName": who}, "user": None, "body": "here"}  # noqa: E731
+    state = lambda to, cache=None: slack.issue_state("PRF-1", "lean", to, {} if cache is None else cache)  # noqa: E731
+    nodes[:] = [by("lean"), by("comms"), by("comms/W"), by("infra")]
+    assert state(["proofs"]) == (False, "in Backlog, no comment by @proofs (commented on by comms, comms/W, infra)")
+    assert state(["proofs", "circuits"])[1].startswith("in Backlog, no comment by @proofs, @circuits (commented on by ")
+    assert state(["proofs-x"])[0] is False
+    nodes.append(by("proofs"))
+    assert state(["proofs"]) == (True, "commented on by proofs")
+    nodes[-1] = by("proofs/W")
+    assert state(["proofs"]) == (True, "commented on by proofs/W")
+    nodes[-1] = by("proofs/W/X")
+    assert state(["proofs"])[0] is True and state(["proofs/W"])[0] is False
+    assert state([]) == (True, "commented on by comms")
+    nodes[:] = [by("lean")]
+    assert state(["proofs"]) == (False, "in Backlog, no comment but the asker's") == state([])
+    cache: dict = {}
+    nodes[:] = [by("lean"), by("proofs")]
+    assert state(["comms"], cache)[0] is False and state(["proofs"], cache)[0] is True
+    assert state(["comms"], cache)[0] is False and state(["proofs", "comms"], cache)[0] is True and len(cache) == 3
+
+
+def test_traffic_leaves_an_ask_unanswered_when_only_a_third_handle_commented_on_its_issue(fake, registry, routes_dirs, capsys, monkeypatch):
+    """The ask's `to` reaches `issue_state`: lean's ask of proofs stays UNANSWERED on comms's comment, and answers on proofs's."""
+    from research import linear
+    post = fake.add(COORD, text="@proofs is G1 stated?\nLinear: <https://linear.app/x/issue/PRF-9|PRF-9>", username="lean", bot_id=BOT, ts=f"{T0:.6f}")
+    by = lambda h: {"botActor": {"userDisplayName": h}, "user": None, "body": "here"}  # noqa: E731
+    issue = {"state": {"type": "backlog"}, "comments": {"nodes": [by("comms")]}}
+    monkeypatch.setattr(linear, "_http", FakeLinearIssues({"PRF-9": issue}))
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    now = f"{T0 + 86400:.0f}"
+    (un,) = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])["unanswered"]
+    assert un["ts"] == post["ts"] and un["to"] == ["proofs"]
+    assert un["state"] == "in Backlog, no comment by @proofs (commented on by comms)"
+    issue["comments"]["nodes"].append(by("proofs/W"))
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    assert not rep["unanswered"] and [x["ts"] for x in rep["answered"]] == [post["ts"]]
 
 
 def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):

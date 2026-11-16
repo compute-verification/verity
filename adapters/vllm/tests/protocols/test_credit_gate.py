@@ -968,7 +968,7 @@ def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
     assert SV.model_key(gate.model_key(CH.MODEL, _circuit(), reg["weights_root"])).key == mk.key
 
 
-def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
+def test_a_sampled_session_that_opened_no_weights_is_refused(periodic, tmp_path):
     """Each sampled proof block's release must open its K's ``h1/b/<K>`` beside its A, since nothing else ties the B rows
     it proved to the ones the period registered. The ``--registered`` file core hands the verifier for a sampled call is
     vllm's own (`pouw_h1_served.register`'s, the one its prover's releases read), its ``b_k<K>_<j>`` ports at
@@ -1327,7 +1327,7 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
     assert PHC.period_credit(ledger, PERIOD, [window(a, da)])[1][0] == "missing"
 
 
-def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
+def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     """The credit bit is under calls_root and so under the sample root the sampling coin followed: flipping it after
     the sample is refused, whether the sample root is left (it is no longer over the manifest) or recomputed (no sample
     challenge phase of the auditor's ledger is opened on it, so it has no sampling coin of the challenger's); the honest

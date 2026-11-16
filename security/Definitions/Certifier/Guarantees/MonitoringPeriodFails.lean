@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The leak over a monitoring period with each failure charged as it happens
 
-A connection the network certifier fails (`failCell`) is the server's move, neither the operator's nor advice, so
+A connection the network attester fails (`failCell`) is the server's move, neither the operator's nor advice, so
 `MonitoringPeriodLeakChecked`'s operator and registered values, fixed before the period, cannot hold where it fell. These
 statements let both follow the run's fail pattern, each connection's fail cell or none, and pay for it by counting the
 patterns:
@@ -90,7 +90,7 @@ open scoped NNRat
 set_option linter.unusedVariables false
 
 /-- **The leak over a monitoring period, each failure charged as it happens: exactly `j` failures.**
-`MonitoringPeriodLeakChecked`, where each window's operator and registered values may follow the network certifier's fail cells
+`MonitoringPeriodLeakChecked`, where each window's operator and registered values may follow the network attester's fail cells
 over the period (`op φ i` and `ρ φ i`, `φ` the fail cell of each connection, `failCell`): the secrets whose run
 fails exactly `j` connections, each below its bound, and whose every window meets `ExecutionPhaseGoodChecked`, number
 at most `failPatterns bound j` times `MonitoringPeriodLeakChecked`'s count. At `j = 0` the factor is one.
@@ -144,11 +144,11 @@ def MonitoringPeriodLeakFails : Prop :=
             (Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The leak over a monitoring period, each failure charged as it happens.** `MonitoringPeriodLeakChecked`, where each
-window's operator and registered values may follow the network certifier's fail cells over the period (`op φ i` and
+window's operator and registered values may follow the network attester's fail cells over the period (`op φ i` and
 `ρ φ i`, `φ` the fail cell of each connection, `failCell`), bound before the secrets and reading the pattern alone:
 
 * each window's audit has `MonitoringPeriodLeakChecked`'s bound;
-* where at every window's statement the network certifier registers its observations at that window's operator at the
+* where at every window's statement the network attester registers its observations at that window's operator at the
   run's fail pattern (`CertifierRegisters`), for the secrets whose every window meets `ExecutionPhaseGoodChecked` at the
   registered values of the run's fail pattern:
   * **held**: the cells the client receives are read from the windows' records under a registered parameter of `Θ`,

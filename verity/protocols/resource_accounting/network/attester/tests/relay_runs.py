@@ -14,11 +14,11 @@ from verity.protocols.resource_accounting.network.attester import runner_parts a
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
-from verity.protocols.resource_accounting.network.verifier.network_attester import (END, INTEGER_FIELDS, REFUSED, W63K4, Shim, NetworkCertifier,
-                                                    NetworkCertifierParams, cells, read_cell)
+from verity.protocols.resource_accounting.network.verifier.network_attester import (END, INTEGER_FIELDS, REFUSED, W63K4, Shim, NetworkAttester,
+                                                    NetworkAttesterParams, cells, read_cell)
 
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
-PARAMS = NetworkCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
+PARAMS = NetworkAttesterParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128, egress="bytes")
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
@@ -28,7 +28,7 @@ SLOW_COMMIT_S = 0.4
 
 
 class _Writer:
-    def __init__(self, network_attester: NetworkCertifier | None = None) -> None:
+    def __init__(self, network_attester: NetworkAttester | None = None) -> None:
         self.network_attester, self.writes, self.closed, self.transport = network_attester, [], False, self
 
     def write(self, data: bytes) -> None:
@@ -68,9 +68,9 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None, params: NetworkCertifierParams = PARAMS,
+         process: bool = False, servers: list | None = None, params: NetworkAttesterParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
-         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> NetworkCertifier:
+         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> NetworkAttester:
     """A run of the network attester at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
@@ -89,7 +89,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     assert not back or (timed and not process)
     lines = rp.Lines(out, ws.LINK) if timed else None
     held: dict[int, dict] = {}
-    device: list[NetworkCertifier] = []
+    device: list[NetworkAttester] = []
 
     def taken(window: int, line: dict) -> None:
         if window in (back or {}):
@@ -125,12 +125,12 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             servers.append(writer)
         return reader, writer
 
-    def settled(w: NetworkCertifier) -> bool:
+    def settled(w: NetworkAttester) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> tuple[list[_Writer], NetworkCertifier]:
+    async def main() -> tuple[list[_Writer], NetworkAttester]:
         clock = VirtualClock(-tau / 2)
-        network_attester = NetworkCertifier(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
+        network_attester = NetworkAttester(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
                         **hooks)
         device.append(network_attester)
         over: list[bool] = []
