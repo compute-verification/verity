@@ -46,8 +46,10 @@ theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩) | (exfalso; contradiction)
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩) |
+    (cases h; exact ⟨_, by assumption, rfl, fun hz => by simpa [hz] using ‹¬ (_ && _) = true›⟩) | (exfalso; contradiction)
 
+open FlockSoundness.Refine in
 /-- A masked setup's statement has the hm96 rows (`Ins.setup` refuses any other). -/
 theorem Ins.setup_hm96Rows {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p) :
     s.read.tags.hm96Rows = true := by
