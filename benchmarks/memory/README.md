@@ -18,6 +18,7 @@ verifier times every pass and checks each one's answers against the store's comm
 
 ## What you need
 
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
 - **A Linux machine with one NVIDIA H200 or RTX PRO 6000 Blackwell.** These are the cards the tree has a data sheet
   (`hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
   there, saying so, before it starts anything. Another card needs a data sheet (named with `LOCAL_NODE`), and a result
