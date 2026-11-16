@@ -6,7 +6,7 @@ in the serve dir's ``pearl/w<k>/``: the epoch taken as the piece's passes, the g
 
 The give-up before the verifier's coin, with stand-ins for served_passes.py, debit.py, served_verdicts.py,
 pearl_c_sm90.sh's setup and gpu-lease: it asks ``served_passes.py volunteer-needed`` before anything is built or served,
-gives the rows over inert work cap up (on the card by default) exactly when the answer is yes, refuses to serve with the
+gives the rows over an inert-work bound up (on the card by default) exactly when the answer is yes, refuses to serve with the
 give-up turned off then, leaves it off when the answer is no unless PEARLPLUS_VOLUNTEER asks for it, stops on any other
 answer, and hands PEARLPLUS_OVER_CAP to both the question and the verdict."""
 
@@ -351,7 +351,7 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         return
     assert rc == 0, said
     if "verify" in steps and not any(s.startswith("volunteer ") or s == "volunteer" for s in steps):
-        assert f"POUW volunteer: not run: Pearl+'s verdict credits a drawn row over its inert work cap nothing (over-cap rule " \
+        assert f"POUW volunteer: not run: Pearl+'s verdict credits a drawn row over its inert-work bound nothing (over-cap rule " \
                f"{needed.split()[1]})" in said
     if needed == "yes reject" and volunteer is None:
         rc, said, got = run(PEARLPLUS_OVER_CAP="reject")

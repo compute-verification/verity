@@ -34,7 +34,7 @@
 #      (`cp -a`, their modes kept, the symlink replaced once the copy is whole) and the RAM copy removed, a stopped piece
 #      leaving them in RAM, its line naming where;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
-#      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
+#      records, the rows over an inert-work bound (V-EX), which the serve's screen can't see, from every tile's words' counts
 #      over the whole run, not a sample's, by default exactly while step 4's verdict rejects a run on a sampled row over
 #      its cap: its over-cap rule (PEARLPLUS_OVER_CAP, verify's --over-cap; default the verdict's own) is reject, which
 #      `served_passes.py volunteer-needed` says before anything is built or served, and under it a PEARLPLUS_VOLUNTEER
@@ -128,7 +128,7 @@ RULE=${NEEDED#* } VOLUNTEER=${PEARLPLUS_VOLUNTEER-auto}
 case ${NEEDED%% *} in
   yes) [ "$VOLUNTEER" = auto ] && VOLUNTEER=1
     if [ -z "$VOLUNTEER" ]; then
-      say "volunteer: refused, so nothing is served: Pearl+'s verdict rejects a run on a drawn row over its debit cap" \
+      say "volunteer: refused, so nothing is served: Pearl+'s verdict rejects a run on a drawn row over its inert-work bound" \
         "(over-cap rule $RULE), so the give-up before its coin can't be skipped (PEARLPLUS_VOLUNTEER is empty)"
       exit 2
     fi ;;
@@ -302,7 +302,7 @@ if [ -n "$GO" ] && [ -n "$VOLUNTEER" ]; then
   rc=$?
   say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
 elif [ -n "$GO" ]; then
-  say "volunteer: not run: Pearl+'s verdict credits a drawn row over its debit cap nothing (over-cap rule $RULE), so" \
+  say "volunteer: not run: Pearl+'s verdict credits a drawn row over its inert-work bound nothing (over-cap rule $RULE), so" \
     "no row is given up before the verifier's coin"
 fi
 if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
