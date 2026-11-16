@@ -63,7 +63,7 @@ path = "../../../proofs/spot_flock/verifier/lean"
 
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
-name = "core_memory_challenger"
+name = "core_memory_attester"
 path = "../../../resource_accounting/memory/pous/attester/lean"
 
 # Remote, the other composite `product` names, whose tie of PoUW's windows to the run's record onsite reads

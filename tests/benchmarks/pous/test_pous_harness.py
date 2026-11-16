@@ -671,7 +671,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
     rc, calls, _ = _pod_sh(tmp_path, "mc", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home))
     assert rc.returncode == 0 and calls == []
     package = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"
-    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-attester-verdict\n"
     rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
     assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
     check = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check"

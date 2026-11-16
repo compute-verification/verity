@@ -22,7 +22,7 @@ from verity.commitments.merkle import CommitmentDomain
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "memory-challenger-difftest"
+EXE = "memory-attester-difftest"
 REFUSALS = (D.Reject, ValueError)
 P2 = lms.Params(64, 1, 2)
 DEPLOYMENT = hashlib.sha512(b"memory-challenger-lean/deployment").digest()

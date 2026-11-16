@@ -149,7 +149,7 @@ WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts
        "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/protocols/resource_accounting/memory/poub/verifier/lean/Poub/", "verity/protocols/resource_accounting/memory/poub/verifier/audit.py"
-MC, MC_PY = "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/", "verity/protocols/resource_accounting/memory/pous/"
+MC, MC_PY = "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/", "verity/protocols/resource_accounting/memory/pous/"
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
@@ -170,12 +170,12 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{RA_PY}::Registration": (f"{RA}Window.lean::Poub.Registration", "poub-difftest", "PoUB's port"),
     f"{RA_PY}::Registry": (f"{RA}Registry.lean::Poub.Registry", "poub-difftest", "PoUB's port"),
     f"{RA_PY}::Verdict": (f"{RA}Window.lean::Poub.Verdict", "poub-difftest", "PoUB's port"),
-    f"{MC_PY}device/memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
+    f"{MC_PY}device/memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryAttester.CoinTree", "memory-attester-difftest",
                                                "the memory challenger's port"),
-    f"{MC_PY}device/memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
+    f"{MC_PY}device/memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryAttester.Verdict", "memory-attester-difftest",
                                               "the memory challenger's port"),
-    f"{MC_PY}verifier/streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
-                                          "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
+    f"{MC_PY}verifier/streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryAttester.StreamedWipe.Verdict",
+                                          "memory-attester-difftest", "the memory challenger's port, for the streamed wipe"),
     "verity/circuits/layout.py::Gate": (f"{CIRCUITS}Gate.lean::Flock.Program.Gate", "verity-evaluate",
                                            "the evaluator's `gate` answers each gate of the Python's layout"),
     "verity/circuits/partition_object.py::Partition": (f"{CIRCUITS}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
@@ -644,7 +644,7 @@ KNOWN: dict[str, str] = {
     "security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.Protocol":
         "homonym, a one-round PoUW protocol in a machine model (RS-DEF): rename (compute-accounting)",
     # security/Properties/
-    "security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
+    "security/Properties/Attest.lean::MemoryAttester.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
@@ -783,7 +783,7 @@ KNOWN: dict[str, str] = {
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
+    "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/Records.lean::MemoryAttester.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/resource_accounting/network/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",

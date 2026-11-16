@@ -48,7 +48,7 @@ def named(v) -> dict | None:
 
 
 def named_port(inputs: st.SearchStrategy) -> D.Port:
-    return D.Port("memory-challenger-difftest", "wipe_named", named, inputs, package=M.PACKAGE, rejects=REFUSALS)
+    return D.Port("memory-attester-difftest", "wipe_named", named, inputs, package=M.PACKAGE, rejects=REFUSALS)
 
 
 counted_server = D.server_fixture(counted_port(st.none()))

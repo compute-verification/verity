@@ -5130,6 +5130,16 @@
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml",
         "verity/runtime/pyproject.toml": "tests/verity/runtime/pyproject.toml"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Pous/MemoryChallenger.lean": "security/Proofs/Properties/Pous/MemoryAttester.lean",
+        "security/Proofs/Properties/Pous/MemoryChallenger/": "security/Proofs/Properties/Pous/MemoryAttester/",
+        "security/Properties/Pous/MemoryChallenger.lean": "security/Properties/Pous/MemoryAttester.lean",
+        "security/Properties/Pous/MemoryChallenger/": "security/Properties/Pous/MemoryAttester/",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger.lean": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester.lean",
+        "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/"
+      }
     }
   ]
 }
