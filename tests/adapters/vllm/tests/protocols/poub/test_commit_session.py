@@ -39,7 +39,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 
 from verity_vllm.protocols.poub import remote
 
-VLLM = (Path(__file__).resolve().parents[6] / "adapters" / "vllm")
+VLLM_TESTS = Path(__file__).resolve().parents[3]  # tests/adapters/vllm, where the adapter's tests import as `tests`
 
 
 def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest():
@@ -450,7 +450,7 @@ def test_a_failing_test_leaves_no_verifier_process(tmp_path):
     (tmp_path / "test_failing.py").write_text(FAILING)
     r = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist",
                         f"--junitxml={tmp_path / 'report.xml'}", str(tmp_path / "test_failing.py")],
-                       cwd=VLLM, capture_output=True, text=True)
+                       cwd=VLLM_TESTS, capture_output=True, text=True)
     out = r.stdout + r.stderr
     assert r.returncode == 1, out
     cases = {c.get("name"): [x.get("message", "") for x in c if x.tag == "failure"]

@@ -76,7 +76,7 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, firs
     for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness", tree / ".venv" / "bin", bin_, venv,
               sd / "pearl" / "w7", tmp_path / "piece", tmp_path / "cubin"):
         p.mkdir(parents=True)
-    (tree / "benchmarks" / "one_stage" / "served_pearlplus.sh").symlink_to(HERE.parent / "served_pearlplus.sh")
+    (tree / "benchmarks" / "one_stage" / "served_pearlplus.sh").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_pearlplus.sh")
     (tree / "benchmarks" / "harness" / "env.sh").write_text("")
     (tmp_path / "step.py").write_text(STEP)
     py = (f'#!/bin/sh\ncase "$1" in -c|-) exec {sys.executable} "$@";; esac\n'
@@ -159,7 +159,7 @@ def test_under_pearlplus_tie_verify_holds_the_passes_to_the_windows_class(tmp_pa
     verify = next(a for a in _steps(tmp_path) if Path(a[0]).name == "served_passes.py" and a[1] == "verify")
     w = str(sd / "private" / "pearlplus" / "window-record.json")
     assert verify[verify.index("--tie"):verify.index("--tie") + 4] == ["--tie", w, "--class", "4,32,3"]
-    script = (HERE.parent / "served_verdicts.sh").read_text()
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
     assert "export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} " in script
 
 
@@ -298,7 +298,7 @@ def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
     tree, d, p, calls = tmp_path / "tree", tmp_path / "serve", tmp_path / "piece", tmp_path / "calls"
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True)
-    shutil.copy(HERE.parent / "served_pearlplus.sh", one)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "served_pearlplus.sh", one)
     (tree / ".venv" / "bin").mkdir(parents=True)
     (tree / ".venv" / "bin" / "python").symlink_to(sys.executable)
     (one / "served_verdicts.py").write_text(RECORD + 'print("POUW-DEV {}")\n')

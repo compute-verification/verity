@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-NCI = HERE.parent
+NCI = HERE.parents[2] / "benchmarks" / "nci"
 sys.path.insert(0, str(NCI))
 
 import catalog  # noqa: E402
