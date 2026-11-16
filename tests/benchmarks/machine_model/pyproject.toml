@@ -20,10 +20,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
 # the Site's readers (`verity.device`, which imports the wire, `verity.channel`), which the workspace environment
 # brings.
-# `run.py` writes the sm_120 headline as its metrics.toml's row with the harness kit's writer (`kit` and its `settings`,
-# which read `verity_config.settings`).
-inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "benchmarks/machine_model/run.py",
-          "benchmarks/machine_model/metrics.toml", "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
-          "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config", "security/Definitions/Registration/Sheets",
+inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "security/Definitions/Registration/Sheets",
           "verity/__init__.py", "verity/errors.py", "hardware/cards", "verity/device.py",
           "verity/channel.py"]

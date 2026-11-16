@@ -9,10 +9,6 @@ untraced = ["test_statement.py"]
 # falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's, with the
 # Dot width read from the BF16 GEMM's step (gemm.py's GEMM_HOPPER).
 inputs = [
-  # run.py writes the statement's first figure as metrics.toml's row with the harness kit's writer (`kit` and its
-  # `settings`, which read `verity_config.settings`)
-  "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
-  "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
   # the output bits an incorrect proof block injects are the widest public size class of a block's outputs (tiers.py
   # reads verity.circuits.partition_v2, which imports its package)
   "verity/__init__.py",
