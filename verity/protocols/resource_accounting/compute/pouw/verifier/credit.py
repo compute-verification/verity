@@ -3159,9 +3159,13 @@ def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name
 
 
 def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """The verdict of record on a credit period's presented roots: the Lean `Credit.periodRoots`'s, not yet written, so
-    this raises (`verifier.not_written`); `period_twin` is its Python twin."""
-    return V.not_written("period", "PouwCheck.Credit.periodRoots")
+    """The verdict of record on a credit period's presented roots, (code, why) or None: the Lean `Credit.period`'s
+    (`verifier.of_record` on ``period-roots``), with `period_twin` its Python twin; a disagreement is the refusal
+    ``verifier.DISAGREE``."""
+    why = period_twin(key, ledger, name, roots, verify)
+    said = V.of_record("period-roots", {"key": key, "ledger": ledger, "name": name, "roots": roots},
+                       None if why is None else {"refused": list(why)})
+    return None if said is None else tuple(said["refused"])
 
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
