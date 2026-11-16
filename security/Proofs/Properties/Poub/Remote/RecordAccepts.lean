@@ -323,7 +323,6 @@ theorem groups_one : record1.groups node1 = #[group1] := by
   rw [show node1.groupsPerCoin = 1 from rfl, show node1.params.samples = 1 from rfl,
     show record1.seen = seen1 from rfl, ofSummary_one sm hw]
 
-/-- The play: `record1` at every coin. -/
 abbrev recs1 : SampleCoins node1.samples 0 Unit → Record := fun _ => record1
 
 /-- **`record1`'s schedule is honest**: one window, one pass over `[0, 1)`, the sample's receipts the same at every
