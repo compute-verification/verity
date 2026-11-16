@@ -54,8 +54,9 @@ when:
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
   for a queue merge), whose own merge the source checks below fail.  A site (``lint: file:line what``) is the tree
-  below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
-  an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
+  below's wherever in its file it stands: it is compared by its file and what it is (a retired term less the advice its
+  Glossary row gives), with a count, never by its line, so an edit above a site moves it and adds none, a second site of
+  the same kind in its file is the change's, and a file's
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
   lowered under a tree that its base's list covered is one.  A file the change renames (``git diff -M``) is its old
   path's file, so a move adds none of the sites its base holds there past its list, which are named at the old path
@@ -275,6 +276,8 @@ LINES = re.compile(r"\d+(?:,\d+)*")
 #: the count a violation states against its allowance, whole: ``2 found, 0 allowed``, or the suffix
 #: ``  (2 found, 1 allowed)`` that `_ratchet.new_violations` writes after a key's lines only while the key has an allowance
 COUNT = re.compile(r"\s*\(?\b(\d+) found, \d+ allowed\b\)?")
+#: the advice after a retired term's site (``'X' is retired; say Y (GLOSSARY.md)``), which rewording its Glossary row changes
+ADVICE = re.compile(r"(?<=' is retired); say .*")
 #: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
 RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the tables that place a module, by lint file: each a dict literal of strings, which a change may edit for the modules it
@@ -1328,7 +1331,9 @@ def unplaced(v: str) -> tuple[str, int] | None:
     that names its lines (`SITE` with a line, ``lint: file:line what``, or one key's lines, ``lint: file:12,40 what``: one
     site a line) or a count (`COUNT`, ``lint: file: 2 found, 0 allowed``: that many).  None for a violation that names
     neither.  The allowance is no part of what a violation is: a list that falls with its file's count names the same
-    thing, and so does a key whose entry goes, which then states no count after its lines."""
+    thing, and so does a key whose entry goes, which then states no count after its lines; nor is a retired term's advice
+    (`ADVICE`), so a site whose Glossary row is reworded is the same site."""
+    v = ADVICE.sub("", v)
     m, n = SITE.match(v), COUNT.search(v)
     lines = LINES.match(v, m.start(2)) if m and m[2] else None
     cuts = [x for x in (lines and lines.span(), n and n.span()) if x]

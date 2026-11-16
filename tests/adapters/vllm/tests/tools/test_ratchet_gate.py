@@ -1980,8 +1980,9 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     """`beyond`: of a file's sites of one kind, as many as its base holds are the base's (those at a line the base names
     first, then the earliest), each named at the base's line; a count is the base's while it is no more than the base's,
     whatever each list allows, and the change's where the base names none; a key's violation that names each of its lines
-    counts a site a line, with the count it states after them or without; and a violation that names neither a line nor a
-    count is the base's when the base has the same one."""
+    counts a site a line, with the count it states after them or without; a retired term's site is its term without the
+    advice its Glossary row gives; and a violation that names neither a line nor a count is the base's when the base has
+    the same one."""
     a, b, count = "l: f.py:3 x", "l: f.py:9 x", "l: f.py: 2 found, 0 allowed"
     assert G.beyond([a], ["l: f.py:4 x"]) == (["l: f.py:4 x"], [])
     assert G.beyond([a, b], ["l: f.py:9 x"]) == ([b], [a])
@@ -2007,6 +2008,9 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     assert G.beyond([two], [three]) == ([three], []) and G.beyond([three], [two]) == ([], [three])
     assert G.beyond([two], [keyed]) == ([keyed], []) and G.beyond([keyed], [two]) == ([two], [])
     assert G.beyond(["l: test_x raised E", "l: nothing here"], ["l: test_x raised E"]) == (["l: test_x raised E"], ["l: nothing here"])
+    was, now = (f"r: f.md:{n} 'warden' is retired; say the attester; its {s} (GLOSSARY.md)" for n, s in ((3, "certs"), (4, "records")))
+    other = now.replace("'warden'", "'tap'")
+    assert G.beyond([now], [was]) == ([was], []) and G.beyond([other], [was]) == ([], [other])
 
 
 def test_a_site_a_lint_below_it_counts_fails_the_pr_that_adds_it_and_never_a_later_one(lane_linted):
