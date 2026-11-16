@@ -1580,7 +1580,8 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
         s, d = ROOT / f, dest / f
         if s.is_symlink():
             raise lean_check().OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(s)!r}), which a copy of the tree "
-                                           f"would keep and the audit then write through: the tree holds no links")
+                                           f"would keep and the audit then write through: the tree holds no links, so replace it "
+                                           f"with the file or directory it points to")
         d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_file():
             shutil.copy2(s, d)

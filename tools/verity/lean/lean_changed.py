@@ -346,7 +346,7 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
             if src.is_symlink():
                 raise AUDIT.OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(src)!r}), which the slot tree would "
                                         f"keep and the run then write through (`link`, `lake_dirs`): the tree holds no "
-                                        f"links")
+                                        f"links, so replace it with the file or directory it points to")
             if src.is_file():
                 data = src.read_bytes()
                 if dst.is_file() and not dst.is_symlink() and dst.read_bytes() == data:

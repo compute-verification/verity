@@ -36,6 +36,11 @@ KNOWN = ("/run/user/{uid}/bus", "/run/user/{uid}/systemd/private", "/run/user/{u
          "/run/systemd/userdb/io.systemd.Multiplexer", "/run/systemd/resolve/io.systemd.Resolve", "/run/snapd.socket",
          "/run/snapd-snap.socket", "/run/docker.sock", "/var/run/docker.sock", "/run/containerd/containerd.sock",
          "/run/uuidd/request", "/run/rpcbind.sock", "/tmp/.X11-unix/X0")
+#: why the kernel's list of unix sockets can't be read whole, and what to do
+UNPARSED = ("holds a name no line parses: another process on this node holds a unix socket whose name holds a newline,"
+            " which the list can't carry, so the sockets the sandbox must hide can't all be known. Find it with"
+            " `ss -xap` (its name runs onto a second line) and stop the process that holds it, or run the build on"
+            " another node")
 
 
 def program() -> bytes:
@@ -44,7 +49,8 @@ def program() -> bytes:
         arch, foreign, sock, uring = ABI[os.uname().machine]
     except KeyError:
         raise SystemExit(f"sockets.py: no seccomp filter for {os.uname().machine}, so the sandbox can't keep its command"
-                         f" from the host's unix sockets") from None
+                         f" from the host's unix sockets: run the build on an x86-64 or arm64 machine, or add this"
+                         f" machine's audit arch and its `socket` and `io_uring_setup` numbers to `ABI`") from None
     deny = RET_ERRNO | EACCES
     ld, jeq, jge, ret = 0x20, 0x15, 0x35, 0x06
     ins = [(ld, 0, 0, 4), (jeq, 1, 0, arch), (ret, 0, 0, deny), (ld, 0, 0, 0)]
@@ -65,7 +71,9 @@ def confine() -> None:
     if libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) or libc.prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER,
                                                                  ctypes.addressof(pbuf), 0, 0):
         raise SystemExit(f"sockets.py: the seccomp filter wasn't installed ({os.strerror(ctypes.get_errno())}), so the"
-                         f" sandbox can't keep its command from the host's unix sockets")
+                         f" sandbox can't keep its command from the host's unix sockets: run the build on a kernel with"
+                         f" seccomp filters (CONFIG_SECCOMP_FILTER), outside a container whose own filter refuses"
+                         f" `prctl(PR_SET_SECCOMP)`")
 
 
 def names(text: str) -> tuple[list[str], bool]:
@@ -102,8 +110,8 @@ def inventory() -> int:
         found.update(n for n in got if not n.startswith("@"))
     if not read or not ok:
         print("sockets.py: the kernel's list of unix sockets (/proc/PID/net/unix) "
-              + (f"could be read for no process: {', '.join(unread[:5])}" if not read
-                 else "holds a name no line parses"), file=sys.stderr)
+              + (f"could be read for no process ({', '.join(unread[:5])}): run the build where /proc is mounted and"
+                 f" readable" if not read else UNPARSED), file=sys.stderr)
         return 3
     sys.stdout.write("".join(f"{n}\n" for n in sorted(found)))
     return 0
@@ -155,15 +163,18 @@ def probe(addresses: list[str]) -> int:
         with open("/proc/self/net/unix") as f:
             own, ok = names(f.read())
     except OSError as e:
-        print(f"sockets.py: the sandbox's own list of unix sockets can't be read ({e})", file=sys.stderr)
+        print(f"sockets.py: the sandbox's own list of unix sockets can't be read ({e}): run `sandbox.sh` under"
+              f" `unshare --pid --fork`, as its header says, so it mounts a /proc of its own", file=sys.stderr)
         return 3
     if not ok:
-        print("sockets.py: the sandbox's own list of unix sockets holds a name no line parses", file=sys.stderr)
+        print(f"sockets.py: the sandbox's own list of unix sockets {UNPARSED}", file=sys.stderr)
         return 3
     want |= {n for n in own if n.startswith("@")}
     hits = [f"{n} ({how})" for n in sorted(want) if (how := reached(n))]
     if hits:
-        print("sandbox.sh: the command could connect to these unix sockets, which it did not make:", *hits, file=sys.stderr)
+        print("sandbox.sh: the command could connect to these unix sockets, which it did not make:", *hits, "- the"
+              " seccomp filter should have refused this, so check that `sockets.py exec` installed it, and hide each"
+              " socket's directory from the sandbox (or stop what listens on it)", file=sys.stderr)
         return 3
     return 0
 
