@@ -35,11 +35,11 @@ No composite lists it: onsite's bandwidth component is `Poub.P2Protocol.protocol
 
 On acceptance it publishes the receipts not shown wrong and the error that holds at, `{"eps", "q_bytes"}` (`certify`):
 the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's receipts
-and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉` openings
-coins at its `samples` s each (at least the per-sample term of `Accounting.Guarantees.Remote.PooledSample`, s/2^256; its
-PRF advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records
-read no commitment): at least the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol`
-proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
+and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^256 (`eps`), the session's `⌈W/g⌉`
+openings coins at its `samples` s each (the per-sample term of `ResourceAccounting.Guarantees.Remote.PooledSample`,
+s/2^256; its PRF advantages and binding term are left out of ε, not numbers, and so is the network attesters' term
+δnet, which `LineHeldAtSubprotocol` carries beside it): the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves at
+`Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
 `Properties.Poub.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
@@ -130,10 +130,12 @@ a window at g ≤ 1, as `Properties.Poub.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
-/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and at least the
-samples' rejection at the session's `samples` s a sample. -/
+/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^256`, the pooled bound's δ and the
+samples' rejection at the session's `samples` s a sample, the size `PooledSample` proves for the sampler's first
+blocks. It leaves out the network attesters' term δnet, the chance their count of what enters the node is wrong
+(`IngressCounted`), which `LineHeld`'s and `LineHeldAtSubprotocol`'s bounds carry as a term of their own beside it. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
-  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
+  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 256 : Nat)
 
 /-- What an accepted session certifies (module docstring), with its profile. -/
 def certify (params : Session.Params) (g : Nat) (sm : Session.Summary) : Public × Json :=
@@ -191,6 +193,7 @@ def account : Core.Account :=
 #guard (ratio DELTA).toString == "1/2535301200456458802993406410752"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
-#guard (ratio (eps three 2)).toString == "1374389534721/2535301200456458802993406410752"
+#guard (ratio (eps three 2)).toString ==
+  "22835963083295358096932575511191922182123945989/57896044618658097711785492504343953926634992332820282019728792003956564819968"
 
 end Poub.Protocol

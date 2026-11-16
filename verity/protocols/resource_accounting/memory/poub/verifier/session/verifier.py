@@ -356,16 +356,15 @@ def recorded_memory(session: dict, *, chip_bytes: int, host_bytes: int = 0) -> d
 
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
-    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
-    commitment's hiding terms, the receipts' binding term and the sample's rejection (`ledger.hiding`, `ledger.binding`,
-    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  It leaves
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the receipts'
+    binding term and the sample's rejection (`ledger.binding`, `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  It leaves
     out the windows' PRF advantages, which the record names beside it (`ledger.NAMED_TERMS`, `ledger.DELTA_FORM`).
     None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
             return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
-                    + sum(float(Fraction(d.get(k, 0))) for k in ("hiding", "binding", "rejection")))
+                    + sum(float(Fraction(d.get(k, 0))) for k in ("binding", "rejection")))
     return None
 
 

@@ -638,7 +638,7 @@ class Record:
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
     (`RequirementLink.mapped`), and the receipts every sample requested (`Params.samples`, None in a record no session
     made): a sample over U receipts takes min(`samples`, U), so `samples` is the k_t of the sample's rejection
-    Σ_t k_t/2^64 (`ledger.rejection`), which a sample opening all its receipts doesn't show.  `samples` is also the
+    Σ_t k_t/2^256 (`ledger.rejection`), which a sample opening all its receipts doesn't show.  `samples` is also the
     session's sample cap s and `append_coins` the append coins its coin commitment reserved, which bound every window
     of the session, whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what
     acceptance makes public; `profile` is the protocol's profile, each window's schedule and openings sampling design
@@ -1671,7 +1671,7 @@ def pooled(record: Record) -> tuple[float, float]:
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t samples
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
-    sample, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
+    sample, at δ + Σ_t s_t/2^256 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
     + the receipts' binding term (`ResourceAccounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and

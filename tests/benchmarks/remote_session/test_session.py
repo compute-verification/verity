@@ -779,10 +779,10 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     d = {k: Fraction(v) for k, v in lg["delta"].items()}
     assert lg["memory"]["error"] == verifier.memory_error(lg) == (
         reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"]
-        + sum(float(d[k]) for k in ("hiding", "binding", "rejection")))
-    assert d["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+        + sum(float(d[k]) for k in ("binding", "rejection")))
+    assert "hiding" not in d
     assert d["binding"] > 0
-    assert d["rejection"] == Fraction(len(record.windows) * record.samples, 2 ** 64) > 0
+    assert d["rejection"] == Fraction(len(record.windows) * record.samples, 2 ** ledger.REJECTION_LOG2) > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (

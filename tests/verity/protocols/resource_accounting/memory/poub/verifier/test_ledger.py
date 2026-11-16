@@ -195,7 +195,7 @@ def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(stor
     assert error == out.spec.to_json()["error"] == monitoring.ledger_error({"declared": out.to_json()})
     table = monitoring.table({"verdict": "accept", "public": public, "profile": profile}, error, 1, 600)
     eps, sk = Fraction(public["eps"]), ledger.sketch(r)
-    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** 64) and sk > 0
+    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** ledger.REJECTION_LOG2) and sk > 0
     assert table["observed"]["error"] == out.spec.error_horizon > float(eps)
     assert out.spec.error_horizon == pytest.approx(
         float(eps) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r) + sk, rel=1e-12)
@@ -239,29 +239,18 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     sampled = len(r.windows) * r.samples
     assert sampled == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
-    assert snap.delta == (Fraction(r.windows[0].profile.delta) + Fraction(P, 2 ** audit.SLACK_LOG2) + ledger.hiding(r)
-                          + ledger.binding(r) + ledger.sketch(r) + Fraction(sampled, 2 ** 64))
+    assert snap.delta == (Fraction(r.windows[0].profile.delta) + Fraction(P, 2 ** audit.SLACK_LOG2)
+                          + ledger.binding(r) + ledger.sketch(r) + Fraction(sampled, 2 ** ledger.REJECTION_LOG2))
     assert snap.to_json()["delta"] == str(snap.delta) and Fraction(snap.to_json()["delta"]) == snap.delta
     d = ledger.delta_parts(r)
     assert d == {"profile": Fraction(r.windows[0].profile.delta), "slack": Fraction(P, 2 ** audit.SLACK_LOG2),
-                 "hiding": ledger.hiding(r), "binding": ledger.binding(r), "sketch": ledger.sketch(r),
-                 "rejection": Fraction(sampled, 2 ** 64)}
+                 "binding": ledger.binding(r), "sketch": ledger.sketch(r),
+                 "rejection": Fraction(sampled, 2 ** ledger.REJECTION_LOG2)}
     assert tuple(d) == ledger.DELTA_PARTS
-    parts = d["profile"] + d["slack"] + d["hiding"] + d["binding"] + d["sketch"] + d["rejection"]
+    parts = d["profile"] + d["slack"] + d["binding"] + d["sketch"] + d["rejection"]
     assert snap.delta == parts and sampled > 0
     assert Fraction(d["rejection"]) == Fraction(sampled, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
-
-
-def test_the_coin_commitments_hiding_is_charged(store) -> None:
-    """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows for all but a 2^-64 fraction of keys, which the line's δ
-    carries (`PooledSample` reads none)."""
-    s, prover, passes, clock = drive(store, params(), SCHEDULE)
-    assert all(v.accepted for v in finish(s, prover, passes, clock))
-    r = s.record()
-    assert len(r.windows) > 1 and ledger.hiding(r) == Fraction(len(r.windows), 2 ** 191)
-    assert ledger.hiding(r) == ledger.hiding_over(len(r.windows))
 
 
 def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
@@ -322,7 +311,7 @@ def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1
 
 
 def test_the_samples_terms_are_charged_by_name(store) -> None:
-    """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
+    """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^256 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
@@ -335,7 +324,7 @@ def test_the_samples_terms_are_charged_by_name(store) -> None:
     sampled = [w.profile.drawn["receipt"] for w in r.windows]
     assert len(sampled) > 1 and max(sampled) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
     d = ledger.draw(r)
-    assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and not hasattr(d, "hiding")
+    assert d.rejection == len(r.windows) * r.samples * 2.0 ** -ledger.REJECTION_LOG2 and not hasattr(d, "hiding")
     fc = 2 ** audit.QUERIES_LOG2
     L = (2 ** 64 - 1) * r.codec.max_blocks
     want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
@@ -352,14 +341,27 @@ def test_the_samples_terms_are_charged_by_name(store) -> None:
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
 
+def test_a_64_row_session_is_held_at_its_profile_delta_not_the_samples_rejection() -> None:
+    blocks, windows, samples = 2 ** 27, 104, 214  # a 64-row H200 `--local` session's coins and samples a coin
+    profile = audit.window_profile((blocks,), samples, audit.DELTA)
+    r = audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
+        audit.WindowRecord(t, (blocks,), t * 10 ** 8, (t + 1) * 10 ** 8, (t + 1) * 10 ** 8, profile)
+        for t in range(windows)), rows=64, pace=Pace(1), samples=samples, append_coins=0)
+    assert windows * samples == 22_256 and float(Fraction(22_256, 2 ** 64)) == pytest.approx(1.2065e-15, rel=1e-4)
+    parts = ledger.delta_parts(r)
+    assert parts["rejection"] == ledger.rejection(r) == Fraction(22_256, 2 ** ledger.REJECTION_LOG2)
+    assert ledger.sketch(r) == timing.sketch_failure(windows, 64, blocks=blocks)
+    total = sum(parts.values(), Fraction(0))
+    assert max(parts, key=parts.get) == "profile" and audit.DELTA < total < Fraction(1, 2 ** 100)
+
+
 def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
-    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
-    requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
-    record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
-    more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger
-    charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding, which the 16-row sketch's 2^-15 in D puts above the slack and far below the shortfall.  A record whose
-    samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^256 + bind + Σ_t Adv(prf t), k_t the samples window
+    t requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
+    record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^256 short of E less the advantages.
+    At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger charges 3·70 at the record's
+    `samples`, not the 190 sampled, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2.  A record whose samples aren't
+    min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
@@ -370,12 +372,12 @@ def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_rec
     assert len(deltas) == 1
     D = Fraction(deltas.pop())
     delta_s, delta = Fraction(ledger.sketch(r)), Fraction(r.windows[0].profile.delta)
-    assert delta_s > 0 and Fraction(ledger.delta_parts(r)["rejection"]) == Fraction(sum(k), 2 ** 64)
-    held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
-            + Fraction(ledger.binding(r)))
+    assert delta_s > 0 and Fraction(ledger.delta_parts(r)["rejection"]) == Fraction(sum(k), 2 ** ledger.REJECTION_LOG2)
+    held = delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.binding(r))
     slack = Fraction(r.passes, 2 ** audit.SLACK_LOG2)
     assert ledger.delta_parts(r)["slack"] == slack and D == held + slack
-    assert D - Fraction(sum(k) - sum(sampled), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
+    assert sum(k) > sum(sampled) and ledger.delta_parts(r)["rejection"] != Fraction(sum(sampled), 2 ** ledger.REJECTION_LOG2), \
+        "the ledger charges the samples requested, not the draws made"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)
     with pytest.raises(ValueError, match="states no samples|a record no session made doesn't state"):

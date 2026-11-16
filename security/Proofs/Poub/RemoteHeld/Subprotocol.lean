@@ -18,9 +18,9 @@ namespace Properties.Poub.Subprotocol.SecurityProofs
 open Properties.Poub.Line
 
 theorem lineHeldAtSubprotocol : LineHeldAtSubprotocol := by
-  intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt
+  intro node κ X _ prf rest r correct T R δs δnet a b e D O I hP hCv hSk hCov hIc hLive hRef hCnt
   exact le_trans (Pouw.pr_mono fun ω h => ⟨plays_verified h.1, h.2⟩)
-    (Properties.Poub.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
+    (Properties.Poub.Line.SecurityProofs.lineHeld node κ X prf rest r correct T R δs δnet O I hP hCv
       hSk hCov hIc hLive hRef hCnt)
 
 end Properties.Poub.Subprotocol.SecurityProofs

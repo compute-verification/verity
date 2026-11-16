@@ -323,14 +323,13 @@ theorem groups_one : record1.groups node1 = #[group1] := by
   rw [show node1.groupsPerCoin = 1 from rfl, show node1.params.samples = 1 from rfl,
     show record1.seen = seen1 from rfl, ofSummary_one sm hw]
 
-/-- The play: `record1` at every commitment and every coin. -/
-abbrev recs1 : Unit → SampleCoins node1.samples 0 Unit → Record := fun _ _ => record1
+abbrev recs1 : SampleCoins node1.samples 0 Unit → Record := fun _ => record1
 
 /-- **`record1`'s schedule is honest**: one window, one pass over `[0, 1)`, the sample's receipts the same at every
 coin, and the record's one group, of one pass from coin 0 to last root 1, spans it. -/
 theorem honestSchedule_one :
-    Subprotocol.HonestSchedule node1 1 (fun _ p => p) recs1 (fun _ => ()) := by
-  refine ⟨by decide, fun _ p => Nat.lt_succ_self p, fun _ _ _ _ _ => rfl, fun ω _ gs hgs => ?_⟩
+    Subprotocol.HonestSchedule node1 1 (fun _ p => p) recs1 := by
+  refine ⟨by decide, fun _ p => Nat.lt_succ_self p, fun _ _ _ => rfl, fun ω _ gs hgs => ?_⟩
   have hgs' : gs = #[group1] := hgs.symm.trans groups_one
   subst hgs'
   have hw : node1.windows = 1 := rfl
@@ -355,63 +354,63 @@ def receipts1 : Receipts node1.samples 0 Unit :=
     fun _ _ _ => ⟨[], [], []⟩⟩
 
 /-- **`LineHeld`'s premises hold together at an accepted play.** At `node1` (one registered block under the deployed
-codec, one window of one pass, one sample), the play `record1` at every commitment and coin, the honest trace on
+codec, one window of one pass, one sample), the play `record1` at every coin, the honest trace on
 `[p, p + 1)` for pass `p` (the whole store in node memory, every receipt correct), no outside device, nothing but the
 verifier's messages entering it as its certifiers count, every receipt correct and the sampler's fallbacks 0, every
 premise of `Properties.Poub.Line.LineHeld` holds at `δs = δnet = 0`, and the Lean verifier accepts the play at
 every coin. -/
 theorem lineHeld_accepted :
-    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
+    ∃ (node : Node) (κ : ℕ) (X : Type) (_ : Fintype X)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
       (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
-      (recs : Cm → SampleCoins node.samples κ X → Record)
-      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
+      (r : SampleCoins node.samples κ X → Record)
+      (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (T : Trace (SampleCoins node.samples κ X))
       (R : Receipts node.samples κ X) (δs δnet : ℝ)
-      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
-      Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
-      Covers (ofRecord T node (played recs com)) ∧
-      SketchBoundAt (ofRecord T node (played recs com)) O δs ∧
-      Covered (ofRecord T node (played recs com)) O I ∧
-      IngressCounted (ofRecord T node (played recs com)) I δnet ∧
-      (∀ c, Live ((recordCommitted node recs correct).view c)) ∧
-      Refused ((recordCommitted node recs correct).play com) prf rest (ofRecord T node (played recs com)) R ∧
-      Counted ((recordCommitted node recs correct).play com) (ofRecord T node (played recs com)) ∧
-      ∃ ω, Verified node (played recs com ω) := by
-  obtain ⟨hP, hCv, hSk, hCov, hIc, hLive, hRef, hCnt, -, -⟩ :=
-    Subprotocol.lineHeldAtSubprotocol_honest node1 0 Unit Unit (fun _ _ _ _ => false) recs1 (fun _ => ()) receipts1 1
+      (O : Outside (ofRecord T node r)) (I : Ingress (SampleCoins node.samples κ X)),
+      Paced (ofRecord T node r) (recordPace node r) ∧
+      Covers (ofRecord T node r) ∧
+      SketchBoundAt (ofRecord T node r) O δs ∧
+      Covered (ofRecord T node r) O I ∧
+      IngressCounted (ofRecord T node r) I δnet ∧
+      Live (recordSample node r correct) ∧
+      Refused (recordSample node r correct) prf rest (ofRecord T node r) R ∧
+      Counted (recordSample node r correct) (ofRecord T node r) ∧
+      ∃ ω, Verified node (r ω) := by
+  obtain ⟨hP, hCv, hSk, hCov, hIc, hLive, hRef, hCnt, -⟩ :=
+    Subprotocol.lineHeldAtSubprotocol_honest node1 0 Unit (fun _ _ _ _ => false) recs1 receipts1 1
       (fun _ p => p) honestSchedule_one
-  exact ⟨node1, 0, Unit, Unit, inferInstance, fun _ _ _ _ => false, fun _ _ _ => 0, recs1,
-    fun _ _ _ => Finset.range (receiptMax + 1), fun _ => (), _, receipts1, 0, 0, _, _, hP, hCv, hSk, hCov, hIc,
+  exact ⟨node1, 0, Unit, inferInstance, fun _ _ _ _ => false, fun _ _ _ => 0, recs1,
+    fun _ _ => Finset.range (receiptMax + 1), _, receipts1, 0, 0, _, _, hP, hCv, hSk, hCov, hIc,
     hLive, hRef, hCnt, ⟨(), fun _ _ => false⟩, record_verified⟩
 
 /-- **`LineHeld`'s honest witness, with no premise.** At `lineHeld_accepted`'s play every premise of
 `Properties.Poub.Line.LineHeld` holds, and `Shared.run` runs the played record's session, at the node's parameters,
 windows a sample and registration, to an accepted state. -/
 theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest :
-    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
+    ∃ (node : Node) (κ : ℕ) (X : Type) (_ : Fintype X)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
       (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
-      (recs : Cm → SampleCoins node.samples κ X → Record)
-      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
-      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
+      (r : SampleCoins node.samples κ X → Record)
+      (correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (T : Trace (SampleCoins node.samples κ X))
       (R : Receipts node.samples κ X) (δs δnet : ℝ)
-      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
-      Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
-      Covers (ofRecord T node (played recs com)) ∧
-      SketchBoundAt (ofRecord T node (played recs com)) O δs ∧
-      Covered (ofRecord T node (played recs com)) O I ∧
-      IngressCounted (ofRecord T node (played recs com)) I δnet ∧
-      (∀ c, Live ((recordCommitted node recs correct).view c)) ∧
-      Refused ((recordCommitted node recs correct).play com) prf rest (ofRecord T node (played recs com)) R ∧
-      Counted ((recordCommitted node recs correct).play com) (ofRecord T node (played recs com)) ∧
+      (O : Outside (ofRecord T node r)) (I : Ingress (SampleCoins node.samples κ X)),
+      Paced (ofRecord T node r) (recordPace node r) ∧
+      Covers (ofRecord T node r) ∧
+      SketchBoundAt (ofRecord T node r) O δs ∧
+      Covered (ofRecord T node r) O I ∧
+      IngressCounted (ofRecord T node r) I δnet ∧
+      Live (recordSample node r correct) ∧
+      Refused (recordSample node r correct) prf rest (ofRecord T node r) R ∧
+      Counted (recordSample node r correct) (ofRecord T node r) ∧
       ∃ ω rs s, _root_.Poub.Shared.run node.groupsPerCoin
-          (_root_.Poub.Session.State.init node.params node.reg (played recs com ω).coins
-            (played recs com ω).appendCoins (played recs com ω).notBeforeNs) (played recs com ω).events =
+          (_root_.Poub.Session.State.init node.params node.reg (r ω).coins
+            (r ω).appendCoins (r ω).notBeforeNs) (r ω).events =
           .ok (rs, s) ∧ s.outcome = some "accepted" := by
-  obtain ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+  obtain ⟨node, κ, X, hX, prf, rest, r, correct, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
     hRef, hCnt, ω, rs, s, hr, ho⟩ := lineHeld_accepted
-  exact ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+  exact ⟨node, κ, X, hX, prf, rest, r, correct, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
     hRef, hCnt, ω, rs, s, hr, ho⟩
 
 end Properties.Poub.Line.Honest

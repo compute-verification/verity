@@ -462,7 +462,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         printed = next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:"))
         assert ", error δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ = " in printed
         assert printed.endswith(
-            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
+            "): the ledger's δ (profile δ + P·2^-slack + bind + δs + Σ_t k_t/2^256) summed over the "
             "credited sessions; Σ_t adv_t (claim prf/sha-512) is named, with no value and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON
         assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
@@ -894,13 +894,13 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     """Each accepted paced session's error is the memory line's δ as the ledger computed it (its record's `declared`
     forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
     `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
-    sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
-    the recorded total by it. A ledger that didn't charge the sample's rejection has Σ_t k_t/2^64 added at the session's
+    sum to it, give no line. A record whose ledger charged the coin commitment's hiding keeps it as a part
+    (`RECORDED_PARTS`): n·2^-191, below the float δ's precision, so the exact parts exceed the recorded total by it. A ledger that didn't charge the sample's rejection has Σ_t k_t/2^64 added at the session's
     `samples`, so it reads as one that did, a window that opened all its receipts included. Every error names the
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
     def session(profile: float, passes: int, sketch: float, *, charged: bool = True) -> dict:
-        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": float(al.ledger.hiding_over(passes)),
+        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": passes * 2.0 ** -191,
              "sketch": sketch}
         if charged:
             d["rejection"] = 48 * passes * 2.0 ** -64
@@ -916,7 +916,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     e = al.session_error(a)
     total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
-             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_binding": Fraction(0),
+             "delta_hiding": Fraction(700, 2 ** 191), "delta_binding": Fraction(0),
              "delta_sketch": Fraction(1, 2 ** 60), "delta_rejection": Fraction(48 * 700, 2 ** 64)}
     assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
@@ -969,7 +969,7 @@ def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves
     of the document that has a session (a session's, a T's, the line of record's) names the term beside its total,
     as the ledger's own records do (`ledger.NAMED_TERMS`). A T that credits no session prints no error."""
     assert al.NAMED_TERMS is al.ledger.NAMED_TERMS
-    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": al.ledger.hiding_over(96), "binding": 0.0,
+    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": 96 * 2.0 ** -191, "binding": 0.0,
          "sketch": 0.0, "rejection": 48 * 96 * 2.0 ** -64}
     total = 0.0
     for x in d.values():
@@ -1040,10 +1040,10 @@ GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
 @pytest.mark.parametrize("run,k", GATE_RUNS)
 def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
-    session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
-    sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
+    session's error is the memory line's δ its ledger recorded, bit for bit, plus the sample's rejection it didn't
+    charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
-    which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
+    which is the sketch the record charged, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 samples, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
     slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
@@ -1054,11 +1054,10 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
          "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
     e = al.session_error(s)
     parts = {n: al.line.number(e["exact"][f"delta_{n}"]) for n in al.ledger.DELTA_PARTS}
-    rejection = Fraction(passes * drawn, 2 ** al.ledger.REJECTION_LOG2)
+    rejection = Fraction(passes * drawn, 2 ** al.UNRECORDED_REJECTION_LOG2)
     assert parts["rejection"] == rejection == (Fraction(3177, 2 ** 59) if passes == 2118 else Fraction(87, 2 ** 56))
-    hiding = Fraction(al.ledger.hiding_over(passes))
-    assert parts["hiding"] == hiding and float(hiding) == pytest.approx(passes * 2.0 ** -191, rel=1e-12)
-    assert al.line.number(e["exact"]["total"]) == Fraction(delta) + hiding + rejection == sum(parts.values())
+    assert "delta_hiding" not in e["exact"]
+    assert al.line.number(e["exact"]["total"]) == Fraction(delta) + rejection == sum(parts.values())
     assert e["total"] == float(Fraction(delta) + rejection) and e["named_terms"] == al.NAMED_TERMS
     assert al.V.UNRECORDED_SLACK_LOG2 == 41 < al.audit.SLACK_LOG2
     assert parts["profile"] == Fraction(1, 2 ** 40) and parts["slack"] == Fraction(passes, 2 ** 41)

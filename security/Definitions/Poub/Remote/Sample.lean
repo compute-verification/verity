@@ -79,8 +79,7 @@ at least 4 for `N < 2^64`.
   window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
   played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
   `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
-  they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
-  (`Properties.Poub.Line.recordCommitted`).
+  they are: it reads no bit of coin `t`.
 * `Run.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
 * `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`

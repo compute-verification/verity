@@ -166,15 +166,13 @@ def test_the_sketch_charges_the_provers_budget() -> None:
     assert timing.sketch_failure(p, blocks=n) == timing.sketch_failure(p, blocks=n, queries=q)
     assert timing.sketch_failure(p, blocks=n, queries=q // 2) < timing.sketch_failure(p, blocks=n)
     assert [lg(timing.sketch_failure(p, rows=rows, blocks=n)) for rows in (16, 64)] == [-15.12, -135.85]
-    record, keys = one_pass_session(n, p, span_ns, samples), 64
+    record = one_pass_session(n, p, span_ns, samples)
     assert record.windows[0].profile.delta == audit.DELTA == 2.0 ** -101
     parts = ledger.delta_parts(record)
     assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == "sketch"
     assert parts["profile"] == audit.DELTA
     assert parts["slack"] == Fraction(p, 2 ** audit.SLACK_LOG2)
     assert parts["sketch"] == ledger.sketch(record) == timing.sketch_failure(p, blocks=n)
-    assert parts["hiding"] == pytest.approx(
-        2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys), rel=1e-12)
     total = sum(parts.values(), Fraction(0))
     assert [x.delta for x in ledger.memory(record, ledger.Node.stated(timing.RTX_PRO_6000_NODE))] == [total] * 3
     assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
