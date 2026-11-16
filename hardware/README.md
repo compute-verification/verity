@@ -150,7 +150,7 @@ disk leaves that ride the path (`leaves`) and says why they leave (`source`). It
 the one that bounds the node's disks together, the host card's `disk.read_max`, written once, there. Both nodes'
 disks all ride it. A server whose drives are all its own has no `storage` table and no such way out.
 
-A node file holds no clock or peak of a card, which are the cards', and no network attester or memory challenger:
+A node file holds no clock or peak of a card, which are the cards', and no network attester or memory attester:
 those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
 `load_node(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
@@ -227,5 +227,5 @@ site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("
 
 `remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
 refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
-accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
+accepts the H200 node, both of whose links say why no certifier splits them, once a memory attester reaches its host
 (`../verity/tests/tests/test_nodes.py`).

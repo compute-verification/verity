@@ -43,7 +43,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
   code running on the auditor device (`verity/protocols/compose/verifier/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network attester anywhere, is specified yet.
-- **No auditor devices at the site.** There are no network attesters or memory challengers. So network certification,
+- **No auditor devices at the site.** There are no network attesters or memory attesters. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
   see `security/Definitions/Certifier` and its `Guarantees`.
 
