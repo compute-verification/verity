@@ -9,6 +9,7 @@ public import Proofs.Flock.Recursive.FirewallObj
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Properties.Verity.Sampled.HonestSession.Delta
+import Proofs.Properties.Verity.Sampled.HonestSession.PortsFacts
 import Proofs.Pouw.Period.Sort
 import Base.Bytes
 import Flock.Scan
@@ -427,6 +428,26 @@ private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
 
 /-! ## v2's parameters, with every field named -/
 
+/-- A verifier that names its window's open root has no unwindowed registered value: `unwindowed` returns `#[]` at once
+(the `windowRoot.isSome` branch), never reaching its well-founded body, which the walk's kernel reduction cannot step.
+The `windowRoot := some r` field is structural in the statement (not a side condition on `v.windowRoot`), so the walk's
+rewrite matches the final guard's concrete record by `kabstract` alone — a side condition the walk cannot discharge, the
+record being tainted by the derived `query` and `partition`. -/
+private theorem unwindowed_some
+    (program : Spot.Program) (query law : Json) (workTable : Option Json) (scheme : String)
+    (ports : Array (String × Json)) (leafLayer : Option String) (anchors log : Array Json) (partition : Option Json)
+    (registered : Array (String × Nat)) (params : Array Spot.Registered.Param)
+    (supplied : Array (String × Spot.Supplied.Rows)) (pinned : Array (String × String))
+    (outputs : Array (String × String × Spot.Registration.Earlier)) (binding : Option (String × String))
+    (schemas : Array (String × String)) (r : String) (held : Array String)
+    (declared : Option (Nat × Array (Nat × String))) (seedSalt : Option String) (pool : Option Spot.Registration.Pool)
+    (tied : Array String) (members : Array (Array (Nat × Nat) × Nat)) :
+    Spot.Registration.unwindowed
+      { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered, params,
+        supplied, pinned, outputs, binding, schemas, windowRoot := some r, held, declared, seedSalt, pool, tied,
+        members } = #[] := by
+  unfold Spot.Registration.unwindowed; rfl
+
 set_option maxHeartbeats 4000000 in
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
 private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
@@ -510,9 +531,10 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, ratio_half, split_half, poolValues_none, keys?_mkObj,
-      keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt] block [Flock.canon, Spot.Program.parse, Flock.unhex,
-      Spot.keys?, Spot.sortStrings] shallow []
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, ratio_half, split_half, poolValues_none,
+      keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
+      unwindowed_some, Array.mapM_empty]
+      block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
