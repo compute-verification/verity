@@ -20,10 +20,13 @@ commits, the `circuit.json` window-commit writes beside it. It writes (`record.R
   and R naming the Program's digest and the circuit record's SHA-512. Without R no record of the log names the
   Program, and the record check refuses the record (`NO_REGISTRATION`).
 * **The rate rule's limits** (`inference-only-limits.json`), where the serve wrote none: α = k/c and Γ = c of the
-  policy's own c and k (`limits`).
+  policy's own c and k (`rate_limits.of_policy`), refused where those give none.
 * **The count** (`block-counts-CLASS.json`): the class circuit record's inference blocks judged against the policy's
-  c, k and n by the integration's count (`count`), at the verifier's pins ``--pins`` (none: every read is free) and R's
-  registered roots; its exact counts go to the run directory's `private/`, outside `out/`.
+  c, k and n by the integration's count (`count`), at the verifier's pins ``--pins`` and R's registered roots; its
+  exact counts go to the run directory's `private/`, outside `out/`. A weight read is held, and not fresh, only where
+  ``--pins`` pins its parameter at the root R registers: with no ``--pins`` every registered read is a free input
+  (`interface.input_count`), so every weight read counts as fresh bits against k, the most a block can be charged,
+  and the step's line says so.
 
 A refusal of the serve's files exits 2 with its reason, before anything is written."""
 from __future__ import annotations
@@ -36,18 +39,17 @@ import json
 import shutil
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 import policy as P
+import rate_limits as L
 import record as R
 
 #: what a tied serve writes under its `out/` that this reads
 SERVED = {"circuit": "record/circuit-record.json", "phi": "record/serve-phi.json", "window": "record/window-record.json",
           "policy": R.OUT_FILES["policy"]}
-LIMITS = "inference-only-limits.json"
-LIMITS_FORMAT = "verity-bench/inference-only-limits/v1"
+LIMITS = R.OUT_FILES["limits"]
 NO_REGISTRATION = ("no registration chained after W names the Program (--registration R, the window's registration "
                    "that `prove_path.py window-commit --pearl-passes` writes), so the record check refuses the record")
 
@@ -83,17 +85,6 @@ def program_of(phi: Mapping[str, Any], cls: tuple[int, int, int], scheme: str) -
     registered = PP.registered_of_serve(phi, None, None, PP.CAP_BITS)
     circuit = class_circuit(registered, PP.window_class_of(",".join(map(str, cls))), tables=PearlTables(scheme))
     return canonical_json(encode_program(circuit.program()[0])).decode()
-
-
-def limits(policy_bytes: bytes) -> dict[str, Any]:
-    """The rate rule's limits fixed from the policy alone: α = k/c and Γ = c, in the unit the policy counts c in."""
-    p = json.loads(policy_bytes)
-    a = Fraction(p["k"], p["c"])
-    return {"format": LIMITS_FORMAT, "alpha": [a.numerator, a.denominator], "gamma": int(p["c"]),
-            "unit": "Boolean gates by the policy's gate table, the unit of its c",
-            "count": {x: p.get(x) for x in ("c", "k", "n")},
-            "from": "the policy's c and k (alpha = k/c, gamma = c)",
-            "policy_sha512": hashlib.sha512(policy_bytes).hexdigest(), "written_by": "the developer"}
 
 
 def count(circuit: Path, roots: Path | None, pins: Path | None, policy: Path, day: str, out: Path,
@@ -166,6 +157,10 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
     held = out / R.REGISTERED["circuit"]
     if held.exists() and held.read_bytes() != body:
         raise Refused(f"{held} is not the serve's circuit record ({files['circuit']}) byte for byte")
+    try:
+        bounds = None if (out / LIMITS).exists() else L.of_policy(policy_bytes)
+    except ValueError as e:
+        raise Refused(f"{SERVED['policy']}: {e}") from None
     reg_dir.mkdir(exist_ok=True)
     said = []
     (out / R.REGISTERED["program"]).write_text(text)
@@ -178,10 +173,10 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
                                                   for r in log))
     said.append(f"registered/log.jsonl: {len(first)} first record(s), W"
                 + (", R chained right after W" if registration is not None else f"; {NO_REGISTRATION}"))
-    if not (out / LIMITS).exists():
-        doc = limits(policy_bytes)
-        (out / LIMITS).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-        said.append(f"{LIMITS}: alpha = {doc['alpha'][0]}/{doc['alpha'][1]} and gamma = {doc['gamma']}, {doc['from']}")
+    if bounds is not None:
+        (out / LIMITS).write_text(json.dumps(bounds, indent=1, sort_keys=True) + "\n")
+        said.append(f"{LIMITS}: alpha = {bounds['alpha'][0]}/{bounds['alpha'][1]} and gamma = {bounds['gamma']}, "
+                    f"{bounds['from']}")
     tag = "-".join(map(str, cls))
     run_dir = out.parent if out.name == "out" else out
     private = run_dir / "private"
@@ -189,7 +184,8 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
     counted(held, registration, pins, files["policy"], day or str(policy.get("written_utc", ""))[:10],
             out / f"block-counts-{tag}.json", private / f"block-counts-{tag}.json")
     said.append(f"block-counts-{tag}.json: the class circuit record's blocks judged against the policy's c, k and n"
-                + ("" if pins is not None else ", every read free (no --pins)"))
+                + ("" if pins is not None else ", with no --pins: no weight is held, so every registered read counts "
+                   "as fresh bits"))
     return said
 
 
@@ -200,7 +196,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--first", type=Path, nargs="+", default=[], metavar="FILE",
                     help="the registration records W follows, the first first: the deployment's registration of the weights")
     ap.add_argument("--registration", type=Path, metavar="R", help="the window's registration, chained right after W")
-    ap.add_argument("--pins", type=Path, metavar="WREG", help="the verifier's pins: the committer's weights registration")
+    ap.add_argument("--pins", type=Path, metavar="WREG", help="the verifier's pins: the committer's weights registration (none: every weight read "
+                         "counts as fresh)")
     ap.add_argument("--day", help="the UTC day served, YYYY-MM-DD (default the policy's written_utc day)")
     for what in ("circuit", "phi", "window"):
         ap.add_argument(f"--{what}", type=Path, metavar="FILE",

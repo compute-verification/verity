@@ -6,11 +6,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 import assemble as A
 import built as B
 import pytest
+import rate_limits as L
 import record as R
 import report
 from test_served_record import DEV_WHY, _run, case, made, no_out, stand_in  # noqa: F401
@@ -76,6 +80,7 @@ def test_a_made_tied_serve_assembled_holds_the_files_the_check_reads_and_its_acc
     assert calls == [{"circuit": out / R.REGISTERED["circuit"], "roots": tmp_path / "R.json", "pins": None,
                       "policy": out / A.SERVED["policy"], "day": DAY, "out": out / "block-counts-2-2-2.json",
                       "private": tmp_path / "private" / "block-counts-2-2-2.json"}]
+    assert said[-1].endswith("with no --pins: no weight is held, so every registered read counts as fresh bits")
     capsys.readouterr()
     code, doc = _run(["--from", str(tmp_path)], stand_in)
     assert (code, doc["record"]["block"]["value"] is not None, doc["record"]["no_number"]) == (0, True, None)
@@ -166,10 +171,65 @@ def test_the_limits_are_the_policys_own_and_limits_already_written_are_kept(case
     doc = json.loads((out / A.LIMITS).read_text())
     c, k = json.loads(policy)["c"], json.loads(policy)["k"]
     assert (doc["alpha"][0] * c, doc["alpha"][1] * k, doc["gamma"]) == (k * doc["alpha"][1], c * doc["alpha"][0], c)
-    assert doc["policy_sha512"] == hashlib.sha512(policy).hexdigest() and doc["format"] == A.LIMITS_FORMAT
+    assert doc["policy_sha512"] == hashlib.sha512(policy).hexdigest() and doc["format"] == L.FORMAT
     (out / A.LIMITS).write_text('{"alpha": [1, 2], "gamma": 3}')
     _assemble(case, tmp_path, names)
     assert json.loads((out / A.LIMITS).read_text()) == {"alpha": [1, 2], "gamma": 3}
+
+
+def test_a_policy_whose_c_and_k_give_no_limits_is_refused_before_anything_is_written(case, tmp_path) -> None:
+    names = tied(case, tmp_path)
+    out = tmp_path / "out"
+    policy = json.loads((out / A.SERVED["policy"]).read_text())
+    (out / A.SERVED["policy"]).write_text(json.dumps({**policy, "c": 0}))
+    with pytest.raises(A.Refused, match=r"the policy's c and k give no limits \(ZeroDivisionError"):
+        _assemble(case, tmp_path, names)
+    assert not (out / R.REGISTERED["program"]).exists() and not (out / A.LIMITS).exists()
+
+
+def _shells_limits() -> str:
+    """The Python `served_verdicts.sh`'s `limits()` runs, as the script holds it."""
+    text = (A.P.ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    m = re.search(r"^limits\(\) \{\n.*?<<'EOF'[^\n]*\n(.*?)\nEOF\n", text, re.S | re.M)
+    assert m, "benchmarks/one_stage/served_verdicts.sh has no limits() with a Python heredoc to hold to rate_limits"
+    return m.group(1)
+
+
+def _shell(policy: bytes, where: Path) -> tuple[int, Path]:
+    (where / "policy.json").write_bytes(policy)
+    out = where / "limits.json"
+    r = subprocess.run([sys.executable, "-S", "-", str(where / "policy.json"), str(out), *[""] * 6],
+                       input=_shells_limits(), capture_output=True, text=True, check=False)
+    return r.returncode, out
+
+
+@pytest.mark.parametrize("policy", [{"c": 14, "k": 6, "n": 16}, {"c": 1_000_003, "k": 4_096, "n": 1, "x": "y"}])
+def test_the_shells_default_limits_of_a_policy_are_rate_limits_own(tmp_path, policy) -> None:
+    """`served_verdicts.sh`'s `limits()` writes the same default limits file as `rate_limits.of_policy` of one policy,
+    with no ALPHA, GAMMA or held pair set."""
+    body = json.dumps(policy).encode()
+    code, out = _shell(body, tmp_path)
+    assert code == 0
+    assert json.loads(out.read_text()) == L.of_policy(body), (
+        "served_verdicts.sh's limits() and rate_limits.of_policy write different limits of one policy: the default "
+        "limits have one writer, so the shell's default calls rate_limits.of_policy")
+
+
+@pytest.mark.parametrize("policy", [{"c": 0, "k": 1}, {"k": 1}, {"c": 4, "k": -1}, {"c": "x", "k": 1}])
+def test_a_policy_that_gives_no_limits_gives_none_by_either(tmp_path, policy) -> None:
+    body = json.dumps(policy).encode()
+    code, out = _shell(body, tmp_path)
+    assert code != 0 and not out.exists()
+    with pytest.raises(ValueError):
+        L.of_policy(body)
+
+
+def test_rate_limits_loads_with_the_standard_library_alone() -> None:
+    """A Python with no packages loads `rate_limits` by path and writes the limits: ``-S`` reads no site-packages."""
+    r = subprocess.run([sys.executable, "-S", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import rate_limits; "
+                        "print(rate_limits.of_policy(b'{\"c\": 6, \"k\": 4}')['alpha'])", str(Path(L.__file__).parent)],
+                       capture_output=True, text=True, check=False)
+    assert (r.returncode, r.stdout) == (0, "[2, 3]\n"), r.stderr
 
 
 def test_main_exits_2_with_the_refusal(case, tmp_path, capsys) -> None:

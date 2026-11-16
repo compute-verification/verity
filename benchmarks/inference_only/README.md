@@ -247,9 +247,11 @@ writes beside it.
   chain is held from its first record, and R must name the Program and the circuit record's SHA-512. Without R no record
   names the Program, so the check refuses the record.
 - **The limits** (`inference-only-limits.json`) are written only where the serve wrote none: α = k/c and Γ = c of the
-  policy.
+  policy, by `rate_limits.py`, which loads only the standard library. A test holds `served_verdicts.sh`'s `limits()`
+  to the same file of one policy.
 - **The count** (`block-counts-CLASS.json`) is the integration's count of the class circuit record's blocks against
-  the policy, at `--pins` (none: every read is free). Its exact counts go to the run directory's `private/`.
+  the policy, at `--pins`. With no `--pins` no weight is held, so every weight read counts as fresh bits, and the step
+  says so. Its exact counts go to the run directory's `private/`.
 
 A refusal exits 2 before anything is written.
 
