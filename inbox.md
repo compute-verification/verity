@@ -88,3 +88,22 @@ model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
 
 12:48 PM PST. None of the three cards was posted by me, so there are no ids. Each `ask-daniel --as training` (dry run of card 1, twice) refused: "@training is held by bc-b43da88b-..., bc-a61a21a8-...; and this agent is bc-aedb35ab-...". The poster grant never reached the registry this VM reads (ran: `names list` shows posters [bc-a61a21a8-...] only). You then stopped A for good. So: (H)/(E) not posted; rho not posted; redteam/training not posted. I post none now: the rho and (H)/(E) cards are overtaken, and the redteam card stays with top, as you set at 18:20Z. If you want me to post the redteam card, my handle still can't; it needs the grant to show here.
 
+[2026-11-16T20:48Z] eb7271855488
+PAGE, 12:48 PM PST. PR 3 is pushed: draft #10564 (https://github.com/compute-verification/verity/pull/10564), branch `cursor/training-delete-cover-4207`, head `f83eacdf011966c82c0bdd55dbc7d7702ac9abd6`. 25 files, +8/−1,294. Opened with `research queue open --draft --issue TRN-177 --by training` without credentials: there is no Goal line and no Linear link (`research queue link 10564 --issue TRN-177` needs credentials). The lock and `claim_ids.json` are untouched. The body lists every lock record the update must remove, in both locks.
+
+Two stops, which you decide:
+
+1. compute-accounting's `security/Proofs/InferenceOnly/Cover.lean` and `Cover/Checked.lean` are stated over what this deletes, not merely importing it [read]. `Checked.lean` proves `CheckedCoverTraining` from `Slowdown.Cover.SecurityProofs.CoverTraining_rate` and imports `Properties.InferenceOnly.Desc.Cover`. `theta_desc` is there too. Their aggregator line `public import Proofs.InferenceOnly.Cover` in `security/Proofs/InferenceOnly.lean` goes with them. The branch does not build until compute-accounting removes them or lets me [inferred from the imports; not built].
+2. `benchmarks/slowdown/slowdown/classes.py`'s `cover` formula and its `premises.toml` rows cite `Slowdown.Cover.*`. After the lock update, `tests/benchmarks/slowdown/test_lean_names.py` fails until they go [inferred]. Removing them changes the calculator's binding class (`test_classes.py`, `test_scenario.py`, `test_analysis.py --bounds cover`), so it belongs with the later Python. Adding the names to `ALLOWED` would make it pass, but that list only shrinks.
+
+Edits to other lanes' files, all stated in the body:
+- lean's `security/Definitions.lean`: one unused import line removed.
+- network-accounting's `security/Properties/InferenceOnly/Desc.lean`: a docstring clause that named the deleted `Desc.Cover`.
+- `benchmarks/circuit_properties` prose: now names `Verity.Circuit` and `Slowdown.Cut.Work` instead of `Slowdown.Cover.Circuit` and `MulBlocks` [read Cut.lean's fields].
+
+Ran locally:
+- `test_doc_paths`, `test_retired_terms`, `lint/test_repo_retired_terms`, `test_glossary_lean_names`, `test_lean_vocabulary` and `test_claim_ids_table`: 91 passed.
+- `test_lean_names`: 3 passed, against the unchanged lock.
+
+Not run: the Lean build, the Lean check, the lock update and the suites. PR 4 is next.
+
