@@ -108,7 +108,7 @@ def main(argv=None) -> int:
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
-        cfg = json.loads((Path.cwd() / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+        cfg = json.loads((Path.cwd() / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
         target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server")["sm"]["count"]))}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT

@@ -1,5 +1,5 @@
 """The Lean template-instance queries (`verity-verify-proof template-query`, `Flock.HmRow`) against core's pinned vectors,
-`verity/circuits/tests/template_instance_vectors.json`: descriptor bytes in, units out, and every refusal.
+`tests/verity/circuits/template_instance_vectors.json`: descriptor bytes in, units out, and every refusal.
 
     python template_query_agree.py --lean BIN --vectors template_instance_vectors.json --out DIR
 
