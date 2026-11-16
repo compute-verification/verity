@@ -2,13 +2,13 @@
 # One-stage audit, run A5, over a GPU-served window: Llama-3.2-1B int8 batch-invariant eager on one H200 (ROW, default the B4
 # I256/O32 h200 row), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
 # --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1; or
-# A5_PARTITION's file, whose law is the sample) is committed at its C2 site before the bundle is sealed
+# A5_PARTITION's file, whose sampling design gives the sample) is committed at its C2 site before the bundle is sealed
 # (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte run root. Then the Commit's C2 replay on CPU from
 # the sealed bundle, and the window's audit, in the same job, so the window's private bodies (m*-private.bin,
 # v*-private.bin: rows and salts) never leave the machine. The audit is A5_COINS's:
-#  - dev (default): a5.sh (WINDOW=served, A5_ROW_DIR) on the bundle and window: Lean's draw on in-process development coins,
+#  - dev (default): a5.sh (WINDOW=served, A5_ROW_DIR) on the bundle and window: the Lean verifier's sample on in-process development coins,
 #    each Flock --zk session on a development challenger of its own, accepted by Flock's per-session Lean verify --zk and
-#    Lean's draw; SPOT's one-stage check (OneStageZk) does not run, and refuses such a case (it names no challenger).
+#    the Lean verifier's sample; SPOT's one-stage check (OneStageZk) does not run, and refuses such a case (it names no challenger).
 #  - challenger: records_audit.py audit of the window on ONE local challenger session (`--challenger local --deployed-key`:
 #    the auditor device's service run on this machine, a development stand-in for the auditor's, its key made for the run at
 #    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N units), every
@@ -66,8 +66,8 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 [ -n "$CKPT" ] && [ -d "$CKPT" ] || refuse "no $REPO@${REV:0:10} checkpoint under $HF_HOME (HF_HOME): make it with $BOOT"
 [ -e "$FA3G" ] || refuse "no guarded FA3 tap at $FA3G (A5_TAPS): make it with $BOOT"
 [ -e "$NT" ] || refuse "no norm tap at $NT (A5_TAPS): make it with $BOOT"
-[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its law"
-command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the row serves on one H200 (sm_90), which this machine doesn't show"
+[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its sampling design (its law key)"
+command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the workload serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
@@ -167,7 +167,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   run=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$B/binding_map.json") || return 21
   k=$("$TPY" -c 'import json, sys; l = json.load(open(sys.argv[1]))["law"]; print(l.split(":")[1] if l.startswith("subset:") else "")' "$PART")
   n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json")
-  [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a subset:K partition law, the rate rate:K/N over the window's N units" >&2; return 22; }
+  [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a partition whose sampling design (its law key) is subset:K, sampled at rate:K/N over the window's N proof blocks" >&2; return 22; }
   rate=rate:$k/$n
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
   "$TPY" -m verity_numerical.bench.generate --subcircuit "${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16}" --n 4 --seed 1 \
@@ -262,23 +262,23 @@ rate, card = read(s).get("law") if isinstance(read(s).get("law"), str) else None
 lines = [x for x in (d / "a5.log").read_text(errors="replace").splitlines() if x.startswith("A5 ")] if (d / "a5.log").is_file() else []
 audit = next((json.loads(x[3:]).get("audit") for x in reversed(lines) if '"audit"' in x), None) or {}
 accepted = "accepted" if audit.get("accepted") is True else "NOT accepted"
-sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
-          f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
+sample = (f"sampling design {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} proof blocks, delta {summ.get('delta', '?')}, "
+          f"sampled {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
 if os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
     rc = next((x.split()[1] for x in v2 if x.startswith("V2RC ")), None)
     verdict = {"0": "accepted", "1": "rejected", "2": "undecided or no case"}.get(rc, "did not run")
-    line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
+    line = (f"COINS sample: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
             f"--zk behind the Lean ZK server, every session's coin tree from that challenger session's release log (coin "
             f"trees {summ.get('coin_trees', '?')}); the audit {accepted}; SPOT's one-stage check (OneStageZk v2, "
             f"spot-one-stage-zk) {verdict}; {card}")
 else:
-    line = (f"COINS draw: development coins (in-process secrets.token_bytes), no auditor's challenger, by Lean's draw, {sample}; "
+    line = (f"COINS sample: development coins (in-process secrets.token_bytes), no auditor's challenger, by the Lean verifier's sampler, {sample}; "
             f"sessions: Flock {'plain' if summ.get('plain') else '--zk'}, each on a development challenger local to its session "
             f"(coin trees {summ.get('coin_trees', '?')}), arm {summ.get('arm', '?')} "
             f"({'the ZK server' if summ.get('firewall') else 'no ZK server'}); {accepted} by Flock's per-session Lean verify "
-            f"--zk and Lean's draw, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
+            f"--zk and the Lean verifier's sampler, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
             f"challenger); {card}")
 print(line)
 if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: the line rides as its text
