@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -85,7 +86,7 @@ def test_the_window_run_serves_on_node_a_on_the_launchs_card_and_cores(tmp_path)
         "ROW": f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][PLACEMENT['row']]}/{PLACEMENT['row']}"}
     assert words[words.index("--") + 1:] == ["taskset", "-c", "0-11", "bash", "adapters/vllm/tools/served_run/window.sh"]
     assert f"adapters/vllm/workloads/{PLACEMENT['row']}.json" in flags(got, "--send")
-    assert "${" not in got.stdout
+    assert set(re.findall(r"\$\{(\w+)", got.stdout)) <= {"HOME", *NODE_A["env_files"]}
 
 
 def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_path):
@@ -93,9 +94,9 @@ def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_pat
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert {k: env[k] for k in ("PP_CHALLENGER", "PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY")} == {
-        "PP_CHALLENGER": "gate", "PP_PEER": "vy-spot-glm53", "PP_GATE_KEY": "~/.ssh/vllm_lane_ed25519",
-        "PP_CHALLENGER_KEY": "tests/benchmarks/pouw/fixtures/challenger-key.json"}
-    assert "CHALLENGER_ENV" in env and "DEVELOPMENT" not in env
+        "PP_CHALLENGER": "gate:research@${VY_CHALLENGER_1_HOST}", "PP_PEER": "vy-spot-glm53",
+        "PP_GATE_KEY": "${HOME}/.ssh/vllm_lane_ed25519", "PP_CHALLENGER_KEY": "tests/benchmarks/pouw/fixtures/challenger-key.json"}
+    assert "DEVELOPMENT" not in env
     main = [Path(s) for s in flags(got, "--send") if s.endswith("/main.txt")]
     assert len(main) == 1 and main[0].read_text().split() == [git(tmp_path / "tree", "rev-parse", "HEAD")]
 
@@ -104,7 +105,7 @@ def test_the_window_run_takes_the_gates_coins_by_default_with_mains_line(tmp_pat
 def test_no_address_reaches_a_dry_runs_command(tmp_path, args):
     got = run(tmp_path, *args, "--dry-run", VY_CHALLENGER_1_HOST=ADDRESS, **ROW_OF_CARDS)
     assert got.returncode == 0, got.stderr
-    assert ADDRESS not in got.stdout + got.stderr and "VY_CHALLENGER_1_HOST" not in got.stdout
+    assert ADDRESS not in got.stdout + got.stderr
 
 
 def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
@@ -180,7 +181,7 @@ def test_development_coins_are_chosen_and_the_run_says_so(tmp_path):
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert (env["PP_CHALLENGER"], env["DEVELOPMENT"]) == ("local", "1")
-    assert not {"PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY", "CHALLENGER_ENV"} & env.keys()
+    assert not {"PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
     assert not [s for s in flags(got, "--send") if s.endswith("/main.txt")]
 
 
@@ -263,6 +264,71 @@ def test_the_deferred_audit_names_the_window_it_lacks(tmp_path):
     assert (got.returncode, got.stdout) == (1, "") and got.stderr.startswith("run.sh: SERVED_RUN is unset")
 
 
-@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "pin_link.sh", "copy.sh", "audit.sh", "handoff.sh"])
+@pytest.mark.parametrize("tie", [False, True])
+def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie):
+    row = PLACEMENT["tied_row" if tie else "row"]
+    got = run(tmp_path, "settings", f"some/{row[:14]}", VY_CHALLENGER_1_HOST=ADDRESS)
+    assert got.returncode == 0, got.stderr
+    env = dict(line.split("=", 1) for line in got.stdout.splitlines())
+    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "ROW_ID")} == {
+        "VENV": NODE_A["VENV"], "HIDDEN_SO": NODE_A["HIDDEN_SO"], "DISK_FLOOR_GB": NODE_A["DISK_FLOOR_GB"],
+        "H1_PEER": "vy-spot-glm53", "ROW_ID": row}
+    assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
+    assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
+
+
+def test_settings_refuse_a_model_no_row_places(tmp_path):
+    got = run(tmp_path, "settings", "some/other")
+    assert (got.returncode, got.stdout) == (1, "") and "not 'some/other'" in got.stderr
+
+
+def settings_tree(tmp_path: Path, mode: int = 0o600, sets: str = ADDRESS) -> Path:
+    tree = make_tree(tmp_path)
+    shutil.copy(HERE / "workload_env.sh", tree / SERVED_RUN / "workload_env.sh")
+    (tree / "adapters/vllm/manifests").mkdir(parents=True)
+    (tree / "adapters/vllm/manifests/checkpoints-int8.json").write_text('{"checkpoints": []}')
+    placement = tree / SERVED_RUN / "placement.toml"
+    text = placement.read_text().replace("/workspace/research/vllm-servedproof", str(tmp_path / "node"))
+    for var, path in NODE_A["env_files"].items():
+        f = tmp_path / Path(path).name
+        f.write_text(f"export {var}={sets}\n" if var == "VY_CHALLENGER_1_HOST" else f"{var}='192.0.2.22'\n")
+        f.chmod(mode)
+        text = text.replace(f'"{path}"', f'"{f}"')
+    placement.write_text(text)
+    return tree
+
+
+def test_a_command_runs_under_the_settings_with_the_env_files_filled_in(tmp_path):
+    settings_tree(tmp_path)
+    show = 'echo "$PP_CHALLENGER|$VY_CHALLENGER_1_HOST|$VENV|$H1_PEER|$ROW_ID"'
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "bash", "-c", show,
+              PP_CHALLENGER="gate:research@${VY_CHALLENGER_1_HOST}", VENV="/the/callers")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == f"gate:research@{ADDRESS}|{ADDRESS}|/the/callers|vy-spot-glm53|{PLACEMENT['row']}"
+    assert (tmp_path / "node/serve-root").is_dir()
+
+
+@pytest.mark.parametrize(("mode", "sets", "refusal"), [(0o644, ADDRESS, "is missing or has another mode"),
+                                                        (0o600, "", "sets no VY_CHALLENGER_1_HOST")])
+def test_a_command_starts_only_under_the_nodes_env_files(tmp_path, mode, sets, refusal):
+    settings_tree(tmp_path, mode, sets)
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "true")
+    assert (got.returncode, got.stdout) == (1, "") and refusal in got.stderr and ADDRESS not in got.stderr
+
+
+@pytest.mark.parametrize("demo", ["remote", "onsite_network"])
+def test_the_bindings_bind_the_demos_parties_by_the_env_files_names(demo):
+    root = HERE.parents[3]
+    cfg = tomllib.loads((root / "demos" / f"{demo}.toml").read_text())
+    text = (HERE / "bindings" / f"{demo}.toml").read_text()
+    bound = tomllib.loads(text)
+    parties = {p["name"] for p in cfg["party"]}
+    assert set(bound) <= parties and {c for t in bound.values() for c in t} <= set(cfg["protocols"])
+    values = " ".join(str(v) for t in bound.values() for c in t.values() for v in c.values())
+    assert set(re.findall(r"\$\{(\w+)\}", values)) <= {*NODE_A["env_files"], "HOME"}
+    assert not re.search(r"\d+\.\d+\.\d+\.\d+", text)
+
+
+@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0

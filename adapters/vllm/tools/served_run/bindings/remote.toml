@@ -1,0 +1,7 @@
+# `verity run --bindings` for `demos/remote.toml` with the workload on node A; each ${NAME} is filled where the workload runs
+# (`run.sh settings MODEL -- CMD`), from the node's env files (placement.toml's env_files) and its environment.
+[challenger.sampled-proofs]
+gate = "research@${VY_CHALLENGER_1_HOST}"
+peer = "vy-spot-glm53"
+key = "tests/benchmarks/pouw/fixtures/challenger-key.json"
+gate-key = "${HOME}/.ssh/vllm_lane_ed25519"

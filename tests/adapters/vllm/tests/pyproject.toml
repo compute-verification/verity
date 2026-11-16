@@ -86,12 +86,14 @@ untraced = [
 # rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
+# tests/tools/test_served_run.py holds the served run's bindings to the demos' configurations they bind.
 # tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
 # tests/protocols/test_pous_option.py runs the memory challenger, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
 inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
+          "demos/remote.toml", "demos/onsite_network.toml",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",

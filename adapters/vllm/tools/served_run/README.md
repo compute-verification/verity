@@ -136,6 +136,12 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    the audit's node, then `SERVED_RUN=… AUDIT_NODE=… run.sh audit` runs `served_verdicts.sh v3c` there at the window's
    commit (`V3C_PEER` the audit's node; `V3C_AUDIT_TIMEOUT` and `V3C_WARM_JOBS` from the launch) and packs the compose
    hand-off into its `out/handoff/`.
+5. `run.sh settings MODEL [-- CMD...]`, for a workload that `verity run` starts on node A: node A's settings for the
+   row that serves MODEL (its venv, taps, traced Build, weights, peer and disk floor, and the tied form's for the BF16
+   base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
+   none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
+   set is filled in, the INT8 pin linked and the venv's CUDA headers found. `bindings/` holds `verity run --bindings`
+   for each demo's configuration, whose addresses are such `${NAME}`s.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.
