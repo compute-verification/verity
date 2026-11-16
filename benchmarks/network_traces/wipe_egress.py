@@ -10,7 +10,7 @@ RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
 FILE), and exits 0 when the record is covered, 1 when it isn't.
 
-**The count.** The network attester's schedule (`NetworkCertifierParams`) fixes what each 3.2 s execution phase can carry out of
+**The count.** The network attester's schedule (`NetworkAttesterParams`) fixes what each 3.2 s execution phase can carry out of
 the node: its egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for
 ``window`` buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every execution
 phase that meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the network attester host's
@@ -42,7 +42,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 
 from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
@@ -53,12 +53,12 @@ END, DEPLOYMENT, CERTIFICATES = "end.json", "out/deployment.json", "out/certific
 FILES = (END, DEPLOYMENT, CERTIFICATES)
 
 
-def capacity_bits(params: NetworkCertifierParams) -> int:
+def capacity_bits(params: NetworkAttesterParams) -> int:
     """The most bits one execution phase carries out: every cell of its egress and fails records, B bytes each."""
     return sum(g.buckets * g.allocation * g.frame_bytes * 8 for g in (params.grid, params.fails_grid))
 
 
-def window_ns(params: NetworkCertifierParams) -> int:
+def window_ns(params: NetworkAttesterParams) -> int:
     return params.window * params.bucket_ms * 1_000_000
 
 
@@ -102,7 +102,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     if accepted and CERTIFICATES not in files:
         raise ValueError(f"the gate run has no {CERTIFICATES}, which the gate publishes of a run its check accepted: "
                          "give its `fetch` bundle or the directory it unpacks to")
-    params = NetworkCertifierParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     origin, width, n = origin_ns(dep["origin_unix"]), window_ns(params), dep["windows"]
     windows = covering(origin, width, t0, t1, pad)

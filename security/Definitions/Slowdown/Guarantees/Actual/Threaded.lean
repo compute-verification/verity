@@ -37,7 +37,7 @@ needs the read bound in its determination form.
 
 open Slowdown
 
-namespace Accounting.Guarantees.Actual
+namespace ResourceAccounting.Guarantees.Actual
 
 open Verity InferenceOnly Finset
 
@@ -184,4 +184,4 @@ def ThreadedRuntimeDarkSlots : Prop :=
       (T.M.card : ℝ) ≤
         M.dark.card + (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a
 
-end Accounting.Guarantees.Actual
+end ResourceAccounting.Guarantees.Actual

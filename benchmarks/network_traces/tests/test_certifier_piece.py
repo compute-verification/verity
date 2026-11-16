@@ -682,7 +682,7 @@ def _reorder(grid) -> None:
 @pytest.mark.slow
 def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_cut_clocked_or_ordered_otherwise(
         tmp_path, rows_exe):
-    """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkCertifier.Rows.audit`) on the
+    """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkAttester.Rows.audit`) on the
     records the network attester's own publisher writes and signs, under the record of its deployment: the synthetic
     run's accepted; the same run with a cell of window 0's egress re-cut, connection 1's cells re-clocked or a
     bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;

@@ -10,12 +10,12 @@ meta import Identity.Domains
 /-!
 # The count over a span between two marks, a core protocol: `verity/certifier/span/v0`
 
-A span runs on one link of the network certifier, from the execution phase of a start mark to the execution phase of
+A span runs on one link of the network attester, from the execution phase of a start mark to the execution phase of
 an end mark. The count decides, from certificates alone, whether every execution phase of the span and of its tail is
 certified under the schedule, and how many bits can have left on the link over them. Its Python mirror is
 `verity/protocols/accounting/certifier/verifier/span.py`, held to it by `tests/test_network_span_protocol.py`.
 
-**A mark** is 64 bytes handed to the network certifier, which certifies them at an execution phase of the link
+**A mark** is 64 bytes handed to the network attester, which certifies them at an execution phase of the link
 (`certificate.CertifiedMark`): it signs the mark hidden under 64 bytes of its own coins,
 
     signed digest = SHA-512("verity-network-certifier/mark/v1" ‖ salt ‖ mark)     (`markDigest`)
@@ -29,14 +29,14 @@ the execution phase. The mark and its salt are witness; the certificate is a sig
     {"key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool},
      "schedule": {…}, "session": hex(session)}
 
-the network certifier's LMS key and its parameters, the certifier session's id (32 bytes), the link, its name held to
+the network attester's LMS key and its parameters, the certifier session's id (32 bytes), the link, its name held to
 what the period's check holds it to, at most 65,535 UTF-8 bytes, and the schedule, as the period's check reads it (its
 `scheduleOf`).
 
 They may hold the registered hardware too, two more keys that come together: `"site"`, the site of a registration
 log's view (`Registered.siteOf`), and `"head"`, the head of the log it was read at, a string the count carries and
 doesn't read. The link and the key are then read off the site (`Registered.registered`): the link is one of the site's
-that joins a network certifier and a host, and the key, as its lower-case hex, is the key that certifier registered. A
+that joins a network attester and a host, and the key, as its lower-case hex, is the key that certifier registered. A
 refusal there is a refusal of the parameters. Nothing here holds the site to an accepted log: its caller does.
 
 **Commitment**: the two marks, the start's then the end's, each
@@ -66,7 +66,7 @@ phases are not public, and a reason is part of an answer.
    marks link name, is an egress certificate, is the key's, signs `markDigest` of its salt and its mark, and its
    signature verifies in the certifier session.
 2. The marks are in order: w_s ≤ w_e, the execution phases their certificates name.
-3. The span's tail is `tail` execution phases. The network certifier releases a connection's response late: its cell
+3. The span's tail is `tail` execution phases. The network attester releases a connection's response late: its cell
    i leaves D + ⌊i / r⌋ buckets after its admission, and it has at most `egress_cells` cells. It reads a server's bytes
    only on a connection it opened when it admitted that client's connection, so the bytes it has read by the end mark
    leave in cells of connections admitted by then, the last of them D + ⌊(egress_cells − 1) / r⌋ buckets after the end
@@ -74,7 +74,7 @@ phases are not public, and a reason is part of an answer.
 4. The evidence shows each execution phase from w_s to w_e + tail once, in order: one outside them, one shown twice
    and a missing one each reject.
 5. Each execution phase's two certificates are egress certificates on their link names at that execution phase and
-   verify under the key in the session. The network certifier certifies only a complete record, and none of an
+   verify under the key in the session. The network attester certifies only a complete record, and none of an
    execution phase it faulted or refused a connection in, so a span that holds such a phase is rejected.
 6. Each execution phase's egress cells' head is the link's at that execution phase, names the schedule's digest and
    is signed under the key in the session (the row registration's check, `check_registration` in Python). No
@@ -114,7 +114,7 @@ def markBytes : Nat := 64
 def markInput (salt mark : ByteArray) : ByteArray := markTag ++ salt ++ mark
 
 /-- `certificate.mark_digest`: the digest a mark certificate signs, the 64-byte mark hidden under the 64 bytes the
-network certifier sampled for it. -/
+network attester sampled for it. -/
 def markDigest (salt mark : ByteArray) : ByteArray := Flock.Sha512.hash (markInput salt mark)
 
 /-- `certificate.marks_link`: the link name a link's marks are certified under. -/
@@ -138,7 +138,7 @@ structure Params where
   /-- What the registered hardware states of the link and the key, when the parameters hold the site. -/
   registered : Option Registered := none
 
-/-- A mark as the network certifier hands it back (`certificate.CertifiedMark`): its certificate, the certificate's
+/-- A mark as the network attester hands it back (`certificate.CertifiedMark`): its certificate, the certificate's
 bytes as the commitment holds them, the salt and the 64 bytes marked. -/
 structure Mark where
   certificate : Certificate
@@ -473,7 +473,7 @@ def guardMark (phase fill : UInt8) : ByteArray :=
     ⟨Array.replicate 64 3⟩, ⟨Array.replicate 64 6⟩, some (4 * 1572864))
 #guard (namedOf guardParams (guardMark 7 1 ++ guardMark 5 4)).map (·.egressBits) == some none
 #guard (namedOf guardParams (guardMark 5 1)).isNone && (namedOf "{}" (guardMark 5 1 ++ guardMark 7 4)).isNone
-/-- The registered hardware of the `#guard`s: the link `eth0` joins the host `node0` and the network certifier `cert0`,
+/-- The registered hardware of the `#guard`s: the link `eth0` joins the host `node0` and the network attester `cert0`,
 which registers `key`, and `out0` is the certifier's other half, to the outside. -/
 def guardSite (key : String) : Json :=
   Core.Site.toJson ⟨[],

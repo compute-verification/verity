@@ -1,8 +1,8 @@
-"""The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkCertifier`, the role
+"""The network attester's device as a party of the deployment layer (`verity.runtime`): `NetworkAttester`, the role
 `parties.NETWORK_CERTIFIER` of the certifier's manifest (`parties.MANIFEST`), and `PROTOCOL`, that manifest with it.
 
 Its needs are the manifest's: its clock and coins are the runtime's sources, and its signing key the capability
-`signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_attester.NetworkCertifierParams`, under ``params``), the
+`signing-key` (`certificate.Signer`). Its parameters are the schedule's (`network_attester.NetworkAttesterParams`, under ``params``), the
 number of execution phases (``windows``) and the first one's opening on its clock in ns (``origin``).
 
 Its life is the methods its turns call:
@@ -16,7 +16,7 @@ Its life is the methods its turns call:
 `hand_out`, `hand_out_run` and `close` are written: they make the manifest's messages out of the documents the device
 keeps. `open_session`, `certify`, `sign` and `collect` raise `NotImplementedError` naming the goal
 `network/certifier-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
-the runtime has no form for yet (`device_needs`): the relay (`network_attester.NetworkCertifier`), its pacer and its publisher process,
+the runtime has no form for yet (`device_needs`): the relay (`network_attester.NetworkAttester`), its pacer and its publisher process,
 started by the auditor device's relay session.
 """
 
@@ -30,7 +30,7 @@ from verity.party import Action, Finish, Identity, Params, Received, Send, Timer
 from verity.protocol import ProtocolDef
 
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 GOAL = "network/certifier-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
@@ -85,19 +85,19 @@ class Phase:
     out: Out | None = None
 
 
-class NetworkCertifier:
+class NetworkAttester:
     """The network attester's device on one link: `start` and `on` are the runtime's calls, and the rest its life."""
 
     def __init__(self) -> None:
         self.identity: Identity | None = None
-        self.schedule: NetworkCertifierParams | None = None
+        self.schedule: NetworkAttesterParams | None = None
         self.windows = 0
         self.closes: tuple[int, ...] = ()
         self.next = 0
 
     def start(self, params: Params, identity: Identity) -> list[Action]:
         self.identity = identity
-        self.schedule = NetworkCertifierParams(**params["params"])
+        self.schedule = NetworkAttesterParams(**params["params"])
         self.windows = params["windows"]
         span = self.schedule.window * self.schedule.bucket_ms * 1_000_000
         self.closes = tuple(params["origin"] + (w + 1) * span for w in range(self.windows))
@@ -168,10 +168,10 @@ class NetworkCertifier:
         return out + [Finish({"windows": self.next})]
 
 
-def _network_attester() -> NetworkCertifier:
-    return NetworkCertifier()
+def _network_attester() -> NetworkAttester:
+    return NetworkAttester()
 
 
 PROTOCOL = ProtocolDef(NC.MANIFEST, {NC.NETWORK_CERTIFIER: _network_attester})
 
-__all__ = ["GOAL", "Kept", "NetworkCertifier", "Opened", "Out", "PROTOCOL", "Phase", "SENDS", "SignedRecord"]
+__all__ = ["GOAL", "Kept", "NetworkAttester", "Opened", "Out", "PROTOCOL", "Phase", "SENDS", "SignedRecord"]

@@ -102,7 +102,7 @@ them.
 
 **The network attester it serves** (`Class.serves`): a class takes every run of a network attester whose B, r, lanes
 and slot stride `every` are its own (B, r, lanes and EVERY; the network attester's window is whole slot strides,
-`NetworkCertifierParams`), whose `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in
+`NetworkAttesterParams`), whose `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in
 S_{A−1}, or its ingress failed), whose delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most
 admitted + D, where its egress starts), whose `egress_cells` is at most KO + 1 (a response's ids fit `out`) and whose
 egress form is the id form, the egress record's (the cells `io_tie.parse_cell` reads, and no others leave). The
@@ -156,7 +156,7 @@ from verity.protocols.resource_accounting.network.prover import io_ids as II
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams
 
 BIT, BYTE = HC.BIT, HC.BYTE
 #: the state's head: `now`, `phase`, `last`
@@ -251,7 +251,7 @@ class Class:
         x -= self.EVERY if x >= self.EVERY else 0
         return (now + self.WITHIN + (self.EVERY - x if x else 0)) % (1 << 32)
 
-    def serves(self, params: NetworkCertifierParams) -> None:
+    def serves(self, params: NetworkAttesterParams) -> None:
         """ValueError, naming the fix, unless the scan takes every run of the network attester at `params` (the module
         docstring's "The network attester it serves")."""
         need = {"cell_bytes": (params.cell_bytes == self.B, f"= B = {self.B}"),

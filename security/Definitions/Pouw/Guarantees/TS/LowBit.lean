@@ -7,7 +7,7 @@ public import Definitions.Pouw.Receipt.Li
 # A one-register fold's low bit (trusted)
 
 What a lower bound that reads a fold through its low bit can see, each `def G : Prop` proved as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.LowBit`:
+`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.LowBit`:
 
 * `LiLowBit`: li's chain with odd multipliers has bit 0 the XOR of its start's, its keys' and its words' bits 0.
 
@@ -21,9 +21,9 @@ register.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- **li's low bit is a parity.** For words of `n + 1` bits, any half steps with odd multipliers and any start `y`:
 bit 0 of li's chain is the XOR of `y`'s bit 0 and, half step by half step, the bits 0 of `d₀`, the key `k` and
@@ -33,4 +33,4 @@ def LiLowBit : Prop :=
     (Pouw.Receipt.liChain (hs.map Pouw.Receipt.LiOddHalfStep.val) y).getLsbD 0 =
       hs.foldl (fun x h => x ^^ h.2.2.1.getLsbD 0 ^^ h.1.getLsbD 0 ^^ h.2.2.2.getLsbD 0) (y.getLsbD 0)
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

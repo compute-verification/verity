@@ -45,7 +45,7 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
+Lean's `ResourceAccounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
 
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
@@ -84,7 +84,7 @@ H1 (cgemm.cu's c_l7qs, `verity/protocols/resource_accounting/compute/pouw/prover
 bits) on the tile's rows and W' = W + c + U (c the coin bits, U period 32) on its columns, and absorbs one call-wide fold a
 thread: T_0 .. T_(KS-1), then O' = T_last - U A_0 and D_d = U A_d (1 <= d < m) for the digits A_d of X's residue sums
 (`call_words`, m = `n_digits`(KS)). fx1 multiplies word q by `fx1_key`(q) first. Its receipt is a thread's 8 chain words
-y_i ^ rotl(z_i, 16), R[(tile 512 + ctid) 8 + i]; case (a) (`Accounting.TS.DuoUnits`, `Fx1Units`) needs every chain's full
+y_i ^ rotl(z_i, 16), R[(tile 512 + ctid) 8 + i]; case (a) (`ResourceAccounting.TS.DuoUnits`, `Fx1Units`) needs every chain's full
 state, R[(tile 512 + ctid) 16 + i], (y_0..7, z_0..7).
 
     PouwCallCheck_v1{KS, FOLD, OUT}  (x: Array<KS, Array<64, Array<32, i8>>>, xsel: Array<16, bit>,

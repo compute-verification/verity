@@ -284,13 +284,13 @@ def test_a_network_attester_under_the_tick_streams_the_watermark_to_the_server(t
     corpus = mod("corpus")
     started = []
 
-    class NetworkCertifier:
+    class NetworkAttester:
         def __init__(self, argv, **kwargs):
             started.append(argv)
             self.stdout = io.StringIO(json.dumps({"listening": ["127.0.0.1", 1]}) + "\n")
 
     monkeypatch.setattr(corpus.subprocess, "run", lambda *args, **kwargs: None)
-    monkeypatch.setattr(corpus.subprocess, "Popen", NetworkCertifier)
+    monkeypatch.setattr(corpus.subprocess, "Popen", NetworkAttester)
     (tmp_path / "warden").mkdir()
     (tmp_path / "warden" / "deployment.json").write_text('{"run_id": "ab"}')
     for on in (False, True):

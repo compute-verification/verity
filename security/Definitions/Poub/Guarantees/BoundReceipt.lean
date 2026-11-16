@@ -37,9 +37,9 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate Accounting.BoundReceipt
+open ResourceAccounting ResourceAccounting.Rate ResourceAccounting.BoundReceipt
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -57,7 +57,7 @@ receipts that leave a location are those it made. The bound is per block and hol
 since the mix alone makes the receipt unpredictable; the verifier taking each block from either location costs the
 factor `2`.
 
-Proof: `Accounting.SecurityProofs.Colocation`: off its queries, a location's receipt is the same for every value of the
+Proof: `ResourceAccounting.SecurityProofs.Colocation`: off its queries, a location's receipt is the same for every value of the
 mix at the receipt's point (`Chip.run_congr`), so at most one value of the mix there matches it.
 
 Frozen (no-function, hash): a bound in the random-oracle model over abstract chip programs, which no Lean function of
@@ -111,7 +111,7 @@ are functions of the store and the tile outputs, never of the mix. Over a window
 each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
 a digest of each block that makes the next pass's receipts without it, which this game doesn't cover.
 
-Proof: `Accounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
+Proof: `ResourceAccounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
 each tile output and mix, the rest's at each store and mix), with the GPU's mix at the tile outputs and the rest's at
 the store.
 
@@ -142,7 +142,7 @@ receipts the rest relays to the GPU are among the at most `m` blocks the rest ca
 sources see the oracle without querying it, which costs that bound `m·b` and `C(N, m)·2^L/2^(h·m)`; here the only
 other location is the rest, whose mix queries `q_z` counts.
 
-Proof: `Accounting.SecurityProofs.BoundReceiptLinkInteractive`, as `BoundReceiptLink`'s, with the guess taken over the
+Proof: `ResourceAccounting.SecurityProofs.BoundReceiptLinkInteractive`, as `BoundReceiptLink`'s, with the guess taken over the
 node's queries.
 
 Frozen (no-function, hash): as `Colocation`, a bound in the random-oracle model over abstract chip programs. -/
@@ -179,7 +179,7 @@ the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs its
 `RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m` rows and a reduction of `k`, it is
 `k/(4m)` times that on the outbound side.
 
-Proof: `Accounting.SecurityProofs.BoundReceiptShare`, by division.
+Proof: `ResourceAccounting.SecurityProofs.BoundReceiptShare`, by division.
 
 Frozen (no-function): an arithmetic fact about the covered blocks, about no function of the remote protocol's code. -/
 def BoundReceiptShare : Prop :=
@@ -217,7 +217,7 @@ def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
 domain, target and error: `Pouw.Assumptions.TT CM P D γ₀ ε` implies `TileUnpredictable CM P Wmm D γ₀ ε`. A checked
 unit whose work is above `T/(1 − γ₀)` puts the checked units' total work above it.
 
-Proof: `Accounting.SecurityProofs.TileUnpredictableOfTT`.
+Proof: `ResourceAccounting.SecurityProofs.TileUnpredictableOfTT`.
 
 Frozen (conjecture, no-function, hash): it carries the named open conjecture TT, over PoUW's game with a uniform oracle,
 to one unit, about no Lean function of the protocol's code. -/
@@ -230,7 +230,7 @@ def TileUnpredictableOfTT : Prop :=
 `β`, cost model that hashes nothing, NCP parameters, domain on which `g₀ ≥ P.d/(3k)`, target and error:
 `Pouw.NCP.Assumptions.TTNCP_U β CM P D g₀ δ` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D g₀ δ`.
 
-Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
+Proof: `ResourceAccounting.SecurityProofs.TileUnpredictableOfNCPU`.
 
 Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's named conjecture on route U. -/
 def TileUnpredictableOfNCPU : Prop :=
@@ -272,7 +272,7 @@ the correct units' total credit above it. It is generic in `P`, so it takes rev1
 `pearlCProtocolDevRev1`) and an assumption of `TTOutW1`'s shape at a protocol whose tickets are the k-slice
 accumulators.
 
-Proof: `Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`.
+Proof: `ResourceAccounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`.
 
 Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for an assumption of `TT_OUT`'s shape at W1 at any
 Pearl-C protocol. -/
@@ -291,7 +291,7 @@ def TileUnpredictablePearlCOfTTOut : Prop :=
 the bound entries, `boundEntries P keep`, gives it for the full set `P` and for every `boundEntries P keep'` with
 `keep ⊆ keep'`, at its credit or below.
 
-Proof: `Accounting.SecurityProofs.TileUnpredictableMono`.
+Proof: `ResourceAccounting.SecurityProofs.TileUnpredictableMono`.
 
 Frozen (no-function, hash): an implication between hypotheses over PoUW's game with a uniform oracle, about no Lean
 function of the protocol's code. -/
@@ -302,4 +302,4 @@ def TileUnpredictableMono : Prop :=
     P'.Y = P.Y → (∀ sh, P.checkIdx sh ⊆ P'.checkIdx sh) → (∀ sh, credit' sh ≤ credit sh) →
       TileUnpredictable CM P credit D γ₀ ε → TileUnpredictable CM P' credit' D γ₀ ε
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

@@ -28,7 +28,7 @@ from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDE
 from verity.protocols.resource_accounting.network.verifier import scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
@@ -565,7 +565,7 @@ def test_a_bad_response_cap_is_refused(server):
 
 def test_a_schedule_with_connection_rows_is_refused_by_name(server):
     """A schedule with lengths rows, of either form, with content rows or without, and with request words, is one
-    the network attester builds (`NetworkCertifierParams`), and the period check reads it and refuses it by name at the
+    the network attester builds (`NetworkAttesterParams`), and the period check reads it and refuses it by name at the
     parameters, Lean as the
     mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
     it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, with no
@@ -586,7 +586,7 @@ def test_a_schedule_with_connection_rows_is_refused_by_name(server):
 
 
 def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
-    """A schedule whose lengths rows, content rows or request words `NetworkCertifierParams` refuses (`PC.bad_lengths`) is
+    """A schedule whose lengths rows, content rows or request words `NetworkAttesterParams` refuses (`PC.bad_lengths`) is
     refused at the parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with
     connection rows is."""
     case = build("rows-honest", 0, small=True)
@@ -1504,7 +1504,7 @@ def test_a_samples_bound_is_its_stratas_own_summed():
 
 
 def test_the_rows_forms_cells_are_the_schedules(server):
-    """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `NetworkCertifierParams.rows_cells`): `egress_cells`
+    """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `NetworkAttesterParams.rows_cells`): `egress_cells`
     for each of the `lanes · m · window` connections the network attester can carry, so an accepted period's schedules
     and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
     cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
@@ -1525,7 +1525,7 @@ def test_the_rows_forms_cells_are_the_schedules(server):
             assert reference(broken)["reason"].startswith("params: cells:"), (n, reference(broken))
             verdict, got = D.replay(PORT, broken, server)
             assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
-    four = NetworkCertifierParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
+    four = NetworkAttesterParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
                         ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
     assert len(four.rows_cells(1)) == 128 and sum(clog2(c + 1) for c in four.rows_cells(1)) == 384
 
@@ -1660,7 +1660,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit sampled in part with at most 2
     incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
     them."""
-    p = Params((PC.Audit(0, 3, "", 10),), (7, 2), 0, 2, "a", (), "", 1, NetworkCertifierParams(),
+    p = Params((PC.Audit(0, 3, "", 10),), (7, 2), 0, 2, "a", (), "", 1, NetworkAttesterParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
     (scan,) = out["scans"]
