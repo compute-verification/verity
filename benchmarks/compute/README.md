@@ -225,19 +225,21 @@ It needs:
   flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
   made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
   clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
-  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. Neither the time it takes
-  nor the disk the environment fills has been measured;
-- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import): `research run`
-  puts it on `PYTHONPATH`; a bare `bash benchmarks/compute/serve.sh` needs it there where `benchmarks/harness/env.sh`
-  doesn't put it (`export PYTHONPATH=$PWD/adapters/torch:$PYTHONPATH`); serve.sh checks it before any step;
+  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. In our measured run from a
+  fresh clone, the clone took 191 s and 2.1 GB, and the bootstrap took 1,069 s and filled `WORK` with 15 GB;
+- this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import):
+  `benchmarks/harness/env.sh`, which serve.sh sources, puts every workspace member's packages on `PYTHONPATH`, this
+  one's among them, and serve.sh checks it before any step;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
   in `~/.elan/bin`, which serve.sh also checks first;
 - about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
   200 MB;
 - memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
-  run's processes peaked at 400 GB resident, summed over the workers.
+  run's processes peaked at 400 GB resident, summed over the workers. It grows with `JOBS`: a smaller `JOBS` holds
+  less and makes `python-verify` slower.
 
-A run takes about an hour. Our measured run, on one H200 of a 96-core machine with `COINS=local`, took 59 minutes. The steps took:
+A run takes one to one and a half hours: our measured runs took 59 minutes on one H200 of a 96-core machine with
+`COINS=local`, and 92 minutes on a 36-core machine. On the 96-core run the steps took:
 
 | step | seconds |
 |---|---|
