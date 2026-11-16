@@ -103,8 +103,8 @@ the per-member form accepted the session `s` at its member's statement and `recJ
 form's setup of the session (`setupAt`'s, the one `Flock.Zk.verify` accepted the record at) has one table `T` alone,
 each of its statements under a scheme of the registry, the record's text parses as `recJ`, and `recJ` gives each of
 `T`'s two rep streams `FlockDeploy.repRounds` of the setup's first statement's rounds (`verify_reps`). -/
-theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)} {bs : Core.Blobs}
-    {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
+theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {lt : List (String × ByteArray)}
+    {bs : Core.Blobs} {rd : Spot.OneStageZk.Reads} {pop : Flock.V Unit} {s : Spot.OneStageZk.RunFiles}
     (hacc : MemberChecks.SessionAccepted
       (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop) bs s)
     {recJ : Json} (hrec : Verity.Sampled.recordOn bs s = some recJ) :

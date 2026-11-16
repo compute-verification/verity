@@ -21,7 +21,7 @@ and `keys f` and `ops f` the key and ring queries it asks.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pous
 
@@ -68,4 +68,4 @@ def ops (f : RingQry B w → Bits w) : ℕ :=
 
 end RingResponder
 
-end Accounting
+end ResourceAccounting

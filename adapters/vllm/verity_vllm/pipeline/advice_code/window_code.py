@@ -1,6 +1,6 @@
 """The advice code's window coder: the residual's coder, canonical, prefix-free and self-delimiting per window.
 
-The advice code (`codec`) charges nothing for what is certified (the network certifier's admission order, the request
+The advice code (`codec`) charges nothing for what is certified (the network attester's admission order, the request
 records, the release buckets), replayed (the scheduler replay, `replay`) or derived (`derived`'s rules), and sends only the
 residual, one `Window` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:
@@ -70,8 +70,8 @@ from dataclasses import asdict, dataclass
 from itertools import accumulate
 from typing import Any, NamedTuple
 
-from verity.protocols.accounting.certifier.prover.window_charge import Advice as Window
-from verity.protocols.accounting.certifier.verifier.arith_encode import CW
+from verity.protocols.resource_accounting.network.prover.window_charge import Advice as Window
+from verity.protocols.resource_accounting.network.verifier.arith_encode import CW
 from verity_vllm.pipeline.advice_code import arith as C
 
 __all__ = ["Book", "capped", "Caps", "code_executionPhase", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",

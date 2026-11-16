@@ -33,7 +33,7 @@ pass `j`'s keys and the store are a uniform fiber of the session's coins (`Run.p
 
 @[expose] public section
 
-namespace Accounting.RateSketch.Prover
+namespace ResourceAccounting.RateSketch.Prover
 
 open scoped ENNReal
 
@@ -108,11 +108,11 @@ theorem card_bad_keys_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq D
     _ = g * qtot * Fintype.card (Data N m ρ X) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_assoc, mul_comm qtot]
 
-end Accounting.RateSketch.Prover
+end ResourceAccounting.RateSketch.Prover
 
-namespace Accounting.Remote.Sketch
+namespace ResourceAccounting.Remote.Sketch
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_mono pr_or_le)
@@ -126,7 +126,7 @@ def Miss (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin
 
 /-- Some sector block of the signs is below rank `r`. -/
 def LowRank (r : ℕ) (σ : SketchSigns ks m) : Prop :=
-  ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
+  ∃ u, ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
 
 /-- A correct receipt of a block with a sector never obtained: its tag was never queried, or a query named the block's
 sketch with that sector unobtained. -/
@@ -152,7 +152,7 @@ theorem miss_split
   · exact Or.inl hq
 
 /-- The rank tail at one candidate's key, over the store and the key. -/
-theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumptions.SketchRank ks m r ε) :
+theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε) :
     pr (fun z : Data N m 0 Sector × Key N m h ks => LowRank r z.2.1) ≤ ε := by
   let _ : Fintype (Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   let e : Data N m 0 Sector × Key N m h ks ≃
@@ -161,8 +161,8 @@ theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumption
       invFun := fun y => (y.2.1, (y.1, y.2.2))
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
-  rw [Accounting.Rate.pr_equiv e]
-  exact Accounting.Rate.pr_le_of_fiber _ _ (fun _ => hRank)
+  rw [ResourceAccounting.Rate.pr_equiv e]
+  exact ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun _ => hRank)
 
 /-- The tag guess at one candidate's key: `1/2^h` per block, over the store and the key. -/
 theorem pr_guess_key_le
@@ -176,15 +176,15 @@ theorem pr_guess_key_le
       invFun := fun y => (y.1.1, (y.2, y.1.2))
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
-  rw [Accounting.Rate.pr_equiv e]
-  exact Accounting.Rate.pr_le_of_fiber _ _ (fun σ => Prover.pr_guess_le A σ t)
+  rw [ResourceAccounting.Rate.pr_equiv e]
+  exact ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun σ => Prover.pr_guess_le A σ t)
 
 /-- **One pass, all its candidates.** For a fixed family of `C` candidate devices on the store, each at its own uniform
 key, within the pass's budget of `qtot` queries: some candidate misses with probability at most
 `C·(ε + N/2^h) + qtot/2^(8r)`. -/
 theorem pr_pass_le {C : ℕ}
     (A : Fin C → RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
-    (r qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (r qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
     (hq : ∀ (κ : Fin C → Key N m h ks) (D : Data N m 0 Sector),
       ∑ c, (((A c).prog (κ c).1 D).queries (κ c).2 D).length ≤ qtot) :
     pr (fun x : Data N m 0 Sector × (Fin C → Key N m h ks) => ∃ c, Miss (A c) (x.2 c) x.1)
@@ -198,11 +198,11 @@ theorem pr_pass_le {C : ℕ}
     rintro ⟨D, κ⟩ ⟨c, t, ht, u, hu⟩
     by_cases hl : LowRank r (κ c).1
     · exact Or.inl (Or.inl ⟨c, hl⟩)
-    · have hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix ((κ c).1.block u)).map (Int.cast : ℤ → ℚ)).rank := by
+    · have hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix ((κ c).1.block u)).map (Int.cast : ℤ → ℚ)).rank := by
         intro u
         by_contra hlt
         exact hl ⟨u, by omega⟩
-      have hfib := Accounting.SecurityProofs.SketchRankFiber ks m r (κ c).1 hr
+      have hfib := ResourceAccounting.SecurityProofs.SketchRankFiber ks m r (κ c).1 hr
       rcases miss_split (A c) (κ c).1 (κ c).2 D g hfib t u hu with hg | hb
       · exact Or.inl (Or.inr ⟨c, t, ht, hg⟩)
       · exact Or.inr ⟨c, hb⟩
@@ -233,7 +233,7 @@ theorem pr_pass_le {C : ℕ}
         simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
       refine (Finset.sum_le_sum (fun c _ => hc c)).trans (le_of_eq ?_)
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-  · refine Accounting.Rate.pr_le_of_fiber _ _ (fun κ => ?_)
+  · refine ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun κ => ?_)
     have hcard := Prover.card_bad_keys_le A sketch (fun c => (κ c).1) (fun c => (κ c).2) g qtot
       (fun D => hq κ D)
     have hbound := Bandwidth.pr_le_of_card
@@ -290,7 +290,7 @@ variable {β Hs : Type} [Fintype β] {P : ℕ} {G : Fin P → ℕ}
 and store (`SketchHashRandom A ε`), an event of the model's coins is at most `ε` likelier at the outcome's model coins
 than over the model's coins: average the premise over the prover's coins and the store. -/
 theorem pr_coins_le [Fintype Hs] (A : Run β Hs P N m h S L q ks G) {ε : ℝ}
-    (hH : Accounting.Assumptions.SketchHashRandom A ε) (E : ModelCoins β P N m h ks G → Prop) :
+    (hH : ResourceAccounting.Assumptions.SketchHashRandom A ε) (E : ModelCoins β P N m h ks G → Prop) :
     pr (fun ω : Outcome β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
   refine pr_le_add_of_fst (fun ω : β × (Data N m 0 Sector × Hs) => E (A.coins ω)) E _ fun b => ?_
   refine pr_le_add_of_fst (fun y : Data N m 0 Sector × Hs => E (A.coins (b, y))) (fun z => E (b, z)) _
@@ -316,8 +316,8 @@ theorem pr_pass_le (A : Run β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0�
   let e : ModelCoins β P N m h ks G ≃ (Data N m 0 Sector × (Fin (G j) → Key N m h ks)) ×
         (β × ((i : {i : Fin P // i ≠ j}) → Fin (G i) → Key N m h ks)) :=
     ((Equiv.refl β).prodCongr ((Equiv.refl _).prodCongr sp)).trans shuffle
-  rw [Accounting.Rate.pr_equiv e]
-  refine Accounting.Rate.pr_le_of_fiber _ _ (fun rest => ?_)
+  rw [ResourceAccounting.Rate.pr_equiv e]
+  refine ResourceAccounting.Rate.pr_le_of_fiber _ _ (fun rest => ?_)
   let η : (i : {i : Fin P // i < j}) → Fin (G i) → Key N m h ks := fun i => rest.2 ⟨i.1, Fin.ne_of_lt i.2⟩
   refine (pr_mono (fun x hx => ?_)).trans (hδ rest.1 η)
   have h1 : (e.symm (x, rest)).1 = rest.1 := rfl
@@ -338,7 +338,7 @@ end Run
 /-- An accepting outcome where `SketchBound`'s event fails has some pass's kept candidate missing at the outcome's
 model coins. -/
 theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Run β Hs P N m h S L q ks G)
-    (T : Accounting.Remote.Held.Trace (Outcome β Hs N m)) (hP : T.passes ≤ P)
+    (T : ResourceAccounting.Remote.Held.Trace (Outcome β Hs N m)) (hP : T.passes ≤ P)
     (hrec : Assumptions.Receipted A T) (hpres : Assumptions.Present A T) (ω : Outcome β Hs N m)
     (hacc : T.accepts ω)
     (hfail : ¬ ∀ p < T.passes, ∀ b ∈ T.correct ω p,
@@ -354,16 +354,16 @@ theorem miss_of_fails {β Hs : Type} {P : ℕ} {G : Fin P → ℕ} (A : Run β H
   obtain ⟨τ, h1, h2, h3⟩ := hpres ω hacc j t hall b htb.symm
   exact absurd h3 (hnot τ h1 h2)
 
-end Accounting.Remote.Sketch
+end ResourceAccounting.Remote.Sketch
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Accounting.RateSketch Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
+open ResourceAccounting.RateSketch ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_mono)
 
-/-- `Pouw.pr` is monotone (`Accounting.PouwWork.pr_mono`, restated to keep this file's imports). -/
+/-- `Pouw.pr` is monotone (`ResourceAccounting.PouwWork.pr_mono`, restated to keep this file's imports). -/
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
     Pouw.pr E ≤ Pouw.pr F := by
   classical
@@ -374,8 +374,8 @@ private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : �
     exact h x hx
   exact_mod_cast Finset.card_le_card hsub
 
-/-- **The sketch bound at every parameter** (`Accounting.Guarantees.Remote.SketchBoundRun`). -/
-theorem SketchBoundRun : Accounting.Guarantees.Remote.SketchBoundRun := by
+/-- **The sketch bound at every parameter** (`ResourceAccounting.Guarantees.Remote.SketchBoundRun`). -/
+theorem SketchBoundRun : ResourceAccounting.Guarantees.Remote.SketchBoundRun := by
   intro β Hs _ _ P N m h S L q ks r G qtot ε εro A T hr32 hε hεro hP hRank hH hq hrec hpres
   classical
   let δ : ℝ≥0∞ := ((∑ j, G j : ℕ) : ℝ≥0∞) * (ENNReal.ofReal ε + (N : ℝ≥0∞) / 2 ^ h) +
@@ -433,10 +433,10 @@ theorem SketchBoundRun : Accounting.Guarantees.Remote.SketchBoundRun := by
   rw [hpr, ← hδ']
   exact ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨hfin, ENNReal.ofReal_ne_top⟩) hout
 
-/-- **The sketch bound at the deployed receipts** (`Accounting.Guarantees.Remote.SketchBoundDeployed`):
+/-- **The sketch bound at the deployed receipts** (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`):
 `SketchBoundRun` at `m = 128`, 64 rows, `h = 512`, `r = 27`, with at most `Q + P` candidate seeds and `Q` queries,
 at `ε_ro = (Q + P)²/2^513`. -/
-theorem SketchBoundDeployed : Accounting.Guarantees.Remote.SketchBoundDeployed := by
+theorem SketchBoundDeployed : ResourceAccounting.Guarantees.Remote.SketchBoundDeployed := by
   intro β Hs _ _ P N S L q Q G qtot ε A T hε hP hRank hG hqtot hH hq hrec hpres
   have h := SketchBoundRun β Hs P N 128 512 S L q 64 27 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 513) A T (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
@@ -451,4 +451,4 @@ theorem SketchBoundDeployed : Accounting.Guarantees.Remote.SketchBoundDeployed :
   have h2 : ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ 216 ≤ (Q : ℝ) / 2 ^ 216 := by gcongr
   exact (add_le_add (add_le_add h1 h2) le_rfl).trans (le_of_eq (by ring))
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

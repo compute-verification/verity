@@ -24,7 +24,7 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "accounting", "pouw", "prover", "kernels",
+KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "resource_accounting", "compute", "pouw", "prover", "kernels",
                       "pearl_c_sm90")
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
 
@@ -158,7 +158,7 @@ def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[in
 
     sys.path.insert(0, os.path.join(HERE, "..", "pearl_c_vllm"))
     import fast_tile as FT
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
 
     d, rng, out = InertWork(cubin), np.random.default_rng(seed), {"shapes": [], "timed": [], "resident": []}
     for rows, n, k in shapes:

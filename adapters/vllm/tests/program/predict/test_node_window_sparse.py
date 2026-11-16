@@ -134,6 +134,59 @@ def test_census(window):
         IF.check_proof_block(fn, circuit.cuts.get(tid))
 
 
+#: the indexer's top-k in `indexer_window`'s Program: below its 32 keys, so the indexer runs at each step, at the Definitions
+#: it serves past 2,048 keys
+INDEX_TOPK = 16
+INDEXER = ("CublasSplitKGemm", "DsaIndexerKRow", "DsaIndexerQ")
+
+
+@pytest.fixture(scope="module")
+def indexer_window():
+    return NW.node_window(glm_request(LP, 1, topk=INDEX_TOPK).program.fn, families=FAMILIES)
+
+
+@pytest.mark.slow
+def test_indexer_rows(indexer_window):
+    """The indexer's fused GEMM is its 160 slices a token (128 key words, 32 head weights); each token's key row is one
+    `DsaIndexerKRow_v1` unit reading its 128 key words whole through the gather, and each attention row's query one
+    `DsaIndexerQ_v1` unit reading its 32 head weights as the slices write them, the port cut 32 ways, since a gather of 32
+    one-word rows has no row Flock's composer can prove. None of the three is unlowered or free, and every template is a
+    proof block the composer proves. About 6 s: the only window with the indexer in it."""
+    circuit, w = indexer_window
+    census = w.census(circuit)
+    assert not set(INDEXER) & set(census["unlowered"]) and not set(INDEXER) & set(census["free"])
+    gemm, krow, q = (_tid(circuit, rf"{f}_v1\{{.*\}}") for f in INDEXER)
+    assert circuit.units[gemm] == 160 * (LP + 1) and circuit.units[krow] == LP + 1 and circuit.units[q] == 2
+    assert circuit.cuts[q] == {"w": 32} and krow not in circuit.cuts
+    assert {x.writer for x in circuit.wires if x.reader == q and x.port == "w"} == {gemm}
+    assert {x.writer.split("{")[0] for x in circuit.wires if x.reader == krow and x.port == "k"} == {"AllGather_v1"}
+    for tid, fn in w.b.fns.items():
+        IF.check_proof_block(fn, circuit.cuts.get(tid))
+
+
+@pytest.mark.slow
+def test_indexer_scores(indexer_window):
+    """The indexer's scores are their slices along the keys, a unit one row's score of one key (the logits' Boolean body at
+    N = 1): the prefill's last row scores the prompt's 32 keys and the decode's row 33. Unit n reads its row's query and head
+    weights from the row's `DsaIndexerQ_v1` unit and key n's row and scale from key n's `DsaIndexerKRow_v1` unit, each one
+    writer's row, so no port is cut. About 6 s with `test_indexer_rows`, whose window it reads."""
+    circuit, w = indexer_window
+    census = w.census(circuit)
+    assert "DsaMqaLogits" not in census["unlowered"] and "DsaMqaLogits" not in census["free"]
+    scores = _tid(circuit, r"DsaMqaLogits_v3\{N=1,.*\}")
+    krow, q = (_tid(circuit, rf"{f}_v1\{{.*\}}") for f in ("DsaIndexerKRow", "DsaIndexerQ"))
+    assert circuit.units[scores] == 2 * LP + 1
+    assert scores not in circuit.cuts
+    assert {(x.writer, x.port) for x in circuit.wires if x.reader == scores} == {(q, "q"), (q, "w"), (krow, "k"), (krow, "ks")}
+    for at, count, _f in w.allocs[scores]:
+        first = {p: _writer(circuit, scores, p, at) for p in ("q", "w", "k", "ks")}
+        assert first["k"][1:] == ("o0", first["ks"][2]) and first["ks"][1] == "o1" and first["q"][2] == first["w"][2]
+        for n in (1, count - 1):
+            assert _writer(circuit, scores, "k", at + n) == (krow, "o0", first["k"][2] + n)
+            assert _writer(circuit, scores, "ks", at + n) == (krow, "o1", first["ks"][2] + n)
+            assert _writer(circuit, scores, "q", at + n) == first["q"]
+
+
 TOPK, E = 8, 256
 MOE = ("CublasSplitKGemmF32Out", "LlBf16DotprodGemm", "MoeRouterSigmoidBias", "Fp8GroupQuantUe8m0", "MoeExpertFp8Gemm",
        "MoeExpertFp8GemmW")

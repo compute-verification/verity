@@ -360,9 +360,11 @@ def module_type(cls) -> type | None:
 
 def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity.protocols.accounting.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
+    (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.protocols.accounting.pouw.prover.serving import NCP_CIRCUIT_SCHEMES
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        NCP_CIRCUIT_SCHEMES,
+    )
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")

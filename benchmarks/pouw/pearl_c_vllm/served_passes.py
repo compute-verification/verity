@@ -30,7 +30,8 @@ salt coin is a live session's on the auditor device instead (`bench_arm.live_coi
 ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
 ``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
 ``generate`` of one short request takes the first calls' one-time
-costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
+costs (the screen's Triton build), unless ``--no-warm-up``: a run held to a class's fixed load (``verify --tie W --class``)
+takes it, as its retained and dropped rounds are to be the class's alone, and the warm-up's are rounds before them; then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
 writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
 it (``timed``), the timed call's wall (``generate_s``), each of its engine steps' (``step_s``) and the engine's close
@@ -180,11 +181,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
-SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
+SPEC = HERE.parents[1] / "harness" / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
 #: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
 #: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
 ARM_PREFIX = "pouw:pearl-c-"
@@ -210,7 +211,7 @@ LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap",
 LEAN_CHECK = "pearlplus-lean-check.json"
 #: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
 BUILD = "build"
-LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
+LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 #: why the step refuses where the two verdicts disagree
@@ -277,8 +278,8 @@ def seed_install(pouw: dict) -> None:
     """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, and the hm96 salt key the
     install's commitment of the fixed operands takes (`pearl_c.new_salt_key`, which the vLLM option binds by name as
     ``pearl_c_salt_key``) a `seeded` one, in this process."""
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from verity_vllm.protocols import pouw as PO
 
     pouw["coins"] = Challenger(0, seeded("coins"))
@@ -316,7 +317,7 @@ def serve(args: argparse.Namespace) -> int:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
     from verity_vllm import LLM
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
@@ -335,8 +336,9 @@ def serve(args: argparse.Namespace) -> int:
             walls.append(time.perf_counter() - t)
     core.step = counted
     vocab = int(core.model_config.get_vocab_size())
-    llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
-                 SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
+    if args.warm_up:
+        llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
+                     SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
     warm, warm_steps = len(run.details["passes"]), len(walls)
     sp = SamplingParams(max_tokens=args.output_tokens, ignore_eos=True, temperature=0.0)
     batch = [{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)]
@@ -366,7 +368,8 @@ def serve(args: argparse.Namespace) -> int:
     coins = doc["coins"]
     session = (coins["session"] or {}).get("session")
     whose = f" (session {session}, closed {coins['closed']})" if session else ""
-    print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps (a warm-up's among them), "
+    warmed = " (a warm-up's among them)" if args.warm_up else ""
+    print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps{warmed}, "
           f"{'every pass retained' if args.retain else 'no pass retained'}: the timed steps {shown} s; {len(held)} passes "
           f"with calls, {len(over)} over their caps; coins {coins['source']}{whose} -> {'OK' if doc['ok'] else 'FAIL'}")
     return 0 if doc["ok"] else 1
@@ -569,7 +572,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     if args.window_record:
         from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
             before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
@@ -926,6 +929,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--output-tokens", type=int, default=16)
     s.add_argument("--max-num-batched-tokens", type=int)
     s.add_argument("--no-retain", dest="retain", action="store_false")
+    s.add_argument("--no-warm-up", dest="warm_up", action="store_false",
+                   help="no warm-up generate before the timed one: a run held to a class's fixed load (verify --class)")
     s.add_argument("--seeded", action="store_true", help="with --no-retain: coins and the hm96 salt key from fixed streams "
                    "(`seeded`), for `same`")
     m = sub.add_parser("same")

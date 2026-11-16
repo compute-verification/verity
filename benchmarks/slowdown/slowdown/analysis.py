@@ -1,22 +1,22 @@
-"""Sensitivity: how the overhead moves with every parameter, and where it falls below a target.
+"""Sensitivity: how the slowdown moves with every parameter, and where it falls below a target.
 
 Every function takes a registry and a scenario name and varies registry keys, so any parameter of any layer (a GPU's
 FLOP/s, a wipe's `k_wipe`, a premise's bits, a family's efficiency, a choice of regime) is swept the same way. The
-metric is a function of a `Result`: by default the overhead's lower bound `LO` (the least over the adversary's
-families); `ATTACK` is the best known attack's overhead, and `upto(status)` is `LO` from only the bounds and cuts at
+metric is a function of a `Result`: by default the slowdown's lower bound `LO` (the least over the malicious developer's
+families); `ATTACK` is the best known attack's slowdown, and `upto(status)` is `LO` from only the bounds and cuts at
 least as strong as `status`. Results are cached per registry and override, so the functions below share their
 evaluations.
 
-* `sweep`: the overhead along one key.
-* `tornado`: the overhead at each ranged parameter's `low` and `high` (the registry's plausible range), the rest held,
+* `sweep`: the slowdown along one key.
+* `tornado`: the slowdown at each ranged parameter's `low` and `high` (the registry's plausible range), the rest held,
   sorted by swing.
-* `threshold`: the value of one key at which the overhead crosses a target, by bisection (`crossing`).
-* `dangers`: the ranged parameters whose plausible range alone takes the overhead below the target, and where;
+* `threshold`: the value of one key at which the slowdown crosses a target, by bisection (`crossing`).
+* `dangers`: the ranged parameters whose plausible range alone takes the slowdown below the target, and where;
   `rescues`, those whose range alone lifts it above.
 * `corner`: every ranged parameter at its adversarial end at once.
-* `margins`: for every ranged parameter, the overhead along a window around its plausible range and where it crosses
+* `margins`: for every ranged parameter, the slowdown along a window around its plausible range and where it crosses
   each target.
-* `phase`: the overhead over a grid of two keys; `frontier`, the curve in that plane where it crosses a target.
+* `phase`: the slowdown over a grid of two keys; `frontier`, the curve in that plane where it crosses a target.
 * `attribution`: what sets the overhead: the bound's weight per gate split into the unregistered leaves and g's terms.
 """
 
@@ -135,13 +135,13 @@ class Swing:
 
     @property
     def size(self) -> float:
-        """The swing in decades of the overhead."""
+        """The swing in decades of the slowdown."""
         vals = [v for v in (self.at_low, self.at_high, self.base) if v > 0 and math.isfinite(v)]
         return math.log10(max(vals) / min(vals)) if len(vals) > 1 else (math.inf if vals else 0.0)
 
     @property
     def worse(self) -> tuple[float, float]:
-        """The end of the range with the lower overhead, and the overhead there."""
+        """The end of the range with the lower slowdown, and the slowdown there."""
         return (self.low, self.at_low) if self.at_low <= self.at_high else (self.high, self.at_high)
 
     @property
@@ -204,7 +204,7 @@ def threshold(registry: Registry, scenario: str, key: str, target: float, lo: fl
 @dataclass(frozen=True)
 class Danger:
     key: str
-    #: the value at which the overhead crosses the target, and the worse end of the plausible range
+    #: the value at which the slowdown crosses the target, and the worse end of the plausible range
     crossing: float
     worst: float
     slowdown_worst: float
@@ -212,7 +212,7 @@ class Danger:
 
 def dangers(registry: Registry, scenario: str, target: float, keys: Iterable[str] | None = None,
             metric: Metric = LO, swings: Sequence[Swing] | None = None) -> list[Danger]:
-    """The ranged parameters whose plausible range alone takes the overhead below `target`, each with where it
+    """The ranged parameters whose plausible range alone takes the slowdown below `target`, each with where it
     crosses."""
     out = []
     for s in tornado(registry, scenario, keys, metric) if swings is None else swings:
@@ -226,8 +226,8 @@ def dangers(registry: Registry, scenario: str, target: float, keys: Iterable[str
 
 def rescues(registry: Registry, scenario: str, target: float, keys: Iterable[str] | None = None,
             metric: Metric = LO, swings: Sequence[Swing] | None = None) -> list[Danger]:
-    """The ranged parameters whose plausible range alone lifts the overhead from below `target` to it, each with where
-    it crosses (a `Danger` read the other way: `worst` is the better end, and `slowdown_worst` the overhead there)."""
+    """The ranged parameters whose plausible range alone lifts the slowdown from below `target` to it, each with where
+    it crosses (a `Danger` read the other way: `worst` is the better end, and `slowdown_worst` the slowdown there)."""
     out = []
     for s in tornado(registry, scenario, keys, metric) if swings is None else swings:
         best, slowdown_best = s.better
@@ -240,14 +240,14 @@ def rescues(registry: Registry, scenario: str, target: float, keys: Iterable[str
 
 @dataclass(frozen=True)
 class Corner:
-    #: each ranged parameter that lowers the overhead, at the end of its range that lowers it more
+    #: each ranged parameter that lowers the slowdown, at the end of its range that lowers it more
     values: Mapping[str, float]
     slowdown: float
     base: float
-    #: the overhead with every such parameter at its worse end at once (the corner, unless an interaction makes it
+    #: the slowdown with every such parameter at its worse end at once (the corner, unless an interaction makes it
     #: higher)
     joint: float
-    #: the overhead as the parameters move to their worse ends one at a time, the worst alone first; a move that would
+    #: the slowdown as the parameters move to their worse ends one at a time, the worst alone first; a move that would
     #: raise it is
     #: left out
     path: tuple[tuple[str, float], ...]
@@ -255,7 +255,7 @@ class Corner:
 
 def corner(registry: Registry, scenario: str, keys: Iterable[str] | None = None, metric: Metric = LO,
            swings: Sequence[Swing] | None = None) -> Corner:
-    """Every ranged parameter at the end of its plausible range where the overhead alone is lower, all at once. Never
+    """Every ranged parameter at the end of its plausible range where the slowdown alone is lower, all at once. Never
     above the base: when an interaction makes the joint corner higher than the path that adds one parameter at a time,
     the path's end is the corner."""
     swings = tornado(registry, scenario, keys, metric) if swings is None else swings
@@ -311,7 +311,7 @@ class Margin:
     low: float
     high: float
     window: tuple[float, float]
-    #: the overhead at points across the window
+    #: the slowdown at points across the window
     samples: tuple[tuple[float, float], ...]
     #: target → the crossings nearest the current value, below and above it, within the window (None: none there)
     crossings: Mapping[float, tuple[float | None, float | None]]
@@ -320,7 +320,7 @@ class Margin:
 def margins(registry: Registry, scenario: str, targets: Sequence[float], keys: Iterable[str] | None = None,
             metric: Metric = LO, widen: float = 1.0, points: int = 25, swings: Sequence[Swing] | None = None,
             rtol: float = 1e-3) -> list[Margin]:
-    """For each parameter that moves the overhead (in tornado order): the overhead across a `window` around its
+    """For each parameter that moves the slowdown (in tornado order): the slowdown across a `window` around its
     plausible range, and where it crosses each target between the current value and either end of the window."""
     out = []
     for s in tornado(registry, scenario, keys, metric) if swings is None else swings:
@@ -339,13 +339,13 @@ def margins(registry: Registry, scenario: str, targets: Sequence[float], keys: I
 
 def phase(registry: Registry, scenario: str, x: str, xs: Sequence[Any], y: str, ys: Sequence[Any],
           metric: Metric = LO) -> list[list[float]]:
-    """The overhead at each `(x, y)`: rows over `ys`, columns over `xs`."""
+    """The slowdown at each `(x, y)`: rows over `ys`, columns over `xs`."""
     return [[at(registry, scenario, {x: xv, y: yv}, metric) for xv in xs] for yv in ys]
 
 
 def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: str, ylo: float, yhi: float,
              target: float, metric: Metric = LO, rtol: float = 1e-3) -> list[tuple[float, float | None]]:
-    """The curve in the `(x, y)` plane where the overhead crosses `target`: for each `x`, the `y` in `[ylo, yhi]` at
+    """The curve in the `(x, y)` plane where the slowdown crosses `target`: for each `x`, the `y` in `[ylo, yhi]` at
     which it does (None where it doesn't cross there)."""
     return [(xv, threshold(registry, scenario, y, target, ylo, yhi, metric, given={x: xv}, rtol=rtol)) for xv in xs]
 
@@ -354,16 +354,16 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 class Term:
     #: `unregistered` (the unregistered leaves), or one of g's terms: a block kind or an uncertified route (`Slowdown.terms`)
     name: str
-    #: its part of the overhead's rate, `1 / overhead` before its floor at 1 (`Slowdown.rates`), and its share of it
+    #: its part of the slowdown's rate, `1 / slowdown` before its floor at 1 (`Slowdown.rates`), and its share of it
     part: float
     share: float
-    #: `1 / part`: the overhead can't exceed it while this term remains
+    #: `1 / part`: the slowdown can't exceed it while this term remains
     ceiling: float
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets the overhead, largest first: its rate (`Slowdown.rates`) split into the unregistered leaves and g's terms, for
-    the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
+    """What sets the slowdown, largest first: its rate (`Slowdown.rates`) split into the unregistered leaves and g's terms, for
+    the family the malicious developer picks (the least `lo`; with `side="attack"`, its best known attack's)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)
         s = fam.combined.parts if fam else None

@@ -23,7 +23,7 @@ namespace Verity.SampledTwo
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The units are the replay blocks, from a labelling into the design's replay blocks and the reading.** -/
 theorem unitsAreReplay_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
@@ -32,7 +32,7 @@ theorem unitsAreReplay_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     {readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)} (e : Fin (V.units θ F) ↪ ℕ)
     (hlen : ∀ u, e u < dd.part.blocks.length)
     (hread : ∀ w u, ReplayCorrect H Cm s Pt dd w (e u) →
-      u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)) :
+      u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)) :
     UnitsAreReplay V θ F c H Cm s Pt dd readX := by
   refine ⟨e, fun w u hu => ?_⟩
   simp only [incorrectReplay, Finset.mem_filter, Finset.mem_range]
@@ -45,7 +45,7 @@ theorem unitsWired_of {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} 
     (hlen : ∀ s dd, A.L.two s = some dd → ∀ u, e u < dd.part.blocks.length)
     (hread : ∀ s Pt dd, A.L.parse x = some s → A.L.partition s = some Pt → A.L.two s = some dd →
       ∀ w u, ReplayCorrect FlockDeploy.sha512 A.L.commit s Pt dd w (e u) →
-        u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)) :
+        u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)) :
     UnitsWired V A x θ F c readX :=
   fun s Pt dd hs hPt hdd => unitsAreReplay_of e (hlen s dd hdd) (hread s Pt dd hs hPt hdd)
 

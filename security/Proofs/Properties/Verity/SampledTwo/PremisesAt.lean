@@ -99,9 +99,9 @@ theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)
   have hP := acceptsPlay_of_playAccepts hplay hA hi hit hx hm hc
   exact ⟨A.h, premises_of_formAccepts hof hA hi hit hWf hwc, SpotFlock.Honest.inScope_of_play hP, hP⟩
 
-/-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the subprotocol takes): the
-session's held copies meet the two premises `Flock.Guarantees.SpotKSTwo` takes (`premises_of_formAccepts`), which give
-it at the connected program (`Live₂.ks_of_connected`). -/
+/-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the subprotocol takes):
+the session's held copies meet the two premises `Flock.Guarantees.SpotKSTwo` takes (`premises_of_formAccepts`), which
+give it at the connected program (`Live₂.ks_of_connected`). -/
 theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)

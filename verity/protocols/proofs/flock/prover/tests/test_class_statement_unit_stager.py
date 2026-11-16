@@ -28,7 +28,7 @@ from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SE
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.experimental.pearl_c4.prover import pc4
 
 #: a Boolean unit (a + b over 20 bits with its carry, a & c, and w[0] & w[2047] ^ w[1000]), its parameters' leaves off word
@@ -90,7 +90,7 @@ def _tile(m: str) -> tuple:
 
 def _anchor() -> tuple:
     """`test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation`' statement: three public input ports."""
-    from verity.protocols.accounting.pouw.prover.circuit.anchors import public_ports
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pearl_c4_regions_vectors", PC4_TESTS / "pearl_c4_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

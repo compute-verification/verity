@@ -34,7 +34,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The plays `Good` holds of that the form's reading reads at `x`, with coins that agree with some run's**
 (`Messages.ReadAt`). -/
