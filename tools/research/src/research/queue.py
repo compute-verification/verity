@@ -342,6 +342,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, suite_layout, waitcap
+from .telemetry import end_state
 from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
@@ -4109,13 +4110,14 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
 
 def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
     """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
-    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
-    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: exit 0 and validation passed
+    when it found no failure, exit 1 and validation failed when every one it found is allowed; and it ended in the state the
+    runner records for that exit (`end_state`: `done`, `failed`)."""
     tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
     if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
-    if (status.get("state"), status.get("rc"), res.validation_status) != want:
+    rc, validation = (0, "passed") if quick_tier.judge(tier, head, output) is None else (1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != (end_state(rc), rc, validation):
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None

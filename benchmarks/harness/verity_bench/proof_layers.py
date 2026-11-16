@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -35,9 +36,14 @@ from verity_bench import kit
 SCHEMA = "verity-bench/proof-layers/v1"
 #: each layer's flag and its row's title, in the table's order
 LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with sampling", "recursion": "with recursion"}
-RECURSION, PROVE_PATH, A5 = "recursion_e2e", "prove_path", "a5"
+RECURSION, PROVE_PATH, A5, LAYERS_SH = "recursion_e2e", "prove_path", "a5", "layers.sh"
 #: the outputs a layer's row may be read from
-ACCEPTS = {"flock": (PROVE_PATH,), "zk": (PROVE_PATH, A5), "sampling": (A5, PROVE_PATH), "recursion": (RECURSION,)}
+ACCEPTS = {"flock": (PROVE_PATH, LAYERS_SH), "zk": (PROVE_PATH, A5, LAYERS_SH), "sampling": (A5, PROVE_PATH, LAYERS_SH),
+           "recursion": (RECURSION,)}
+#: the directory of a layers.sh run (`benchmarks/one_stage/layers.sh all`) each layer's output is in
+LAYERS_SH_DIRS = {"flock": "flock", "zk": "zk", "sampling": "sampled"}
+#: the words a layers.sh output states its values are stand-ins in, which its row's workload opens with
+STAND_IN = "stand-in values, never served"
 #: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
 #: knowledge at the sampling plan
 PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
@@ -52,7 +58,8 @@ MEMBERS = {"flock": "flock", "zk": "zero knowledge", "sampling": None}
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
 FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/summary.txt", "out/verdicts.txt",
-         "out/machine.txt", "out/*a5.log")
+         "out/machine.txt", "out/*a5.log", "*/out/layers.txt", "*/out/job.log", "*/out/a6/summary.json",
+         "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl")
 NOT_STATED = "not stated"
 #: what a run id that can't be fetched here takes instead
 FIX = "give the run's out/ as a directory instead (where the store's read key is: `research fetch RUN`, then ~/.research/runs/RUN)"
@@ -97,9 +104,12 @@ class Row:
     proof: str | None = None
     why: str | None = None
     notes: list[str] = field(default_factory=list)
+    #: a layers.sh row's figures, one a statement (its name, units, Flock's and Lean's seconds, its proof's bytes)
+    statements: list[dict[str, Any]] = field(default_factory=list)
 
     def withhold(self, why: str) -> None:
         self.prover_s = self.lean_s = self.proof_bytes = None
+        self.statements = []
         self.why = self.why or why
 
     def said(self, coins: str | None, parameters: str | None, detail: str | None) -> None:
@@ -154,6 +164,8 @@ def detect(d: Path) -> str | None:
         return RECURSION
     if (d / "audit.log").is_file() or any(d.glob("*/audit.log")):
         return PROVE_PATH
+    if (d / "layers.txt").is_file() and (d / "a6" / "summary.json").is_file():
+        return LAYERS_SH
     if any((d / f).is_file() for f in ("summary.txt", "a5.log", "a5/a5.log", "a5/a5/summary.json", "a5/summary.json")):
         return A5
     return None
@@ -167,7 +179,8 @@ def locate(given: str, fetcher: Callable[[str], Path]) -> Path:
     if p.is_dir():
         return p / "out" if detect(p) is None and (p / "out").is_dir() else p
     if RUN_ID.fullmatch(given):
-        return fetcher(given) / "out"
+        root = fetcher(given)
+        return root / "out" if (root / "out").is_dir() else root
     raise Unreadable(f"{given} is neither a directory nor a run id")
 
 
@@ -352,7 +365,9 @@ def read_prove_path(d: Path, row: Row) -> None:
         for t, n in (r.get("draw_counts") or {}).items():
             counts[t] = counts.get(t, 0) + int(n)
     population = sum(int(r.get("population") or 0) for r in ranks.values()) or None
-    row.workload = f"arm {arm.name}: " + _drawn(counts, population, len(ranks))
+    commit = _commit(arm / "machine.txt", arm.parent / "machine.txt")
+    row.workload = (f"arm {arm.name}" + (f" at commit {commit[:11]} (machine.txt's git HEAD)" if commit else "") + ": "
+                    + _drawn(counts, population, len(ranks)))
     _per_block(row, [r.get("per_unit") or {} for r in ranks.values()])
     summary = json.loads(_text(arm / "summary.json") or "{}")
     challenger = (summary.get("coins") or {}).get("challenger")
@@ -363,6 +378,17 @@ def read_prove_path(d: Path, row: Row) -> None:
     timings = [t for f in sorted(arm.glob("rank*/summary.json"))
                for t in (json.loads(f.read_text()).get("timing") or {}).values()]
     row.device, row.eps_delta = _device(timings), _eps_delta(pp.get("delta"))
+
+
+def _commit(*paths: Path) -> str | None:
+    """The commit the first of `paths` that exists states: its first whole git sha (prove_path's run.sh's ``git rev-parse
+    HEAD`` in machine.txt, layers.sh's ``source`` in job.log), never a part of a longer digest."""
+
+    for path in paths:
+        if path.is_file():
+            found = re.search(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])", _text(path))
+            return found.group(0) if found else None
+    return None
 
 
 def read_a5(d: Path, row: Row) -> None:
@@ -412,7 +438,79 @@ def read_a5(d: Path, row: Row) -> None:
         row.notes.append(f"arm {summary['arm']}")
 
 
-READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5}
+def _delta(x: float) -> str:
+    e = math.log2(x) if x > 0 else 0.0
+    return f"2^{e:.0f}" if e == round(e) else f"{x:g}"
+
+
+def read_layers_sh(d: Path, row: Row) -> None:
+    """A layers.sh layer's out (proofs' `benchmarks/one_stage/layers.sh`): layers.txt's ``ran with:`` line and whether its
+    values are stand-ins (`STAND_IN`); a6/summary.json's statements, each with Flock's ``prove_total_s``, Lean's verify
+    seconds and its proof's bytes, a statement's and not a proof block's; its verdicts (the plain run's every statement's,
+    or the audit's, every Lean verdict and every negative case); the sample's ``wrong_units`` bound as its ε at δ; each
+    session's lean-verify.log for the proof (``--zk``); and gpu-lease's usage record for the cards Flock proved on."""
+
+    said = _text(d / "layers.txt").splitlines()
+    m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", said[0] if said else "")
+    if m and m.group(1) in COINS and m.group(2) in PARAMETERS:
+        row.said(m.group(1), m.group(2), m.group(3))
+    s = json.loads(_text(d / "a6" / "summary.json"))
+    if s.get("windows"):
+        stmts = [{"name": w.get("name"), "units": w.get("units"),
+                  "template": next((x.get("template") for x in ((w.get("lean_verify") or {}).get("unit_draw") or {}).get("strata") or []), None),
+                  "prove_s": _number((w.get("live") or {}).get("prove_total_s")), "lean_s": _number((w.get("lean_verify") or {}).get("verify_s")),
+                  "proof_bytes": (w.get("live") or {}).get("proof_bytes"),
+                  "accepted": (w.get("live") or {}).get("accepted") is True and (w.get("lean_verify") or {}).get("accepted") is True}
+                 for w in s["windows"]]
+        row.accepted = s.get("accepted") is True and all(x["accepted"] for x in stmts)
+        n = sum(x["accepted"] for x in stmts)
+        row.lean = (f"accepted: Lean's verify true on every statement ({n} of {len(stmts)})" if row.accepted else
+                    f"not accepted: {n} of {len(stmts)} statements accepted, summary accepted {s.get('accepted')}")
+        drawn = ""
+    else:
+        audit, negs = s.get("audit") or {}, s.get("negatives") or {}
+        stmts = [{"name": x.get("name"), "template": x.get("template"), "units": (s.get("draw_counts") or {}).get(x.get("name")),
+                  "prove_s": _number(((s.get("timing") or {}).get(x.get("name")) or {}).get("timing", {}).get("prove_total_s")),
+                  "lean_s": _number(((s.get("timing") or {}).get(x.get("name")) or {}).get("lean_verify_s")),
+                  "proof_bytes": (((s.get("timing") or {}).get(x.get("name")) or {}).get("timing") or {}).get("proof_bytes")}
+                 for x in s.get("members") or []]
+        verdicts, before = audit.get("verdicts") or {}, s.get("checks_before_draw") or {}
+        row.accepted = (audit.get("accepted") is True and audit.get("complete") is True and bool(verdicts)
+                        and all(v is True for v in (*verdicts.values(), *before.values(), *negs.values())) and bool(negs))
+        held = [f"{k} {v}" for k, v in (*verdicts.items(), *before.items()) if v is not True]
+        held += [f"negative {k} not refused" for k, v in negs.items() if v is not True]
+        row.lean = (f"accepted: every Lean verdict true ({', '.join(sorted({k.split('/')[0] for k in verdicts}))} on each "
+                    f"of {len(stmts)} statements), {len(negs)} of {len(negs)} negative cases refused" if row.accepted else
+                    "not accepted: " + ("; ".join(held) or f"audit accepted {audit.get('accepted')}"))
+        drawn = f", {s.get('k')} of them drawn" if s.get("k") != s.get("population") else ", every unit drawn"
+        w = audit.get("wrong_units") or {}
+        if all(_number(w.get(x)) is not None for x in ("bound", "of", "delta")):
+            row.eps_delta = f"at most {w['bound']:,} of {w['of']:,} units wrong except with probability {_delta(w['delta'])}"
+    population = s.get("population") or sum(int(x.get("units") or 0) for x in stmts)
+    row.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else "")
+                    + f"{len(stmts)} statements of {population:,} units{drawn}: "
+                    + "; ".join(f"{x['name']}, {x['units']:,} units" + (f" of {x['template']}" if x.get("template") else "")
+                                for x in stmts))
+    if commit := _commit(d / "job.log"):
+        row.workload += f" (source {commit[:11]}, job.log)"
+    for x in stmts:
+        pb = x.pop("proof_bytes")
+        x["proof_bytes"] = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
+        if isinstance(pb, list) and len(set(pb)) > 1:
+            row.notes.append(f"{x['name']}'s reps' proofs differ in bytes ({pb}): no bytes figure")
+        x.pop("accepted", None)
+    row.statements = stmts
+    zk = [" --zk" in _text(d / "a6" / f"session-{x['name']}" / "lean-verify.log") for x in stmts]
+    row.proof = "zk" if zk and all(zk) else "plain" if s.get("plain") is True and not any(zk) else None
+    leases = [json.loads(x) for x in _text(d.parent / "gpu-lease-usage.jsonl").splitlines() if x.strip()]
+    cards = sorted({g.get("index") for x in leases if "flock-circuit prove" in str(x.get("cmd")) for g in x.get("gpus") or []},
+                   key=str)
+    if cards:
+        row.device = "GPU " + ", ".join(map(str, cards)) + " (gpu-lease's record of each flock-circuit prove)"
+
+
+READERS: dict[str, Callable[[Path, Row], None]] = {RECURSION: read_recursion, PROVE_PATH: read_prove_path, A5: read_a5,
+                                                   LAYERS_SH: read_layers_sh}
 
 
 def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) -> Row:
@@ -425,10 +523,12 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
     row.given, row.status = given, "read"
     try:
         d = locate(given, fetcher)
+        if detect(d) is None and layer in LAYERS_SH_DIRS and detect(own := d / LAYERS_SH_DIRS[layer] / "out") == LAYERS_SH:
+            d = own
         row.format = detect(d)
         if row.format is None:
             raise Unreadable(f"{d} holds none of the outputs this reads (recursion_e2e.json, an arm's audit.log, "
-                             "summary.txt or a5.log)")
+                             "summary.txt or a5.log, layers.sh's layers.txt)")
         if row.format not in ACCEPTS[layer]:
             raise Unreadable(f"--{layer} takes {' or '.join(ACCEPTS[layer])}'s output, and {d} holds {row.format}'s")
         READERS[row.format](d, row)
@@ -458,8 +558,17 @@ def _cell(x: float | None, unit: str, per: str, what: str) -> str:
     return f"{figure} {per}{wall}" + (f" ({what})" if what else "")
 
 
+def _statements(r: Row, key: str, what: str) -> str:
+    """A layers.sh row's cell: each statement's figure, its unit first and a statement's, never a proof block's."""
+
+    cells = [(f"{x[key]:,.0f} bytes" if key == "proof_bytes" else f"{x[key]:.3g} s") + f" a statement of {x['units']:,} units"
+             for x in r.statements if x.get(key) is not None]
+    return "; ".join(cells) + f" ({what})" if cells else "—"
+
+
 def has_number(rows: Sequence[Row]) -> bool:
-    return any(x is not None for r in rows for x in (r.prover_s, r.lean_s, r.proof_bytes))
+    return any(x is not None for r in rows for x in (r.prover_s, r.lean_s, r.proof_bytes)) or any(
+        x.get(k) is not None for r in rows for x in r.statements for k in ("prove_s", "lean_s", "proof_bytes"))
 
 
 def render(rows: Sequence[Row]) -> str:
@@ -477,9 +586,12 @@ def render(rows: Sequence[Row]) -> str:
     for r in rows:
         read = r.status == "read"
         proof = r.proof or (NOT_STATED if read else "—")
+        cells = ((_statements(r, "prove_s", "Flock's prove_total_s"), _statements(r, "lean_s", "Lean's verify"),
+                  _statements(r, "proof_bytes", "one rep's proof")) if r.statements else
+                 (_cell(r.prover_s, 's', r.per, r.prover_what), _cell(r.lean_s, 's', r.per, r.lean_what),
+                  _cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)))
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
-                     f"{r.eps_delta if read else '—'} | {_cell(r.prover_s, 's', r.per, r.prover_what)} | {r.lean} | "
-                     f"{_cell(r.lean_s, 's', r.per, r.lean_what)} | {_cell(r.proof_bytes, 'bytes', r.per, r.bytes_what)} |")
+                     f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
     return "\n".join(lines).rstrip()
@@ -505,6 +617,7 @@ def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, 
             r = by_layer[layer]
             value = getattr(r, figure) if r.accepted and r.per_block else None
             why = None if value is not None else r.why or (
+                f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no per-block figure")
             out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
                         "inputs": [r.given] if r.given else [],
