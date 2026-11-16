@@ -530,7 +530,7 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 |---|---|---|
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
-| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
+| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory attester's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
 | Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Poub/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedDevice`, and SPOT's `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
@@ -573,7 +573,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network attesters and memory
-  challengers are onsite's.
+  attesters are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Poub.Remote` are PoUB
   (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
