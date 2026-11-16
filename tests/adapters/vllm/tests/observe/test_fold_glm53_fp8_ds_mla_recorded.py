@@ -53,8 +53,6 @@ FP8_KINDS = ("_fused_norm_rope_kernel", "concat_mla_q", "ConvertReqIndexToGlobal
 
 @pytest.fixture(scope="module")
 def folded():
-    """The fold, shared by this module's tests and released after them: a worker that went on holding it would carry its GBs into
-    every later test it runs."""
     return fold(read_log(str(FIXTURE)), load_profile("derived_GLM53_tp8")[0], strict=False, with_program=False)
 
 
