@@ -1,0 +1,72 @@
+# Written by tools/move/lean_names_pass.py --part docket: the Lean names pass's docket part, which `rename.py --map` runs
+# after the pass's map and `--hand`, and which is dropped whole by not running it. SPOT's run record, the circuit's digest,
+# pieces, sampling design and roots fixed before any challenge, is the docket; the registration protocol keeps its word.
+# Only code is renamed (`scope = "code"`): the record's keys, its formats `verity/registration/v1` and `v2`, the domain
+# constants' values and every message keep their bytes, and so do comments and docstrings.
+scope = "code"
+
+[words]
+
+[[words_in]]
+files = [
+  "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriodAudit.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+  "verity/protocols/proofs/flock/verifier/Flock/RecCompose.lean",
+  "verity/protocols/proofs/flock/verifier/Flock/Test/RecCompose.lean",
+  "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
+  "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+  "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
+  "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Theta.lean",
+  "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Span.lean",
+  "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
+  "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean",
+  "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period/Decode.lean",
+  "verity/protocols/compose/verifier/onsite/CoreOnsite.lean",
+  "verity/commitments/identity/Identity/Domains/Shared.lean",
+  "security/Properties/Spot/MonitoringPeriod.lean",
+  "security/Proofs/Properties/Spot/MonitoringPeriod.lean",
+  "security/Proofs/Properties/Spot/Halt.lean",
+  "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean",
+  "security/Proofs/Properties/InferenceOnly/ThetaSteps.lean",
+  "security/Proofs/Flock/C3/RegLevels/TopHold.lean",
+]
+[words_in.words]
+"registration" = "docket"
+"registrationOf" = "docketOf"
+"registrations" = "dockets"
+"registrationDeadline" = "docketDeadline"
+"innerMetaRegistration" = "innerMetaDocket"
+"heldToRegistration" = "heldToDocket"
+"REGISTRATION" = "DOCKET"
+"REGISTRATION_V1" = "DOCKET_V1"
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean", "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean"]
+[words_in.words]
+"Domains.REGISTRATION" = "Domains.DOCKET"
+"Domains.REGISTRATION_V1" = "Domains.DOCKET_V1"
+
+[[words_in]]
+files = ["security/Proofs/Flock/Recursive/HoloExec.lean", "security/Proofs/Flock/Recursive/TopFinder.lean"]
+[words_in.words]
+"Flock.RecVStar.registration" = "Flock.RecVStar.docket"
+
+[[words_in]]
+files = ["security/Proofs/Properties/Verity/Recursive/Names.lean", "security/Proofs/Properties/Verity/Recursive/PartStatement.lean"]
+[words_in.words]
+"o.registration" = "o.docket"
+
+[[words_in]]
+files = ["security/Proofs/Properties/Verity/Recursive/Refusals.lean"]
+[words_in.words]
+"p.own.registration" = "p.own.docket"
+
+[[words_in]]
+files = ["security/Properties/lean-audit.json"]
+[words_in.words]
+"Spot.MonitoringPeriod.registrationOf" = "Spot.MonitoringPeriod.docketOf"
+
+[rewrite]
+exclude = ["tools/move/**"]
