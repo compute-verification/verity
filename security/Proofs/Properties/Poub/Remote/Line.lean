@@ -296,6 +296,11 @@ theorem le_fillR (hc : ∀ g, 0 ≤ cap g) (hv : ∀ g, 0 ≤ v g) :
 
 theorem ex_throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = throw e := rfl
 
+theorem ite_throw_ok {ε α : Type} {c : Prop} [Decidable c] {e : ε} {r : Except ε α} {a : α}
+    (h : (if c then throw e else r) = .ok a) : ¬ c ∧ r = .ok a := by
+  by_cases hc : c
+  · simp only [hc, ↓reduceIte] at h; cases h
+  · simp only [hc, ↓reduceIte] at h; exact ⟨hc, h⟩
 
 theorem ite_throw_bind_ok {ε α β : Type} {c : Prop} [Decidable c] {e : ε} {x : α} {k : α → Except ε β} {a : β}
     (h : ((if c then throw e else pure x) >>= k) = .ok a) : ¬ c ∧ k x = .ok a := by
@@ -425,6 +430,19 @@ theorem stretch_stop (hhi : (m + 1) * per < gs.size) :
   show (stretchPace (fun _ : Unit => gs) per m).released () per = _
   rw [stretch_released hhi le_rfl, spanStop, Nat.succ_mul]
 
+theorem le_foldl_max (f : ℕ → ℕ) : ∀ (l : List ℕ) (init : ℕ),
+    init ≤ l.foldl (fun a g => max a (f g)) init ∧ ∀ x ∈ l, f x ≤ l.foldl (fun a g => max a (f g)) init := by
+  intro l
+  induction l with
+  | nil => intro init; simp
+  | cons y l ih =>
+    intro init
+    obtain ⟨h1, h2⟩ := ih (max init (f y))
+    refine ⟨(le_max_left _ _).trans h1, ?_⟩
+    intro x hx
+    rcases List.mem_cons.1 hx with rfl | hx
+    · exact (le_max_right _ _).trans h1
+    · exact h2 x hx
 
 theorem stretch_longest (hhi : (m + 1) * per < gs.size) :
     (stretchPace (fun _ : Unit => gs) per m).longest () ≤ lMaxOf gs per m := by
@@ -471,6 +489,10 @@ section Fill
 
 variable {gs : Array Group} {per m : ℕ}
 
+theorem sum_range_list (F : ℕ → ℝ) (n : ℕ) : ∑ g ∈ Finset.range n, F g = ((List.range n).map F).sum := by
+  induction n with
+  | zero => simp
+  | succ n ih => rw [Finset.sum_range_succ, List.range_succ, List.map_append, List.sum_append, ih]; simp
 
 theorem order_len : (m + 1) * per + 1 - m * per = per + 1 := by rw [Nat.succ_mul]; omega
 

@@ -38,6 +38,9 @@ theorem need_bind {b : Bool} {reason : String} {f : Unit → Except String Unit}
   unfold Run.need at h
   cases b <;> simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
 
+theorem need_ok {b : Bool} {reason : String} (h : Run.need b reason = .ok ()) : b = true := by
+  unfold Run.need at h
+  cases b <;> simp_all [throw, throwThe, MonadExceptOf.throw]
 
 /-- What an accepted `checkAt` checked, in its order. -/
 theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public}
@@ -200,6 +203,10 @@ theorem leaves_lists {C : Array (Array ByteArray)} (hS : Shaped C) (salt : ByteA
   simp only [List.length_mapIdx, Array.length_toList] at hs
   exact (hS.2 s hs).1
 
+theorem leaves_size {C : Array (Array ByteArray)} (hS : Shaped C) (salt : ByteArray) :
+    (leaves salt C).size = q.blocks := by
+  rw [leaves, List.size_toArray, flatten_length q.blocksPerSegment _ (leaves_lists hS salt)]
+  simp [hS.1, P2.Params.blocks]
 
 theorem leaves_getElem? {C : Array (Array ByteArray)} (hS : Shaped C) (salt : ByteArray) (s v : Nat)
     (hv : v < q.blocksPerSegment) :

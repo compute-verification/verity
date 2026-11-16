@@ -42,6 +42,9 @@ attribute [local irreducible] zeroRoot
 
 /-! ## The sample of one receipt among one -/
 
+theorem hash_size (m : ByteArray) : (Flock.Sha512.hash m).size = 64 := by
+  unfold Flock.Sha512.hash
+  exact Array.size_ofFn
 
 theorem beNat_lt_aux (b : ByteArray) (off : ℕ) : ∀ (l : List ℕ) (acc k : ℕ), acc < 256 ^ k →
     l.foldl (fun acc i => acc * 256 + (b.get! (off + i)).toNat) acc < 256 ^ (k + l.length)
