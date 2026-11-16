@@ -39,7 +39,4 @@ python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD
  `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
  can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
- `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule ([`DESIGN.md`](DESIGN.md)).
-
-[`DESIGN.md`](DESIGN.md) holds each lint in full, the rule every change is held to (no growth, and how the gate judges a
-change to a lint), and what other code reads from these tests.
+ `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule.

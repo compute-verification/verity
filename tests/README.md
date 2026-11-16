@@ -33,9 +33,6 @@ uv run tools/check/suites.py .                 # this suite, on a node through `
 Where a rule has exceptions, the test names them (an `ALLOWED` table). The import order's are the listing
 `import_order.toml`, which `test_boundaries.py` reads and whose tables `tools/check/import_order.py` writes.
 
-[`DESIGN.md`](DESIGN.md) says what each lint counts, which of its findings warn, and the commands that move, prune and
-record its list.
-
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:
