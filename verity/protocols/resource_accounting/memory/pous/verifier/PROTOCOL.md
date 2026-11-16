@@ -222,19 +222,19 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
    | Step | From, to | What |
    |---|---|---|
-   | coins | challenger | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
-   | warm-up | challenger, server | `WARMUPS` frames on the public `WARMUP_INDEX`, untimed and unrecorded |
-   | round `j` | challenger, server | index `j` alone (`u64be`); the send time is read |
-   | answer `j` | server, challenger | the whole block; the receipt time is read before it is hashed; the first late answer ends the session |
-   | end | challenger, server | `u64be 2^64 − 1` |
-   | sign | challenger | one LMS signature over the header (the `SessionCommitment`'s fields and how the session ended) and the round records' root |
-   | release | challenger, verifier | the `SessionCommitment` (the coin tree's root and key, the session id and parameters, the setup's root), the signed session and every revealed coin's opening; `commitment` and `openings()` refuse before the signature |
+   | coins | memory attester | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
+   | warm-up | memory attester, server | `WARMUPS` frames on the public `WARMUP_INDEX`, untimed and unrecorded |
+   | round `j` | memory attester, server | index `j` alone (`u64be`); the send time is read |
+   | answer `j` | server, memory attester | the whole block; the receipt time is read before it is hashed; the first late answer ends the session |
+   | end | memory attester, server | `u64be 2^64 − 1` |
+   | sign | memory attester | one LMS signature over the header (the `SessionCommitment`'s fields and how the session ended) and the round records' root |
+   | release | memory attester, verifier | the `SessionCommitment` (the coin tree's root and key, the session id and parameters, the setup's root), the signed session and every revealed coin's opening; `commitment` and `openings()` refuse before the signature |
 
-   The verifier checks each round's index against its opening under the released root (`verdict`). The challenger is
+   The verifier checks each round's index against its opening under the released root (`verdict`). The memory attester is
    bound to its coins by being an auditor-trusted device that runs its stated code (`pous-ring-device`,
    `trusted-device`), not by an early commitment, so no guarantee reads the coin tree's hiding.
 
-   The challenger's party sends nothing but these rows. The indices and the end frame go on the prover's connection;
+   The memory attester's party sends nothing but these rows. The indices and the end frame go on the prover's connection;
    the release goes in the report on the party's stdout, to the node that started it, as do the setup salt's source and
    a refusal, which names the field and the rule the request breaks and quotes none of its bytes. The auditor device's
    gate starts a party only for a caller whose address is a registered node's, and keeps the party's log on the host
@@ -485,14 +485,14 @@ neither is assumed (SHA-512 as PRF: not priced, not assumed).
 
 | Step | From, to | What |
 |---|---|---|
-| open | challenger, public | the `WipeCommitment` header: the protocol, the server, the session, `N`, the label size, `k`, the batch size, the deadline a batch (`limit_ns`), and every memory tier inside the boundary with its size, the sizes adding up to `N · 64` bytes; the id goes into the challenger's `SessionLog` first, which refuses it again |
-| mark | challenger, its mark source | the start message (below), once, before the fill's first clock reading; the source returns the start certificate, and the challenger keeps its SHA-512, the session's start mark. On site the source is the network attester. With no source nothing is sent and the mark is empty |
-| fill | challenger, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the challenger reads its clock at the first and last chunk |
-| challenge | challenger, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
-| answer | server, challenger | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
-| sign | challenger | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the start mark, the fill's times and the batch count; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
-| end | challenger's host, network attester | the end message (below), of the signed message and its signature. `end_message` computes it; nothing in `streamed_wipe` sends it |
-| egress | network attester, the wipe's check | the bits that crossed the boundary over the session (C6), as the certifier counts them between the two marks. The count exists only after the end mark, so after the signature: the challenger never holds it and signs none. The check takes it as evidence beside the signed session, in whole MiB |
+| open | memory attester, public | the `WipeCommitment` header: the protocol, the server, the session, `N`, the label size, `k`, the batch size, the deadline a batch (`limit_ns`), and every memory tier inside the boundary with its size, the sizes adding up to `N · 64` bytes; the id goes into the memory attester's `SessionLog` first, which refuses it again |
+| mark | memory attester, its mark source | the start message (below), once, before the fill's first clock reading; the source returns the start certificate, and the memory attester keeps its SHA-512, the session's start mark. On site the source is the network attester. With no source nothing is sent and the mark is empty |
+| fill | memory attester, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the memory attester reads its clock at the first and last chunk |
+| challenge | memory attester, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
+| answer | server, memory attester | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
+| sign | memory attester | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the start mark, the fill's times and the batch count; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
+| end | memory attester's host, network attester | the end message (below), of the signed message and its signature. `end_message` computes it; nothing in `streamed_wipe` sends it |
+| egress | network attester, the wipe's check | the bits that crossed the boundary over the session (C6), as the network attester counts them between the two marks. The count exists only after the end mark, so after the signature: the memory attester never holds it and signs none. The check takes it as evidence beside the signed session, in whole MiB |
 
 **The marks.** The start and end messages tie the session to the network attester's record of what left the site
 while the wipe ran. Neither is signed. Each is 64 bytes:
@@ -509,16 +509,16 @@ end        = SHA-512("verity-pous/streamed-wipe/end/v1\0" ‖ u64be len(message)
                      ‖ u64be len(signature) ‖ signature)
 ~~~
 
-`start_message(commitment)` is `start` and `end_message(signed)` is `end`. The challenger hands `start` to its mark
+`start_message(commitment)` is `start` and `end_message(signed)` is `end`. The memory attester hands `start` to its mark
 source (`WipeMemoryChallenger(..., mark_source=)`) as the statement before `fill` or `fill_by` reads the clock, so no label is
 streamed until it holds the certificate. A source that raises, or returns no bytes, stops the fill there. The
-challenger does not check the certificate: it signs the digest of the bytes it was given. A session with an empty mark
-is judged as any other: the mark says which certificate the challenger held, and the judge reads no certificate.
+memory attester does not check the certificate: it signs the digest of the bytes it was given. A session with an empty mark
+is judged as any other: the mark says which certificate the memory attester held, and the judge reads no certificate.
 
 The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is sampled again, so a
 failed wipe is a visible failure. `verdict(signed, commitment, trusted=...)` accepts a session only when it is
 signed under a trusted key and its header is the published commitment, its batch size is 1 (the reveal the guarantee
-covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
+covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the memory attester's clock,
 and the first was sent after the fill ended. It returns accept and its reasons, and no amount. The format is
 `verity-pous/streamed-wipe/v2`: the readers
 (`wipe_party.signed_of`, the Lean judge) refuse a session of another version, a session whose header names another
@@ -551,11 +551,11 @@ the key's custody is among what the bound doesn't cover. The hosts' names give `
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a start mark changed, a
 field past its width), JSON the Lean must refuse, and named negative controls.
 
-**Batches and deadlines.** A batch's deadline runs from its send to its receipt on the challenger's raw monotonic
+**Batches and deadlines.** A batch's deadline runs from its send to its receipt on the memory attester's raw monotonic
 clock (`CLOCK_MONOTONIC_RAW`, read by `streamed_wipe.raw_clock_ns`), at a resolution of at most
 `memory_challenger.CLOCK_RESOLUTION_NS`. The header names that clock. Time synchronisation slews `CLOCK_MONOTONIC`, so
 an interval on that clock states no rate; the raw clock is never adjusted. The session signs no rate for its clock,
-and the verdict compares the readings as they are signed. The deadline is to be set below the challenger's round trip
+and the verdict compares the readings as they are signed. The deadline is to be set below the memory attester's round trip
 to the server plus the fastest fetch from outside the boundary, so that an answer fetched from a store outside, counted or
 not, is late. The bound doesn't read the deadline: in the game, without `K`, nothing computes a label at any speed, and
 what the outside holds is charged as egress. The deadline is what keeps C5 and C6 checkable during the challenges.
@@ -687,7 +687,7 @@ while the PRF's advantage against the distinguisher built from it (`wipeDistingu
 | one reference session | a `2^20`-label fill over TCP in 0.61 s, 74,000 sequential rounds in 5.0 s (49 µs at p50), signed and accepted |
 
 So one GPU derives labels for 9.0 servers at line rate, but its PCIe link carries 57 GB/s, 1.14 servers' worth: a
-challenger feeding nine servers needs nine host links' worth of PCIe, or labels sent from the GPU to the NIC directly,
+memory attester feeding nine servers needs nine host links' worth of PCIe, or labels sent from the GPU to the NIC directly,
 which was not measured. The node's load average was about 930 during the run, which inflates the Python timings.
 
 **Holes.**
@@ -701,7 +701,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 - **The physical premises** are the game's shape, not yet tied to `Definitions.Registration.Physical`, whose `Memory` and
   `Links` constraints are their form there.
 - **The inter-node stream** is not measured: between the nodes only TCP 22 passes. The fill time is the NIC's line rate
-  (52 s) and its RDMA loopback (59 s), and the deadline needs the challenger's round trip to a server and the fastest
+  (52 s) and its RDMA loopback (59 s), and the deadline needs the memory attester's round trip to a server and the fastest
   fetch from outside the boundary, neither measured.
 - **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
   decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)

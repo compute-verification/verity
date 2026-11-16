@@ -175,7 +175,7 @@ session (`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`; one out of r
 nothing, so it certifies no wipe on it (`wipe_period.uncounted`) and names it as the evidence writer's
 (`writer_gap`). `certify` gives `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128`
 (`R` the declared memory past the fill), which the check that composes the wipe with the network attester is to
-publish once it ties `E` to the certifier's count between the session's marks. `wipe_run.subprotocol(period_dir, node, out, side_of=...)` is the wipe's run in the all-protocols period runner.
+publish once it ties `E` to the network attester's count between the session's marks. `wipe_run.subprotocol(period_dir, node, out, side_of=...)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one

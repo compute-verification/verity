@@ -1018,12 +1018,12 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
   receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
   The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network attesters
-  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
-  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  observe. Its event is that the network attesters counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the network attesters' miscount
   (`IngressCounted`, `trusted-device`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
   `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
-  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  the deployment's half: every uplink of the developer's server passes through an active network attester, so an outside device
   computing for the node sends its result over a counted link. Memory held follows from the bits read under the
   device model (`heldAt_of_read`). The line of record says it is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
