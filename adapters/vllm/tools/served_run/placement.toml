@@ -1,44 +1,28 @@
-# The vLLM served run's placement: the workload it serves, the node each of its runs goes to, how `research run` starts it there,
-# and what that node holds. `run.sh` reads it and hands the run's script its node's paths as its environment, so
-# no script names a node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
-# A run's parameters (the window's and setup's CARD, CORES and END, the compose's HANDOFF) are named as ${NAME}, which
-# `run.sh` fills from the environment the run is launched in; with NAME unset it starts nothing and says so. No file
-# holds a machine's address, and no command line does: the gate's is in an env file on the node (CHALLENGER_ENV).
+# Where each of the served run's runs goes and what its node holds, which run.sh reads; ${NAME} is a launch's parameter.
 
-# the workload the served run serves, one of the integration's (adapters/vllm/workloads/<row>.json, fetched by its art id and
-# checked against that directory's SHA256SUMS): Llama-3.2-1B INT8 on one H200, batch 4, int8 linears (its engine's
-# quantization, verity_int8); with --tie, the BF16 row, whose linears Pearl+ serves
 row = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 tied_row = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 [node.vy-spot-glm53]
-# node A, eight H200s shared by card: a run takes the card and cores its row books. `run.sh setup` leaves under the
-# served run's directory the INT8 pin (HF_HOME; the BF16 base is the node's own /workspace/hf), the endpoint's sm_90 taps
-# (built at TAPS_AT: a window launched from a commit that changed their sources is refused), each row's traced Build
-# (LLAMA_ROOT/<run id>/<row>, the run id under builds), Flock's build and the serve's caches on disk (the serve dir is in
-# memory)
 VENV = "/workspace/venv312"
 CUDA_HOME = "/usr/local/cuda-12.9"
 HF_HOME = "/workspace/research/vllm-servedproof/hf"
 LLAMA_ROOT = "/workspace/research/vllm-servedproof/llama"
 FLOCK_WORK = "/workspace/research/vllm-servedproof/flock-work"
-# no endpoint serves with less free on its serve dir's filesystem
 DISK_FLOOR_GB = "60"
 HIDDEN_SO = "/workspace/research/vllm-servedproof/taps/fa2/build/fa3_matReqG/verity_fa3_matReqG.so"
 NORM_TAP_SO = "/workspace/research/vllm-servedproof/taps/norm_tap/build/verity_norm_tap.so"
 SERVE_ROOT = "/workspace/research/vllm-servedproof/serve-root"
+# the commit the taps were built at
 TAPS_AT = "811eb216fe373d3ae3d19973cf4925d98cc87528"
 
 [node.vy-spot-glm53.builds]
-# each row's traced Build that passed, by the setup run that made it, which the endpoint's Build of record is held to
+# each row's setup run whose traced Build passed
 "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager" = "r20261115-161425-7366"
 
 [node.vy-nebius-cpu-14]
-# a CPU pod of the research pool, which composes the window's record off the served node; it is no auditor device
 
 [run.setup]
-# once per row and node (setup.sh): the pin, the taps, the predicted and the traced Build and their compare, Flock's
-# build; on card CARD under its own lease for the Build alone, ending before END. Nothing serves.
 node = "vy-spot-glm53"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "6h"]
 wrap = ["taskset", "-c", "${CORES}"]
@@ -46,13 +30,6 @@ send_workload = true
 env = { CARD = "${CARD}", CORES = "${CORES}", END = "${END}", GPU_LEASE_WHO = "vllm-served-run-setup" }
 
 [run.window]
-# one execution phase of the served execution blocks through served_verdicts.sh (window.sh), on card CARD under its own
-# GPU lease and cores CORES, the lease ending before END; the prover and the Lean verifier run on the node after it. The
-# remote product with no accounting piece: PoUW's H1 not served (H1_GATE empty, so PoUW's piece is MISSING), no V3c
-# (V3C_CLASS empty: the record's SPOT audit is step 3's), no composite (COMPOSITE empty: remote can't accept with PoUW
-# missing). The record is composed off the node: window.sh packs the compose hand-off into out/handoff/, which
-# `run.sh compose` composes on COMPOSE_NODE, the compose run's node. SPOT's coins are the coins table's: the gate's
-# unless the launch chooses development coins (`run.sh window --development`).
 node = "vy-spot-glm53"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "6h"]
 wrap = ["taskset", "-c", "${CORES}"]
@@ -73,28 +50,18 @@ LEASE_MEM_GB = "128"
 GPU_LEASE_WHO = "vllm-served-run"
 
 [run.window.tie]
-# `run.sh window --tie`, the tied window: tied_row served under Pearl+ (PEARLPLUS_TIE), PoUW's piece Pearl+'s on the
-# window's own linears, committed at V3c's class 4,32,4 (served_verdicts.sh then serves LOAD=fixed, 4 slots, prompts
-# 32:32, BF16), V3c's audit at a stratified rate deferred off the node (V3C_AUDIT_MEM_GB above node A's memory)
+# V3C_AUDIT_MEM_GB above node A's memory defers the records audit off the node
 env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "stratified-rate:1/3481648", PRECISION = "bfloat16", H1_PEER = "vy-spot-glm53", V3C_AUDIT_MEM_GB = "2100" }
 
 [run.window.coins.gate]
-# the default: SPOT's coins (and the tie's Pearl+ salts) from sessions of their own on vy-challenger-1's gate, the
-# auditor's challenger, its peer the node, under its gate key, held to the challenger's key record (the tree's copy) and
-# to main's first-parent line, which `run.sh` reads from origin's main at launch and sends as main.txt. The gate's
-# address is VY_CHALLENGER_1_HOST in CHALLENGER_ENV, an env file on the node (mode 600) that window.sh sources.
 main_line = true
+# CHALLENGER_ENV: the node's mode-600 env file that sets VY_CHALLENGER_1_HOST, the gate's address
 env = { PP_CHALLENGER = "gate", CHALLENGER_ENV = "", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "~/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.window.coins.development]
-# `run.sh window --development`: a local development challenger session on the node and in-process Pearl+ salts, no
-# auditor's coins; the run is a development run, DEVELOPMENT=1 in its environment and in served_verdicts.sh's record
 env = { PP_CHALLENGER = "local", PEARLC_CHALLENGER_GATE = "", DEVELOPMENT = "1" }
 
 [run.compose]
-# the window's record composed off the served node (compose.sh): its compose hand-off, the directory HANDOFF holding
-# the window run's out/handoff/compose.tar and its .sha256, launched at the window's commit (the hand-off's
-# COMPOSE_TREE), which `run.sh` holds it to
 node = "vy-nebius-cpu-14"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "120m"]
 send = ["${HANDOFF}/compose.tar", "${HANDOFF}/compose.tar.sha256"]

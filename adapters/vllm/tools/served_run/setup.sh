@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-# The setup run on the served node, which `run.sh setup [--tie]` starts (placement.toml's [run.setup]), once per row and
-# node: what that row's window run reads, left on the node under its paths. Steps, each skipped where its result is
-# there unless STEPS names it:
-#   pin      the INT8 row's pin: the base checkpoint copied from the node's /workspace/hf to HF_HOME and `int8-checkpoint
-#            make`, every file held to manifests/checkpoints-int8.json. The BF16 row reads the node's base in place.
-#   taps     HIDDEN_SO and NORM_TAP_SO built here from this tree (pod_fa3_tap.sh with its row guard, pod_norm_tap.sh)
-#   flock    Flock's prover built in FLOCK_WORK (60-circuit.sh MODE=build)
-#   build    `predict row` and the row's traced Build (`row run --stages build --config-run 1`, under one `gpu-lease 1 --on
-#            CARD`, as its target check reads the device) in LLAMA_ROOT/<this run's id>/, and `predict compare` of the
-#            two, as served_verdicts.sh's step 0 runs it; the INT8 row's prediction is held to the tree's pin
-#            (test_predict.py's H200_INT8). Once it passes, placement.toml's builds names this run's id for the row.
-# Nothing here serves. What leaves (out/): job.log, the steps' public lines, predict_row.json, predict_compare.json and the
-# Build's stage verdict words; no key, salt, request or token.
+# What a row's window reads, made on its node (`run.sh setup`); a step STEPS names reruns even where its result exists.
 set -uo pipefail
 for v in CARD CORES END ROW_ID ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
   [ -n "${!v:-}" ] || { echo "setup.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh setup\`"; exit 2; }
@@ -72,8 +60,7 @@ EOF
 ) || { log "predict: $pin"; exit 3; }
 log "predict: $pin"
 max=$(( (end - $(date -u +%s)) / 60 - 30 )); [ "$max" -gt 30 ] || { log "build: $max min left before END: not started"; exit 75; }
-# the row driver's derives get PYTHONPATH without the torch adapter and the settings package (verity_torch is not in the
-# venv): its python is a mirror of the venv's bin whose `python` appends them (VERITY_CORE, which the driver sets)
+# the row driver's derives need the torch adapter and the settings package, which the venv lacks
 PYW=$R/py/bin
 rm -rf "$R/py" && mkdir -p "$PYW" && for f in "$VENV"/bin/*; do ln -s "$f" "$PYW/${f##*/}"; done
 rm -f "$PYW/python" "$PYW/python3"

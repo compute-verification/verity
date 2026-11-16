@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# The compose run off the served node, which `HANDOFF=DIR run.sh compose` starts (placement.toml's [run.compose]): the
-# window run's compose hand-off (its out/handoff/compose.tar, the serve dir's verifier-side files and no witness, held to
-# its .sha256) laid out in a scratch serve dir, then `served_verdicts.sh compose` at the served node's commit: the copy
-# held to the served node's sums, the cases' blobs rebased, and `record --off-node --sampled-lean`, which builds remote's
-# SPOT Lean verifier here and runs it on the record's audit (the sampled proof blocks' proofs), its answer tied to the served
-# record. The record and its lines go to $OUT (out/record, out/verdicts.txt). This node is no auditor device.
+# The window's record composed off the served node from its hand-off (`run.sh compose`).
 set -uo pipefail
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
 mkdir -p "$OUT"

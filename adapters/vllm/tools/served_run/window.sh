@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-# The window run on the served node, which `run.sh window` starts (placement.toml's [run.window]): benchmarks/one_stage/
-# served_verdicts.sh on card CARD alone (a gpu-lease shim in the run dir adds `--on CARD`), its lease ending 15 min before
-# END, with the node's paths and the run's settings as its environment. What it reads from the node, which `run.sh setup`
-# leaves there: the pin (pin_link.sh), the taps (HIDDEN_SO, NORM_TAP_SO), the traced Build (ROW) and Flock's build
-# (FLOCK_WORK). Under the gate's coins it sources CHALLENGER_ENV, the node's env file (mode 600) that holds the gate's
-# address, so no command line or log line holds it. The serve dir D is in memory (/dev/shm, mode 700), its caches under
-# SERVE_ROOT, as /dev/shm is mounted noexec; D stays on the node. After the run, the compose hand-off
-# (private/compose/inputs.txt's files, verifier-side, `served_verdicts.py witness` passing on the list again) is packed
-# into $OUT/handoff/compose.tar for `run.sh compose`.
-# Exit: 0 when served_verdicts.sh ends pending as a window on the served node should (its record is composed off this
-# node, or under a deferral audited off it first), its last line `pending: ...` saying which; served_verdicts.sh's own
-# otherwise (1 = a rejection or a failed step); 75 when the card is in use or the row leaves under an hour of lease, with
-# nothing run; 2 for a missing input; 4 when the hand-off is not packed.
+# The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
 for v in CARD CORES END COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }

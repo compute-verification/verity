@@ -1,7 +1,4 @@
-# Sourced by window.sh and setup.sh, from the tree's root: the engine reads an INT8 pin at its checkpoint manifest's
-# local_path (under /workspace/hf) whatever HF_HOME is, so that model directory becomes one link to the pin under
-# HF_HOME, made where nothing is at that name and removed at exit. A model the INT8 manifest doesn't name (the BF16 base)
-# is read where the node keeps it, with no link. Needs REPO, REV, HF_HOME and log(); returns 2 where it can't link.
+# Sourced from the tree's root with REPO, REV, HF_HOME and log(): an INT8 pin linked where the engine reads it until exit.
 local_path=$(python3 -c 'import json, sys; print(next((c["local_path"] for c in json.load(open(sys.argv[1]))["checkpoints"] if c["repo"] == sys.argv[2] and c["revision"] == sys.argv[3]), ""))' \
   adapters/vllm/manifests/checkpoints-int8.json "$REPO" "$REV") || return 2
 if [ -n "$local_path" ]; then

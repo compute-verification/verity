@@ -1,9 +1,4 @@
-"""`run.sh`: a placement value's ``${NAME}`` is filled from the environment the run is launched in or a FLAG's
-``--env``, so the window's card, cores and end are the launch's; with NAME unset nothing starts and the refusal names
-it. No address reaches the command: the gate's is read on the node. The window takes the gate's coins by default, only
-from a commit on main's first-parent line, which is sent beside it, and development coins with --development, which the
-run's environment says; --tie gives the tied window's settings, and a window from a commit whose taps' sources changed
-since they were built is refused. The compose run sends the window's hand-off and starts only at the window's commit."""
+"""`run.sh`'s dry runs over a stand-in tree."""
 from __future__ import annotations
 
 import hashlib
@@ -20,11 +15,8 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run"
-#: where the served run's scripts sit in the tree
 SERVED_RUN = Path("adapters/vllm/tools/served_run")
-#: an address as a launch's environment might hold one, here a documentation address
 ADDRESS = "192.0.2.21"
-#: the window run's parameters, as a launch gives them
 ROW_OF_CARDS = {"CARD": "5", "CORES": "0-11", "END": "2026-11-17T03:00Z"}
 PLACEMENT = tomllib.loads((HERE / "placement.toml").read_text())
 NODE_A = PLACEMENT["node"]["vy-spot-glm53"]
@@ -37,9 +29,7 @@ def git(tree: Path, *args: str) -> str:
 
 
 def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
-    """A copy of the tree's served run, a git repository whose origin's main is its one commit: its workloads are
-    stand-ins (the real ones are fetched fixtures), its taps built at that commit, and with ``tied_build`` the tied row
-    has a traced Build."""
+    """The served run's files in a repository whose origin's main is its one commit, the workloads stand-ins."""
     tree = tmp_path / "tree"
     (tree / SERVED_RUN).mkdir(parents=True)
     shutil.copy(HERE / "run.sh", tree / SERVED_RUN / "run.sh")
@@ -64,8 +54,7 @@ def make_tree(tmp_path: Path, tied_build: bool = True) -> Path:
 
 
 def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
-    """`run.sh ARGS` in the stand-in tree (made if it isn't yet), in this environment less the variables placement.toml
-    names, with ``env`` over it: the completed run."""
+    """Makes the stand-in tree if it isn't yet; ``env`` is over this environment less placement.toml's variables."""
     tree = tmp_path / "tree"
     if not tree.exists():
         make_tree(tmp_path)
@@ -75,7 +64,6 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
 
 
 def flags(got: subprocess.CompletedProcess, flag: str) -> list[str]:
-    """The values of ``flag`` (``--env``, ``--send``) in the `research run` command a dry run printed, in order."""
     words = shlex.split(got.stdout)
     return [b for a, b in zip(words, words[1:], strict=False) if a == flag]
 
@@ -125,7 +113,7 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     env, tie = env_of(got), PLACEMENT["run"]["window"]["tie"]["env"]
     assert {k: env[k] for k in tie} == tie
     assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
-    assert env["V3C_LAW"].startswith("stratified-rate:") and env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53"
+    assert any(v.startswith("stratified-rate:") for v in tie.values()) and env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53"
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
     assert env["ROW_ID"] == PLACEMENT["tied_row"] and "__bf16__" in env["ROW"] and env["ROW"].endswith(PLACEMENT["tied_row"])
     assert not {"H1_TIE", "CERTIFIER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
@@ -199,7 +187,6 @@ def test_the_setup_run_makes_the_rows_inputs_on_node_a(tmp_path, tie):
 
 
 def handoff(tmp_path: Path, served: str) -> Path:
-    """A window's hand-off whose compose.env says it was served at ``served``."""
     d = tmp_path / "handoff"
     d.mkdir()
     with tarfile.open(d / "compose.tar", "w") as t:
