@@ -5,8 +5,8 @@
  "commitment": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
  "public": {
   "work": {
-   "credited": 105449127936,
-   "macs": 120000000000,
+   "credited": 134502518410,
+   "macs": 136201633792,
    "epsilon": "1/100"
   },
   "unit": "MAC",
