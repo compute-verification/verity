@@ -2,11 +2,22 @@
 # renames, the phrases ("its cap", "the row cap") that a message, a comment or a doc says with a word before "cap", in a
 # file whose every "cap" is Pearl's, which no prose map reaches inside a string.
 #
-# Each entry is a phrase of two words, so it never stands in a name, and it is here only if every place the phrase stands in
+# Only the files listed (every "cap" in each is Pearl's) take the phrases, and a hyphenated cap (`cap-chunks`, `cap-flags`)
+# is a leaf role that stays. Each entry is a phrase of two words, so it never stands in a name, and it is here only if every place the phrase stands in
 # the file is a string, a comment or a doc, no share ("cap 1/400") follows it anywhere, and neither a Lean string literal
 # nor a data file holds it. A cap written as a share stays (a prose and printed share is `inert_share`'s).
 
 [words]
+
+[[words_in]]
+files = [
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.py",
+    "verity/protocols/accounting/pouw/prover/circuit/pearl_plus_tile.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py",
+]
+
+[words_in.words]
 "count caps" = "count inert-work bounds"
 "hidden cap" = "hidden inert-work bound"
 "tile's cap" = "tile's inert-work bound"
@@ -16,8 +27,10 @@
 "split cap" = "split inert-work bound"
 "tile caps" = "tile inert-work bounds"
 "tile cap" = "tile inert-work bound"
-"two caps" = "two inert-work bounds"
 "TN cap" = "TN inert-work bound"
+
+[keep]
+patterns = ["(?<![\\w])cap-\\w|\\w-cap(?![\\w])"]
 
 [rewrite]
 exclude = [
