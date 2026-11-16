@@ -1,6 +1,6 @@
 """verity_vllm.program.predict.window_circuit (at its fixed slots): a served window is its class's one Circuit of the
 catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row or a registered read
-of the weights or the network certifier's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
+of the weights or the network attester's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
 Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
 enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
 in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
@@ -74,7 +74,7 @@ def held(circuit) -> dict[str, dict[str, str]]:
     """`interface.input_count`'s pins and the window's roots holding every registered parameter of ``circuit``: each
     weight's own, ``weights/<label>@<words>``, and the scan state's, `scan_state.SCAN_STATE`, pinned by the verifier at
     the root the window's registration records for it. Each pin here is the window's own root, the scan state's included,
-    which is why a count under it reports zero free inputs: the verifier pins the scan state at the network certifier's
+    which is why a count under it reports zero free inputs: the verifier pins the scan state at the network attester's
     scan rows' root (`SCAN_PIN`), and each slot's occupancy, prompt length and token ids are free unless the window reads
     that state."""
     roots = {p: "ab" * 64 for p in circuit.registered.params}
@@ -152,7 +152,7 @@ def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     nowhere else, so `interface.members` (which cuts a template's batch only there and at a statement's unit bound) makes the entry
     template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
-    network certifier's scan reads as lane j's Programs."""
+    network attester's scan reads as lane j's Programs."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
@@ -537,7 +537,7 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
     """`interface.input_count` over the circuit's description (JSON, no Program lowered), each registered parameter pinned
     by the verifier itself before the run at the root the window's registration records for it (`held`): each weight's (one
-    a weight and row width, ``weights/<label>@<words>``) and the scan state's, which the network certifier's scan proofs
+    a weight and row width, ``weights/<label>@<words>``) and the scan state's, which the network attester's scan proofs
     hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the advice
     to the prover. The registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE
     tables' rows; the embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each):
@@ -564,7 +564,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
 
 #: TINY's rotary table's parameter, the one weight with no byte digest in the weights record (held to the analytic table)
 ROPE = WB.weight_param("model.layers.0.self_attn.rotary_emb.cos_sin_cache", 16)
-#: the scan state's pin, which no weights registration gives: the network certifier's scan rows' root
+#: the scan state's pin, which no weights registration gives: the network attester's scan rows' root
 SCAN_PIN = {SS.SCAN_STATE: "ef" * 64}
 #: the committer's secret key, which its weights' row salts are sampled under (`window_weights.weights_registration`)
 KEY = bytes(range(32))
@@ -850,7 +850,7 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 
 
 def test_a_window_its_slots_dont_place_is_refused_by_name():
-    """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network certifier's
+    """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network attester's
     scan placed it is the class's circuit, a last output past the window's end included (the scan carries it across
     windows); refused by name are two requests at one boundary, an anchor that is no boundary and a last output before its
     anchor. A placement that isn't one a request is a caller's error."""

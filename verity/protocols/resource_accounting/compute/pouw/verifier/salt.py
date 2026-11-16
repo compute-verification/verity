@@ -1,4 +1,4 @@
-"""PoUW's read of the network certifier's per-execution-phase salt.
+"""PoUW's read of the network attester's per-execution-phase salt.
 
 PoUW execution phase p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier device samples
 p's 512-bit salt and releases it into the block only (`CertifierDevice`'s `SaltSource`, under

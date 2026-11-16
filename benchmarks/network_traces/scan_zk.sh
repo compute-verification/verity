@@ -11,7 +11,7 @@
 #      own, started from the record before it)
 #      SC_WARDEN_RUN=DIR (a network_certifier_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `network_certifier_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
-#      fake's id-form answer SC_FIRST_MS after each (past the network certifier's delay: a void run), SC_PROMPT_MAX and
+#      fake's id-form answer SC_FIRST_MS after each (past the network attester's delay: a void run), SC_PROMPT_MAX and
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean sample --stratified K on
 #      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove

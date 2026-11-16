@@ -1,6 +1,6 @@
 """The post's configuration (`record.json`) and a serve's stamp against it (`record.py`). The fixtures are two serves'
 stored `meta.json`, each reduced to its configuration fields: one at the post's context length with no network
-certifier (the serve tax's `boundary` arm), one under the certified tick at a shorter context with prefix caching off
+attester (the serve tax's `boundary` arm), one under the certified tick at a shorter context with prefix caching off
 (another harness, which records neither its decoding nor an execution phase)."""
 import hashlib
 import json

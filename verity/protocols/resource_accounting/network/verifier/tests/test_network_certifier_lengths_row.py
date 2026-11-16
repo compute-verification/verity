@@ -1,6 +1,6 @@
 """The lengths row's proof block (`lengths_row`): its request row is K slots as a struct of arrays, its bytes are the
 canonical id request's whatever the cell size, the Boolean Definition computes its reference's outputs bit for bit on
-rows of its form and on rows that are not, and on the network certifier's own releases, signed and registered
+rows of its form and on rows that are not, and on the network attester's own releases, signed and registered
 (`connection_rows`), the prover's blocks return the signed lengths rows, which the verifier's registered reads accept,
 while a request row with another length, a fails row with another cell and a request row with another place in the
 release order are refused: by the block's verdict, or by the read of a row that is not the signed one."""
@@ -70,7 +70,7 @@ def test_the_shape_and_the_statics_are_checked():
 
 def test_a_schedule_whose_stride_releases_more_than_a_row_holds_is_refused_when_it_is_built():
     """One rule (`connection_rows.check_slots`) holds a lengths row to the slots its proof block returns. The shape
-    calls it, and so do a schedule's parameters with lengths rows, so a network certifier is never set to a stride
+    calls it, and so do a schedule's parameters with lengths rows, so a network attester is never set to a stride
     whose rows no proof block returns: the refusal names the longest stride of the window that fits, or the most
     lanes where none does. A schedule without lengths rows is not held to it."""
     CR.check_slots(2730)
@@ -226,17 +226,17 @@ ANDS_TESTS = 402
 ANDS_ONE, ANDS_SIXTEEN, ANDS_A_SLOT = 349, 5_614, 351
 
 
-# --- the network certifier's releases --------------------------------------------------------------------------------
+# --- the network attester's releases --------------------------------------------------------------------------------
 
 #: each of the traffic's five requests as the compute side holds it, by its place in the release order: its prompt's
-#: ids, and its outputs: what the network certifier sent for the three it ended, and more than it sent before the
+#: ids, and its outputs: what the network attester sent for the three it ended, and more than it sent before the
 #: `FAIL` for the two the server failed (none of four, two of six)
 PROMPTS, OUTPUTS = (3, 40, 100, 5, 7), (3, 8, 2, 4, 6)
 
 
 @pytest.fixture(scope="module")
 def signed(tmp_path_factory):
-    """The lengths tests' traffic through the network certifier, each window's connection rows signed and their
+    """The lengths tests' traffic through the network attester, each window's connection rows signed and their
     registration read as the verifier reads it: by window, the opening, the head and domains the verifier derived,
     and the compute side's request rows, one a slot stride."""
     _, arrivals, answers = traffic()
@@ -256,7 +256,7 @@ def signed(tmp_path_factory):
 
 def _refusal(opened, head, domains, table: str, rows, positions=range(T), reads_from=0) -> str | None:
     """The verifier's registered read of `rows` as the rows of `table` at `positions`, each under the network
-    certifier's salt and path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
+    attester's salt and path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
     reads = [LR.reads(opened.table(table), p) for p in positions]
     entry = {"value": reads[0].entry["value"], "positions": list(positions),
              "paths": [r.entry["paths"][0] for r in reads]}
@@ -272,7 +272,7 @@ def _computed(requests, fails) -> list[tuple[int, int, bytes]]:
 def test_an_honest_row_passes(signed):
     """Every slot stride's proof block of both windows, loaded or idle: the block accepts, its failures are the
     stride's connections that ended in a `FAIL`, and the lengths row its gates compute is the row the network
-    certifier signed, so the verifier's registered reads accept it as the lengths table's row j and the fails row as
+    attester signed, so the verifier's registered reads accept it as the lengths table's row j and the fails row as
     the fails table's, each under the head the verifier checked."""
     for window, (opened, head, domains, requests) in signed.items():
         blocks = LR.blocks(SH, opened, requests)

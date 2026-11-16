@@ -1,6 +1,6 @@
 """class_rows: the class circuit's rows by what fills them, on TINY's class circuit.
 
-* no input row of any unit is free: each is wired, a registered read of the weights or of the network certifier's scan
+* no input row of any unit is free: each is wired, a registered read of the weights or of the network attester's scan
   state rows, a table root or an opening;
 * a GEMM slice reads one wired row (o_proj's, its 4 heads' rows) and one registered row and writes one row;
 * the scan reads its state row and writes each lane's four outputs, and no unit is a gather or a slot row;

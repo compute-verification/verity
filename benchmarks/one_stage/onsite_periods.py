@@ -15,7 +15,7 @@ scaled cell's rule is in the record's ``rules`` with its sources. While a check 
 charges ℓ_a + 1 for each tied audit, the record says only how it tightens (``of_record.tight``), and no tighter figure
 is beside it. Where the grid is conditional (``periods.conditional_on``: an open premise no charge covers, or the
 coins), every cell is rendered conditional on those names, a proved one never as proved; a proved cell needs the network
-certifier's verdict to accept, or its Lean answer to accept with every premise its verdict leaves open in the grid's
+attester's verdict to accept, or its Lean answer to accept with every premise its verdict leaves open in the grid's
 conditions.
 """
 from __future__ import annotations

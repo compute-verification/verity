@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _network_lengths_row_roots() -> list[Any]:
-    """The lengths row's proof block (`verity.protocols.resource_accounting.network.prover.lengths_row`: a row of the network certifier's
+    """The lengths row's proof block (`verity.protocols.resource_accounting.network.prover.lengths_row`: a row of the network attester's
     lengths table computed from the request row and the fails row) at the lengths tests' schedule (two slots a row of
     512-byte cells, u32 places, 8-bit counts); at 4,096-byte cells with u32 places and 18-bit counts, one slot and
     sixteen, whose difference is fifteen slots' gates; and at the two cell sizes whose straddle gates those lack: 505
