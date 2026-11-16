@@ -19,7 +19,7 @@ any other probe's or tensor_kinds' records) on every facet.
 MACHINE below; its arguments are `generate.py`'s. The run's `out/` gets the sources timed (`fb_*.cu`), `kept.txt`, the
 first gate with its refusals (`gate0.txt`), `sass/`, each chunk's `gate.json`, `times.jsonl` and `rows.jsonl` under
 `chunks/`, every chunk's rows in `rows.jsonl`, and `loads.jsonl` and `summary.txt`. The `loads.py` commands after it
-read any runs' `rows.jsonl` on a CPU. The tests are `../tests/test_facet_break.py`.
+read any runs' `rows.jsonl` on a CPU. The tests are `../../../tests/benchmarks/pouw/test_facet_break.py`.
 
 `loads.py` is the one module other code imports: `generate.py`, `../sass_census/diff_menu.py` (a SASS
 opcode's census class, `class_of`), the census-cover fixtures' generator and the tests, which import `generate.py`

@@ -140,4 +140,4 @@ The directory is no Python package, so a caller loads a module by its path.
 
 Nothing here writes a row for a probe the gate refused.
 
-The tests are `../tests/test_opcode_probe.py`.
+The tests are `../../../tests/benchmarks/pouw/test_opcode_probe.py`.
