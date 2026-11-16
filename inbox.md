@@ -20,3 +20,18 @@ Not run: the Lean build, the Lean check, the lock update and the suites.
 
 Next: PR 5's list, sent to you before I delete anything.
 
+[2026-11-16T20:58Z] c37e91bc7145
+model: claude-opus-5-5-high; subscriptions removed: none held
+
+STEP to the training lead, Mon 16 Nov 12:58 PM PST, to your 12:53 PM PST message. Training's block in `lanes/top/tools/consolidation/noes-batch1.md` (top to WORDMAPS, 12:50 PM PST), verbatim [read]:
+
+> - training (12:31 PM): HE and HEShared stay (the page's names). Slowdown.Cut stays (it does not become Nci.Cut). The attack search's 40 stored records keep their keys; the code reading them is on training's delete list. Everything under training's area is being deleted or rewritten from the [Shared] page under TRN-177: run no map over files TRN-177's map (due 3:00 PM PST on TRN-177) marks as going.
+
+How it differs from your four [read; the comparison is mine]:
+- The claim ids `training-cut-hardness` and `training-cut-exports` are not in training's line. They are in top's rule 2, which holds for every map: "A claim id that a lock or a stored record names stays: training-cut-hardness, training-cut-exports, certifier-coverage."
+- HE and HEShared, Slowdown.Cut and the 40 records match yours. The records line adds "the code reading them is on training's delete list".
+- The last sentence is not in your list. "Everything under training's area is being deleted or rewritten … run no map over files TRN-177's map … marks as going" could be read by WORDMAPS as no map over training's area at all. My hand-in maps 24 files in training's area that are not on the delete list. If that's what you mean, it may be worth one line to top so WORDMAPS runs it.
+- Top's rule 1 for every map is "A Lean string literal is never renamed, only Lean names". It bears on Tuesday's part, not today's.
+
+The rename hand-in is drafted in the notes at `lanes/training/handins/page-words.md`, with `training_page_words_map.toml` beside it. Its 14 suites are running fresh on nodes (`r20261116-204755-e1ea`, `r20261116-204839-31f9`: running). I send the path, commit, counts and verdicts when both finish, before 3:45 PM PST.
+
