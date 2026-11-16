@@ -131,7 +131,8 @@
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
 # to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-13.0, else cuda; any other line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
+# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -200,13 +201,19 @@ if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
   # the toolkit of the CUDA version the prover's torch is built for, where the node has it
   CUDA_ROOT=${CUDA_ROOT:-/usr/local}
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
+  TM=${TV%%.*}
   [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
+  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
   CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
     refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
+  NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
+  [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
+    "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
+[ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
 B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
@@ -486,7 +493,11 @@ fi
   else
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-    FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
+    SM=${CC/./}
+    [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
+    [ "${CC%%.*}" -ge 9 ] && SM+=a
+    FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
     nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
     nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
