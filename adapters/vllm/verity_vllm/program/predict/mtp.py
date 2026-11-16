@@ -31,7 +31,7 @@ have.
 The weights record is the target's (`dsa.Net`) and then the draft layer's, under its checkpoint names `model.layers.NL.*`: its
 `enorm`, `hnorm`, `eh_proj` and `shared_head.norm` (mtp.py:66-68, 81-83), then its decoder layer's parameters in the family's
 module order and its buffers, each typed and keyed as `generic._mla_weight_field` maps layer NL of a configuration one layer
-longer whose indexer layers include it.
+longer whose indexer layers include it.  `draft_layer` gives those names, their paths and that configuration (`DraftLayer`).
 
 Premises, each unsettled at the pin and taken here rather than read:
 
@@ -50,11 +50,11 @@ Premises, each unsettled at the pin and taken here rather than read:
 from __future__ import annotations
 
 import copy
-from typing import NamedTuple, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, Refs, concat
-from verity.circuits.types import Array, Type, Value
+from verity.circuits.types import Array, Value
 
 from .dsa import Net as _TargetNet
 from .dsa import _at, _Model
@@ -85,14 +85,47 @@ class Step0(NamedTuple):
     topk: Coll | None
 
 
+class DraftLayer(NamedTuple):
+    """The draft layer's part of the weights record as names and paths (`draft_layer`).
+
+    `config` is the configuration the paths are into: the target's, one layer longer (NL + 1), with layer NL among its
+    `INDEXER_LAYERS`.  `paths` maps each leaf the record holds for the draft layer, by checkpoint name `model.layers.NL.<rest>`,
+    in record order, to its path:
+    - the layer's own four (`OWN`) to the one-part path of their key;
+    - its decoder layer's parameters and buffers to what `generic._mla_weight_field` gives under `config`, a path into
+      `analytic.mla_weights_type(config)`;
+    - a KV-cache scale (`generic._MLA_SCALES`), an f32 word in the record, to None, as the target's are unmapped."""
+    config: dict[str, Any]
+    paths: dict[str, tuple[str | int, ...] | None]
+
+
+def draft_layer(hf: dict[str, Any], C: dict[str, Any]) -> DraftLayer:
+    """The draft layer's names and paths (`DraftLayer`) for the checkpoint config `hf` and the target's configuration `C`
+    (`generic.derive_config` at the rank): what `Net` builds the draft layer's leaves from, for a reader that matches checkpoint
+    names to the record."""
+    from verity_vllm.engine.profiles import family_facts as FF
+    from verity_vllm.observe.fold.profiles.generic import _MLA_SCALES, _mla_weight_field
+    NL = int(C["NL"])
+    config = {**C, "NL": NL + 1, "INDEXER_LAYERS": (*(C.get("INDEXER_LAYERS") or ()), NL)}
+    field = _mla_weight_field(hf, config)
+    paths: dict[str, tuple[str | int, ...] | None] = {f"model.layers.{NL}.{s}": (key,) for s, key in OWN.items()}
+    params = FF.facts_for(hf)["params"]
+    for rest in (*params["order"], *params["buffers"]):
+        name = f"model.layers.{NL}.{rest}"
+        path = field(name)
+        if path is not None:
+            paths[name] = path
+        elif _MLA_SCALES.match(name):
+            paths[name] = None
+    return DraftLayer(config, paths)
+
+
 class Net(_TargetNet):
     """`dsa.Net` with its MTP draft layer: the weights record (`leaves`) is the target's and then the draft layer's, and `draft`
     is the draft forward over a target model's builder, weights, peers and launch."""
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.definitions.registry.prims import BF16
-        from verity_vllm.engine.profiles import family_facts as FF
-        from verity_vllm.observe.fold.profiles.generic import _MLA_SCALES, _mla_weight_field
         from verity_vllm.program import model as analytic
 
         from .phi import STATED_SPECULATIVE
@@ -109,23 +142,16 @@ class Net(_TargetNet):
             _refuse("; ".join(facts))
         self.steps = int(STATED_SPECULATIVE["num_speculative_tokens"])
         H = int(C["H"])
-        own: list[tuple[str, Type, object]] = [
-            (f"model.layers.{NL}.enorm.weight", Array(H, BF16), (NL, OWN["enorm.weight"])),
-            (f"model.layers.{NL}.hnorm.weight", Array(H, BF16), (NL, OWN["hnorm.weight"])),
-            (f"model.layers.{NL}.eh_proj.weight", Array(H, Array(2 * H, BF16)), (NL, OWN["eh_proj.weight"])),
-            (f"model.layers.{NL}.shared_head.norm.weight", Array(H, BF16), (NL, OWN["shared_head.norm.weight"])),
-        ]
-        longer = {**C, "NL": NL + 1, "INDEXER_LAYERS": (*(C.get("INDEXER_LAYERS") or ()), NL)}
-        T, field = analytic.mla_weights_type(longer), _mla_weight_field(hf, longer)
-        params = FF.facts_for(hf)["params"]
-        for rest in (*params["order"], *params["buffers"]):
-            name = f"model.layers.{NL}.{rest}"
-            path = field(name)
-            if path is not None:
-                own.append((name, _at(T, path), (NL, path[-1])))
-            elif _MLA_SCALES.match(name):
-                own.append((name, Value(32), None))
-        self._leaves += own
+        row = Array(H, BF16)
+        own_types = {"enorm": row, "hnorm": row, "eh_proj": Array(H, Array(2 * H, BF16)), "shared_head_norm": row}
+        layer = draft_layer(hf, C)
+        T = analytic.mla_weights_type(layer.config)
+        for name, path in layer.paths.items():
+            if path is None:
+                self._leaves.append((name, Value(32), None))
+            else:
+                t = own_types[str(path[0])] if len(path) == 1 else _at(T, path)
+                self._leaves.append((name, t, (NL, path[-1])))
 
     def draft_peer_shapes(self, r: int) -> list[tuple[int, int]]:
         """A draft step of r rows: the embedding's all-reduce, the layer's post-attention fused all-reduce norm and the shared

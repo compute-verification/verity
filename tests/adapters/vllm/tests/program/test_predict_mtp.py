@@ -186,3 +186,14 @@ def test_the_weights_record_is_the_targets_then_the_draft_layers(phi, tmp_path):
     assert [n.removeprefix("model.layers.2.") for n, _ in own[4:]] == layer1
     with pytest.raises(Unexpressible, match="MTP draft under engine speculative None"):
         MTP.Net(_cut(_row_phi(GLM53, "GLM53", tmp_path / "plain"), None), 1, 1)
+
+
+def test_the_draft_layer_map_is_the_records_draft_leaves(phi):
+    """`draft_layer`'s names are exactly the record's draft-layer leaves, in record order; its configuration is one layer longer
+    with layer 2 an indexer layer; a decoder layer's path is a path of that configuration's record."""
+    net, base = MTP.Net(phi, 1, 1), TargetNet(phi, 1, 1).leaves()
+    layer = MTP.draft_layer(phi.hf_config, net.C)
+    assert list(layer.paths) == [n for n, _ in net.leaves()[len(base):]]
+    assert layer.config["NL"] == LAYERS + 1 and LAYERS in layer.config["INDEXER_LAYERS"]
+    assert layer.paths["model.layers.2.eh_proj.weight"] == ("eh_proj",)
+    assert {p[0] for p in layer.paths.values() if p is not None and len(p) > 1} == {"layers", "indexers"}
