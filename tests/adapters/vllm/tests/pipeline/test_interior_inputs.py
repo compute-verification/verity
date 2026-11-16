@@ -32,7 +32,7 @@ from verity_vllm.pipeline import interior_rows as IR
 
 V, OUT, N = 64, 4, 3                # the vocabulary, a class's outputs and its spans
 K = 4                             # the greedy select's units a token
-PROMPT = 4                        # a class's prompt size, which holds the requests' three prompt ids
+PROMPT = 3                        # a class's prompt size: the requests' three prompt ids
 SERVED = {"r0": 4, "r1": 4, "r2": 3}
 SAMPLE = [2, 0]                   # the replay sample: r2, served one token short of its class, then r0
 SAMPLING = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": OUT, "min_tokens": 0,
