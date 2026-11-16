@@ -119,7 +119,7 @@ C.check_header("my_folds.cuh")                          # a header defining rece
 against the schedule it runs. `pfill_cuh` builds pfill.cuh for the host with g++, as pfill_host.cpp does, once a fold build
 (default, `-DPFILL_LI`, `-DPFILL_XIN13`) and runs `pf_absorb`, the build's key rule, `pf_keys` and the lane starts over
 the vectors. `e2e_definitions` evaluates E2E's Boolean Definitions (PouwDuoAbsorb_v2, PouwXinAbsorb_v2
-and their finals) on bits over the same vectors. `benchmarks/pouw/tests/test_receipts_adopters.py` runs them on the ones under
+and their finals) on bits over the same vectors. `tests/benchmarks/pouw/test_receipts_adopters.py` runs them on the ones under
 `benchmarks/pouw` and on E2E's, and skips `pfill.cuh`'s where there is no g++. For any module, run
 `python receipt_conform.py --adopter NAME PATH`. A kernel is held to its host twin by its own gate, and the twin is held
 to these vectors.
