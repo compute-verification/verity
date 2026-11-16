@@ -5102,7 +5102,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
                           env=env, check=False, capture_output=True, text=True)
 
 
-COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
+COMPOSES = "K PRODUCT POUW COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 
 
 def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_files_alone(tmp_path):
@@ -5117,7 +5117,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     assert run.returncode == 0, run.stderr
     d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "",
         "SAMPLED_AUDIT": "sampled-proofs-served", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5260,7 +5260,7 @@ def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only
     assert line or lines[0].startswith("PREFLIGHT passed")
 
 
-FAKE_COMPOSE_COMPOSITE = FAKE_SERVED_COMPOSITE.replace('"$SERVED_NODE" "$@"', '"$SERVED_NODE" "$COMPOSE_HANDOFF" "$@"')
+FAKE_COMPOSE_COMPOSITE = FAKE_SERVED_COMPOSITE.replace('"$SERVED_NODE" "$@"', '"$SERVED_NODE" "$COMPOSE_HANDOFF" "$POUW" "$@"')
 
 
 def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] | None = None,
@@ -5329,7 +5329,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
                                                                          "--tree", SHA, "--composite",
                                                                          str(out / "composite")])
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
+    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", "h1", str(d), str(out)]
     assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
@@ -5375,7 +5375,7 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 
 
 #: `served_verdicts.sh`'s COMPOSES, every setting a hand-off may carry
-HAND_OFF_NAMES = ("K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
+HAND_OFF_NAMES = ("K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
                   "AUDITED_ON SAMPLED_AUDIT STEPS")
 SETTINGS_REFUSED = ("PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's "
                     "private/compose/compose.env) as data, and refuses them, none set: its line {n} ")
@@ -5437,7 +5437,7 @@ def test_a_hand_off_whose_setting_the_compose_node_would_refuse_is_refused_on_th
     run = _handed(tmp_path, COMPOSE_NODE="vy-auditor-2 x")
     assert run.returncode == 1
     assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
-        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 9 sets "
+        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 10 sets "
         "COMPOSE_NODE to a value of other characters than A-Za-z0-9._/:+@=,-"]
     assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
 
@@ -5470,6 +5470,32 @@ def test_a_compose_follow_on_refuses_a_setting_that_would_point_its_reads_outsid
     lines = (tmp_path / "serve" / env).read_text().splitlines()
     _forged(tmp_path, env, "".join(f"{setting}={value}\n" if x.startswith(f"{setting}=") else f"{x}\n" for x in lines))
     assert _compose(tmp_path) == (3, [line], [])
+
+
+TIED_NOT_PEARLPLUS = ("PREFLIGHT: the hand-off's window is tied to Pearl+'s W (PEARLPLUS_TIE), whose record composes under "
+                      "remote/v1 with POUW=pearlplus, and its POUW is h1")
+
+
+@pytest.mark.parametrize("handed, forged, composed", [
+    ({}, {}, "h1"),
+    ({"POUW": "pearlplus"}, {}, "pearlplus"),
+    ({}, {"PEARLPLUS_TIE": "1"}, None),
+    ({}, {"POUW": None, "PEARLPLUS_TIE": "1"}, None),
+])
+def test_the_compose_follow_on_composes_at_the_hand_offs_pouw_and_refuses_a_tied_one_under_another(tmp_path, handed,
+                                                                                                 forged, composed):
+    assert _handed(tmp_path, **handed).returncode == 0
+    env = "private/compose/compose.env"
+    got = dict(x.split("=", 1) for x in (tmp_path / "serve" / env).read_text().splitlines())
+    assert got["POUW"] == handed.get("POUW", "h1")
+    got = {k: v for k, v in {**got, **forged}.items() if v is not None}
+    _forged(tmp_path, env, "".join(f"{k}={v}\n" for k, v in got.items()))
+    rc, lines, order = _compose(tmp_path)
+    if composed is None:
+        assert (rc, lines, order) == (3, [TIED_NOT_PEARLPLUS], [])
+    else:
+        assert order == ["composite", "record"], lines
+        assert (tmp_path / "order.composite").read_text().split()[2] == composed
 
 
 @pytest.mark.parametrize("blob, why", [
@@ -5522,7 +5548,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
     v3c = f"v3c-w7-{VTAG}/audit"
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": v3c, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5630,7 +5656,7 @@ def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_w
     assert not dc.exists()
     assert handoff("out", "cpu-6") == (0, [HANDOFF_LINE.replace("{d}", str(d))])
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": STEP3, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5690,7 +5716,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
         HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
         f"the record accept, 1 files of its $OUT in {tmp_path / 'out' / 'compose'}"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": STEP3, "STEPS": "0,3"}
     sent, listed = json.loads(seen.read_text()), (dc / "inputs.txt").read_text().splitlines()
@@ -6299,6 +6325,52 @@ def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
         "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
     gone = [d for d in packages if not (HERE.parents[2] / d / "lakefile.toml").is_file()]
     assert not gone, f"served_composite.sh's `package` names {gone}: no Lake package of this tree"
+
+
+PRODUCT_COMPOSITE = '''import sys
+from pathlib import Path
+COMPONENTS = {"remote": (), "remote-v1": ()}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    for o in ("--private-out", "--public-out"):
+        Path(a[a.index(o) + 1]).mkdir(parents=True)
+    print(f"VERDICT {a[0]} accept")
+'''
+NO_V1 = ("COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no "
+         "verity/protocols/compose/verifier/remote/RemoteV1Main.lean")
+
+
+@pytest.mark.parametrize("pouw, v1, composed", [
+    (None, True, "remote"),
+    ("h1", True, "remote"),
+    ("pearlplus", True, "remote-v1"),
+    ("pearlplus", False, None),
+    ("h1", False, "remote"),
+])
+def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks_it(tmp_path, pouw, v1, composed):
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
+    _script(bin_ / "systemd-run", "exit 1")
+    remote = tree / "verity" / "protocols" / "compose" / "verifier" / "remote"
+    remote.mkdir(parents=True)
+    if v1:
+        (remote / "RemoteV1Main.lean").write_text("")
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(PRODUCT_COMPOSITE)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", **({"POUW": pouw} if pouw else {})}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env=env, check=False, capture_output=True, text=True)
+    said = (out / "verdicts.txt").read_text().splitlines()
+    if composed is None:
+        assert (r.returncode, said, (tmp_path / "built").exists()) == (1, [NO_V1], False)
+    else:
+        assert r.returncode == 0, r.stderr
+        assert said[0] == f"COMPOSITE {composed}: VERDICT {composed} accept"
+        assert (tmp_path / "built").read_text().split() == [composed]
+        assert [x.name for x in (out / "composite").iterdir()] == [composed]
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
