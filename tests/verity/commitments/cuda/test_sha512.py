@@ -62,8 +62,8 @@ def _digest(lib: ctypes.CDLL, form: int, m: bytes) -> bytes:
 
 
 def test_the_package_names_the_header_the_forms_include() -> None:
-    assert SHA512.resolve() == SOURCE.parents[1] / "sha512.cuh"
-    assert '#include "../sha512.cuh"' in SOURCE.read_text()
+    assert SHA512.resolve() == (SOURCE.parent / "../../../../verity/commitments/cuda/sha512.cuh").resolve()
+    assert '#include "../../../../verity/commitments/cuda/sha512.cuh"' in SOURCE.read_text()
 
 
 def test_hashlib_gives_the_fips_examples() -> None:

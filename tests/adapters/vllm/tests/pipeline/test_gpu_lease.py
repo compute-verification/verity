@@ -466,7 +466,7 @@ def test_the_commit_gives_its_gpu_back_after_its_last_run_and_ends_with_its_comm
 
     def run_tl(to: int, argv: list[str]) -> int:
         with open(log, "a") as f:
-            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT, cwd=(Path(__file__).parents[5] / "adapters" / "vllm")).returncode
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT, cwd=Path(__file__).resolve().parents[2]).returncode
 
     rc, rec = GL.run(str(tmp_path), str(log), cmd, 600, env, run_tl)
     assert rc == 3, log.read_text()                    # the holder's end after the release did not kill the Commit

@@ -55,7 +55,7 @@ def enclosing(tree: ast.Module, line: int) -> str:
 
 
 def violation(finding: dict) -> R.Violation:
-    path, line = Path(finding["filename"]), finding["location"]["row"]
+    path, line = Path(finding["filename"]).resolve(), finding["location"]["row"]
     code = finding["code"] or "syntax-error"
     symbol = "<module>" if code == "syntax-error" else enclosing(R.parse(path), line)
     return R.Violation(R.rel(path), code, symbol, LINE_REF.sub("", finding["message"]), line)
@@ -73,7 +73,7 @@ def findings(config: Path, *paths: str) -> tuple[R.Violation, ...]:
 
 @cache
 def scan() -> tuple[R.Violation, ...]:
-    return findings(CONFIG, ".")
+    return findings(CONFIG, ".", R.TESTS_ARG)
 
 
 def test_no_new_findings() -> None:

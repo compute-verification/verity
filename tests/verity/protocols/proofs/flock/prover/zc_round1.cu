@@ -12,7 +12,7 @@
 #include <cuda_runtime.h>
 
 #include "phi8_table.cuh"
-#include "../cuda/zc_round1.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/zc_round1.cuh"
 
 __host__ __device__ inline uint64_t zr_mix(uint64_t x) {
     x += 0x9e3779b97f4a7c15ull;
