@@ -352,6 +352,26 @@ def test_the_samples_terms_are_charged_by_name(store) -> None:
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
 
+def test_a_64_row_session_is_held_at_its_profile_delta_not_the_samples_rejection() -> None:
+    """At 64 sketch rows the sample's rejection no longer holds the memory line's δ up.  A 64-row session of
+    `verity bench memory --local` on an H200 sampled 104 openings coins of 214 receipts each, 22,256 samples, and a
+    ledger charging their rejection at 2^-64 a sample gave it 1.2065e-15 (2^-49.6), the most of its δ.  At
+    `REJECTION_LOG2` = 256 the same samples charge 22,256/2^256.  A record of those counts and rows, its other figures
+    this test's own (104 one-pass windows at one window a coin over 2^27 blocks, no append coins), has δ below 2^-100,
+    the windows' profile δ the most of it."""
+    blocks, windows, samples = 2 ** 27, 104, 214
+    profile = audit.window_profile((blocks,), samples, audit.DELTA)
+    r = audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
+        audit.WindowRecord(t, (blocks,), t * 10 ** 8, (t + 1) * 10 ** 8, (t + 1) * 10 ** 8, profile)
+        for t in range(windows)), rows=64, pace=Pace(1), samples=samples, append_coins=0)
+    assert windows * samples == 22_256 and float(Fraction(22_256, 2 ** 64)) == pytest.approx(1.2065e-15, rel=1e-4)
+    parts = ledger.delta_parts(r)
+    assert parts["rejection"] == ledger.rejection(r) == Fraction(22_256, 2 ** ledger.REJECTION_LOG2)
+    assert ledger.sketch(r) == timing.sketch_failure(windows, 64, blocks=blocks)
+    total = sum(parts.values(), Fraction(0))
+    assert max(parts, key=parts.get) == "profile" and audit.DELTA < total < Fraction(1, 2 ** 100)
+
+
 def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^256 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window
     t requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
