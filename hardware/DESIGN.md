@@ -4,8 +4,8 @@ One TOML file per SKU in `hardware/cards/`, read by the Site's module (`verity/d
 card's numbers. A card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
 so the same GPU in another host needs no second card), a server's (`kind = "server"`: what a server model's own
 documents state of it apart from those, its network ports) or a time base's (`kind = "timebase"`: the clock an
-auditor's device reads, apart from the host it runs in). Each number is an entry `{ value, unit, mark, source }`; the README states the marks and the sources, and lists the
-cards.
+auditor's device reads, apart from the host it runs in). Each number is an entry `{ value, unit, mark, source }`;
+the README states the marks and the sources, and lists the cards.
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
