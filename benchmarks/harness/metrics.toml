@@ -1,0 +1,27 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# Each is a row of the served table (`served_overhead.py`, `verity-bench served-table`): a protocol's arm over stock FP8
+# as served (compiled), in time per output token, paired by rep, on Llama-3.1-8B at batch 32 with 512-token mixed
+# prompts, read from the store's runs.
+[[metric]]
+id = "benchmarks/served-overhead-commit"
+title = "Served overhead of committing values"
+owner = "benchmarks"
+unit = "percent"
+axis = "Percent that committing every value of every served step adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the H200 at batch 32."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
+every = "7d"
+goal = "benchmarks/six-directories-wired"
+
+[[metric]]
+id = "benchmarks/served-overhead-pous-bandwidth-audit"
+title = "Served overhead of the bandwidth audit"
+owner = "benchmarks"
+unit = "percent"
+axis = "Percent that PoUS's bandwidth audit adds to vLLM's time per output token serving Llama 3.1 8B, over stock FP8 on the RTX PRO 6000 at batch 32."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
+every = "7d"
+goal = "benchmarks/six-directories-wired"

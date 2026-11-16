@@ -1,0 +1,417 @@
+{
+ "apiVersion": "v1",
+ "kind": "List",
+ "items": [
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "ClusterQueue",
+   "metadata": {
+    "name": "circuits",
+    "generation": 21,
+    "managedFields": [
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:metadata": {
+        "f:annotations": {
+         ".": {},
+         "f:kubectl.kubernetes.io/last-applied-configuration": {}
+        }
+       },
+       "f:spec": {
+        ".": {},
+        "f:cohortName": {},
+        "f:flavorFungibility": {
+         ".": {},
+         "f:whenCanBorrow": {},
+         "f:whenCanPreempt": {}
+        },
+        "f:namespaceSelector": {},
+        "f:preemption": {
+         ".": {},
+         "f:borrowWithinCohort": {
+          ".": {},
+          "f:policy": {}
+         },
+         "f:reclaimWithinCohort": {},
+         "f:withinClusterQueue": {}
+        },
+        "f:queueingStrategy": {},
+        "f:resourceGroups": {}
+       }
+      },
+      "manager": "kubectl-client-side-apply",
+      "operation": "Update",
+      "time": "2026-09-30T16:14:48Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:spec": {
+        "f:stopPolicy": {}
+       }
+      },
+      "manager": "kubectl-patch",
+      "operation": "Update",
+      "time": "2026-10-03T13:30:01Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:status": {}
+      },
+      "manager": "kueue",
+      "operation": "Update",
+      "subresource": "status",
+      "time": "2026-10-03T13:30:01Z"
+     }
+    ]
+   },
+   "spec": {
+    "cohortName": "nebius",
+    "resourceGroups": [
+     {
+      "coveredResources": [
+       "nvidia.com/gpu",
+       "cpu",
+       "memory"
+      ],
+      "flavors": [
+       {
+        "name": "vy-nebius-1",
+        "resources": [
+         {
+          "name": "nvidia.com/gpu",
+          "nominalQuota": "0"
+         },
+         {
+          "name": "cpu",
+          "nominalQuota": "0"
+         },
+         {
+          "name": "memory",
+          "nominalQuota": "0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "ClusterQueue",
+   "metadata": {
+    "name": "deployments-cpu",
+    "generation": 16,
+    "managedFields": [
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:metadata": {
+        "f:annotations": {
+         ".": {},
+         "f:kubectl.kubernetes.io/last-applied-configuration": {}
+        }
+       },
+       "f:spec": {
+        ".": {},
+        "f:cohortName": {},
+        "f:flavorFungibility": {
+         ".": {},
+         "f:whenCanBorrow": {},
+         "f:whenCanPreempt": {}
+        },
+        "f:namespaceSelector": {},
+        "f:preemption": {
+         ".": {},
+         "f:borrowWithinCohort": {
+          ".": {},
+          "f:maxPriorityThreshold": {},
+          "f:policy": {}
+         },
+         "f:reclaimWithinCohort": {},
+         "f:withinClusterQueue": {}
+        },
+        "f:queueingStrategy": {}
+       }
+      },
+      "manager": "kubectl-client-side-apply",
+      "operation": "Update",
+      "time": "2026-09-30T20:34:24Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:spec": {
+        "f:resourceGroups": {},
+        "f:stopPolicy": {}
+       }
+      },
+      "manager": "kubectl-patch",
+      "operation": "Update",
+      "time": "2026-10-03T13:30:00Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:status": {}
+      },
+      "manager": "kueue",
+      "operation": "Update",
+      "subresource": "status",
+      "time": "2026-10-03T13:30:00Z"
+     }
+    ]
+   },
+   "spec": {
+    "cohortName": "nebius",
+    "resourceGroups": [
+     {
+      "coveredResources": [
+       "nvidia.com/gpu",
+       "cpu",
+       "memory"
+      ],
+      "flavors": [
+       {
+        "name": "vy-nebius-1",
+        "resources": [
+         {
+          "borrowingLimit": "0",
+          "name": "nvidia.com/gpu",
+          "nominalQuota": "0"
+         },
+         {
+          "borrowingLimit": "16",
+          "name": "cpu",
+          "nominalQuota": "100"
+         },
+         {
+          "borrowingLimit": "384Gi",
+          "name": "memory",
+          "nominalQuota": "640Gi"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "ClusterQueue",
+   "metadata": {
+    "name": "deployments-gpu",
+    "generation": 32,
+    "managedFields": [
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:metadata": {
+        "f:annotations": {
+         ".": {},
+         "f:kubectl.kubernetes.io/last-applied-configuration": {}
+        }
+       },
+       "f:spec": {
+        ".": {},
+        "f:cohortName": {},
+        "f:flavorFungibility": {
+         ".": {},
+         "f:whenCanBorrow": {},
+         "f:whenCanPreempt": {}
+        },
+        "f:namespaceSelector": {},
+        "f:preemption": {
+         ".": {},
+         "f:borrowWithinCohort": {
+          ".": {},
+          "f:maxPriorityThreshold": {},
+          "f:policy": {}
+         },
+         "f:reclaimWithinCohort": {},
+         "f:withinClusterQueue": {}
+        }
+       }
+      },
+      "manager": "kubectl-client-side-apply",
+      "operation": "Update",
+      "time": "2026-10-01T14:02:14Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:spec": {
+        "f:queueingStrategy": {},
+        "f:resourceGroups": {},
+        "f:stopPolicy": {}
+       }
+      },
+      "manager": "kubectl-patch",
+      "operation": "Update",
+      "time": "2026-10-03T15:07:46Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:status": {}
+      },
+      "manager": "kueue",
+      "operation": "Update",
+      "subresource": "status",
+      "time": "2026-10-03T16:23:18Z"
+     }
+    ]
+   },
+   "spec": {
+    "cohortName": "nebius",
+    "resourceGroups": [
+     {
+      "coveredResources": [
+       "nvidia.com/gpu",
+       "cpu",
+       "memory"
+      ],
+      "flavors": [
+       {
+        "name": "vy-nebius-1",
+        "resources": [
+         {
+          "borrowingLimit": "2",
+          "name": "nvidia.com/gpu",
+          "nominalQuota": 2
+         },
+         {
+          "borrowingLimit": "72",
+          "name": "cpu",
+          "nominalQuota": "24"
+         },
+         {
+          "borrowingLimit": "320Gi",
+          "name": "memory",
+          "nominalQuota": "640Gi"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "apiVersion": "kueue.x-k8s.io/v1beta2",
+   "kind": "ClusterQueue",
+   "metadata": {
+    "name": "provers",
+    "generation": 25,
+    "managedFields": [
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:metadata": {
+        "f:annotations": {
+         ".": {},
+         "f:kubectl.kubernetes.io/last-applied-configuration": {}
+        }
+       },
+       "f:spec": {
+        ".": {},
+        "f:cohortName": {},
+        "f:flavorFungibility": {
+         ".": {},
+         "f:whenCanBorrow": {},
+         "f:whenCanPreempt": {}
+        },
+        "f:namespaceSelector": {},
+        "f:preemption": {
+         ".": {},
+         "f:borrowWithinCohort": {
+          ".": {},
+          "f:policy": {}
+         },
+         "f:reclaimWithinCohort": {},
+         "f:withinClusterQueue": {}
+        },
+        "f:queueingStrategy": {}
+       }
+      },
+      "manager": "kubectl-client-side-apply",
+      "operation": "Update",
+      "time": "2026-10-01T14:02:14Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:spec": {
+        "f:resourceGroups": {},
+        "f:stopPolicy": {}
+       }
+      },
+      "manager": "kubectl-patch",
+      "operation": "Update",
+      "time": "2026-10-03T15:07:46Z"
+     },
+     {
+      "apiVersion": "kueue.x-k8s.io/v1beta2",
+      "fieldsType": "FieldsV1",
+      "fieldsV1": {
+       "f:status": {}
+      },
+      "manager": "kueue",
+      "operation": "Update",
+      "subresource": "status",
+      "time": "2026-10-03T16:06:52Z"
+     }
+    ]
+   },
+   "spec": {
+    "cohortName": "nebius",
+    "resourceGroups": [
+     {
+      "coveredResources": [
+       "nvidia.com/gpu",
+       "cpu",
+       "memory"
+      ],
+      "flavors": [
+       {
+        "name": "vy-nebius-1",
+        "resources": [
+         {
+          "borrowingLimit": "6",
+          "name": "nvidia.com/gpu",
+          "nominalQuota": 6
+         },
+         {
+          "borrowingLimit": "124",
+          "name": "cpu",
+          "nominalQuota": 64
+         },
+         {
+          "borrowingLimit": "1280Gi",
+          "name": "memory",
+          "nominalQuota": "384Gi"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

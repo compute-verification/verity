@@ -1,0 +1,44 @@
+{
+ "definitions": {
+  "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
+   "and": 27929,
+   "type": "de68ec83362253c42d8db4e59348eb2ee3e5b492d3eaace90c1023c21322b727ebd36c1d275a3786f15440f7fb38b90e959a55b87f77b6b8c13a6ba86c33e82a"
+  },
+  "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}": {
+   "and": 46966,
+   "type": "21cc65c2b5009018e45529fa9e1381c046e7eeaf6a4918cd1113e277cfa53515fdcdcc5df542b6c95bb9dd1ce88215702c759fc0ff3ef0f3c5a9393923a963bf"
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}": {
+   "and": 25499,
+   "type": "b77e1b386c3b93d053b3b359a19d433444183511fa0dee0c35dea5beefa390e95686ca4904610408ed6ca964d45aa8169e236cc2e282921f6545bcac7346cd3f"
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}": {
+   "and": 25499,
+   "type": "b65b108ea45ebab95c32a9ace2e3807dbef7294170a55650b31fba9cddc0a93c2925cf05076968de59ea53f1033919c38189c2efc14baa59f061ede1be9f41be"
+  },
+  "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
+   "and": 19072,
+   "type": "8d818149a1a9e0e4ba879bc214e4f9251a829a78c94c6f06d067cf91be8ebe53356fed2ad0c4c8cdafcd2ba1082bf7765be799a45ebea3f3e6382f5e0bba5998"
+  },
+  "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 30543,
+   "type": "279d25b4c3796bf95d65ed984f021742ad97efbdcc9f26c93b13225fc2c5578dd8720637e2c1954f70d37ab13c49edecbb65fd1bc63fa819c326cb29680a7c96"
+  },
+  "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2}": {
+   "and": 31715,
+   "type": "7e38bd502b3e8cf6a45831c8b6d14a56c63c0e9edea6da4824ca4977d8725d2b3d105319dce6f25a4230181d34bf5698acb53b2a31a6f6ceedbdfc6c895fda65"
+  },
+  "MoeExpertFp8CoordinateChunk_v2{E=3,K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2,FIRST=False,LAST=False}": {
+   "and": 51626,
+   "type": "05de3425399c76a5e0182de96bacbd0b32167b7298d946870d034981e37128ded10a2b6454442731ea582c3824e6d3fbc561990f35f0b0a26c4d037bfdabe505"
+  },
+  "MoeExpertFp8CoordinateChunk_v2{E=3,K=64,G=64,KB=32,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2,FIRST=False,LAST=True}": {
+   "and": 50636,
+   "type": "e0955987da26b57fc198fa073d3b572e2efcc01f8fa61460b00eefabd6b07c2e98fadd6b2c7cee26e6c90c66b79245fe3e998b708d03ee54310cac75710c4f24"
+  },
+  "SiluMulFp8BlockQuantResult_v2": {
+   "and": 13334,
+   "type": "d2e3581314df7853ccf5242703cb795037ab699cda393a0c77e397fd1a6bd9a2e68a6bf1b18e2af1cfcfa5496e0f58510efb2cceaf170d07a9924c312e80e77a"
+  }
+ }
+}

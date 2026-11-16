@@ -1,0 +1,6 @@
+$ /workspace/research/scratch/r20261027-201343-1b8e/tree/.venv/bin/python /workspace/research/scratch/r20261027-201343-1b8e/tree/benchmarks/one_stage/compose_circuit.py --input-set /workspace/tmp/tmp.W7AwqpCxyP/sets/i8192/sets/silumul-v2-i8192 --out /workspace/tmp/tmp.W7AwqpCxyP/served/window/m0/circuit.txt --partition e94be647048a437f7c96efe7b37fdd4fcd616ed47dc583035e2657aa4e3ce9c035857ea2e6a20ebd4b10cc8bb1aa2c826b4598fc224dea6dfc3f68bf1b97781f --program 1831c0970366e8dcbe092a56412bfac8cf7e729635c1f5c7a8632a5296acc3c3b62f27aef6ffe75a4e4fd8d23248688af7466c89daf4cddace82ec7956724978
+# rc 0 in 12.1 s
+--- stdout
+{"subcircuit": "silu-mul-v2/i8192/bf16", "pin": "13d14493cb78f7adabb9eb3863fcd0a9a4d106d49fcb6c19de93cb9860b88310596e9488ad63d694a72950a3177c25f6cf17dcd6ebe992c90b94dd59d84ae9af", "class_sha512": "06362d1220aab7bc053d98c0b562678994b0863c6bd169aabe975bfe022c7e5cfea189b1d22c51a00f8d1dee3af4c84878a8988e7a19bd9ffeaceffd16e30762"}
+
+--- stderr

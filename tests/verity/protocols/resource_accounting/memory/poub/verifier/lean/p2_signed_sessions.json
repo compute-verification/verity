@@ -1,0 +1,233 @@
+{
+ "accept": {
+  "answer": {
+   "bound": {
+    "budget": "31/4",
+    "floor": "0",
+    "floors": [
+     "0",
+     "0"
+    ],
+    "wrong": "0"
+   },
+   "credited_bytes_per_s": 32896000000,
+   "delta": "1/1099511627776",
+   "draws": [
+    4,
+    4
+   ],
+   "host": "auditor-under-test",
+   "plan_units": 2,
+   "protocol": "verity/remote-bandwidth/p2/v0",
+   "q_bytes": 65792,
+   "reason": null,
+   "receipts": 8,
+   "registration": "9f32cf614ae46f101168864d7dbf44116761a04e5fad9a612b3cb557de6ea343994acd684d782afa97f3add1d26fc476a1a5386dd2cb94fb81cc8e71e40e3149",
+   "span_ns": 2000,
+   "unit_bytes": 8224,
+   "units": 2,
+   "verdict": "accept",
+   "windows": [
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": {
+      "accepted": true,
+      "at": null,
+      "failure": null
+     }
+    },
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": {
+      "accepted": true,
+      "at": null,
+      "failure": null
+     }
+    }
+   ],
+   "wrong_at_most": 0
+  },
+  "case_sha512": "6cf4b84c554a2fd679cf36627c347eadf75845988de03d69384cff35f1cd7a46b721f58ad7ff804758a76d100c840c35c46ae9edfc0743b81df417d3a314c08d",
+  "close": {
+   "chain": "ac5e1bbe28d02c365ec8b1427367c478fd1f630227238e7557e4a2f5db8fcb25c155885c429f90bd0ed2fb008f036405d7c184a09d397ac65687915d312c2360",
+   "lines": 11,
+   "public_key": "c390d41e5927f5597a00120e4addfe96d7556baf82bacf2439effed3f1d019e388e75cff04737802c641940af994f59707cdd3a6f9737727bdd58b0004489830252e2d749934d88fdb4a6ed5400748d2",
+   "signature_sha512": "a33a7b4fa7d064bb189d7f317eb21415c3ede0d0ddd05437eab96e26ea5f5f4b05a5b7a84e66a035b77620830609035deeabef83b3c31783f7fd43c7524c036b"
+  },
+  "prover": "answer"
+ },
+ "garble": {
+  "answer": {
+   "at": [
+    0,
+    0
+   ],
+   "failure": "malformed",
+   "host": "auditor-under-test",
+   "plan_units": 2,
+   "protocol": "verity/remote-bandwidth/p2/v0",
+   "reason": null,
+   "registration": "9f32cf614ae46f101168864d7dbf44116761a04e5fad9a612b3cb557de6ea343994acd684d782afa97f3add1d26fc476a1a5386dd2cb94fb81cc8e71e40e3149",
+   "unit_bytes": 8224,
+   "units": 2,
+   "verdict": "reject",
+   "window": 0,
+   "windows": [
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": {
+      "accepted": false,
+      "at": [
+       0,
+       0
+      ],
+      "failure": "malformed"
+     }
+    },
+    {
+     "draws": null,
+     "passes": 1,
+     "verdict": null
+    }
+   ]
+  },
+  "case_sha512": "2df4676a77df445641da0c462cd8b4ab1858a62ecdbd5fae3f5ccc1ad3630d7f9d883d3b4f8389d16e7813f09c73c41772ed222dae6bcfa4207e23a73252eb84",
+  "close": {
+   "chain": "8ad5b3961d2d2e1dd609d62d715832ec1da20f51c655be76bdcf6154c7baf0f39e971f7db7479b7ba0f12244d7651fac8e448edf63d34f1c82532779a0207c21",
+   "lines": 7,
+   "public_key": "c390d41e5927f5597a00120e4addfe96d7556baf82bacf2439effed3f1d019e388e75cff04737802c641940af994f59707cdd3a6f9737727bdd58b0004489830252e2d749934d88fdb4a6ed5400748d2",
+   "signature_sha512": "057649c5b7b908556e37fe22fa0ecca2877c374575ddd76f76505417bb63d5c64b98dc0b5e9aa7eb99e4d822732179434d2e1cbb0ae457162ace4726a0e4b70e"
+  },
+  "prover": "answer"
+ },
+ "gone": {
+  "answer": {
+   "at": null,
+   "failure": "malformed",
+   "host": "auditor-under-test",
+   "plan_units": 2,
+   "protocol": "verity/remote-bandwidth/p2/v0",
+   "reason": "the prover's side failed: ConnectionError: the peer closed mid-session",
+   "registration": "9f32cf614ae46f101168864d7dbf44116761a04e5fad9a612b3cb557de6ea343994acd684d782afa97f3add1d26fc476a1a5386dd2cb94fb81cc8e71e40e3149",
+   "unit_bytes": 8224,
+   "units": 2,
+   "verdict": "reject",
+   "window": 1,
+   "windows": [
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": {
+      "accepted": true,
+      "at": null,
+      "failure": null
+     }
+    },
+    {
+     "draws": null,
+     "passes": 1,
+     "verdict": {
+      "accepted": false,
+      "at": null,
+      "failure": "malformed"
+     }
+    }
+   ]
+  },
+  "case_sha512": "839ee3e290db8662225716e6e95acaba544a48a31c84615407970d72bc4e5ffd41dcf33deb3dfc5371a84bae78b470c5cbf4483b46eb7d16ffb2daf50a183fbc",
+  "close": {
+   "chain": "821b3ab5c499a1c2d9c4f932c0a461fa5bcdb5f2bf8a4b7307e871025db1ddc2a2dab6b01d69506d7e5e4f3d483b8638954528d34d7cecac5c4e144c8671d9b7",
+   "lines": 8,
+   "public_key": "c390d41e5927f5597a00120e4addfe96d7556baf82bacf2439effed3f1d019e388e75cff04737802c641940af994f59707cdd3a6f9737727bdd58b0004489830252e2d749934d88fdb4a6ed5400748d2",
+   "signature_sha512": "6b3262bfac5dbbec6431c5dbfeaaada29eb1c586837cc87c8b094e26123fdb1118b8f68634ca3236b271d4ce6b15a3da9d915427b3712e24bea5ff9ecf821457"
+  },
+  "prover": "Gone"
+ },
+ "skip": {
+  "answer": {
+   "at": [
+    0,
+    1
+   ],
+   "failure": "receipt",
+   "host": "auditor-under-test",
+   "plan_units": 2,
+   "protocol": "verity/remote-bandwidth/p2/v0",
+   "reason": null,
+   "registration": "9f32cf614ae46f101168864d7dbf44116761a04e5fad9a612b3cb557de6ea343994acd684d782afa97f3add1d26fc476a1a5386dd2cb94fb81cc8e71e40e3149",
+   "unit_bytes": 8224,
+   "units": 2,
+   "verdict": "reject",
+   "window": 0,
+   "windows": [
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": {
+      "accepted": false,
+      "at": [
+       0,
+       1
+      ],
+      "failure": "receipt"
+     }
+    },
+    {
+     "draws": null,
+     "passes": 1,
+     "verdict": null
+    }
+   ]
+  },
+  "case_sha512": "86dc23f7d788e4d305d44f0383b9930312b89dc0f0631586592524f53c0588102257aef66dd8de7b9b60dac6a7816742abf574e2f1ad57b0b6fc4be57c1ff18b",
+  "close": {
+   "chain": "d6a3e608248564019e2a4d527e90611c1786aa4ec625460cfe2e455fb32f8acaa4cf0525477c12dac0ab32d6c1b3b99d1eb2c18b28080fb98c06528d2553441f",
+   "lines": 7,
+   "public_key": "c390d41e5927f5597a00120e4addfe96d7556baf82bacf2439effed3f1d019e388e75cff04737802c641940af994f59707cdd3a6f9737727bdd58b0004489830252e2d749934d88fdb4a6ed5400748d2",
+   "signature_sha512": "ace9f1bf3202ba8abe2c4016198a96b7c22fb088785211bdb0b32ace051ff9a46216257eded464cc9e6caa6ee2472455910115f95aeda985ac49c77c95a6c315"
+  },
+  "prover": "answer"
+ },
+ "unwritable": {
+  "answer": {
+   "at": null,
+   "failure": "malformed",
+   "host": "auditor-under-test",
+   "plan_units": 2,
+   "protocol": "verity/remote-bandwidth/p2/v0",
+   "reason": "the prover's side failed: BrokenPipeError: [Errno 32] Broken pipe",
+   "registration": "9f32cf614ae46f101168864d7dbf44116761a04e5fad9a612b3cb557de6ea343994acd684d782afa97f3add1d26fc476a1a5386dd2cb94fb81cc8e71e40e3149",
+   "unit_bytes": 8224,
+   "units": 2,
+   "verdict": "reject",
+   "window": 1,
+   "windows": [
+    {
+     "draws": 4,
+     "passes": 2,
+     "verdict": null
+    },
+    {
+     "draws": null,
+     "passes": 1,
+     "verdict": {
+      "accepted": false,
+      "at": null,
+      "failure": "malformed"
+     }
+    }
+   ]
+  },
+  "case_sha512": "c5ac0306187115d60f50a4fcede6ef52c792cf6a5f0f38da6211e1c90d84671d1719f868fecdcd22ce157596a55ae938fd3e79ef99031def2cf82f39a32be716",
+  "close": {
+   "chain": "cce084c4abec119ef6c22629630942f89df239efbbd532d40deb158b786760b773910d31884c9555aa3463210f8588e3b248fac674c345fb71a12c862172442f",
+   "lines": 7,
+   "public_key": "c390d41e5927f5597a00120e4addfe96d7556baf82bacf2439effed3f1d019e388e75cff04737802c641940af994f59707cdd3a6f9737727bdd58b0004489830252e2d749934d88fdb4a6ed5400748d2",
+   "signature_sha512": "b2a9a78bf1c46e9cb1d675130f28e93006dd75115212d75580dc7be74f265df3b45f055f7aebeb4a92cdf5ffbbecfe5753833b92a25467b2df0d26e781c12846"
+  },
+  "prover": "ConnectionError"
+ }
+}

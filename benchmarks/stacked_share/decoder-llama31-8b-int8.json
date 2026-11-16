@@ -1,0 +1,14 @@
+{
+ "label": "Llama-3.1-8B int8, LP=256 T=31: the census's request Program as pre/attn/post blocks a layer",
+ "source": "units-8b.json of r20261018-045058-23f7 (art:dc25549e...): a row's callees a layer (pre: RMSNormFusedCuda 21506, Int8RowQuant{K=4096} 28674, ScaledMmS8 QKV 24576, RoPE 5120; post: Int8RowQuant{K=4096} 28674 x2, ScaledMmS8 O 16384, gate_up 114688, down 16384, RMSNormFusedCuda 21506, SiluMul 14336, Int8RowQuant{K=14336} 100354), the attention fit a request-step-layer, Gemm_v2 + TokenSelect a sample; widths bf16 (hidden, q, o 4096; K and V 8 x 128 a layer); data products (#4622's prices) Int8LutAttentionRow's Q'K'^T, 32 heads x 128 a key, and P V', 32 x 128 a key with the keys padded to the s8 step's 32 (products_pass.py on the Program: (S + 32 ceil(S/32)) D a head's row), the linears' MACs by weights free; check_products is the Program's own count (r20261026-085548-0287)",
+ "prompt": 256,
+ "decode": 31,
+ "layers": 32,
+ "row": {"embed": 4113, "pre": 79876, "post": 341000, "final": 18965},
+ "sample": 33474812,
+ "attention": {"r0": 53536, "b_q": 416, "b_kv": 12288, "w0": 3072, "w_start": -64, "products": {"per_key": 4096, "per_padded_key": 4096, "block": 32}, "calls": 1},
+ "bits": {"hidden": 65536, "q": 65536, "kv": 32768, "o": 65536, "token": 32},
+ "m_dyn_node_bytes": 609801469952,
+ "check": 9404379802,
+ "check_products": 11418992640
+}

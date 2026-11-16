@@ -1,0 +1,38 @@
+# PoUB's node store's tests out of the vLLM adapter, after the store (`poub_node_store_map.toml`): what
+# `tools/move/layout.py --map tools/move/poub_node_store_tests_map.toml` moves (memory-accounting, MEM-321, the row "PoUS's
+# and PoUB's code in the vLLM adapter goes to our provers").
+#
+# The tests of `NodeMemory`, its memory map and PoUB's serving loop read nothing of vLLM, so they go whole to PoUB's own
+# suite, `verity/protocols/accounting/poub/tests/` (`verity/protocols/NAME/tests/` in `tests/tree.toml`), their names
+# kept so their imports of one another hold. The session tests of the Commit's `CommitSession`, which drive the adapter's
+# option, go back to the adapter in a code change after this move; the binder's tests, on the engine's hooks, stay there.
+# The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py" = "verity/protocols/accounting/poub/tests/test_registry.py"
+"adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py" = "verity/protocols/accounting/poub/tests/test_memory_map.py"
+"adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py" = "verity/protocols/accounting/poub/tests/test_remote_session.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+"adapters.vllm.tests.protocols.remote_bandwidth.test_memory_map" = "verity.protocols.accounting.poub.tests.test_memory_map"
+"adapters.vllm.tests.protocols.remote_bandwidth.test_registry" = "verity.protocols.accounting.poub.tests.test_registry"
+"adapters.vllm.tests.protocols.remote_bandwidth.test_remote_session" = "verity.protocols.accounting.poub.tests.test_remote_session"

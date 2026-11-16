@@ -1,0 +1,551 @@
+{
+ "schema": "bench-instances/v1/seeds",
+ "experiment_id": "B1-b3eba618b1b5-20260907T1731Z",
+ "source": "/Users/danielreuter/projects/veritor/vllm-poc/fixtures/B1-b3eba618b1b5-20260907T1731Z",
+ "repo_copy": "packages/verity/tests/ml/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z",
+ "model": {
+  "hf_repo": "Qwen/Qwen2.5-1.5B",
+  "hf_revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "hidden": 1536,
+  "intermediate": 8960,
+  "fused_qkv_N": 2048,
+  "gate_up_N": 17920,
+  "vocab": 151936
+ },
+ "files_copied": [
+  "x.u16",
+  "w_row.u16",
+  "fixture.json"
+ ],
+ "out_row": "not copied; sha256 recorded, word j = committed_word; full row at repo_copy/<name>/out_row.u16",
+ "seeds": {
+  "qkv_proj_decode_0": {
+   "family": "qkv_proj",
+   "phase": "decode",
+   "layer": "5",
+   "op": "layers.5.self_attn.qkv_proj.gemm",
+   "j": 1014,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.5.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=307c6016-75d6-547f-9dfc-24a350a873dd/t=136/ph=decode/l=5/op=layers.5.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 48849,
+   "hf_tensor": [
+    "model.layers.5.self_attn.q_proj.weight",
+    1014
+   ],
+   "sha256": {
+    "x.u16": "a7e0d5e84c8155e20d8503ffa2c8c1ff880a6fcd11e9f33e86c6b05ae2ccef87",
+    "w_row.u16": "f1f24b22e8570c95364af08028b5e5a37c3c1b4c1b1d49e4ab4d3cdc04a0699f",
+    "fixture.json": "ee6ff3c6b53bd9542b84cad3adc287330e60b69749e02611b3b5098aa88f7ad9",
+    "out_row.u16": "43a890e07e287dfd5b2474925794094ecf96ff4a6a5f888d52ebd346d2df5c0a"
+   }
+  },
+  "qkv_proj_decode_1": {
+   "family": "qkv_proj",
+   "phase": "decode",
+   "layer": "3",
+   "op": "layers.3.self_attn.qkv_proj.gemm",
+   "j": 1427,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.3.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=65cac35e-4c36-56b6-b8f0-44693b0ebd13/t=139/ph=decode/l=3/op=layers.3.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 48920,
+   "hf_tensor": [
+    "model.layers.3.self_attn.q_proj.weight",
+    1427
+   ],
+   "sha256": {
+    "x.u16": "d7273db76fa2fb152a53b8c2070429fcf4bf2ffae6490806365f7e683c84bbe6",
+    "w_row.u16": "51a0c7c0f1261f57286cc9ebf72eb2dcaab55daf53409d44c0150dd32ffc5ba6",
+    "fixture.json": "479a6cbada442f9f5a9474a4af9044748e2891b03a155f3e273dbca8a1c9b8e1",
+    "out_row.u16": "657a1affcc09680e92c2d4fbac1ec9803e554361781c30632997c2db1207653b"
+   }
+  },
+  "qkv_proj_decode_2": {
+   "family": "qkv_proj",
+   "phase": "decode",
+   "layer": "7",
+   "op": "layers.7.self_attn.qkv_proj.gemm",
+   "j": 967,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.7.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=307c6016-75d6-547f-9dfc-24a350a873dd/t=172/ph=decode/l=7/op=layers.7.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 16135,
+   "hf_tensor": [
+    "model.layers.7.self_attn.q_proj.weight",
+    967
+   ],
+   "sha256": {
+    "x.u16": "ff27123553aca9fc7afe400f2c0a7e9b8ac3658a8713813edc2f51534ca63a41",
+    "w_row.u16": "c070c8975dd7fffeeaeced9bf932d4f188e64e05fd7e932e3d0dc0543c657e33",
+    "fixture.json": "f8399cd81300cf817655b2ae7d4c75f4f1f15860fd02d096a8e4526c78b6547b",
+    "out_row.u16": "4f8cd0cf6659637b80b4f4c69618516e8bced63700da85b85e8961d89cd3e4f0"
+   }
+  },
+  "qkv_proj_prefill_0": {
+   "family": "qkv_proj",
+   "phase": "prefill",
+   "layer": "10",
+   "op": "layers.10.self_attn.qkv_proj.gemm",
+   "j": 308,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.10.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=9acdc8c1-51e9-5593-a2b2-f31ff3d04988/t=316/ph=prefill/l=10/op=layers.10.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 16195,
+   "hf_tensor": [
+    "model.layers.10.self_attn.q_proj.weight",
+    308
+   ],
+   "sha256": {
+    "x.u16": "96fe06794e77b02591c647c838aac5c9e8fa1f0fe1ca5caeed6123847679ecad",
+    "w_row.u16": "dffc999e051945c2def6c1fc888cebb2e1071d6a693d0f3ca2a9061cf944b48d",
+    "fixture.json": "886800ec166f0311ad8462a3075167010edfd8bde232969e61875a5dee14e41c",
+    "out_row.u16": "91a3a8f8b2a722cda26cb465071c7514cdb2fae766f1a3bcaa3bd7487de445f9"
+   }
+  },
+  "qkv_proj_prefill_1": {
+   "family": "qkv_proj",
+   "phase": "prefill",
+   "layer": "17",
+   "op": "layers.17.self_attn.qkv_proj.gemm",
+   "j": 1476,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.17.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=197e7877-6d1b-5576-b052-44b1474c234f/t=691/ph=prefill/l=17/op=layers.17.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 15914,
+   "hf_tensor": [
+    "model.layers.17.self_attn.q_proj.weight",
+    1476
+   ],
+   "sha256": {
+    "x.u16": "e1d5c895879ebce036a673112156a15b78d7376c9822f1fe1077a9f160f0835e",
+    "w_row.u16": "890ecd1cac0b3d95928ebec70ab8bdc9fb8ccf870ae8b0adba3c72ed88144077",
+    "fixture.json": "46c133ac4a33ee5d7cd5d431c52d5e55acda777e09921a0fe084c342204538fd",
+    "out_row.u16": "46971d0b7ae547bb4f7460d0c6809ae5f5cbf268c94fcc0b8720985834480f07"
+   }
+  },
+  "qkv_proj_prefill_2": {
+   "family": "qkv_proj",
+   "phase": "prefill",
+   "layer": "7",
+   "op": "layers.7.self_attn.qkv_proj.gemm",
+   "j": 84,
+   "N": 2048,
+   "K": 1536,
+   "weight_param": "layers.7.self_attn.qkv_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=08beda53-9f9d-5667-aa61-b8e0796de341/t=621/ph=prefill/l=7/op=layers.7.self_attn.qkv_proj.gemm/port=0",
+   "out_row_word_j": 16267,
+   "hf_tensor": [
+    "model.layers.7.self_attn.q_proj.weight",
+    84
+   ],
+   "sha256": {
+    "x.u16": "a90716974645265bf62eb76b3b16c3ed4aeee8479312682343854087b3e35046",
+    "w_row.u16": "5190c26e0ced5a54f867d364ed18088247bcb74eab90d88e877b5eabecd5c6ea",
+    "fixture.json": "065c3c0ba8c8e05acf356481a28993608e6d252f98cb041da576af7f110b79a7",
+    "out_row.u16": "b740848bdba6898b0c4752c0f95668dbcf1c18b9222f936f0623bba473cefa9c"
+   }
+  },
+  "o_proj_decode_0": {
+   "family": "o_proj",
+   "phase": "decode",
+   "layer": "9",
+   "op": "layers.9.self_attn.o_proj.gemm",
+   "j": 748,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.9.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=a3af9bbe-d949-5148-a5e5-55e360ca4c1a/t=2066/ph=decode/l=9/op=layers.9.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 48940,
+   "hf_tensor": [
+    "model.layers.9.self_attn.o_proj.weight",
+    748
+   ],
+   "sha256": {
+    "x.u16": "cffbe0d3b1ba772269afa71cf6e99ff1f2f1c6b3ffbfad0ebbe073e4b9f97d4b",
+    "w_row.u16": "de1965e69ed400351c76b5802dad2c148c1dbf63c12d1558cc0af879fc80e8c1",
+    "fixture.json": "1a961d9ff028cf49091105906ff3b92f2824acbb973cfb8ab9eedd80f9951b47",
+    "out_row.u16": "239c81eed13c3e595034c530ebe4256eabb0979d6de1708b10d685077ba2520c"
+   }
+  },
+  "o_proj_decode_1": {
+   "family": "o_proj",
+   "phase": "decode",
+   "layer": "6",
+   "op": "layers.6.self_attn.o_proj.gemm",
+   "j": 905,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.6.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=197e7877-6d1b-5576-b052-44b1474c234f/t=2071/ph=decode/l=6/op=layers.6.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 15910,
+   "hf_tensor": [
+    "model.layers.6.self_attn.o_proj.weight",
+    905
+   ],
+   "sha256": {
+    "x.u16": "087a91f1299f704b4142cda5d242ed3403c6df29e757cd70d2f7c8e5d9878bb9",
+    "w_row.u16": "07002a4302ab1436641668e5033a84a34f1142729e0ab1bef68f78a67276effe",
+    "fixture.json": "b2d1ec3ba364e7f05a6fbdc11209d54f034cf8d1f4974aec2ac61786b4d62a28",
+    "out_row.u16": "b4f2ecf1bd774981789e59758439e8cc436550a7d024c4f857b57c69bf05bc98"
+   }
+  },
+  "o_proj_decode_2": {
+   "family": "o_proj",
+   "phase": "decode",
+   "layer": "12",
+   "op": "layers.12.self_attn.o_proj.gemm",
+   "j": 1044,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.12.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=fc53fcc7-fb7e-59f3-910c-f9d225fa7d2a/t=574/ph=decode/l=12/op=layers.12.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 48658,
+   "hf_tensor": [
+    "model.layers.12.self_attn.o_proj.weight",
+    1044
+   ],
+   "sha256": {
+    "x.u16": "8153b87ad71cd4026737d85ef5c402368fee914bf97adc86339bd4bc3dd61fa4",
+    "w_row.u16": "7b441eb6c208d326accbd49b4eeb161a1695a37044dd0b7ddd8718b7b57a1fad",
+    "fixture.json": "27db4a1b3f1ed7465ed3b9d03c36916a3bf69b680c72422f8c0865d8f6f66bc6",
+    "out_row.u16": "b9b5cf07973231868b6404602dd81e7685e517b7b29136891163626c00948cd1"
+   }
+  },
+  "o_proj_prefill_0": {
+   "family": "o_proj",
+   "phase": "prefill",
+   "layer": "16",
+   "op": "layers.16.self_attn.o_proj.gemm",
+   "j": 1535,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.16.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=307c6016-75d6-547f-9dfc-24a350a873dd/t=35/ph=prefill/l=16/op=layers.16.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 48482,
+   "hf_tensor": [
+    "model.layers.16.self_attn.o_proj.weight",
+    1535
+   ],
+   "sha256": {
+    "x.u16": "64c24b7bec97389e5f537183b571b1426d1ef5aa8e26b78b09745fe85fc13a54",
+    "w_row.u16": "7eb52e85402bdc0fca1d998067c73d7270baebbd06cb0a3c505f3c38a76c96e2",
+    "fixture.json": "7e33f8844ece26d1ecb6c40332b23cab7604c18be7c7351a4e41b40dd27babfc",
+    "out_row.u16": "01b92296990a0583eeeb784e0ba1cc64726dcb79dd67e25741d9b98ca29597cb"
+   }
+  },
+  "o_proj_prefill_1": {
+   "family": "o_proj",
+   "phase": "prefill",
+   "layer": "10",
+   "op": "layers.10.self_attn.o_proj.gemm",
+   "j": 1457,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.10.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=1a7bfae3-d012-5651-9d94-0eb9240814bc/t=1084/ph=prefill/l=10/op=layers.10.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 15704,
+   "hf_tensor": [
+    "model.layers.10.self_attn.o_proj.weight",
+    1457
+   ],
+   "sha256": {
+    "x.u16": "3b7facb8d990c8c4638e83d6ff32da532ae3d762abafa4057545d4ab9301e91b",
+    "w_row.u16": "e09b925452c7d58f9703eefbf88ada6c4fb49fba4191acad07d13028c790100c",
+    "fixture.json": "e742501c8705cac67cc5f108ff56168f77dd985976132b62b062ef2a5312ad31",
+    "out_row.u16": "ad5ebdc14abd0e0ad03f8b4fcd7f0685866f423f1089e12705c85d5cf06a48e6"
+   }
+  },
+  "o_proj_prefill_2": {
+   "family": "o_proj",
+   "phase": "prefill",
+   "layer": "13",
+   "op": "layers.13.self_attn.o_proj.gemm",
+   "j": 544,
+   "N": 1536,
+   "K": 1536,
+   "weight_param": "layers.13.self_attn.o_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=08beda53-9f9d-5667-aa61-b8e0796de341/t=918/ph=prefill/l=13/op=layers.13.self_attn.o_proj.gemm/port=0",
+   "out_row_word_j": 48792,
+   "hf_tensor": [
+    "model.layers.13.self_attn.o_proj.weight",
+    544
+   ],
+   "sha256": {
+    "x.u16": "b468d51553b339a714bd3dce4ad1c0ab33c09dc33178ec18fe5d70472263fe29",
+    "w_row.u16": "7530ce24315a9c4833a0326921975ffed40a857fe11fdd63b75f11b167b31fb2",
+    "fixture.json": "eddb391d1e5884386fc36d125a68ad6b10c22e252196697da7b61cc1ed77d45f",
+    "out_row.u16": "3b2517682f61c5b4fad411503a8454104b635909c62900184f6150d7a2bad7b4"
+   }
+  },
+  "gate_up_proj_decode_0": {
+   "family": "gate_up_proj",
+   "phase": "decode",
+   "layer": "5",
+   "op": "layers.5.mlp.gate_up_proj.gemm",
+   "j": 5290,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.5.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=4ac55503-b533-5615-8fb7-34f2a6ef2c79/t=75/ph=decode/l=5/op=layers.5.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 49263,
+   "hf_tensor": [
+    "model.layers.5.mlp.gate_proj.weight",
+    5290
+   ],
+   "sha256": {
+    "x.u16": "f9a7a897247b5699490b88e8d6317b070815964d23d3f4ba9df212a9c69ee401",
+    "w_row.u16": "a7f809e97acf6dea6ebb3fb6293d410f00bbeb3d12ad4acc7f3c0ec8d788ec1b",
+    "fixture.json": "33400a88dc77277c8b4c694d2f4e47f811dab5f4ecc2a53beba9c0b0e3f17e5e",
+    "out_row.u16": "3805c599a8d3c9c3e9767997be8dfb607cb134319d836e595cf90009cb7bf1d3"
+   }
+  },
+  "gate_up_proj_decode_1": {
+   "family": "gate_up_proj",
+   "phase": "decode",
+   "layer": "9",
+   "op": "layers.9.mlp.gate_up_proj.gemm",
+   "j": 16895,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.9.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=a3af9bbe-d949-5148-a5e5-55e360ca4c1a/t=2097/ph=decode/l=9/op=layers.9.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 15955,
+   "hf_tensor": [
+    "model.layers.9.mlp.up_proj.weight",
+    7935
+   ],
+   "sha256": {
+    "x.u16": "498b399290d58041f0a8991efb685b24f392199828759410a080d049d1b19b5f",
+    "w_row.u16": "a85cafe96ed8e7c7fe275a819f004b2558562b4106aabfd7976723390fdf4c3a",
+    "fixture.json": "2f6a2e4bf46eb5294e19ee610dfd2e0a696f385897d3ed87b39ccad314f6f143",
+    "out_row.u16": "36e1c20ec4f8dc63f3d29169313613582a410828b9de89e2e95f2851e273dca7"
+   }
+  },
+  "gate_up_proj_decode_2": {
+   "family": "gate_up_proj",
+   "phase": "decode",
+   "layer": "8",
+   "op": "layers.8.mlp.gate_up_proj.gemm",
+   "j": 11112,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.8.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=9c02aa0a-034a-57ce-a87a-2c215a302e15/t=136/ph=decode/l=8/op=layers.8.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 48684,
+   "hf_tensor": [
+    "model.layers.8.mlp.up_proj.weight",
+    2152
+   ],
+   "sha256": {
+    "x.u16": "ce90b09f179a3a9e09911d6d100c370025ebe3bd6000b9e753364866b0ee846b",
+    "w_row.u16": "44004e460facfd023b4aea42710095444da253569ae3fb5b53f2b24180f59b3e",
+    "fixture.json": "821bf40b0c5ef2b7b8cde0cdcca641ee89ad4d04fa4b403408cc3481e3ce132a",
+    "out_row.u16": "4fd2afd2b6d72e0163325b9d6b4f2086a34203432991c3f7a931e4e3e3436e93"
+   }
+  },
+  "gate_up_proj_prefill_0": {
+   "family": "gate_up_proj",
+   "phase": "prefill",
+   "layer": "7",
+   "op": "layers.7.mlp.gate_up_proj.gemm",
+   "j": 2439,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.7.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=1a7bfae3-d012-5651-9d94-0eb9240814bc/t=1406/ph=prefill/l=7/op=layers.7.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 49034,
+   "hf_tensor": [
+    "model.layers.7.mlp.gate_proj.weight",
+    2439
+   ],
+   "sha256": {
+    "x.u16": "c773d05fd969a59703299e011f4dd1895fdf13d62065506c201fe7318b20d579",
+    "w_row.u16": "984e7038e6720fe5b0b30253ab43bce9afae2b53aa5e79ebb5db1e6286a2bb0d",
+    "fixture.json": "5ca0e6a3de91b45f5b1bed002c76b31b1f2837152f9cf1c39bc79561b298833a",
+    "out_row.u16": "68a4406b80d535721a8e38862a0efe0ebe4af6f6005af8fcf6ba5d03218f00e0"
+   }
+  },
+  "gate_up_proj_prefill_1": {
+   "family": "gate_up_proj",
+   "phase": "prefill",
+   "layer": "11",
+   "op": "layers.11.mlp.gate_up_proj.gemm",
+   "j": 7693,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.11.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=1a7bfae3-d012-5651-9d94-0eb9240814bc/t=220/ph=prefill/l=11/op=layers.11.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 49161,
+   "hf_tensor": [
+    "model.layers.11.mlp.gate_proj.weight",
+    7693
+   ],
+   "sha256": {
+    "x.u16": "251bed2456992e70b9af0f974f10f9f411e12849a9e7bad4a6a9c66d2f735f97",
+    "w_row.u16": "685fbd069cb996a2981986df0567928bd1277773c066b089ae4c35ce744ea271",
+    "fixture.json": "fe519c254ed59e92f7012d29f3c0954b20af27e5fe6b38b603786fd5f57546d9",
+    "out_row.u16": "11af6e44d84da200754f06d52850385bef1f8f76c89ba2800ebfbc63e2824b81"
+   }
+  },
+  "gate_up_proj_prefill_2": {
+   "family": "gate_up_proj",
+   "phase": "prefill",
+   "layer": "23",
+   "op": "layers.23.mlp.gate_up_proj.gemm",
+   "j": 7560,
+   "N": 17920,
+   "K": 1536,
+   "weight_param": "layers.23.mlp.gate_up_proj.weight",
+   "canonical_id": "p=b3eba618b1b5/r=197e7877-6d1b-5576-b052-44b1474c234f/t=1353/ph=prefill/l=23/op=layers.23.mlp.gate_up_proj.gemm/port=0",
+   "out_row_word_j": 48440,
+   "hf_tensor": [
+    "model.layers.23.mlp.gate_proj.weight",
+    7560
+   ],
+   "sha256": {
+    "x.u16": "2ed36bbbaf4d8bf1f99a055646c35cf667cfcfd74dbaa754dd64b7e4658f2b3a",
+    "w_row.u16": "23f9756acf5c5d68ff1da9174e42f1241bcde4f3cd826963c795403d911f99df",
+    "fixture.json": "a11529ca7ce6b4d287f29a053f3691c80436b44a18dc8bddacbfe98de2b75963",
+    "out_row.u16": "5175d84d09e74f110ec29f355b8548fffb661c6bb5e5525d61d2489b673e5263"
+   }
+  },
+  "lm_head_decode_0": {
+   "family": "lm_head",
+   "phase": "decode",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 28585,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=4ac55503-b533-5615-8fb7-34f2a6ef2c79/t=37/ph=decode/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 48921,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    28585
+   ],
+   "sha256": {
+    "x.u16": "2eaa4a120ce2e85ee3f50dccd9cd04a03789f3b64599dcd9f5b1edb77880d249",
+    "w_row.u16": "b708df6f947d4533c3acff55feea3d9634fcc8ce6c08d3173d4c51e629219af5",
+    "fixture.json": "76a99bd1d15e61b04a22607d6c9a54520cc686ef0c6e31aca37fb9d02941e202",
+    "out_row.u16": "c13f9e9f5a5755357702cfcb9d6c49c8fcef2b6d58b838fe8d007dca4ef44195"
+   }
+  },
+  "lm_head_decode_1": {
+   "family": "lm_head",
+   "phase": "decode",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 40469,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=307c6016-75d6-547f-9dfc-24a350a873dd/t=186/ph=decode/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 16573,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    40469
+   ],
+   "sha256": {
+    "x.u16": "27e604d1082a00e922449db8af9a04a6fc0be8b05a29b9878b57a34d0caa99bf",
+    "w_row.u16": "5a59c6fadde3e593557e77abfbcf14bc59af6088ac77614ebd0c63941a6764af",
+    "fixture.json": "7e77f8e1ec8934229f050551c8dc2693bb94160009a81221650f956b2f2e06af",
+    "out_row.u16": "d666e070b84e798d34c02693e9f0301978148e3c31e14885d9d0f5d0d8a2e4b9"
+   }
+  },
+  "lm_head_decode_2": {
+   "family": "lm_head",
+   "phase": "decode",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 136935,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=197e7877-6d1b-5576-b052-44b1474c234f/t=2110/ph=decode/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 49047,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    136935
+   ],
+   "sha256": {
+    "x.u16": "49cbb960997425c15926bd04568a26da57911607ac2192318dfd7e403d807c91",
+    "w_row.u16": "0eb2b984fde1e73cb9b42deed9315657fd614b7501fadb83030b320e30ed96df",
+    "fixture.json": "bbfde3e65820e18ea21fc79a95753070104185770196df19d9acae4dcd219194",
+    "out_row.u16": "20eec37a189a44189985df0fd541a52c9de57e1b4261428238b52a84d72826ad"
+   }
+  },
+  "lm_head_prefill_0": {
+   "family": "lm_head",
+   "phase": "prefill",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 111818,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=307c6016-75d6-547f-9dfc-24a350a873dd/t=127/ph=prefill/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 49196,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    111818
+   ],
+   "sha256": {
+    "x.u16": "c464fa67ead3b03a1a8043bea0f9f3a5b8aabaacaa968ca14acb77bb0668c41c",
+    "w_row.u16": "21fd85fb38f2cbd82b1d1312c8656f7e517178b6676f6d89378987e6470c86ce",
+    "fixture.json": "8aa306f9e003923a8f244f1c3a373e07e0dd21c3b45ca08ec6c440b3e2fefc39",
+    "out_row.u16": "4cb31bded03270dad53a51bd3cd03184f82d4d24c06b7999f2f88dba481e24bc"
+   }
+  },
+  "lm_head_prefill_1": {
+   "family": "lm_head",
+   "phase": "prefill",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 18917,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=197e7877-6d1b-5576-b052-44b1474c234f/t=2047/ph=prefill/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 16466,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    18917
+   ],
+   "sha256": {
+    "x.u16": "8332b1b3bbaa7df2eb14ae529c12769d47beadd131afd478b4a5b77bb9d7aa4e",
+    "w_row.u16": "10f720303b70b55c0c279b3e4d7636ca5c459026e997ef658a2d5ddea79f02e8",
+    "fixture.json": "fa321b864a24049b77505625c404449ef055e0d9aa6ba2ca49e00547dccecba9",
+    "out_row.u16": "08d78238c5d53b3e8e1bc44ac543be0ddaa05804ee26442abb9e0e24f9874179"
+   }
+  },
+  "lm_head_prefill_2": {
+   "family": "lm_head",
+   "phase": "prefill",
+   "layer": "lm_head",
+   "op": "lm_head.gemm",
+   "j": 22041,
+   "N": 151936,
+   "K": 1536,
+   "weight_param": "embed_tokens.weight",
+   "canonical_id": "p=b3eba618b1b5/r=55c43c04-032e-5184-85b7-4211e28990cd/t=511/ph=prefill/l=lm_head/op=lm_head.gemm/port=0",
+   "out_row_word_j": 49059,
+   "hf_tensor": [
+    "model.embed_tokens.weight",
+    22041
+   ],
+   "sha256": {
+    "x.u16": "95d2f52f5abb3ec014a5af78398132b01660e0d43e193479a79acda0e1211424",
+    "w_row.u16": "f14ea2e61c72e99a582ddabbc57f8cbd717788e3baad7665a8c731da2eace63d",
+    "fixture.json": "60a2ae2a756e9e535af3378cdeb7d72f35751f1ab33b7b3cac84a22e64f17e89",
+    "out_row.u16": "e88051b5761922d8cd14b417d356ca6ec529a67235e0641d3bbefbbab535baf4"
+   }
+  }
+ }
+}

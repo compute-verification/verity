@@ -1,0 +1,398 @@
+# The retired word "draw", in the Glossary's words: what `tools/move/rename.py --map tools/move/draw_words_map.toml`
+# renames. GLOSSARY.md: "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit" -> the sample, a sampled
+# proof block; to sample (coins are flipped). Its rows are `terms_map.toml`'s for the family, run here outside that map's
+# prose scope, so a name follows its word (`draw_session` -> `sample_session`, `DrawSetup` -> `SampleSetup`) and so does a
+# file's path; a drawn unit is a sampled proof block, a draw of coins a flip, a coin family's role a sampling coin.
+# Left by this map, each for its owner or its own map:
+# - the proof system's own tree (`verity/protocols/proofs/`, Flock's and SPOT's areas of `security/`,
+#   `benchmarks/one_stage/`, `benchmarks/remote_session/`), which proofs' workers rename, and every name, path and
+#   module of it another file spells, which follows proofs' map;
+# - the Lean: its files, and every name the Lean declares or spells wherever another file names it, which the family's
+#   Lean map renames after lean's names move, with the Lean lints and tools that spell them (`tests/test_lean_packages.py`,
+#   `tests/test_lean_vocabulary.py`, `tools/verity/lean/`);
+# - what recorded data or another system reads ([keep]): data files (JSON, JSONL, CSV, TSV, text), record keys and reason
+#   codes (a quoted lowercase token), kebab-case names and flags with the attributes argparse makes of them, environment
+#   variables and other upper-case snake-case names, domain tags and format ids, coin labels (`draw/0`), a Definition's
+#   id, a keyword that becomes a record's key, and a prompt a model reads;
+# - the word in its other senses: a random number a sampler or a generator takes (the vLLM adapter's token sampling, its
+#   draw ledger, its seeded workload lengths and prompts, a seed a host or a rank draws, random weights or tensors), a
+#   GPU's power draw, a resource's draw on CPU slots, hypothesis's `draw` and `DrawFn`, a bare function `draw(`;
+# - memory accounting's files (PoUB, PoUS, `benchmarks/pous/` and their Lean), which its own maps rename
+#   (`draw_bare_map.toml`, `draw_poub_*`), and every name of theirs another file reads; and the other names terms_map.toml
+#   keeps beside the name they would become ([keep_in]);
+# - the paths whose owners run their own map over them (`adapters/vllm/`, PoUW's protocol and `benchmarks/pouw/`, the
+#   network certifier's files and `benchmarks/network_traces/`, `network_e2e/`, `benchmarks/slowdown/`), and every name
+#   of theirs another file reads;
+# - the deployment runtime (`verity/runtime/`), whose coin sources' `draw(n)` flips coins, which other lanes' tests call;
+# - the kernel Definitions' registry (`prims.py`, `b1.py`, `ref_prims.py`), whose source a manifest's digest hashes;
+# - records of what was (earlier maps, changelogs, the archive), the Glossary's table, the retired-words lints and their
+#   lists, fixtures, pinned and lock files.
+
+[words]
+"test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins" = "test_a_seeded_serve_flips_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins"
+"test_each_commit_window_draws_every_coin_from_a_session_of_its_own" = "test_each_commit_window_flips_every_coin_from_a_session_of_its_own"
+"test_each_window_draws_its_coins_from_a_gate_session_of_its_own" = "test_each_window_flips_its_coins_from_a_gate_session_of_its_own"
+"drawn proof blocks" = "sampled proof blocks"
+"drawn proof block" = "sampled proof block"
+"Drawn proof blocks" = "Sampled proof blocks"
+"Drawn proof block" = "Sampled proof block"
+"drawn units" = "sampled proof blocks"
+"drawn unit" = "sampled proof block"
+"Drawn units" = "Sampled proof blocks"
+"Drawn unit" = "Sampled proof block"
+"drawn_units" = "sampled_blocks"
+"drawn_unit" = "sampled_block"
+"drawnUnits" = "sampledBlocks"
+"drawnUnit" = "sampledBlock"
+"DrawnUnits" = "SampledBlocks"
+"DrawnUnit" = "SampledBlock"
+"coins are drawn" = "coins are flipped"
+"coins were drawn" = "coins were flipped"
+"coin is drawn" = "coin is flipped"
+"coin was drawn" = "coin was flipped"
+"coins drawn" = "coins flipped"
+"coin drawn" = "coin flipped"
+"draws coins" = "flips coins"
+"draws its coins" = "flips its coins"
+"draws its coin" = "flips its coin"
+"draws the same coins" = "flips the same coins"
+"drew the coins" = "flipped the coins"
+"drew its coins" = "flipped its coins"
+"draw fresh coins" = "flip fresh coins"
+"Draw fresh coins" = "Flip fresh coins"
+"draws fresh coins" = "flips fresh coins"
+"Draw a coin" = "Flip a coin"
+"drawn coins" = "flipped coins"
+"draws the period's weight-side coins" = "flips the period's weight-side coins"
+"draws a stream round's coins" = "flips a stream round's coins"
+"draws the ten batching coins" = "flips the ten batching coins"
+"draw the judged run's coins" = "flip the judged run's coins"
+"draw their in-process coins" = "flip their in-process coins"
+"drawing exactly their coins" = "flipping exactly their coins"
+"draws level 0's query coins" = "flips level 0's query coins"
+"drew independent pair coins" = "flipped independent pair coins"
+"draws every window's coins" = "flips every window's coins"
+"draws its schedule's coins" = "flips its schedule's coins"
+"draws every append's coin" = "flips every append's coin"
+"draws each round's coins" = "flips each round's coins"
+"draws its own live coins" = "flips its own live coins"
+"draws the window's coins" = "flips the window's coins"
+"draws a fresh skip coin" = "flips a fresh skip coin"
+"draws its phase's coins" = "flips its phase's coins"
+"draws its round's coins" = "flips its round's coins"
+"draws the model's coins" = "flips the model's coins"
+"Draw c's openings coin" = "Flip c's openings coin"
+"draw c's openings coin" = "flip c's openings coin"
+"draw d's openings coin" = "flip d's openings coin"
+"draw the append's coin" = "flip the append's coin"
+"draw the model's coins" = "flip the model's coins"
+"draws a stream's coins" = "flips a stream's coins"
+"draws the round's coin" = "flips the round's coin"
+"drawing a run's coins" = "flipping a run's coins"
+"draws its first coins" = "flips its first coins"
+"draws the other coins" = "flips the other coins"
+"draws a uniform coin" = "flips a uniform coin"
+"draws b's check coin" = "flips b's check coin"
+"draws the inner coin" = "flips the inner coin"
+"draws two live coins" = "flips two live coins"
+"draws a random coin" = "flips a random coin"
+"draws its own coins" = "flips its own coins"
+"draws its salt coin" = "flips its salt coin"
+"draw plain's coins" = "flip plain's coins"
+"draw a check coin" = "flip a check coin"
+"draws a live coin" = "flips a live coin"
+"draws three coins" = "flips three coins"
+"drawing no coins" = "flipping no coins"
+"draws every coin" = "flips every coin"
+"draws live coins" = "flips live coins"
+"draw every coin" = "flip every coin"
+"draw their coin" = "flip their coin"
+"draws each coin" = "flips each coin"
+"draws the coins" = "flips the coins"
+"draws no coins" = "flips no coins"
+"draws one coin" = "flips one coin"
+"draws the coin" = "flips the coin"
+"draws no coin" = "flips no coin"
+"draws a coin" = "flips a coin"
+"draw a coin" = "flip a coin"
+"that draw coins" = "that flip coins"
+"redraws the live coins" = "flips the live coins again"
+"redraws the last coin" = "flips the last coin again"
+"redraws the coins" = "flips the coins again"
+"draw coins" = "sampling coins"
+"Draw coins" = "Sampling coins"
+"draw coin" = "sampling coin"
+"Draw coin" = "Sampling coin"
+"redrawing" = "resampling"
+"Redrawing" = "Resampling"
+"redrawn" = "resampled"
+"Redrawn" = "Resampled"
+"Redraws" = "Resamples"
+"REDRAWN" = "RESAMPLED"
+"REDRAW" = "RESAMPLE"
+"drew" = "sampled"
+"Drew" = "Sampled"
+"undrawn" = "unsampled"
+"Undrawn" = "Unsampled"
+"redraws" = "resamples"
+"redraw" = "resample"
+"Redraw" = "Resample"
+"drawing" = "sampling"
+"Drawing" = "Sampling"
+"draws" = "samples"
+"Draws" = "Samples"
+"DRAWS" = "SAMPLES"
+"drawn" = "sampled"
+"Drawn" = "Sampled"
+"DRAWN" = "SAMPLED"
+"draw" = "sample"
+"Draw" = "Sample"
+"DRAW" = "SAMPLE"
+
+# the SHA-512 row engine's salts and seed tiles are derived from a key or a seed, not sampled
+[[words_in]]
+files = ["benchmarks/torch_gpu/sha512_rows/**", "verity/commitments/cuda/sha512_rows/**"]
+words = { "draws" = "derives", "drawn" = "generated" }
+
+[rewrite]
+# Never rewritten: records of what was, the term source and the lints that spell the old words on purpose, fixtures,
+# pinned and lock files; data files, which records and vectors are; the Lean; the proof system's own tree;
+# `benchmarks/hash/`, whose Dither names kernels' own map renames; the registry files a digest hashes; and memory
+# accounting's files, which its own maps rename
+exclude = ["benchmarks/proof_throughput/verity_proof_throughput/zk.py", "benchmarks/proof_throughput/README.md", "verity/protocols/interface/README.md", "verity/protocols/compose/verifier/lean/README.md", "verity/protocols/experimental/dither/PROTOCOL.md", "tools/move/**", ".agents/skills/friction/SKILL.md", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json", "GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py", "tests/lint/allowlists/**", "tools/research/tests/test_slack.py", "tools/check/tests/test_move_check.py", "*.jsonl", "*.csv", "*.tsv", "*.npz", "*.bin", "*.log", "**/lean-audit.json", ".agents/skills/using-slack/registry.json", "adapters/vllm/tests/lint/allowlists/p14_one_way.json", "adapters/vllm/verity_vllm/engine/profiles/corpus_coverage.json", "benchmarks/census/schemas/input_sets.schema.json", "benchmarks/compute/tests/fixtures/record/pieces/pouw/verify.json", "benchmarks/harness/verity_bench/data/served_row.json", "benchmarks/harness/verity_bench/data/spot_holes.json", "benchmarks/memory/tests/fixtures/session.json", "benchmarks/nci/algorithms.json", "benchmarks/nci/calibrations.json", "benchmarks/nci/parameters.json", "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json", "benchmarks/numerical/bench-instances/v1/manifest.json", "benchmarks/one_stage/interfaces/tests/fixtures/block-record-b71a-w30.json", "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r1-window10.json", "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json", "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json", "benchmarks/one_stage/interfaces/tests/fixtures/integrity-profile-stratified.json", "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json", "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json", "benchmarks/pouw/budget_sampling.json", "benchmarks/pouw/pearl_c_sm90/overhead_arm.json", "benchmarks/proof_throughput/baseline.json", "benchmarks/prove_path/sources.json", "benchmarks/sampling_plan/inputs.json", "benchmarks/scan_cost/public.json", "benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json", "benchmarks/spot_figures/cards/references.glm-5.3.f531585c3d37.json", "benchmarks/spot_figures/tests/fixtures/control/plan_inputs.json", "security/Proofs/lean-audit.json", "security/Properties/lean-audit.json", "security/lean-audit.json", "tests/lint/allowlists/lean_bar.json", "tests/lint/allowlists/repo_python_verdicts.json", "tests/lint/allowlists/repo_retired_terms.json", "tests/lint/allowlists/repo_silent_excepts.json", "tools/move/draw_bare_moves.json", "tools/move/draw_poub_lean_read_moves.json", "tools/move/layout_maps.json", "tools/research/src/research/store/moves.json", "tools/verity/lean/lean-deps.json", "tools/verity/lean/tests/fixtures/merge/accounting-retired-import-onto-next.json", "tools/verity/lean/tests/fixtures/merge/hash-basic-definition-taken-out-onto-next.json", "tools/verity/lean/tests/fixtures/merge/inline-live-coins-onto-next.json", "verity/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json", "verity/commitments/claim_ids.json", "verity/protocols/accounting/poub/verifier/lean/tests/p2_signed_sessions.json", "verity/protocols/accounting/poub/verifier/tests/vectors.json", "verity/protocols/accounting/pouw/verifier/lean/check/lean-audit.json", "verity/protocols/accounting/pouw/verifier/lean/commit/lean-audit.json", "verity/protocols/accounting/pouw/verifier/lean/window/lean-audit.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/epoch_coins_v1.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/window.json", "verity/protocols/policy/inference_only/verifier/lean/lean-audit.json", "verity/protocols/proofs/flock/prover/agreement/vectors.json", "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/attention-head/d16-bn16/sm80-fa2-bf16/n16-seed20260926-T17-17/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/attention-head/d16-bn16/sm80-fa2-bf16/n16-seed20260926-T17-17/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/attention-head/d64-bn16/sm80-fa2-bf16/n2-seed20260926-T9-9/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/attention-head/d64-bn16/sm80-fa2-bf16/n2-seed20260926-T9-9/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n3-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n3-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n4-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n4-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n64-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gemm-coordinate/k64/sm80-mma-bf16/n64-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1056/fp32/n2-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1056/fp32/n2-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1056/fp32/n3-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1056/fp32/n3-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1280/fp32/n3-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1280/fp32/n3-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1280/fp32/n4-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/gumbel-top-p-token-select/v1280/fp32/n4-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rmsnorm-fused-cuda/n64-eps1e-05/bf16/n2-seed3/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rmsnorm-fused-cuda/n64-eps1e-05/bf16/n2-seed3/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rmsnorm-triton/n2048-eps1e-05/bf16/n1-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rmsnorm-triton/n2048-eps1e-05/bf16/n1-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n32-seed20261020/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n32-seed20261020/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n32-seed20261025/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n32-seed20261025/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n4-seed20260926/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n4-seed20260926/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20260928/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20260928/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20261009/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20261009/manifest.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20261022/index.json", "verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets/rope-head/d64/neox-bf16/n8-seed20261022/manifest.json", "verity/protocols/proofs/flock/verifier/lean-audit.json", "verity/protocols/proofs/spot/verifier/lean/tests/plan_of_record.json", "*.lean", "**/lakefile.toml", "**/lean-toolchain", "verity/protocols/proofs/**", "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean", "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**", "security/Proofs/Properties/Spot.lean", "benchmarks/one_stage/**", "benchmarks/remote_session/**", "benchmarks/hash/**", "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py", "adapters/vllm/verity_vllm/definitions/registry/prims.py", "adapters/vllm/verity_vllm/definitions/registry/b1.py", "verity/protocols/accounting/poub/**", "verity/protocols/accounting/pous/**", "benchmarks/pous/**", "security/*/Poub/**", "security/*/Poub.lean", "security/*/Pous/**", "security/*/Pous.lean", "security/Proofs/Properties/Poub/**", "security/Proofs/Properties/Pous/**", "benchmarks/pous/streamed_wipe/bench.py", "benchmarks/pous/tests/test_pous_served_piece.py", "benchmarks/remote_session/tests/test_challengers.py", "benchmarks/remote_session/tests/test_session.py", "security/Definitions/Accounting/ReadUnit.lean", "security/Definitions/Poub/Guarantees/Stacking.lean", "security/Definitions/Poub/RateAudit.lean", "security/Definitions/Poub/RateAuditSketch.lean", "security/Definitions/Poub/Remote/Sample.lean", "security/Definitions/Poub/Remote/SketchLine.lean", "security/Proofs/Accounting/ReadUnit/Binding.lean", "security/Proofs/Accounting/ReadUnit/Deployed.lean", "security/Proofs/Accounting/ReadUnit/Guarantees.lean", "security/Proofs/Accounting/ReadUnit/Witnesses.lean", "security/Proofs/Poub/RateAudit/DeployedSketch.lean", "security/Proofs/Poub/RateAudit/DeployedSketchSum.lean", "security/Proofs/Poub/RemoteHeld/Binding.lean", "security/Proofs/Poub/RemoteHeld/DrawMeets.lean", "security/Proofs/Poub/RemoteHeld/Line.lean", "security/Proofs/Poub/RemoteHeld/Sample.lean", "security/Proofs/Pous/EndToEnd.lean", "security/Proofs/Pous/EndToEndAt.lean", "security/Proofs/Properties/Poub/Remote/Coins.lean", "security/Proofs/Properties/Poub/Remote/Frozen.lean", "security/Proofs/Properties/Poub/Remote/Lifetime.lean", "security/Proofs/Properties/Poub/Remote/Live.lean", "security/Proofs/Properties/Poub/Remote/RecordAccepts.lean", "security/Proofs/Properties/Poub/Remote/Released.lean", "security/Proofs/Properties/Poub/Remote/Run.lean", "security/Proofs/Properties/Poub/Remote/Sample.lean", "security/Proofs/Properties/Poub/Remote/Shared.lean", "security/Proofs/Properties/Poub/Remote/SharedLink.lean", "security/Proofs/Properties/Poub/Remote/SubprotocolWitnesses.lean", "security/Proofs/Properties/Pous/Wipe.lean", "security/Properties/Accounting/Served.lean", "security/Properties/Poub/Remote.lean", "security/Properties/Poub/Remote/Coins.lean", "security/Properties/Poub/Remote/Shared.lean", "security/Properties/Pous/EndToEnd.lean", "security/Properties/Pous/MemoryChallenger/Session.lean", "security/Properties/Pous/Period.lean", "security/Properties/Pous/Period/Audits.lean", "security/Properties/Pous/PeriodGame.lean", "verity/protocols/accounting/poub/prover/opening_prover.py", "verity/protocols/accounting/poub/prover/p2_party_prover.py", "verity/protocols/accounting/poub/prover/period_prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/tests/test_remote_session.py", "verity/protocols/accounting/poub/verifier/audit.py", "verity/protocols/accounting/poub/verifier/lean/Poub/Difftest.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Line.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/P2Session.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Protocol.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Registry.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Session.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Shared.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Span.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Verifier.lean", "verity/protocols/accounting/poub/verifier/lean/Poub/Window.lean", "verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_line.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_p2.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_registry.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_replay.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_span.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_units.py", "verity/protocols/accounting/poub/verifier/ledger.py", "verity/protocols/accounting/poub/verifier/line.py", "verity/protocols/accounting/poub/verifier/opening.py", "verity/protocols/accounting/poub/verifier/p2_case.py", "verity/protocols/accounting/poub/verifier/p2_parties.py", "verity/protocols/accounting/poub/verifier/period.py", "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session_parties.py", "verity/protocols/accounting/poub/verifier/tests/test_append_coins.py", "verity/protocols/accounting/poub/verifier/tests/test_appends.py", "verity/protocols/accounting/poub/verifier/tests/test_ledger.py", "verity/protocols/accounting/poub/verifier/tests/test_opening.py", "verity/protocols/accounting/poub/verifier/tests/test_p2.py", "verity/protocols/accounting/poub/verifier/tests/test_p2_party.py", "verity/protocols/accounting/poub/verifier/tests/test_pooled.py", "verity/protocols/accounting/poub/verifier/tests/test_poub.py", "verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py", "verity/protocols/accounting/poub/verifier/tests/test_registrations.py", "verity/protocols/accounting/poub/verifier/tests/test_session_parties.py", "verity/protocols/accounting/poub/verifier/tests/test_shared_coin.py", "verity/protocols/accounting/poub/verifier/timing.py", "verity/protocols/accounting/poub/verifier/verifier_party.py", "verity/protocols/accounting/pous/device/challenger_party.py", "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean", "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean", "verity/protocols/accounting/pous/device/lean/tests/mc_cases.py", "verity/protocols/accounting/pous/device/lean/tests/test_formats.py", "verity/protocols/accounting/pous/device/lean/tests/test_protocol.py", "verity/protocols/accounting/pous/device/lean/tests/test_verdict.py", "verity/protocols/accounting/pous/device/lean/tests/test_wipe_count.py", "verity/protocols/accounting/pous/device/memory_challenger.py", "verity/protocols/accounting/pous/device/wipe_challenger.py", "verity/protocols/accounting/pous/prover/period_prover.py", "verity/protocols/accounting/pous/verifier/PROTOCOL.md", "verity/protocols/accounting/pous/verifier/check/tests/test_run.py", "verity/protocols/accounting/pous/verifier/check/tests/test_setup_difftest.py", "verity/protocols/accounting/pous/verifier/check/tests/test_signed_run.py", "verity/protocols/accounting/pous/verifier/streamed_wipe.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_challenger_party.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_memory_challenger.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_run.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_session_proofs.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_streamed_wipe.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_verdict_circuit.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_wipe_parties.py", "adapters/vllm/**", "verity/protocols/accounting/pouw/**", "benchmarks/pouw/**", "benchmarks/network_traces/**", "benchmarks/network_e2e/**", "benchmarks/slowdown/**", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**", "tests/test_lean_packages.py", "tests/test_lean_vocabulary.py", "tools/verity/lean/**"]
+
+[keep]
+patterns = [
+    '''[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b''',
+    '''note:[\w./-]+''',
+    '''art:[0-9a-f]+''',
+    '''cursor/[\w./-]+''',
+    '''lanes/[\w.-]+''',
+    '''(?<![\w\\])(?<!parametrize\()(?<!parametrize\(\()(?<!match=)(?<!\x22symbol\x22: )(?<!\x22rounds\x22, )(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\(\x22coins\x22, )(?<!reg\.receipt, )(?<!setattr\(VR\.CW, )(?<!setattr\(T\.VR\.CW, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra|adapters)\w*\.)[^\s\x22\x27/{]*?(?i:draw|drew)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1''',
+    '''\\[\x22\x27](?![A-Z])[^\s\x22\x27\\/{]*?(?i:draw|drew)[^\s\x22\x27\\/{]*\\[\x22\x27]''',
+    '''[\x22\x27][a-z_-]+/[\w-]*(?i:draw)[\w-]*[\x22\x27]''',
+    '''\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|REDRAWN|REDRAW)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|REDRAWN|REDRAW)(?:_[A-Z0-9]+)+\b''',
+    '''(?<=[/.])(?:draw|drawn|draws)\.(?:json|jsonl|log|bin|lock|txt|npz)\b''',
+    '''(?<![\w-])-{0,2}(?:\w+-)+\w*(?i:draw|drew)\w*(?:-\w+)*(?![\w-])''',
+    '''(?<![\w-])-{0,2}\w*(?i:draw|drew)\w*(?:-\w+)+(?![\w-])''',
+    '''(?<![\w-])--\w*(?i:draw|drew)\w*(?![\w-])''',
+    '''(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn)\b(?! = )''',
+    '''\b(?:draw_k|draw_file|draws_dir|fresh_draws|os_draws|lean_refuses_drawn|lean_refuses_drawless|rec_inner_draw|replay_draw)\b''',
+    '''\b(?:drawn_at|checks_before_draw|unit_draw|draw_counts|draw_coin|draw_after|served_is_lean_draw|draw_reason|draws_scan)\b''',
+    '''\bdraw_salt\b''',
+    '''\bdrawIsSubset\b''',
+    '''(?<=b\x22)draws?(?= [\w{])''',
+    '''(?<=f\x22)draw(?= \{len)''',
+    '''(?<=a request \x60)draws?\b''',
+    '''(?<=\x60)draw(?= LEN)''',
+    '''\binner\.draw\b''',
+    '''\b(?:every|need \d+) draw coins?\b''',
+    '''\bdraw coins? \d''',
+    '''\bpouw/draw\b''',
+    '''\bpublic\.draws?\b''',
+    '''(?<=window \d, )draw(?= \[)''',
+    '''(?<=[\x22\x27^`])(?:DRAWN?|DRAWS)(?=[\x22\x27 \\])''',
+    '''\bRemote\.Draw\b''',
+    '''\bRemoteDraw\b''',
+    '''\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b''',
+    '''\b(?:to)?DrawnLayer\b''',
+    '''\bGame\.draw\b''',
+    '''\bdrawVec\b''',
+    '''\bCoinsDraw\b''',
+    '''(?<=\.update\()(?:draw|draws|drawn)(?==)''',
+    '''\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])''',
+    '''(?<=\]\}, )draw(?==union_draw\[)''',
+    '''\bdrawn(?==len\(drawn\), exclusion_tiles)''',
+    '''(?<=subcircuit=sub\.id, )draws(?==)''',
+    '''(?<=rounds=len\(got\), )draws(?==)''',
+    '''\bpower[._ -]draws?\b''',
+    '''(?i:\bpower draws?\b)''',
+    '''(?i)\b(?:draw|draws|drawn|drew|drawing)\b(?: [\w\x27-]+){0,2} (?:power|watts?)\b''',
+    '''(?i)\b(?:re)?(?:draw|draws|drawn|drew|drawing)\b(?: [\w\x27-]+){0,3} seeds?\b''',
+    '''(?i)\bseeds? (?:[\w\x27-]+ ){0,3}(?:re)?(?:drawn|drew|draws?)\b''',
+    '''(?i)\b(?:re)?(?:drawn|draws?|drew)\b(?: [\w\x27-]+){0,2} weights?\b''',
+    '''\bdraw(?= on \{b\[\x27slots\x27\]\} CPU slots)''',
+    '''\bdraws a sample\b''',
+    '''(?i)(?<![\w.])(?:generator|rng|philox|gumbel)s?(?: [\w\x27\x60-]+){0,5} (?:draw|draws|drawn|drew)\b''',
+    '''(?i)\b(?:draw|draws|drawn|drew)(?: [\w\x27\x60-]+){0,4} (?:generator|rng|philox|gumbel)s?(?![\w.(])''',
+    '''(?<![\w.])data\.draw(?=\()''',
+    '''\bDrawFn\b''',
+    '''\bImageDraw\b''',
+    '''[\x22\x27](?:[a-z]+ )?(?:draw|drawn|draws)(?=: )''',
+    '''\bverity/protocols/proofs/[\w./-]*''',
+    '''\bbenchmarks/(?:one_stage|remote_session)/[\w./-]*''',
+    '''\bsecurity/\w+/(?:Properties/)?(?:Flock|Spot)\b[\w./-]*''',
+    '''\bverity\.protocols\.proofs\.[\w.]*''',
+    '''(?<![\w.])(?:one_stage|remote_session)\.[\w.]*''',
+    '''(?<![\w.])(?:a|ns|args|harness_opts|opts|options)\.(?:lean_refuses_drawless|lean_refuses_drawn|draw_session|fresh_draws|draws_dir|draw_dir|draw_out|undrawn|draw_k|drawn|draws|draw)(?!\w)''',
+    '''(?<=getattr\()(?:a|ns|args), [\x22\x27]\w*(?i:draw)\w*[\x22\x27]''',
+    '''(?<!\w)(?:test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port|test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream|test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id|test_the_issuer_signs_no_clock_under_a_salt_it_drew_for_one_before|test_h3_draws_each_rows_e_a_from_its_own_digest|test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module|test_bf16_families_keep_the_old_draws_and_add_the_canonical_set|test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw|test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own|test_lean_draw_runs_flock_verify_draw_on_the_coins)(?!\w)''',
+    '''(?<![A-Za-z])Draw(?=\.[A-Za-z]|/)''',
+    '''[A-Za-z]*Draw[A-Za-z]*(?=\.lean\b)''',
+    '''\bDrawIsCoin\b''',
+    '''(?<=/)(?<!h1/)(?:draw|draws|drawn)(?![\w])''',
+    '''(?<![\w/])draw\.py\b''',
+    '''\b(?:draw|drawn|draws)\.json\b''',
+    '''(?<![\w/])draws(?=/w<k>)''',
+    '''\bDRAWS?(?==)''',
+    '''\$\{?DRAWS?\b''',
+    '''(?<=Registered\.checkFull registered )draw\b''',
+    '''(?<=\{\x22receipts\x22: )draw(?=\.receipts)''',
+    '''(?<=pouw-check-difftest )draw\b''',
+    '''(?<=verify-proof )draw\b''',
+    '''(?<=`pass`, `)draw(?=`)''',
+    '''(?<=`length`, `)drawn(?=`)''',
+    '''\bdraw(?=\.parse_design\b)''',
+    '''\bprofile(?:\.[A-Za-z_]+|\[[^\]]*\])*\.(?:draw|drawn|draws)\b''',
+    '''(?<=\bpr\.)(?:drawn|draws)\b''',
+    '''(?<=\brank\.)drawn(?=\()''',
+    '''(?<=\bstages\[coins\.at\]\.)drawn(?=\()''',
+    '''(?<=\bdraw\.)draw\b''',
+    '''(?<=\bd\.)draw\b''',
+    '''(?<=select\(\x22honest\x22\)\.)draw\b''',
+    '''(?<=\[\x22honest\x22\]\.)draw\b''',
+    '''(?<=\bsecond\.)draw\b''',
+    '''(?<=\bsub\.)draw(?=\()''',
+    '''(?<=\bcanvas\.)draw\b''',
+    '''\bdrawn(?==\{)''',
+    '''(?<=\x22rounds\x22, \x22)draw(?=\x22\))''',
+    '''(?<=is not )drawn\b''',
+    '''(?<=[\x22\x27]not )drawn(?=[\x22\x27])''',
+    '''\bdraw(?='s (?:a coin opening|coin is))''',
+    '''(?<=\{ctx\}\.)(?:draw|drawn|draws)\b''',
+    '''\bdraw_out\b''',
+    '''(?<=\bWd\.)DRAW\b''',
+    '''(?<=\brecord\.)draw\b''',
+    '''(?<=Definition\(\x22)[^\x22]*''',
+    '''\b(?:draw|drawn|draws)(?=/(?:\d|second\b|\{))''',
+    '''\bdraw_commitment\b''',
+    '''(?<=The verifier )draws(?= tiles of the served window)''',
+    '''(?<=and each )drawn(?= tile is \x22)''',
+    '''(?<=for test in )drawn(?=, proved)''',
+    '''(?<=D12 \(no )draw(?=\))''',
+    '''(?<=write_text\(\x22def )drawn(?=\()''',
+    '''(?<=\bagree\.)drawn\b''',
+    '''(?<=export\.json \()draw\b''',
+    '''(?<=\x22subset )draw(?=\x22)''',
+    '''\bFlock_\w+''',
+    '''(?<=setup \()drawn(?=\))''',
+  '''(?<= \\\()drawn(?=\\\))''',
+  '''(?<=\bp\.)drawn\b''',
+    '''\btest_pouw_h1_drawn\b''',
+    '''(?<=[\x22\x27])Draw(?=[\x22\x27])''',
+    '''\bdraw(?=\.work_table)''',
+    '''(?<=os\.urandom\(64\), )drawn\b''',
+    '''(?<=every )drawn(?= instance that passed)''',
+    '''(?<=no )drawn(?= instance passed)''',
+    '''(?<=unseeded )draw\b''',
+    '''(?<![\w.])(?:plan\.draw|TM\.Draw|S\.Draw)(?!\w)''',
+    '''\x22checks_before_draw\x22''',
+    '''\x22lean\-draw\x22''',
+    '''\x22draw_counts\x22''',
+    '''\x22before_draw_s\x22''',
+    '''\x22not\ closed\ at\ the\ run\x27s\ commit:\ redrawn\ sample\x22''',
+    '''\x22redrawn\ sample\x22''',
+    '''\x22power\.draw\x22''',
+    '''\x22refused:\ a\ subset\ draw\ without\ \-\-zk:\ no\ soundness\ claim\ draws\ by\ this\ law\x22''',
+    '''\x22subset\ draw\x22''',
+    '''\x22refused:\ a\ session\ without\ a\ draw:\ every\ soundness\ claim\ is\ about\ a\ drawn\ session\ \(D12\)\x22''',
+    '''\x22draw\.log\x22''',
+    '''\x22unit_draw\x22''',
+    '''\x22draw_check\x22''',
+    '''\x22draw\.json\x22''',
+    '''\x22\-\-rec\-inner\-draw\x22''',
+    '''\x22stage/draw\.json\x22''',
+    '''\x22gap_draw\x22''',
+    '''\x22DRAW_BYTES\x22''',
+    '''\x22pouw/draw\x22''',
+    '''\x22\-\-drawn\-only\x22''',
+    '''\x22drawn\x22''',
+    '''\x22verity/pouw/pearl\-c\-draw/v1\x22''',
+    '''\x22verity/pouw/pearl\-c/draw\-after/v1\x22''',
+    '''\x22verity/pouw/served\-zk\-draw/v1\x22''',
+    '''\x22verity/pouw/closure\-draw/v1\x22''',
+    '''\x22verity/pouw/h1/draw/v1\x22''',
+    '''\x22verity\-network\-certifier/period\-draw/v1\x22''',
+    '''\x22\-\-draw\-k\x22''',
+    '''\x22proofs:\ the\ evidence\ names\ 0\ sessions:\ the\ drawn\ units\ are\ proved\ in\ one\ session\x22''',
+    '''\x22draw/second/0\x22''',
+    # names the Lean or the proof system's tree spells, each renamed by its own side's map
+    '''(?<![\w])(?:test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt|test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_its_name|test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_refused|test_a_session_that_stops_after_hello_reports_the_coin_tree_the_challenger_drew|test_the_code_reads_one_coin_over_g_groups_as_the_merged_window_the_model_drew|test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after|test_restored_requests_keep_their_served_seeds_and_new_ones_draw_as_served|test_a_seeded_run_draws_the_same_inputs_whatever_the_process_has_loaded|test_the_tile_epsilon_is_the_least_whose_k_prime_the_draw_meets|test_a_lone_bernoulli_draw_of_the_checked_level_bounds_exactly|test_m3_draws_a_uniform_eight_and_certifies_the_heaviest_units|test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw|test_a_result_names_the_population_its_draws_are_taken_from|test_vstage_refuses_to_stage_over_an_undrawn_inner_session|the_known_trees_follow_the_draw_in_registers_answer_alone|test_the_relay_sends_what_run_sends_at_the_salts_it_drew|test_no_retries_nothing_redraws_and_an_outcome_is_final|test_proved_refuses_another_status_and_an_undrawn_block|test_rng_state_puts_back_what_the_next_draws_read|test_the_planner_certifies_a_draw_over_the_card|test_the_lean_zk_server_draws_its_own_salts|pearlCSampledDrawDevRev1RowInertBoundAtTol|test_a4_uniform_leaves_the_norms_undrawn|pearlCSampledDrawDevRev1RowInertBoundAt|EndToEndRegisteredDrawn_nontrivial|gapSampledDrawTolThreshold_of_tol|tables_unsplittable_draw_refused|EndToEndRegisteredDrawn_honest|test_undrawn_levels_only_group|drawIsOnItsStreams_nontrivial|groupedDrawMisses_nontrivial|GGapSampledDrawTolThreshold|drawChallengePhase_withheld|gapSampledDraw_of_threshold|secondDraw_refused_le_first|accepted_drawnIncorrect_le|drawSetupZHJP_subsingleton|drawUnits_subset_ascending|drawChallengePhase_honest|drawIsOnItsStreams_honest|drawUnits_second_error_le|joint_sampleUnits_of_drew|unit_draw_ignored_refused|drawsIn_eq_of_acceptsTol|groupedDrawMisses_honest|EndToEndHiddenDrawnFlat|before_draw_checks_pass|drawWithheld_nontrivial|instIsEmptyFinDrawsNode|drawWithheld_acceptAll|challenger_draw_coins|creditedDraw_withheld|disjoint_tileDraw_iff|executionPhaseDrawnOf|forall_mem_subsetDraw|gapSampledDraw_of_tol|lean_refuses_drawless|member_sample_of_drew|pearlCDrawRev1_nonneg|proved_of_recordDrawn|secondDraw_refused_le|workIsTheCredit_drawn|RegisteredBeforeDraw|altered_draw_refused|drawUnits_work_units|joint_sample_of_drew|recordSample_of_drew|registeredBeforeDraw|rowDrawn_satisfiable|sampledOfGoodDrawTol|second_draw_reserved|value_map_draw_false|wires_drawn_unrolled|VERITY_DRAWS_POLL_S|checkDraw_secondObj|draw_session_reason|executionPhaseDrawn|overInertBoundDraws|printedPart_of_drew|refused_before_draw|served_is_lean_draw|unit_draw_from_file|value_map_draw_true|DrawIsOnItsStreams|GGapSampledDrawTol|advice_before_draw|checks_before_draw|drawChallengePhase|drawIsOnItsStreams|drawUnits_work_run|lean_refuses_drawn|refused_after_draw|secondDraw_none_le|GroupedDrawMisses|TicketsAreTheDraw|acceptMeans_drawn|checks_after_draw|drawCoin_complete|drawCoin_instance|draw_epoch_reason|drawcheck_refused|fixed_before_draw|forged_unit_drawn|gapSampledDrawTol|groupedDrawMisses|pearlCDrawRev1_le|sessionless_draws|ticketsAreTheDraw|toOption_drawStep|unit_draw_session|POUW_TILES_DRAWN|creditedDrawWith|draws_on_dropped|lean_draw_sha512|DRAW_CHALLENGER|DrawCoinAccepts|DrawCustodyZKHJ|GGapSampledDraw|H1_DRAWN_MEM_GB|RUN_DRAW_DOMAIN|advance_undrawn|creditedDraw_eq|descriptorDrawn|drawCoinAccepts|drawEpochReason|drawSessionWith|draw_challenger|draw_uniform_lt|drawn_preserves|drawn_secondObj|frequency_draws|in_process_draw|secondDraw_none|value_bind_draw|weightedDraw_eq|DRAW_AFTER_TAG|H1_DRAWN_CHECK|NOT_DRAW_EPOCH|WorkDrawMisses|complete_drawn|dead_not_drawn|drawSession_eq|drawSetupHP_eq|draw_directory|draw_of_stmtOk|draw_seed_salt|drawn_accepted|draws_per_coin|over_cap_draws|pearlCDrawRev1|pearlplus_draw|rejected_draws|sample_of_drew|value_map_draw|workDrawMisses|DRAW_FAMILIES|DrawInstances|DrawIsTickets|H1_DRAWN_ONLY|H1_DRAWN_WORK|ZkServerDraws|before_draw_s|drawBytes_pos|drawKeys_work|draw_families|draw_fits_why|draws_sent_ns|keepW_undrawn|lean_drawless|per_drawn_and|prob_drawn_le|undrawn_first|AcceptedDraw|DRAW_REFUSED|DrawWithheld|DrawnRefines|acceptedDraw|checkAt_drew|creditedDraw|drawCoin_iff|drawCoins_ok|drawWithheld|draw_ran_out|draw_refused|draw_session|pearlDraw_eq|reserve_draw|session_draw|weightedDraw|CHAIN_DRAWS|DRAWN_UNITS|DRAW_DOMAIN|DrawSession|SampledDraw|TicketDraws|WIRES_DRAWN|_draw_token|before_draw|blank_drawn|chain_draws|check_drawn|claimedDraw|creditDrawn|drawTickets|draw_counts|draw_misses|draw_reason|drawn_after|drawn_reads|drawn_units|draws_total|inner_drawn|period_draw|sdraw_keeps|select_draw|served_draw|wires_drawn|DRAW_BYTES|DRAW_FLAGS|DRAW_WORDS|DrawAtMost|DrawMisses|DrawRecord|RecordDraw|RemoteDraw|after_draw|card_tdraw|check_draw|df_undrawn|drawAnswer|drawAtMost|drawReason|drawWeight|draw_after|draw_bytes|draw_check|draw_coins|draw_files|draw_first|draw_slots|draw_units|drawn_cost|drawn_from|drawn_rows|drawn_twin|inner_draw|leak_draws|open_draws|recordDraw|same_draws|secondDraw|subsetDraw|unset_drew|value_draw|work_draws|ALL_DRAWN|BlockDraw|DRAWCHECK|DRAWPROVE|DRAW_ARGS|DRAW_FILE|DRAW_FORM|DRAW_NODE|DRAW_ROOT|DRAW_UNIT|DrawExact|DrawMeets|DrawRoots|DrawShape|DrawSlots|H1_DRAW_K|case_drew|checkDraw|drawAfter|drawCheck|drawCodes|drawExact|drawShape|draw_bind|draw_coin|draw_root|draw_twin|drawcheck|firstDraw|full_draw|lean_draw|mem_drawn|node_draw|pearlDraw|unit_draw|DRAWLESS|DRAW_TAG|FormDraw|FragDraw|FullDraw|LiveDraw|PlanDraw|RowDrawn|TreeDraw|drawCoin|drawStep|drawWith|draw_inj|draw_law|draw_one|drawless|drawn_at|drawn_by|drawn_eq|drawn_of|gap_draw|instDraw|nodeDraw|own_draw|tileDraw|DrawnOn|NO_DRAW|OJDraws|PreDraw|RegDraw|RowDraw|drawInd|drawKey|drawOne|drawVec|draw_ok|drawnAt|drawnOf|drawnOk|drawnOn|drawn_s|drawsIn|drawsOf|drew_of|hdrawnA|on_draw|putDraw|py_draw|tp_draw|ODraws|_Drawn|_drawn|_draws|drawOf|draw_k|draw_t|drawer|draws_|draws₀|hDraw₁|hDraw₂|hIdraw|hPdraw|hdraw0|hdraw2|hdrawn|hdraws|nodraw|t_draw|TDraw|_draw|draw2|drawJ|drawK|drawS|drawW|draw₁|draw₂|edraw|hDraw|hdraw|hdrew)(?![\w])''',
+    '''(?<![\w.])(?:FlockSoundness\.Discharge\.Recursion\.ZkServerSteps\.Draws\.runs|FlockSoundness\.Discharge\.Recursion\.ZkServerSteps\.Draws|security\.Proofs\.Flock\.Soundness\.Discharge\.Layout\.Drawn|security\.Proofs\.Properties\.Verity\.Sampled\.Members\.Draw|security\.Proofs\.Properties\.Verity\.Sampled\.Window\.Draw|FlockSoundness\.Discharge\.Recursion\.ZkServerRun\.Drawn|verity\.protocols\.proofs\.spot\.verifier\.lean\.Spot\.Draw|FlockSoundness\.Discharge\.HiddenExec\.AcceptedHP\.draw|FlockSoundness\.Discharge\.HiddenExec\.AcceptedH\.draw|FlockSoundness\.Discharge\.Placed\.TypedAccepted\.draw|Properties\.Pouw\.MonitoringPeriodJ10R\.Answered\.draw|verity\.protocols\.proofs\.flock\.verifier\.Flock\.Draw|Properties\.Challenger\.FamilyOneCommitment\.drawn|Claims\.SamplingGeneric\.Compiled\.Sessions\.draws|FlockSoundness\.Discharge\.Placed\.Accepted\.draw|Proofs\.Flock\.Soundness\.Discharge\.Layout\.Drawn|Proofs\.Properties\.Verity\.Sampled\.Members\.Draw|Verity\.SampledTwo\.MemberChecks\.ReadsBack\.draw|protocols\.proofs\.spot\.verifier\.lean\.Spot\.Draw|security\.Proofs\.Flock\.EndToEnd\.Joint\.MT\.Drawn|Discharge\.Recursion\.ZkServerSteps\.Draws\.runs|Proofs\.Properties\.Verity\.Sampled\.Window\.Draw|security\.Proofs\.Flock\.EndToEnd\.Joint\.MT\.Draw|security\.Proofs\.Flock\.Claims\.Sampling\.Draws|security\.Proofs\.Properties\.Challenger\.Drawn|PouwCheck\.PearlPlus\.Protocol\.Profile\.drawn|PouwCheck\.PearlPlus\.Protocol\.Profile\.draws|protocols\.proofs\.flock\.verifier\.Flock\.Draw|security\.Proofs\.Flock\.EndToEnd\.Joint\.Drawn|PouwCheck\.PearlPlus\.Protocol\.Params\.draws|Claims\.Recursion\.CompiledStatement\.draws|FlockComplete\.ZkTables\.RecordJsonAt\.draw|FlockSoundness\.Audit\.Adaptive\.Play\.Drawn|verity\.commitments\.lean\.Commitments\.Draw|Discharge\.Recursion\.ZkServerSteps\.Draws|Pouw\.MonitoringPeriodJ10R\.Answered\.draw|SamplingGeneric\.Compiled\.Sessions\.draws|Claims\.ZKServer\.Relay\.AfterSample\.draw|Flock\.Soundness\.Discharge\.Layout\.Drawn|Properties\.Verity\.Sampled\.Members\.Draw|SampledTwo\.MemberChecks\.ReadsBack\.draw|Verity\.Sampled\.Device\.Deployment\.draws|Claims\.ZKServer\.Relay\.SampleInv\.draws|Claims\.ZKServer\.Relay\.SlotsReach\.draw|Discharge\.Recursion\.ZkServerRun\.Drawn|Properties\.Verity\.Sampled\.Window\.Draw|security\.Proofs\.Flock\.SpotFlock\.Drawn|Challenger\.FamilyOneCommitment\.drawn|Core\.Composition\.Cases\.Stubbed\.drawn|Discharge\.HiddenExec\.AcceptedHP\.draw|FlockComplete\.ZkTables\.RecordAt\.draw|Proofs\.Flock\.EndToEnd\.Joint\.MT\.Drawn|Properties\.Challenger\.Withheld\.draws|Properties\.Pouw\.PearlPlus\.Runs\.drawn|Discharge\.HiddenExec\.AcceptedH\.draw|Discharge\.Placed\.TypedAccepted\.draw|PouwCheck\.PearlPlus\.CoinRecord\.draw|Proofs\.Flock\.EndToEnd\.Joint\.MT\.Draw|Slowdown\.Guarantees\.AcceptAll\.drawn|proofs\.spot\.verifier\.lean\.Spot\.Draw|Flock\.ZkServer\.Frame\.Draws\.ofBytes|MonitoringPeriodJ10R\.Answered\.draw|Proofs\.Flock\.Claims\.Sampling\.Draws|Proofs\.Properties\.Challenger\.Drawn|Recursion\.ZkServerSteps\.Draws\.runs|Claims\.ZKServer\.LeanRelease\.draws|Flock\.ZkServer\.Finish\.RepIn\.draws|Flock\.ZkServer\.Frame\.Draws\.ofRead|Flock\.ZkServer\.Level0\.Slots\.drawn|Flock\.ZkServer\.Session\.State\.draw|FlockComplete\.ZkTables\.Case\.drawn|FlockComplete\.ZkTables\.Goals\.draw|Proofs\.Flock\.EndToEnd\.Joint\.Drawn|Properties\.Challenger\.Drawn\.drawn|Recursion\.CompiledStatement\.draws|commitments\.lean\.Commitments\.Draw|security\.Proofs\.Flock\.Bridge\.Draw|Flock\.ZkServer\.Level0\.Slots\.draw|PearlPlus\.Protocol\.Profile\.drawn|PearlPlus\.Protocol\.Profile\.draws|Poub\.Session\.WindowSummary\.drawn|Soundness\.Discharge\.Layout\.Drawn|Verity\.Recursive\.InnerNames\.draw|Verity\.Recursive\.SetupMatch\.draw|proofs\.flock\.verifier\.Flock\.Draw|Accounting\.TS\.SampledLayer\.draw|Composition\.Cases\.Stubbed\.drawn|Flock\.ZkServer\.Finish\.Own\.draws|Flock\.ZkServer\.Frames\.Rep\.draws|NetworkCheck\.Period\.Facts\.drawn|PearlPlus\.Protocol\.Params\.draws|PouwCheck\.PearlPlus\.Input\.draws|Sampled\.Device\.Deployment\.draws|Verity\.Recursive\.PartNames\.draw|ZKServer\.Relay\.AfterSample\.draw|Discharge\.Placed\.Accepted\.draw|MemoryChallenger\.CoinTree\.draw|PouwCheck\.PearlPlus\.Plan\.drawn|ZKServer\.Relay\.SampleInv\.draws|ZKServer\.Relay\.SlotsReach\.draw|security\.Definitions\.Core\.Draw|Accounting\.Slowdown\.Task\.draw|Flock\.EndToEnd\.Joint\.MT\.Drawn|Flock\.RecCoins\.InnerForm\.draw|FlockSoundness\.PlanDraw\.drawn|Recursion\.ZkServerSteps\.Draws|Spot\.SecondStage\.Checked\.draw|security\.Properties\.Spot\.Draw|Flock\.EndToEnd\.Joint\.MT\.Draw|Proofs\.Flock\.SpotFlock\.Drawn|ZkServer\.Frame\.Draws\.ofBytes|spot\.verifier\.lean\.Spot\.Draw|Core\.Example\.Evidence\.drawn|Flock\.Claims\.Sampling\.Draws|MemberChecks\.ReadsBack\.draw|Poub\.P2Session\.Credit\.draws|Pouw\.Dither\.RoundProto\.Draw|Properties\.Challenger\.Drawn|Properties\.Challenger\.Draws|Properties\.Poub\.InvOn\.drawn|Recursion\.ZkServerRun\.Drawn|Session\.WindowSummary\.drawn|Spot\.OneStage\.Evidence\.draw|Verity\.Majority\.Plays\.drawn|Verity\.Sampled\.Members\.Draw|Verity\.Sampled\.Record\.drawn|ZkServer\.Finish\.RepIn\.draws|ZkServer\.Frame\.Draws\.ofRead|ZkServer\.Level0\.Slots\.drawn|ZkServer\.Session\.State\.draw|Flock\.EndToEnd\.Joint\.Drawn|Flock\.ZkServer\.Frame\.Draws|Flock\.ZkServer\.Level0\.draw|FlockComplete\.CaseZk\.drawn|FlockComplete\.GoalsZk\.draw|Guarantees\.AcceptAll\.drawn|HiddenExec\.AcceptedHP\.draw|Spot\.OneStage\.Public\.drawn|Spot\.SecondStage\.Own\.drawn|Spot\.SecondStage\.Stmt\.draw|Verity\.Draw\.samplingDesign|Verity\.Sampled\.Window\.Draw|Verity\.SamplingDesign\.draw|ZKServer\.LeanRelease\.draws|ZkServer\.Level0\.Slots\.draw|ZkTables\.RecordJsonAt\.draw|Audit\.Adaptive\.Play\.Drawn|Challenger\.Withheld\.draws|FamilyOneCommitment\.drawn|FlockDeploy\.Raw\.Fits\.draw|HiddenExec\.AcceptedH\.draw|PearlPlus\.CoinRecord\.draw|Placed\.TypedAccepted\.draw|Pouw\.PearlPlus\.Runs\.drawn|Recursive\.InnerNames\.draw|Recursive\.SetupMatch\.draw|ZkServer\.Finish\.Own\.draws|ZkServer\.Frames\.Rep\.draws|flock\.verifier\.Flock\.Draw|Flock\.Readable\.Read\.draw|FlockComplete\.Case\.drawn|FlockComplete\.Goals\.draw|Poub\.Registry\.Live\.drawn|PouwCheck\.PearlPlus\.draw|Proofs\.Flock\.Bridge\.Draw|Recursive\.PartNames\.draw|SecondStage\.Checked\.draw|VStar\.Recursive\.Own\.draw|ZkServerSteps\.Draws\.runs|Compiled\.Sessions\.draws|CompiledStatement\.draws|Device\.Deployment\.draws|EndToEnd\.Joint\.MT\.Drawn|Pouw\.Dither\.NoFold\.Draw|RecCoins\.InnerForm\.draw|Verity\.Wipe\.OfRun\.drawn|verifier\.lean\.Spot\.Draw|Challenger\.Drawn\.drawn|Discharge\.Layout\.Drawn|Dither\.RoundProto\.Draw|EndToEnd\.Joint\.MT\.Draw|Example\.Evidence\.drawn|OneStage\.Evidence\.draw|P2Session\.Credit\.draws|Poub\.Difftest\.Op\.drawn|Poub\.Session\.Win\.drawn|PouwCheck\.Credit\.drawn|PouwCheck\.Public\.drawn|Protocol\.Profile\.drawn|Protocol\.Profile\.draws|Relay\.AfterSample\.draw|Spot\.Record\.Input\.draw|Spot\.Stream\.Entry\.draw|ZkTables\.RecordAt\.draw|Claims\.Sampling\.Draws|Definitions\.Core\.Draw|Flock\.SpotFlock\.Drawn|OneStage\.Public\.drawn|PearlPlus\.Input\.draws|Properties\.Spot\.Drawn|Protocol\.Params\.draws|Relay\.SampleInv\.draws|Relay\.SlotsReach\.draw|SecondStage\.Own\.drawn|SecondStage\.Stmt\.draw|Verity\.Exchange\.drawn|lean\.Commitments\.Draw|Core\.Integrity\.drawn|EndToEnd\.Joint\.Drawn|FlockDeploy\.Raw\.draw|Majority\.Plays\.drawn|PearlPlus\.Plan\.drawn|PearlPlus\.Runs\.drawn|Placed\.Accepted\.draw|Properties\.Spot\.Draw|Sampled\.Members\.Draw|Sampled\.Record\.drawn|TS\.SampledLayer\.draw|ZkServer\.Frame\.Draws|ZkServer\.Level0\.draw|Adaptive\.Play\.Drawn|Cases\.Stubbed\.drawn|Draw\.samplingDesign|Flock\.Draw\.drawWith|Frame\.Draws\.ofBytes|Registry\.Live\.drawn|Sampled\.Window\.Draw|SamplingDesign\.draw|Spot\.Draw\.checkDraw|Verity\.Signer\.draws|WindowSummary\.drawn|ZkServerSteps\.Draws|ZkTables\.Case\.drawn|ZkTables\.Goals\.draw|verifier\.Flock\.Draw|Dither\.NoFold\.Draw|Finish\.RepIn\.draws|Frame\.Draws\.ofRead|Level0\.Slots\.drawn|Period\.Facts\.drawn|Readable\.Read\.draw|Recursive\.Own\.draw|Session\.State\.draw|Slowdown\.Task\.draw|TypedAccepted\.draw|Verity\.Draw\.Subset|Difftest\.Op\.drawn|Flock\.Bridge\.Draw|Flock\.HmOut\.drawn|Flock\.HmRow\.drawn|LeanRelease\.draws|Level0\.Slots\.draw|Pous\.Period\.Drawn|Record\.Input\.draw|RecordJsonAt\.draw|SampledLayer\.draw|Session\.Win\.drawn|Spot\.Stream\.drawn|Spot\.Stream\.draws|Stream\.Entry\.draw|ZkServerRun\.Drawn|AfterSample\.draw|Challenger\.Drawn|Challenger\.Draws|Commitments\.Draw|Deployment\.draws|Finish\.Own\.draws|Flock\.HmIn\.drawn|Frames\.Rep\.draws|Poub\.InvOn\.drawn|Spot\.Pieces\.draw|Verity\.Game\.draw|Wipe\.OfRun\.drawn|AcceptAll\.drawn|AcceptedHP\.draw|CoinRecord\.draw|Core\.Level\.draw|InnerNames\.draw|Integrity\.drawn|PouwWindow\.DRAW|RecDeploy\.Drawn|RoundProto\.Draw|SampleInv\.draws|SetupMatch\.draw|SlotsReach\.draw|SpotFlock\.Drawn|AcceptedH\.draw|Draw\.checkDraw|Evidence\.drawn|Exchange\.drawn|InnerForm\.draw|Joint\.MT\.Drawn|PartNames\.draw|PearlPlus\.draw|PlanDraw\.drawn|ReadsBack\.draw|Sampling\.Draws|Sessions\.draws|Withheld\.draws|lean\.Spot\.Draw|Accepted\.draw|Answered\.draw|CoinTree\.draw|Draw\.drawWith|Draws\.ofBytes|Evidence\.draw|Joint\.MT\.Draw|Profile\.drawn|Profile\.draws|Raw\.Fits\.draw|RecordAt\.draw|Stubbed\.drawn|CaseZk\.drawn|Checked\.draw|Credit\.drawn|Credit\.draws|Draws\.ofRead|GoalsZk\.draw|Layout\.Drawn|Members\.Draw|Params\.draws|Period\.Drawn|Public\.drawn|Record\.drawn|Signer\.draws|Stream\.drawn|Stream\.draws|Bridge\.Draw|Draw\.Subset|Drawn\.drawn|Facts\.drawn|Frame\.Draws|HmOut\.drawn|HmRow\.drawn|Input\.draws|InvOn\.drawn|Joint\.Drawn|Level0\.draw|NoFold\.Draw|OfRun\.drawn|Pieces\.draw|Plays\.drawn|RepIn\.draws|Slots\.drawn|Verity\.Draw|Window\.Draw|Args\.draws|Case\.drawn|Draws\.runs|Entry\.draw|Flock\.Draw|Goals\.draw|HmIn\.drawn|Input\.draw|Level\.draw|Live\.drawn|Plan\.drawn|Play\.Drawn|Runs\.drawn|Slots\.draw|Spot\.Drawn|State\.draw|Core\.Draw|Fits\.draw|Game\.draw|Own\.drawn|Own\.draws|Read\.draw|Rep\.draws|Spot\.Draw|Stmt\.draw|Task\.draw|Win\.drawn|MT\.Drawn|Op\.drawn|Own\.draw|Raw\.draw|MT\.Draw)(?![\w])''',
+    # the pieces of strings that the Lean, the proof system's tree or a data file also spells, which keep their bytes
+    '''(?:refused:\ a\ session\ without\ a\ draw:\ every\ soundness\ claim\ is\ about\ a\ drawn\ session\ \(D12\)|proofs:\ the\ evidence\ names\ 0\ sessions:\ the\ drawn\ units\ are\ proved\ in\ one\ session|refused:\ a\ subset\ draw\ without\ \-\-zk:\ no\ soundness\ claim\ draws\ by\ this\ law|every\ soundness\ claim\ is\ about\ a\ drawn\ session|the\ drawn\ units\ are\ proved\ in\ one\ session|verity\-network\-certifier/period\-draw/v1|no\ soundness\ claim\ draws\ by\ this\ law|verity/pouw/pearl\-c/draw\-after/v1|verity/pouw/served\-zk\-draw/v1|verity/pouw/closure\-draw/v1|verity/pouw/pearl\-c\-draw/v1|a\ subset\ draw\ without\ \-\-zk|a\ session\ without\ a\ draw|verity/pouw/h1/draw/v1|drawn\-unit\-bundle/v2|\}\ drawn\ units\ failed|checks_before_draw|\-\-rec\-inner\-draw|stage/draw\.json|redrawn\ sample|before_draw_s|draw/second/0|\}\ units\ drawn|\-\-drawn\-only)''',
+]
+strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof block, every one being drawn"]
+
+[keep_in]
+"benchmarks/pouw/period_cost.py" = ["draws"]
+"benchmarks/pouw/tests/test_period_cost.py" = ["draws"]
+"verity/protocols/accounting/pouw/prover/clear/clear_audit.py" = ["drawn"]
+"verity/protocols/accounting/certifier/verifier/service.py" = ["drawn"]
+"verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_period.py" = ["drawn"]
+"verity/protocols/accounting/poub/verifier/**" = ["draw", "draws", "Draw", "Draws"]
+"**/p2_v1/**" = ["draws"]
+"benchmarks/pous/held_bandwidth.py" = ["draws"]
+"adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
+"**/served_zk/**" = ["DRAWN"]
+"benchmarks/pouw/tests/test_served_zk.py" = ["DRAWN"]
+"tools/verity/lean/tests/test_merge.py" = ["Draw", "Drawn"]
+"tools/verity/circuit_check/tests/test_ambient.py" = ["Drawn"]
+"adapters/vllm/verity_vllm/program/lifting/continuation.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/program/test_continuation.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/verity_vllm/check/replay/stoch_recompute.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/check/test_stoch_draw_ledger.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/properties/fp8_cache_replay_gpu.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/verity_vllm/pipeline/coverage_workloads.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/pipeline/test_seeded_draws.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/verity_vllm/program/predict/reads.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/acquire/glm53_model.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"**/test_train_draws.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"**/desc_fuzz_programs.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"tools/difftest/tests/test_constants.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"adapters/vllm/tests/pipeline/test_coverage_workloads*.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"benchmarks/serve_tax/**" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"tools/difftest/tests/test_annot.py" = ["draw"]
+"tools/difftest/tests/test_canonical_json_port.py" = ["draw"]
+"tools/difftest/tests/test_flock_json_port.py" = ["draw"]
+"tools/verity/landq/tests/test_hypothesis.py" = ["draw"]
+"verity/circuits/evaluate/tests/test_difftest.py" = ["draw"]
+"verity/commitments/identity/tests/test_identity_difftest.py" = ["draw"]
+"verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py" = ["draw"]
+"verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py" = ["draw", "drawn"]
+"verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py" = ["draw"]
+"verity/tests/tests/test_periods_difftest.py" = ["draw"]
+"benchmarks/pouw/pearl_c_vllm/verify_run.py" = ["drew"]
+"benchmarks/pouw/budget.py" = ["draws"]
+"*.sh" = ["DRAW", "DRAWS", "DRAWN"]
+"verity/protocols/tests/tests/test_profile.py" = ["draw", "draws", "drawn", "drew", "drawing", "redraw", "redraws", "redrawn", "redrawing", "undrawn", "Draw", "Draws", "Drawn", "Redrawn", "DRAW", "DRAWS", "DRAWN", "REDRAWN"]
+"benchmarks/pouw/tests/test_budget.py" = ["draws"]
+"benchmarks/training_slowdown/tests/test_resume.py" = ["drawn"]
+"verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py" = ["draw"]
+"benchmarks/multi_unit/stage.py" = ["draw"]
+"benchmarks/flock_kernels/hm96_leaves.cu" = ["draw"]
+"verity/runtime/**" = ["draw", "draws", "drawn"]
+"benchmarks/proof_throughput/verity_proof_throughput/instances.py" = ["draw"]
+"verity/commitments/periods/wiring.py" = ["check_drawn"]
+"verity/commitments/periods/interface.py" = ["_Drawn"]
+"benchmarks/vllm_encoded/bench_arm.py" = ["live_draw"]
+"benchmarks/proof_throughput/tests/test_instances.py" = ["draw"]
+"benchmarks/proof_throughput/tests/test_report.py" = ["draw"]
+"benchmarks/proof_throughput/verity_proof_throughput/cli.py" = ["draw"]
+"benchmarks/proof_throughput/verity_proof_throughput/result.py" = ["draw"]
+"benchmarks/served_units/stage_window.py" = ["draw"]
+"benchmarks/torch_gpu/p2_stage/bw_check.py" = ["draw"]
+"benchmarks/torch_gpu/p2_stage/full.py" = ["draw"]
+"benchmarks/torch_gpu/p2_stage/layer.py" = ["draw"]
+"benchmarks/torch_gpu/p2_stage/tests/test_p2_stage.py" = ["draw"]
+"benchmarks/torch_gpu/p2_stage/tests/test_sketch.py" = ["draw"]
+"benchmarks/training_slowdown/tests/test_repeats.py" = ["drawn"]
+"benchmarks/verifier_cost/flock_sessions.py" = ["draw"]
+"benchmarks/verifier_cost/registration.py" = ["draw"]
+"benchmarks/verifier_cost/whole_run.py" = ["draw"]
+
+# paths that stay: the H1 prove benchmark's runners, which the proof system's one-stage audit runs by path, and a
+# module whose name another side spells
+[keep_paths]
+"benchmarks/pouw/h1_prove/drawn*" = ["drawn"]

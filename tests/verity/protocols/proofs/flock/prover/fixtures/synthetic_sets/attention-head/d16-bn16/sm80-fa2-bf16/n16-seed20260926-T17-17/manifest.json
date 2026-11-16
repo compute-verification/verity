@@ -1,0 +1,101 @@
+{
+ "content_digest": "e76ae2d7dd3df6fc43b216a0f863904a32696c89bee2c37ef298a94cee4943f9",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "index.json": {
+   "bytes": 1294,
+   "sha256": "30af38a8f1c8f35ebb7b17d5a9af7660fd413d810482486b86fb982bd197cd55"
+  },
+  "k.u16": {
+   "bytes": 8704,
+   "sha256": "df65dbb090a1564873ab455e437ddac079f16d3b0358b2aaeaab0bd4090e9e8f"
+  },
+  "out.u16": {
+   "bytes": 512,
+   "sha256": "76136d3575ba91095c4b85c0fd25bf4c91909050a7c976d6da195957847940a4"
+  },
+  "q.u16": {
+   "bytes": 512,
+   "sha256": "46b856d2efcfd55e05b2e83072c4e78b1c203ff8e3b69fd554e72dade72b87b3"
+  },
+  "v.u16": {
+   "bytes": 8704,
+   "sha256": "9fe293381127c58808ce5d6371bf31d606b566c94a830e4fdfd6b9a50b98a45c"
+  }
+ },
+ "n": 16,
+ "ports": {
+  "k": {
+   "dtype": "u16",
+   "file": "k.u16",
+   "words": 272
+  },
+  "out": {
+   "dtype": "u16",
+   "file": "out.u16",
+   "words": 16
+  },
+  "q": {
+   "dtype": "u16",
+   "file": "q.u16",
+   "words": 16
+  },
+  "v": {
+   "dtype": "u16",
+   "file": "v.u16",
+   "words": 272
+  }
+ },
+ "provenance": {
+  "manifest_digest": null,
+  "model": null,
+  "pair": null,
+  "program_digests": {
+   "AttentionHead_v3{T=17,D=16,BN=16}": "f9d1eabcfc221a88d523929363c6ca77e68cd60b0a26e356b7cb8a20ebea36ea92fd0aff73a1cffd426ba2085084dd43c9fe352b82d0f0de66f16862f3959d35"
+  },
+  "recipe": {
+   "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
+   "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
+   "draws": 16,
+   "generator": "verity_flock.synthetic",
+   "key": "verity.commitments.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'attention-head/d16-bn16/sm80-fa2-bf16', 'seed': 20260926})",
+   "n": 16,
+   "parameters": {
+    "BN": 16,
+    "D": 16,
+    "semantics": "sm80.fa2.bf16"
+   },
+   "rejected": 0,
+   "rejected_draws": [],
+   "samplers": {
+    "T": "17:17",
+    "T_rule": "T = lo + key.uniform(hi - lo + 1, ('T', j))",
+    "qkv": "bf16 window: exponent field 127 +- h, h in [2, 4] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024]; one h per draw for q, k and v"
+   },
+   "seed": 20260926,
+   "subcircuit": "attention-head/d16-bn16/sm80-fa2-bf16",
+   "template": "attention-head"
+  },
+  "research_run": null,
+  "revision": null,
+  "row": null,
+  "row_key": null,
+  "run_root": null,
+  "selection": "the first n admitted draws, in draw order",
+  "source": "synthetic",
+  "versions": null
+ },
+ "relation": {
+  "definition": "Attention_v3",
+  "dot": "AmpereBF16TcDot16_v1",
+  "inv": "Fa2InvSum_v1",
+  "rule": "one query at position T-1 over keys 0..T-1 of its KV head, ceil(T/BN) key blocks last -> first (the Definition's head)",
+  "statics": {
+   "BN": 16,
+   "D": 16
+  },
+  "subcircuit": "AttentionHead<T,16>"
+ },
+ "schema": "input-set/v1",
+ "set": "attention-head-fa2-d16-bn16"
+}

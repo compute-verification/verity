@@ -1,0 +1,143 @@
+module
+
+public import Mathlib.Algebra.Order.Floor.Semifield
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Fp8Atom.Pinned
+public import Proofs.Pouw.Fp8Atom.Checks
+
+/-!
+# Proofs of `Pouw.Fp8Atom`'s guarantees
+
+`Conformance` and `AdaCaptures` assemble the kernel-evaluated chunks of `Pouw.Fp8Atom.Checks`. `CodeClasses` and the
+integer form of `DecodeInjective` are decided over the 256 codes. `ProductExact` and `AlignedMono` are proved.
+-/
+
+@[expose] public section
+
+namespace Pouw.Fp8Atom.Proofs
+
+open Pouw.Fp8Atom
+
+/-! ## Conformance -/
+
+theorem all_holds {step : Nat → (Fin 32 → Code) → (Fin 32 → Code) → Nat} {l : List Vec}
+    (h : l.all (Vec.holds step) = true) : ∀ v ∈ l, step v.acc (codes v.a) (codes v.b) = v.d := by
+  intro v hv
+  simpa [Vec.holds] using List.all_eq_true.mp h v hv
+
+theorem vectors_all : vectors.all (Vec.holds hopperStep) = true := by
+  simp only [vectors, List.all_append, Checks.c00, Checks.c01, Bool.and_self]
+
+theorem vectors_length : vectors.length = 631 := by decide +kernel
+
+/-- **Conformance with `verity.ml.tc`** on the 631 vectors. -/
+theorem conformance : Conformance := ⟨vectors_length.ge, all_holds vectors_all⟩
+
+/-! ## The codec -/
+
+theorem expOr1_pos (c : Code) : 1 ≤ c.expOr1 := le_max_right _ _
+
+theorem decode_eq_none_iff (c : Code) : decode c = none ↔ c.isNaN = true := by
+  unfold decode; split <;> simp_all
+
+/-- A finite code's value, times `2^9`, as an integer. -/
+def intVal (c : Code) : Int := (if c.sign then -1 else 1) * ((c.sig * 2 ^ (c.expOr1 - 1) : Nat) : Int)
+
+theorem two_zpow_lsbExp (c : Code) : (2 : ℚ) ^ c.lsbExp = 2 ^ (c.expOr1 - 1) / 512 := by
+  have h1 := expOr1_pos c
+  have : c.lsbExp = ((c.expOr1 - 1 : Nat) : Int) - 9 := by unfold Code.lsbExp; omega
+  rw [this, zpow_sub₀ two_ne_zero, zpow_natCast]; norm_num
+
+theorem decode_eq (c : Code) (h : c.isNaN = false) : decode c = some ((intVal c : ℚ) / 512) := by
+  unfold decode intVal
+  rw [ite_eq_right (by simp [h]), two_zpow_lsbExp]
+  congr 1
+  split <;> push_cast <;> ring
+
+/-! ## The product -/
+
+theorem decode_some_isNaN {c : Code} {x : ℚ} (h : decode c = some x) : c.isNaN = false := by
+  cases hc : c.isNaN
+  · rfl
+  · rw [(decode_eq_none_iff c).mpr hc] at h; cases h
+
+/-- **The product is exact.** -/
+theorem productExact : ProductExact := by
+  intro a b x y ha hb
+  have hna := decode_some_isNaN ha
+  have hnb := decode_some_isNaN hb
+  rw [decode_eq a hna, Option.some.injEq] at ha
+  rw [decode_eq b hnb, Option.some.injEq] at hb
+  subst ha hb
+  unfold product Term.value
+  rw [Nat.shiftLeft_eq]
+  by_cases h0 : a.sig * b.sig * 2 ^ 17 = 0
+  · simp only [h0, ite_true, Term.zero]
+    have : a.sig * b.sig = 0 := by simpa using h0
+    rcases Nat.mul_eq_zero.mp this with h | h <;> simp [intVal, h]
+  · simp only [h0, ite_false]
+    have h1 := expOr1_pos a
+    have h2 := expOr1_pos b
+    have e : (2 : ℚ) ^ ((a.expOr1 : Int) + b.expOr1 - 14 - 23) =
+        2 ^ (a.expOr1 - 1) * 2 ^ (b.expOr1 - 1) / 2 ^ 35 := by
+      have : ((a.expOr1 : Int) + b.expOr1 - 14 - 23) = ((a.expOr1 - 1 + (b.expOr1 - 1) : Nat) : Int) - 35 := by
+        omega
+      rw [this, zpow_sub₀ two_ne_zero, zpow_natCast, pow_add]
+      norm_num
+    rw [e]
+    unfold intVal
+    cases a.sign <;> cases b.sign <;> simp <;> ring
+
+/-! ## The first truncation -/
+
+theorem toAdder_of_le {w : Nat} (hw : w ≤ 24) (m : Nat) : toAdder w m = m / 2 ^ (24 - w) := by
+  unfold toAdder
+  split
+  · have : w = 24 := by omega
+    subst this; simp
+  · rw [Nat.shiftRight_eq_div_pow]
+
+/-- The total right shift of a term aligned to `E` on a `w`-bit adder. -/
+def shiftOf (w : Nat) (E : Int) (t : Term) : Nat := 24 - w + (E - t.exp).toNat
+
+/-- The aligned magnitude is the magnitude divided by `2^shiftOf`. -/
+theorem aligned_eq {w : Nat} (hw : w ≤ 24) (E : Int) (t : Term) :
+    aligned w E t = (if t.neg then -1 else 1) * ((t.mag / 2 ^ shiftOf w E t : Nat) : Int) := by
+  unfold aligned shiftOf
+  split
+  · simp_all
+  · rw [toAdder_of_le hw, Nat.shiftRight_eq_div_pow, Nat.div_div_eq_div_mul, ← pow_add]
+    split <;> simp
+
+/-- A term's value is its magnitude over `2^shiftOf`, on the grid `2^(E − w + 1)`. -/
+theorem value_eq {w : Nat} (hw : w ≤ 24) {E : Int} {t : Term} (hE : t.exp ≤ E) :
+    t.value = (if t.neg then -1 else 1) * ((t.mag : ℚ) / 2 ^ shiftOf w E t) * 2 ^ (E - w + 1) := by
+  unfold Term.value shiftOf
+  have : t.exp - 23 = (E - w + 1) - ((24 - w + (E - t.exp).toNat : Nat) : Int) := by omega
+  rw [this, zpow_sub₀ two_ne_zero, zpow_natCast]
+  ring
+
+/-- Truncation toward zero of a rational to an integer. -/
+def truncZ (x : ℚ) : Int := if 0 ≤ x then (⌊x⌋₊ : Int) else -(⌊-x⌋₊ : Int)
+
+theorem aligned_eq_truncZ {w : Nat} (hw : w ≤ 24) (E : Int) (t : Term) :
+    aligned w E t = truncZ ((if t.neg then -1 else 1) * ((t.mag : ℚ) / 2 ^ shiftOf w E t)) := by
+  rw [aligned_eq hw]
+  have hq : ((t.mag / 2 ^ shiftOf w E t : Nat) : Int) = (⌊(t.mag : ℚ) / 2 ^ shiftOf w E t⌋₊ : Int) := by
+    congr 1
+    rw [← Nat.floor_div_eq_div (K := ℚ)]
+    simp
+  have hnn : 0 ≤ (t.mag : ℚ) / 2 ^ shiftOf w E t := by positivity
+  unfold truncZ
+  cases t.neg
+  · simp [hq, hnn]
+  · by_cases h0 : (t.mag : ℚ) / 2 ^ shiftOf w E t = 0
+    · simp [h0, hq]
+    · have : ¬ (0 ≤ -((t.mag : ℚ) / 2 ^ shiftOf w E t)) := by
+        intro h; exact h0 (by linarith)
+      simp [hq, this]
+
+end Pouw.Fp8Atom.Proofs
