@@ -1,5 +1,5 @@
 """The network attester's messages between the workload and the prover: the committed rows the served-rows tie reads,
-and the reported advice the certifier's prover computes from the workload's scheduling. The parties are SPOT's
+and the reported advice network certification's prover computes from the workload's scheduling. The parties are SPOT's
 (`spot.prover.workload`), declared again here because this place does not load SPOT's, and the one list of every
 protocol's messages is `tests/test_workload_messages.py`'s.
 

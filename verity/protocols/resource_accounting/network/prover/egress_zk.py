@@ -104,7 +104,7 @@ def link(out: Path) -> SimpleNamespace:
     head, dom = WR.check_registration(registration, signer.public_key(), SESSION, PARAMS, LINK, Direction.EGRESS, w)
     window = states[w * T:w * T + T]
     if [EG.rendered(SHAPE, s) for s in window] != list(cells.rows):
-        raise SystemExit(f"window {w}: the states don't render the network certifier's rows")
+        raise SystemExit(f"window {w}: the states don't render the network attester's rows")
     ordinals = sorted({s.q for st in window for s in st.slots if s.live})
     return SimpleNamespace(window=w, states=window, cells=cells, registration=registration, head=head, dom=dom,
                            ordinals=ordinals)
@@ -398,7 +398,7 @@ def prove(a) -> int:
                                "end": sum(r[s * SHAPE.B] == W.END for r in rows for s in range(SHAPE.R))},
                      "ordinals": at.ordinals, "registration": at.registration}
     log(f"{at.head.value}: {T} rows of {WR.row_bytes(PARAMS)} bytes, root {at.head.root.hex()[:16]}, cells "
-        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the network certifier's key")
+        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the network attester's key")
     M = WZ._one_stage()
     sg = stager(M, n, out / "stager")
     WZ.check_shape(M, sg)

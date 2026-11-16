@@ -409,7 +409,7 @@ def _build(C, S, requests, fails):
 
 LengthsRow = part(
     "LengthsRow", STATICS, _sig, _build,
-    "one row of the network certifier's lengths table computed from the request row of its K slots (valid K×1, id "
+    "one row of the network attester's lengths table computed from the request row of its K slots (valid K×1, id "
     "K×IW, P K×LW, O K×LW, each element LSB first, zero-padded to whole u16s) and the fails row (a slot u16 class, u16 "
     "at): the third output's slot k is u32 id + 1, u32 the bytes of the canonical id request of P prompt ids in "
     "B-byte cells and u32 at where the class has bit 0 set, else O, all 0 where valid is 0; the second output counts "

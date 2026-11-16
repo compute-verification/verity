@@ -9,7 +9,7 @@ connections is under the one signature, and no proof block opens a row of them u
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
 the releases the network attester hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
 run's last close for its last execution phase (`network_attester.Released`, by slot stride: `network_attester`'s "The lengths rows").
-The certifier writes them from the cells it cut and released itself, never from the
+The attester writes them from the cells it cut and released itself, never from the
 server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
 that reading of the records in the clear): that the two agree rests on the network attester's own code
 (`trusted-device`), and no proof ties them. Each table is T / `every` rows,
@@ -662,7 +662,7 @@ def check_no_head(doc: Mapping[str, Any], key: PublicKey, session: bytes, params
     if cert.digest != no_head_digest(link, window, params):
         raise ValueError("the word's certificate doesn't sign that the execution phase has no head")
     if not cert.verify(key, session):
-        raise ValueError("the word's certificate doesn't verify under the network certifier's key in the session")
+        raise ValueError("the word's certificate doesn't verify under the network attester's key in the session")
 
 
 def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:

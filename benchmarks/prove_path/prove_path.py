@@ -114,7 +114,7 @@ Two kinds of committed run:
   ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
-  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
+  and 16, 1,024 prompt ids and 64 outputs, the attester run of record's envelope at the fixed slots; every slot's
   Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
   its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
   each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
@@ -144,7 +144,7 @@ Two kinds of committed run:
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
   (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
   only, for the network attester's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
-  the certifier front kept the network attester's run under the serve dir, slot k is instead the request whose Program
+  the attester front kept the network attester's run under the serve dir, slot k is instead the request whose Program
   the network attester's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
   verifier's own ``window-circuit`` record is the circuit it holds it to. ``--sampling-design`` is the rate that audit states as
@@ -1562,14 +1562,14 @@ KeptIngress = Callable[[Path], tuple[Any, Mapping[str, Any], Sequence[tuple[int,
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: KeptIngress | None = None,
               ) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network attester's scan of its run the certifier front kept under ``serve_dir``, as a window of class
+    """The network attester's scan of its run the attester front kept under ``serve_dir``, as a window of class
     ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's state rows and slot k's request, the I1 id
     (its id request's ``user``) of the one whose Program starts there, None for a slot no request starts
     (`scan_state.scan_state`). The window is the execution phase, of the class's buckets, whose Programs start its
     requests (their anchors, `scan_state.scan_anchors`); the scan reads the network attester's certified ingress rows
     from execution phase 0 and the outputs its egress cells carry. ``kept_ingress`` reads the kept run
-    (`KeptIngress`): the caller passes it, since SPOT reads the certifier's record as a certified input and imports
-    neither the certifier nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
+    (`KeptIngress`): the caller passes it, since SPOT reads the attester's record as a certified input and imports
+    neither the attester nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
     doesn't give the window's scan or the caller passed no reader."""
     from verity_vllm.program.predict import scan_state as SS
 
@@ -1590,7 +1590,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     by = {r["user"]: r for r in io["records"]}
     if missing := [u for u in users if u not in by]:
         raise ValueError(f"{len(missing)} of the window's {len(users)} requests are no certified request: the window "
-                         "served traffic the network certifier didn't see")
+                         "served traffic the network attester didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
     windows = sorted(w for w, _ in phases)
@@ -1733,7 +1733,7 @@ def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | N
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    window's own value. Where the certifier front kept the network attester's run under the serve dir, the scan state is
+    window's own value. Where the attester front kept the network attester's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
@@ -1783,9 +1783,9 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         seconds[what], t = round(time.time() - t, 1), time.time()
 
     if kept_ingress is None or scan_state_file is None:
-        raise ValueError("window-commit reads the network certifier run its serve kept, and names the scan state it opens "
-                         "for the certifier's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
-                         "imports neither the certifier nor a benchmark: run benchmarks/one_stage/window_commit.py")
+        raise ValueError("window-commit reads the network attester run its serve kept, and names the scan state it opens "
+                         "for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
+                         "imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py")
     S.SamplingDesign(a.sampling_design)
     key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
@@ -1925,7 +1925,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
     """The commands (the module docstring). ``kept_ingress`` reads the network attester run a serve kept
     (`KeptIngress`), which ``window-commit``'s scan needs (`kept_scan`), and ``scan_state_file`` is the name its scan
-    reads the window's opened scan state under (`scan_state_opening`): a caller that may import the certifier and
+    reads the window's opened scan state under (`scan_state_opening`): a caller that may import the attester and
     ``benchmarks/`` passes both."""
     from verity_vllm.pipeline.workload_file import workload_file
 

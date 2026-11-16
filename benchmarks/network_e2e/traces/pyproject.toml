@@ -1,6 +1,6 @@
 # Real vLLM V1 scheduler traces under varied traffic (README.md). Not a package: the corpus runs in a node's pinned vLLM venv,
 # and the suite tests the scheduler hook on a stand-in Scheduler, the traffic plan, the summary, the stand-in network
-# certifier's and the network certifier's release headers and watermark against the server's tick feed, `tick.sh` on
+# attester's and the network attester's release headers and watermark against the server's tick feed, `tick.sh` on
 # a stand-in node and `ids.sh` with a stand-in interpreter, stdlib only.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_ids_job.py", "tests/test_tick_job.py"]
 # `corpus.tick_modules` (tests/test_tick_corpus.py): the vLLM integration's `--admit tick` under vLLM's own server
-# (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network certifier speaks, and
+# (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network attester speaks, and
 # the modules they import
 inputs = [
     "adapters/vllm/verity_vllm/__init__.py",
@@ -24,12 +24,12 @@ inputs = [
     "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
     # `verity.protocols.resource_accounting.network.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
-    # the network certifier makes them, which the server's feed reads in a network certifier trace under `--admit tick`, and its
+    # the network attester makes them, which the server's feed reads in a network attester trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
     "verity/protocols/resource_accounting/network/verifier/__init__.py",
     "verity/protocols/resource_accounting/network/verifier/release.py",
-    # `verity.protocols.resource_accounting.network.verifier.pacer` (the probes' tests): the network certifier's clock, which its
+    # `verity.protocols.resource_accounting.network.verifier.pacer` (the probes' tests): the network attester's clock, which its
     # probes read
     "verity/protocols/resource_accounting/network/verifier/pacer.py", "verity/protocols/__init__.py",
           "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/network/__init__.py",
