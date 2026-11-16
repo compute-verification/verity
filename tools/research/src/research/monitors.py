@@ -1051,13 +1051,12 @@ def held(why: str | None, step: str | None, installed: bool, on: set[str]) -> st
 
 
 def there(path: Path) -> bool:
-    """Whether a file is at `path`, as deploy drift's probe reads one: only a path that isn't there is missing."""
+    """Whether a file is at `path`, as deploy drift's probe reads one: only a path that isn't there is missing, and one that
+    can't be read is there."""
     try:
         path.stat()
-    except FileNotFoundError:
-        return False
-    except OSError:
-        pass
+    except OSError as e:
+        return not isinstance(e, FileNotFoundError)
     return True
 
 
