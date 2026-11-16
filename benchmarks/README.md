@@ -10,7 +10,8 @@ and write, and the index of every directory.
 
 `verity bench NAME [ARGS]` runs the directory NAME's own runner, its `run.py` or else its `run.sh`, and hands it ARGS (a
 `-` in NAME is a `_`). A runner that needs a GPU or a whole node is the command of a `research run`, as its header
-says. These are the directories that have one:
+says. In a fresh clone, `uv sync --all-packages --extra torch-cpu` makes the environment every runner here runs in,
+and `uv run verity bench NAME [ARGS]` runs one. These are the directories that have one:
 
 | Command | What it runs |
 | --- | --- |
@@ -18,7 +19,7 @@ says. These are the directories that have one:
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench certifier_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
-| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones |
+| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -51,7 +52,7 @@ says. These are the directories that have one:
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
-| `verity bench training_slowdown` | every job of an attack config and of its honest config, each found by its label and run where it is missing |
+| `verity bench training_slowdown` | every job of an attack config and of its honest config, each found by its label and run where it is missing; `ENTRY --library --root DIR`, one library entry's step traced on a CPU and its slowdown, the bound on one traced step with no entry trained |
 | `verity bench unit_block` | a word primitive's Boolean version built as one Flock proof block, against Flock's proved range |
 | `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
 | `verity bench unit_walk` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds at each width |

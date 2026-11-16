@@ -52,6 +52,7 @@ needs `lake`, which elan (https://github.com/leanprover/elan) installs with the 
 line and exits before any work.
 
 ~~~sh
+uv sync --all-packages --extra torch-cpu
 uv run verity bench inference_only --stated-only     # the served policy and its number, from its stated numbers alone
 uv run verity bench inference_only --stated-only --uncredited-share 0.1%   # and the served class under the value tie
 uv run verity bench inference_only                   # and the class this tree builds, with the Lean count on it
