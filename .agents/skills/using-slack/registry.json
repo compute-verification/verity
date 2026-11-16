@@ -509,7 +509,6 @@
         "benchmarks/property_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
-        "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/demo_minutes/onsite_minutes.py", "tests/benchmarks/demo_minutes/test_onsite_minutes.py", "tools/verity/cli/verity_cli/served_table.py",
