@@ -225,6 +225,29 @@ there is named as one the run did not write. Before anything else it prints, und
   written before its writer stated it), or with kinds other than the linears' outputs and those `tied.toml`'s source
   names, gives no figure and says why.
 
+A serve under the Pearl+ tie writes no Program, no limits and no count. `assemble.py --from DIR` writes them after the
+serve from what it did write, before `--from DIR` reads it:
+
+~~~sh
+uv run python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...] [--registration R] [--pins WREG]
+~~~
+
+- **The Program** (`registered/program.json`) is rebuilt from the serve's `record/serve-phi.json`, the policy's class
+  and its `pearl_tables` scheme. The call is the one the serve's circuit record was written by
+  (`prove_path.py class-circuit`: `window_circuit.class_circuit`). It is refused unless its digest is the circuit
+  record's `program` and R's.
+- **The circuit record** (`registered/circuit.json`) is the serve's own, byte for byte.
+- **The log** (`registered/log.jsonl`) is the `--first` records (the deployment's registration of the weights, first),
+  then W (`record/window-record.json`), then `--registration R`, the window's registration chained right after W. The
+  chain is held from its first record, and R must name the Program and the circuit record's SHA-512. Without R no record
+  names the Program, so the check refuses the record.
+- **The limits** (`inference-only-limits.json`) are written only where the serve wrote none: α = k/c and Γ = c of the
+  policy.
+- **The count** (`block-counts-CLASS.json`) is the integration's count of the class circuit record's blocks against
+  the policy, at `--pins` (none: every read is free). Its exact counts go to the run directory's `private/`.
+
+A refusal exits 2 before anything is written.
+
 ## What it does not mean
 
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.

@@ -38,7 +38,7 @@ inputs = ["benchmarks/slowdown",
           "adapters/torch/verity_torch", "tests/test_vllm_public_api.py", "tests/benchmarks/harness/test_adapter.py", "benchmarks/inference_only"]
 # test files that start a program the read guard can't trace (the record check's script, its compiled command, lake):
 # keyed on the suite's whole tree
-untraced = ["test_served_record.py"]
+untraced = ["test_served_record.py", "test_assemble.py"]
 
 [tool.verity.interface]
 core = "verity bench inference_only"
