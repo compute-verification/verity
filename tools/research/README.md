@@ -273,9 +273,8 @@ git-push+tree+file-sha256`, `transport: git`; job.json
 path, prints one line and ships the archive stream as above, given `.git` in
 place once a push lands; nothing is ever
 marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
-the workload's cwd: the workload runs in its own run directory, as locally,
-because every run of one commit shares `<root>/src/<sha>/` and relative outputs
-used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
+the workload's cwd: the workload runs in its own run directory, as locally, since every run of one commit shares
+`<root>/src/<sha>/`, where relative outputs would race. `--cwd source` (or `source/SUB`) runs it in the tree, and
 `--cwd clone` (`clone/SUB`), for a workload that writes there, in its own clone
 of it, removed when it exits (`research/clone.py`); job.json records `run.cwd` and `run.cwd_basis`. The
 runner and the workload get the tree's `PYTHONPATH` derived from its root
