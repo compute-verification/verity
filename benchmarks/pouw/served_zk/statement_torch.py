@@ -6,7 +6,7 @@ from typing import Any
 
 import torch
 
-from verity.protocols.accounting.pouw.prover.kernels.served_zk import statement as _statement
+from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import statement as _statement
 
 
 class Statement(_statement.Statement):

@@ -78,12 +78,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from a5_network_certifier import composer as row_composer, free_ports, refusal  # noqa: E402
-from verity.protocols.accounting.certifier.prover.network_certifier_zk import WardenRowIdentity  # noqa: E402
+from verity.protocols.resource_accounting.network.prover.network_certifier_zk import WardenRowIdentity  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
@@ -446,7 +446,7 @@ def main(argv=None) -> int:
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
     import a5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out

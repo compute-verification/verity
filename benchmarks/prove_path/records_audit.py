@@ -77,7 +77,7 @@ the prover's development verifier (`PEARL_CREDIT`). Once the records are read an
 audit stopped before its proofs end still says what it was tied to.
 
 ``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
-(`verity.protocols.accounting.registration.verifier.registration.Declaration`). R2 holds the docket's program to
+(`verity.protocols.registration.verifier.registration.Declaration`). R2 holds the docket's program to
 it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
 ``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
 are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
@@ -191,8 +191,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
-from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.registration.verifier import registration as G  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
@@ -653,7 +653,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -1011,7 +1011,7 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
@@ -1042,7 +1042,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.protocols.proofs.spot.device import challenger as Ch, remote as SPR
+            from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:

@@ -20,8 +20,8 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Defin
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.circuits.types import Array, Value
-from verity.protocols.accounting.pouw.verifier import audit as PA
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit,
     draw as D,

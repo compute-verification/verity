@@ -83,7 +83,7 @@ what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py 
 
 A declared run's audit (`../one_stage/a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.protocols.accounting.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.resource_accounting.network.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Docket binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's

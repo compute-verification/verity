@@ -16,7 +16,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
-from verity.protocols.accounting.certifier.verifier import release as REL
+from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from tests.pipeline.test_serve_admit_tick import RUN, TICK, read_all, request
 from tests.pipeline.test_serve_advice import REG, C, SchedEngine, Server, _body

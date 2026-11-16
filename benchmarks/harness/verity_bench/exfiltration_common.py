@@ -90,7 +90,7 @@ WHOLE = {"all three": "with the timing taken once and the entries charged throug
 #: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
 #: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
-READER_MODULE = f"verity.protocols.accounting.certifier.prover.{READER}"
+READER_MODULE = f"verity.protocols.resource_accounting.network.prover.{READER}"
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"

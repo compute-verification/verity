@@ -1,4 +1,4 @@
-"""`python network_certifier_probe.py ARGS...`: `verity/protocols/accounting/certifier/device/network_certifier_serve.py ARGS...`, with probes the network certifier doesn't
+"""`python network_certifier_probe.py ARGS...`: `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py ARGS...`, with probes the network certifier doesn't
 keep, for telling a late tick's cause: every tick's lateness (`NetworkCertifier.lateness`, which warden.json keeps only as
 quantiles), how long each tick's own work took (`NetworkCertifier._tick`), when the publisher packed, signed and committed each
 record (`Publisher.keep`) and every garbage collection of the network certifier's process (serve turns the collector off, so any is
@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "device" / "network_certifier_serve.py"
+SERVE = ROOT / "verity" / "protocols" / "resource_accounting" / "network" / "attester" / "network_certifier_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
 #: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network certifier's clock, seconds,
@@ -42,7 +42,7 @@ def certifier_clock():
     """The network certifier's own clock, which its origin is a reading of: its host's raw clock, read by its clock id
     (`pacer.raw_clock`). A probe's times are laid against that origin, so a probe given no clock reads this one: on
     another clock its times would be off by however far the two clocks stand apart."""
-    from verity.protocols.accounting.certifier.verifier.pacer import raw_clock
+    from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
     return raw_clock
 
 
@@ -169,9 +169,9 @@ def _path() -> None:
 def main(argv: list[str]) -> int:
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
     _path()
-    from verity.protocols.accounting.certifier.device import network_certifier_serve
+    from verity.protocols.resource_accounting.network.attester import network_certifier_serve
 
-    from verity.protocols.accounting.certifier.verifier import network_certifier
+    from verity.protocols.resource_accounting.network.verifier import network_certifier
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
@@ -187,6 +187,6 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 elif __name__ == "__mp_main__":
     _path()
-    from verity.protocols.accounting.certifier.device import network_certifier_serve
+    from verity.protocols.resource_accounting.network.attester import network_certifier_serve
 
     time_keeps(network_certifier_serve.Publisher)

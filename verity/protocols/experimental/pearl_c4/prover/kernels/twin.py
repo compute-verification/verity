@@ -17,9 +17,9 @@ import numpy as np
 from verity.circuits.kernels.tc import block_scaled_batch, group_sum_total_batch
 from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
 
 __all__ = ["Job", "Side", "Tile", "block_scales", "cells", "chain", "e2m1", "e_tilde", "f32", "form", "job", "quantize",
            "rne_bf16", "tile", "u32", "ue4m3", "ue4m3_value", "ue8m0_up"]
