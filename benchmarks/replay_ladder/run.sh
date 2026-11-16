@@ -33,6 +33,10 @@ else export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}; fi
 unset NCCL_P2P_DISABLE
 if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
+if [ -z "${SERVED:-}" ] && [ ! -f "$C4" ]; then
+  art=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["c4"]["art"])' "$here/../ppl/datasets.json")
+  C4=$(research data fetch "$art" --to "$D/inputs" | tail -1)
+fi
 ARMS=${ARMS:-pinned unpinned}
 # the arms whose engines also run at TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 (rblock always does; never unpinned)
 RBLOCK0_ARMS=${RBLOCK0_ARMS:-rblock}

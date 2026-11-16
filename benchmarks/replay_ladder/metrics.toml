@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/replay-rows-exact"
+title = "Served tokens a replay reproduces"
+owner = "proofs"
+unit = "share"
+axis = "Share of a saturated served window's output token positions that a compiled replay of the window on one GPU reproduces exactly, worst of the pinned arm's replays, for the model and machine each point names; every replay listed beside it as a member."
+better = "higher"
+command = "research run --on vy-spot-glm53 --project verity --source . --cwd source --timeout 60m -- bash -c 'set -o pipefail; ARMS=pinned ALONE=0 GPU_LEASE_WHO=proofs gpu-lease 1 --wait --cores 0-15 --max-min 55 -- bash benchmarks/replay_ladder/run.sh llama32-1b'"
+every = "7d"

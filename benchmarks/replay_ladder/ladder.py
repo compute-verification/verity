@@ -56,6 +56,7 @@ from verity_config.settings import of  # noqa: E402 (put on sys.path by serve_ta
 
 ENV = of(__file__)
 SCHEMA = "verity-bench/replay-ladder/v0"
+METRIC = "proofs/replay-rows-exact"
 #: the load each model's window is served at, and the one each replay and the alone sample read
 LOAD = "saturated"
 #: where the capacity server's processes log the configs they keep at run time
@@ -72,6 +73,7 @@ class Rung:
 
 LADDER = {
     "qwen3-8b": Rung("QWEN3_8B", "qwen3-8b"),
+    "llama32-1b": Rung("LLAMA32_1B", "llama-3.2-1b"),
     "llama31-8b": Rung("LLAMA31_8B", "llama-3.1-8b"),
     "r1-distill-llama-8b": Rung("R1_DISTILL_LLAMA_8B", "r1-distill-llama-8b"),
     "gemma2-9b": Rung("GEMMA2_9B", "gemma-2-9b"),
@@ -439,7 +441,29 @@ def summary(a: argparse.Namespace) -> int:
     md = markdown(rows)
     (out / "summary.md").write_text(md)
     print(md, end="")
+    record(out, rows)
     return 0
+
+
+def record(out: Path, rows: list[dict]) -> None:
+    sys.path.insert(0, str(ROOT / "benchmarks/harness"))
+    from verity_bench import kit
+
+    res = kit.writer(out)
+    missing = [f"{r['model']}/{r['pin']}/replay-{x['index']}" for r in rows for x in r["replays"] if "bit_exact" not in x]
+    res.validation("failed" if missing or not rows else "passed", "every replay run.sh started wrote its replay.json",
+                   ", ".join(missing) or ("ok" if rows else "no model directory"))
+    worst = None
+    for r in rows:
+        for x in (x for x in r["replays"] if "bit_exact" in x):
+            point = {"model": r["model"], "checkpoint": r["checkpoint"], "tp": r["tp"], "pin": r["pin"],
+                     "bit_exact": x["bit_exact"], "compile": x["compile"]}
+            res.measurement(METRIC, x["rows_exact_share"], "share", mark="measured",
+                            member=f"{r['model']}/{r['pin']}/replay-{x['index']}", extra=point)
+            if r["pin"] == "pinned" and (worst is None or x["rows_exact_share"] < worst[0]):
+                worst = (x["rows_exact_share"], point)
+    res.measurement(METRIC, worst and worst[0], "share", mark="measured", extra=worst and worst[1],
+                    why=None if worst else "no pinned replay finished")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -213,6 +213,12 @@ def test_summary_reads_a_model_directory(tmp_path):
     assert row["tilings"] == {"runs": 3, "reductions": 2, "split": 1}
     assert ("| qwen3-8b | 1 | inductor_pin | 4, 10, 40 | 1 of 2 | "
             "90.000000% | 0, 1 (fresh compile) | 1 | 1 of 2 | 1 of 2 |") in md
+    L.summary(SimpleNamespace(dirs=[d], out=tmp_path / "s"))
+    doc = json.loads((tmp_path / "s" / "result.json").read_text())
+    metric = [m for m in doc["measurements"] if m["name"] == L.METRIC]
+    assert [m.get("member") for m in metric] == ["qwen3-8b/pinned/replay-1", "qwen3-8b/pinned/replay-2", None]
+    assert metric[-1]["value"] == pytest.approx(0.9) and metric[-1]["model"] == "qwen3-8b"
+    assert doc["validation"]["status"] == "passed"
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
         assert L.model_row(d)["pin"] == arm
