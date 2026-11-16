@@ -448,4 +448,18 @@ theorem checkPublic_ok_pf (hC : CircuitFileFacts) : HmOut.checkPublic cH pubD = 
     List.forIn_cons, List.forIn_nil, dummyRow_zero cH hC.cH_ports hC.cH_dummyOutputs]
   fwd_walk [dummyCheck_false] block [] shallow []
 
+/-! ## The eight fields assembled. -/
+
+/-- **`PublicFileFacts` holds**, given `CircuitFileFacts`: the two loads, the two populations, the own-port check, the
+draw, the public check and the published domain, each proved above. -/
+theorem publicFileFacts (hC : CircuitFileFacts) : PublicFileFacts :=
+  { hmOut_loadPublic := hmOut_loadPublic_pf hC
+    hmIn_loadPublic := hmIn_loadPublic_pf hC
+    pubO_n := pubO_n_pf hC
+    pubI_n := pubI_n_pf hC
+    checkOwn_ok := checkOwn_ok_pf
+    drawn_ok := drawn_ok_pf hC
+    checkPublic_ok := checkPublic_ok_pf hC
+    pubO_domain := pubO_domain_pf hC }
+
 end Verity.Sampled.Instance.HonestSession
