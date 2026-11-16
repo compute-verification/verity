@@ -224,7 +224,7 @@ id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee).
 the tab's value is the one written last that names no member, or, where the run wrote none without a member, the one
 written last: one point a run. Beside it the tab lists the measurements that name a member from the newest run that
 wrote any. So a benchmark that writes one id for several periods, scopes or members writes the metric's own last: the
-one its `title`, `unit` and `axis` are for (`exfiltration-gb-world-year`'s, the `year` over the `world`).
+one its `title`, `unit` and `axis` are for (`exfiltration-total-gb`'s, the `year` over the `world`).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads

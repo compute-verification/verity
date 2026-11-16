@@ -21,7 +21,7 @@ from typing import Any
 from verity_bench import kit
 from verity_bench.exfiltration import main, measurements
 
-HEADLINE = "benchmarks/exfiltration-gb-world-year"
+HEADLINE = "benchmarks/exfiltration-total-gb"
 COMPUTE_AUDIT = "benchmarks/exfiltration-compute-audit-gb"
 NETWORK = "benchmarks/exfiltration-network-attester-gb"
 #: the metrics `benchmarks/exfiltration/metrics.toml` holds this benchmark to, by id: each a figure of the document

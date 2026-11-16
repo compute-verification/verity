@@ -36,7 +36,7 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
-  `--step` take another case of the plan. This is the headline figure. The planner's driver reads the same rows two
+  `--step` take another case of the plan. The planner's driver reads the same rows two
   other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
   whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
   total read between the two pinned budgets that bracket it alone.
@@ -416,9 +416,9 @@ the network attester's ε is 1 or more) is left out, but the world's year, the f
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
-- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` over the world's year (today
-  the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
-  each other period.
+- `benchmarks/exfiltration-total-gb`: the headline figure, the two parts together as the print gives them first: as
+  the scan's check charges it today, at D_j = 2, its error the two parts' summed; over each period the compute audit's
+  part has a value over.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
 - `benchmarks/exfiltration-network-attester-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.

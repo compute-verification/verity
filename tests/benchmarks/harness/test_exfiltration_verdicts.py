@@ -22,7 +22,7 @@ from verity_bench import exfiltration as E
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "8c0ac638eab787f4959a4316f351920b6d69b046025cfed4b4092496a313200c",
+NO_VERDICTS = {"text": "0daf3bbbfcce3a3a28d54b762384f33d35f30586012a5ed0e9f9bb23c97c1ad4",
                "json": "94412a9c27cf341d6c45c78575cb39ae23ffe4ff6eccfa4eece613a12104d2d6"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run

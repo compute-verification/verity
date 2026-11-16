@@ -2,11 +2,11 @@
 # enforces it.
 
 [[metric]]
-id = "benchmarks/exfiltration-gb-world-year"
+id = "benchmarks/exfiltration-total-gb"
 title = "Total exfiltration capacity"
 owner = "benchmarks"
 unit = "GB"
-axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute."
+axis = "GB a year across the world's compute, for GLM-5.3 with verification at 10% of compute: the compute audit's and the network attester's parts together, as the scan's check charges it today."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
