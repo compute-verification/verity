@@ -116,7 +116,6 @@ untraced = [
     "test_tool_rules.py",
     "test_treelock.py",
     "test_undeclared_derivation.py",
-    "test_vqueue_compare.py",
     "test_vqueue_loop.py",
     "test_vqueue_moves.py",
     "test_vqueue_records.py",
