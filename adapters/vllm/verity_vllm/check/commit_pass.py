@@ -129,7 +129,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     # boundary is a named FAIL; ABSENCE or a partial replay is a named FAIL too (never an unsound PASS on C1 + C3 alone).
     # The linkage is not a B>=2 device: at B=1 the arrival-step check ties the Commit to the workload of record (the wl_swapped canary) and
     # the decode chain is what a cross-step relabel breaks.  The full Match-oracle compare is a diagnostic: a mismatch still fails (above),
-    # a complete attribution no longer substitutes for the replay.  Records without a binding block (unit fixtures of other checks) keep
+    # a complete attribution does not substitute for the replay.  Records without a binding block (unit fixtures of other checks) keep
     # the legacy rule.  TP2 (tp2_commit grades the rank block before attaching its binding) is graded by tp's path until the rank replay lands.
     sr = commit.get("sampled_replay")
     lk = commit.get("boundary_linkage")
