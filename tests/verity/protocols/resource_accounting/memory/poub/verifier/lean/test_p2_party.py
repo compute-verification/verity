@@ -393,14 +393,20 @@ def test_a_session_id_the_memory_challenger_has_used_is_refused_before_any_coin(
     assert prover[0].held is None and prover[0].ended is None
 
 
-def test_the_party_takes_a_challenger_and_a_session_id_together_for_one_session(store, tmp_path) -> None:
+def test_the_party_takes_a_challenger_a_session_id_and_the_pin_together_for_one_session(store, tmp_path) -> None:
     path = tmp_path / "registration.json"
     path.write_text(json.dumps(p2_parties.registration_json(store.registration)))
     base = ["--registration", str(path)]
-    for flags, why in ((["--stdio", "--challenger", str(tmp_path)], "--challenger and --session go together"),
-                       (["--stdio", "--session", SESSION_ID.hex()], "--challenger and --session go together"),
-                       (["--stdio", "--challenger", str(tmp_path), "--session", "ab"], "64 lowercase hex"),
+    pin = ["--trusted-sha512", "ab" * 64]
+    together = "--challenger, --session and --trusted-sha512 go together"
+    for flags, why in ((["--stdio", "--challenger", str(tmp_path)], together),
+                       (["--stdio", "--session", SESSION_ID.hex()], together),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", SESSION_ID.hex()], together),
+                       (["--stdio", *pin], together),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", SESSION_ID.hex(), "--trusted-sha512",
+                         "ab"], "128 lowercase hex"),
+                       (["--stdio", "--challenger", str(tmp_path), "--session", "ab", *pin], "64 lowercase hex"),
                        (["--listen", "127.0.0.1:0", "--sessions", "2", "--challenger", str(tmp_path), "--session",
-                         SESSION_ID.hex()], "--sessions 1")):
+                         SESSION_ID.hex(), *pin], "--sessions 1")):
         p = subprocess.run([sys.executable, "-m", p2_parties.MODULE, *base, *flags], capture_output=True, text=True)
         assert p.returncode == 2 and why in p.stderr, (flags, p.stderr)
