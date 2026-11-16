@@ -5,7 +5,7 @@ codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`
 reader is PoUB's prover's, in `verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/`: `reader.cu` with `reader.py` gives the
 audit's receipts, leaves and receipt tree, gated byte for byte against the audit's `receipts.py`; `sketch_receipt.py`
 and `sketching.py` are the reference for the audit's `sketch-sha512` receipt, and `sha512.cuh` is SHA-512 for the
-kernels.
+kernels. `step.cu` is one decode step at HBM exhaustion.
 
 ## Interface
 
@@ -25,6 +25,7 @@ the audit's code. Decided by `rg codec_tensor` over
 **Run:** `uv run tools/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
 and `sketching.py` against the audit's code and `tests/vectors.json`, on the CPU.
 
-**Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; the reader
-scripts write their gates and timings as JSON. **Backs:** the receipts it computes on the GPU are the ones `ResourceAccounting.Guarantees.Remote.SketchBoundRun` and
+**Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; `bench.py`
+writes `codec-tensor.json` and `bench.log` into its `--out`, and the reader scripts their gates and timings as
+JSON. **Backs:** the receipts it computes on the GPU are the ones `ResourceAccounting.Guarantees.Remote.SketchBoundRun` and
 `SketchBoundDeployed` bound, the memory line's sketch premise.
