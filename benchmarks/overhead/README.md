@@ -37,5 +37,3 @@ verity bench overhead table [--json]                          γ per scheme, poi
 ```
 
 A sweep of `points` and a timed `run` are research runs, each taking one GPU of a node through its `gpu-lease`.
-[`DESIGN.md`](DESIGN.md) says how the points and γ are measured, which runs are of record, and what a scheme's arm must
-keep.

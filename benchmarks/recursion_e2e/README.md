@@ -35,8 +35,6 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
-[`DESIGN.md`](DESIGN.md) says where a run goes, what each option does, and what each step of the pipeline runs.
-
 ## What the verdict says
 
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of

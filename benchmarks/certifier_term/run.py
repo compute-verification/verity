@@ -3,7 +3,7 @@ census's reference datacenter and the world, over a week, a month and a year, in
 file). It runs the calculator of K, `benchmarks/network_traces/leak_bounds.py`, with ARGS, and prints what that prints.
 
 With `--out DIR` it also writes its result, through the harness kit's writer for `DIR` (`verity_bench.kit`) and through
-nothing else; the kit says where the file is, `DIR/result.json` outside a research run (`benchmarks/harness/DESIGN.md`).
+nothing else; the kit says where the file is, `DIR/result.json` outside a research run.
 The result holds the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
 figure is the model's, and its mark and every name but the metric's say so (`MODELED`); none is computed from a run's K.

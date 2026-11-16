@@ -69,9 +69,6 @@ runner imports it without vLLM or torch: `kit.lease` (the wait for a job's GPUs)
 number), `kit.record_dir` and `kit.record` (a run's record by directory or run id), and `kit.ran_with` (the core
 benchmarks' `ran with` line). Nothing it writes is a verdict of record.
 
-[`DESIGN.md`](DESIGN.md) holds the rest: how a point is timed, what a result holds and what refuses it, dispatch and
-resume, the served table and the bandwidth breakdown, and each kit call's arguments.
-
 ## A steady-state spec
 
 `plan`, `run` and `check` take a second schema, told from the first by the file's `schema`: a steady-state spec
