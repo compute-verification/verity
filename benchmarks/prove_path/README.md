@@ -34,9 +34,9 @@ served-rows tie's runs on a sealed served window:
 
 ## The prove path
 
-Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
+Network certification under arbitrary vLLM usage proves a served run's step proof blocks after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
-units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
+proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
@@ -58,11 +58,11 @@ commitments and never published.
    `advice: {root, bits}` (`pipeline.advice_windows.binding`). The compiler's digest is `Capped`'s: the inner compiler's digest
    and ℓ, the public cap on the advice's length. The root is the advice's hiding commitment (`advice_windows.commit_advice`:
    I1's canonical encoding in 256-bit rows, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the compiler).
-   `bits` is the advice's length, the leak the certifier charges. Every rank binds the same root: the prover commits the advice
+   `bits` is the advice's length, the leak network certification charges. Every rank binds the same root: the prover commits the advice
    once. The record gains no field.
 2. **Each step's Programs are the compiler's output.** The window's `served_programs` are the digests the compiler produced
    for the advice, and the population program and partition the docket is checked against (R1–R7) are over those
-   Programs. The Stream's Check names the unit templates' Program digests, as it does for a declared run.
+   Programs. The Stream's Check names the proof blocks' templates' Program digests, as it does for a declared run.
 3. **Named gap: the advice is opened to the verifier until the compile slice's proof block exists.** The verifier is handed the
    commitment's opening (the advice and its salts, `advice_windows.opening`), the way the demo opens the wiring. It recomputes
    the root, compiles the advice with its own copy of the registered compiler, derives its own window
@@ -90,17 +90,17 @@ commitments and never published.
 6. **What the advice can and can't do.**
    - Advice that names a request the Commit didn't serve, or a served one at another arrival, commits no window, because the
      committed store holds no such value (`LookupError` at the prover).
-   - A unit committed under other advice and spliced in fails R4.
+   - A proof block committed under other advice and spliced in fails R4.
    - Each of these fails `source` before any coin is read (`more_negatives`, as a5's `advice_negatives`): a docket naming
      another compiler, another advice root, another cap, or none; the opening under another salt; another rank's docket;
      the docket under the compiler listing no transfer gates.
-   - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
+   - The advice can only choose among Programs the compiler emits. Every proof block's values are still committed under hiding leaves
      and opened only inside the proof.
-7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
+7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose proof blocks hold
    transfer gates (the I/O shell's), and its digest covers the list. The window's work sampling design (`work-rate:NUM/DEN`, the
-   stream's rule) samples every unit of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   stream's rule) samples every proof block of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a docket sampling them as the rest. Until the compiler lists the I/O shell's
-   units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
+   proof blocks, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
 - the sample: the service's rule, the partition file's sampling design, on live coins read after the receipt, with ε surfaced at δ by the
@@ -123,36 +123,36 @@ are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live ve
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
 compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
-step units are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
+step proof blocks are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
 Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
 the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network attester's head checks
+- no incorrect proof block is in a class sampled `all`: the transfer-gate proof blocks and the network attester's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
   the incorrect proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
-  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no unit incorrect,
+  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no proof block incorrect,
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
 (`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
 verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
-audit's carried sequences, cut at the horizon, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
+audit's carried sequences, cut at the monitoring period's end, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
-- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
+- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the monitoring period's end lists as
   ingress, and the registered inputs, the weights among them, don't count;
-- λ_δ, which units are incorrect;
+- λ_δ, which proof blocks are incorrect;
 - β_δ, the incorrect proof blocks' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
 
-At δ ≥ miss(1) no unit is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
+At δ ≥ miss(1) no proof block is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
 registered inputs' docket values rather than the trace's, a disagreement being a SHA-512 collision. The bound is
 meaningful only once the advice is the circuit's one free input outside the docket: while a window's circuit is a
-stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than the advice
+stand-in partition rather than the whole window, its free inputs are its proof blocks' inputs, far more bits than the advice
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
 Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
-conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
+conditional miss probability and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
@@ -161,17 +161,17 @@ history would discharge, and doesn't discharge them yet.
 - c is `c`. It is `advice.bits` (the docket's `window.advice.bits`: the I1 advice's length, which
   `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
   charge, so the advice is the only free input outside the docket. Otherwise `c` is null and `bound` is `vacuous`,
-  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its proof blocks' inputs,
   and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/protocols/proofs/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
-  `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
+  `bound` of the `of` proof blocks are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
-- β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
+- β_δ is `harm_bound`: the profile's `harm_bound`, each template's proof blocks weighted by its committed bits (`_template_bits`
   in `verity/protocols/proofs/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
-- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
+- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the network attester's term.
 
 **A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
@@ -192,7 +192,7 @@ guarantee above.
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
 - `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The network attester's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).
@@ -202,21 +202,21 @@ match is refused. It is never a soundness gap.
 
 ## The compile slice's proof block (the target; not built)
 
-The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
+The proof block closes the named gap: the advice is never opened, and the verifier never recompiles.
 
 - **Selection All.** Each docket has one compile slice's proof block, always proved. Its Spec's selection is `service.All`, so it is
-  never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
+  never sampled. It reads no coins, and its proof goes through the ZK server like every proof block's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
-  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term the certifier charges);
+  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term network certification charges);
   - Π, what the window's Programs commit to: either the window's `served_programs` (request id ↦ Program digest) with the
     population Program's and partition's digests that R1–R7 hold the docket to, or, with the compiler's padded public
     step templates, the root of a hiding commitment to the routing (which committed row of each step feeds which public template
     instance).
 - **Witness.** The advice a, with |a| = b ≤ ℓ, the salts y_0 … y_{R−1} of its R = ⌈b / 256⌉ rows, and, for a committed routing,
   the routing's rows and salts.
-- **Statement.** The unit outputs one bit, and it is 1 exactly when all three hold:
+- **Statement.** The proof block outputs one bit, and it is 1 exactly when all three hold:
   1. ρ is the root of a's rows:
      - row i is a[32i … 32i + 31], zero-padded;
      - leaf i is `verity.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
@@ -227,7 +227,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
      encoding, and the compiler's rules.
   3. Its Programs P meet Π: the digest of each request's Program is `served_programs`' entry for it (and P's population Program
      is the registered one), or P's routing is the committed routing under Π's root.
-- **Quantified over every advice string up to ℓ.** For every a ∈ {0,1}^{≤ℓ} and every set of salts: if the unit's proof verifies
+- **Quantified over every advice string up to ℓ.** For every a ∈ {0,1}^{≤ℓ} and every set of salts: if the proof block's proof verifies
   under (d_C, ρ, b, Π), then ρ opens to a (hm96 binding and SHA-512's collision resistance), compile_C(a) is not a refusal, and
   its Programs meet Π. compile_C is total and deterministic, so every ill-formed string has exactly one refusal and no accepting
   proof.

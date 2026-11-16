@@ -1,8 +1,8 @@
 # E2E chains per protocol
 
-The detail behind `verity/protocols/proofs/spot/prover/audit/README.md`'s "What an accepted plain audit means": the status of every
-protocol's end-to-end chain, and the premises locked statements take from `Proofs/`. The page keeps 2a's and 2b's
-chains; this file keeps the rest, which changes with each status update.
+The detail behind `../README.md`'s "What an accepted audit means": the status of every protocol's end-to-end chain,
+and the premises locked statements take from `security/Proofs/`. That section states the sampled audit's guarantees;
+this file keeps every protocol's chain, which changes with each status update.
 
 **Status per protocol.** Each protocol's e2e chain, layer by layer: the session's KS, then sampling, then the audit,
 then the accounting bound, as the lock's guarantees and a walk of their dependencies give it. The last column gives the
@@ -24,11 +24,11 @@ refactor item that changes it, and what has landed since.
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |
 
 Items 1 and 9–12 are the refactor's statement-changing steps: KS to sampling once (1), PoUW's headline from
-`SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, PoUB and the inference-only policy over sampling (11), and
+`SessionSoundAt` (9), the network attester's property (10), PoUS, bandwidth, PoUB and the inference-only policy over sampling (11), and
 recursion's knowledge form (12). The rest (2–6, 8 and 13) are the refactor plan's other steps.
 
-**Premises in `Proofs/`.** `trees.except` (`security/lean-audit.json`) exempts module prefixes from the tree rule
-until Flock's spec is extracted. Each is there for Flock's definitions in `Proofs/`, and one
+**Premises in `security/Proofs/`.** `trees.except` (`security/lean-audit.json`) exempts module prefixes from the tree rule
+until Flock's spec is extracted. Each is there for Flock's definitions in `security/Proofs/`, and one
 of them, `Proofs.Pouw.TS.Session`, is on PoUW's chain, so this is a Flock question.
 - **lean's list**: 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,
