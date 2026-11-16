@@ -14,22 +14,21 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
+from test_topp_stages import ROWS, SERVED_V, f32, row, unit_args
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_words
 from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.numerics import topp_stage_twins as TW
 from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import gumbel_boolean as GB
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_stages as T
 from verity_vllm.definitions.registry import topp_word_gates as TG
-from verity.commitments.periods import interface as IF
-
-from test_topp_stages import ROWS, SERVED_V, f32, row, unit_args
 
 #: the nonzeros of the largest unit proved under ``--zk``: a plain step block of the served row,
 #: ``TopPStep_v1{V=154880,S=1,N=2048,FIRST=false,COMBINE=-1}``, whose proof Flock's verifier accepted.  The largest unit the

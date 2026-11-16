@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_words
+
 from verity_vllm.definitions.numerics import torch_blocks as TB
 from verity_vllm.definitions.numerics import torch_kernels as TK
 from verity_vllm.definitions.registry import torch_embedding as TE

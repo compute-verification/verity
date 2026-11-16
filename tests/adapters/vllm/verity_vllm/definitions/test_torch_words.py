@@ -10,11 +10,11 @@ import zlib
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
+
 from verity_vllm.definitions.registry import boolean_torch_words as BW
 from verity_vllm.definitions.registry import torch_words as W
 
