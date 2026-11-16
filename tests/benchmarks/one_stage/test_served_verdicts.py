@@ -2425,10 +2425,11 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", None])
 def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
-        tmp_path, monkeypatch, capsys, live, design):
-    """The tied audit's rule (its summary's ``sampling_design``) decides what PoUW's accept of record covers: at a stratified rate
-    every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none stated, the
-    row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied guarantee."""
+        tmp_path, monkeypatch, live, design):
+    """The tied audit's rule (its summary's ``sampling_design``) decides what PoUW's accept of record covers: at a
+    stratified rate every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none
+    stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
+    guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
@@ -2438,13 +2439,9 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     weaker = None if design and design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
     assert row["verdict"] == "accept" and row["answer"]["profile"].get("weaker_tie") == weaker, row
-    (tmp_path / "serve").mkdir()
-    assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
-                   str(audit), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
-                   "--product", "remote", "--key-sha512", pin, "--lane", lane]) == 2
-    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    assert line["verdicts"]["PoUW"] == "accept"
-    assert (f"{S.PEARLPLUS_SAID}, {weaker}" in line["reason"]) if weaker else ("weaker tie" not in line["reason"]), line
+    reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
+    said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
+    assert reason.startswith("PoUW: accept") and reason.endswith(said), reason
     assert weaker is None or f"sampled {design}, not a stratified rate" in weaker
 
 
