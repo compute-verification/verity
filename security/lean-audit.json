@@ -30692,11 +30692,10 @@
    }
   },
   "Definitions.Certifier.Guarantees.MonitoringPeriodFails": {
-   "digest": "629148ec16f040a9e9ddb3bfa8c779bcc32c5c597afd6bbb87acb20bfeaab9c1",
+   "digest": "93bb9f7bc4eae7261c61c38b60b05184b5efd9c1bfed02902433c4464b940ff3",
    "definitions": {
     "NetTiming.FailsBelow": "2b3db080ef46bbe327762eb67c8b1988ff1b7b060f2d10fe0bee2382e5e6f341",
     "NetTiming.Guarantees.MonitoringPeriodLeakCharged": "8741f2a37a5cc5993a3a5056cd7ce5366d3f00f8f2f1277af010b2fe8186e403",
-    "NetTiming.Guarantees.MonitoringPeriodLeakFails": "6f68c9cecfa83d27cd700e2d2c6d984cc366e9eef376daea9484156565fd7a96",
     "NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost": "65d59fb466c7fa9dceaab2b59a576adb79c6af24c8e0eded91d03bfe797c43f0",
     "NetTiming.KraftWeights": "ed6bfca95f74411ed152b4d1f18953af0625c62829211552356ddfee9cfd9485",
     "NetTiming.failCount": "9a543078524e5cc988f4f5320ac30aa39d4e7592909a44bc9cf144615ec73341",
@@ -30865,7 +30864,7 @@
    }
   },
   "Definitions.Certifier.Run": {
-   "digest": "81feaef0341aa3648d3348ff617f82e3839a4d7c39fbe21389ff4d3c815f2a81",
+   "digest": "b78fda6cc55c91f2d402cb62cb389f4e8a61343e6cdb370adb51ee7eace7f894",
    "definitions": {
     "NetTiming.Accepted": "14ca64d27323fba871339286089acc8121918bdaab81e7c85942462c1d0cb6f6",
     "NetTiming.Certifier": "a967d757eba04afc63b5fa8ed69c05db5c9982a993153a99adff75c1286f4807",
@@ -30879,7 +30878,6 @@
     "NetTiming.Interaction.op": "751767efe187cbe7ba957763bd23eeb976102e5c6a4ef20b2f43b0b621e5eba0",
     "NetTiming.Interaction.snd": "f9c3eafb62453ff408362a917007a01a13f1848c0c885f682fc2ca77014d521c",
     "NetTiming.Interaction.trace": "6a8f1ec4a1729b677fe2d0bb10b90dc9d8414d9cae2bae2c37476ab2fe7b547d",
-    "NetTiming.Interaction.wireRun": "2bb11ba31dc19b73db3721a753998fecfe8232da956f44aa705264312961440b",
     "NetTiming.Obs": "fa4dd0c7711bb6a8c130b62f7258c4c34f1df7c2e9c6ea926e0cac038cf2ed9b",
     "NetTiming.Obs.jitter": "4848b10995dcb60cbbd165f4b4379afe368f8acf6d0050a545e01971b8a3fef1",
     "NetTiming.Obs.rows": "d2df4cf42c2650e672894b4e11f57e55e936e6cd1ec9bfdf4e49301279f1e44d",
@@ -30966,9 +30964,8 @@
    }
   },
   "Definitions.Certifier.Witness": {
-   "digest": "6df1a5789e278412db81b60ad88e933ef518d7b83537d82004126e454f4a7729",
+   "digest": "89b661fda65b4812e3043279dcfa332d110d51b9c455bd9617a9ad7ea8318938",
    "definitions": {
-    "NetTiming.Witness.AccSeqsAt": "a4b935cd0a15b7bcb7e73d84acde775ea5c575cfa53012bdeba14459226c0bde",
     "NetTiming.Witness.acceptAll": "f4b434627d8d726cba77c3d5d49b6f208742472654bbb76ba621802a074ba35f",
     "NetTiming.Witness.admSched": "7220d1aa2460307c8f48ed22a61f797f9bfca6265ac4cc7280c37285718b26c1",
     "NetTiming.Witness.bitArr": "181f4fcdf33286eaf2f3552fe420741b35b431fa3f83570b56f726862d87001c",
@@ -30981,14 +30978,10 @@
     "NetTiming.Witness.lateAt0": "0f5e38bd41f7e44e02bb3456c0984e8b950d3cd21d91831e832e491fc3d794cd",
     "NetTiming.Witness.noFormat": "8aeb9540414e29567650c22ccf8cb119ae2955fc0b2a5b61aeec96935650a6d9",
     "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
-    "NetTiming.Witness.obs1": "57e339882f45ecf84055ab785c9ceee6462c6ea3797558d6709eb6fa2a6cd275",
     "NetTiming.Witness.oneRow": "9eb58a827ed3cd04b53a4402564a2ae3c4ea795070018dd01740d9b681528752",
     "NetTiming.Witness.oneSched": "f7c2df52e14f1438230968d3f59e09121847f2a0356f8329d0cb12083914992f",
     "NetTiming.Witness.posDec": "4392b84c23cf1a343f3439b10021f47efacbc580f02c1874aa1f3b272edf151b",
     "NetTiming.Witness.posObs": "7319f7ea5525ff8bc59eacce5d845e5869c012e3d990ea84f69863966a2563f7",
-    "NetTiming.Witness.sampDesign": "fb6a4e9d0616c440a74c94f92e0fcb655ff9c765b5aea142baa6df4bff4daa20",
-    "NetTiming.Witness.sampPart": "d26a4579ec6c2f52bda31dad5d50a9fa783859da8627f02f30d7e319bdf0dbce",
-    "NetTiming.Witness.sampProg": "490646a0d0502469081ff35dbae68db38548e3700c739c79dfb305603f9f2b25",
     "NetTiming.Witness.trivLay": "5988642439af8c4776d03b25406c91ed65a4251e64c9904698e9f95f2423da53",
     "NetTiming.Witness.unitOp": "557219b6a767a5cb954065d044a4d45f6a67593f67921812b9f19d5e3907ba2d"
    }
