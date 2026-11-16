@@ -7,11 +7,12 @@ public import Proofs.Flock.SpotFlock.HeldOf
 
 `HeldOf.heldOf` takes each template's reference session statement (`Unread.xs`). This module builds them from what the
 two-stage form's check holds: template `t`'s member (`memberOf`: the first of the interior audit's members whose
-circuit is the one the params name for `t`), its circuit and public files on the blobs, and the pinned lookup tables the
-blobs hold (`OneStageZk.tablesOf`), as the per-member form's `verity-verify-proof verify --zk` reads them
-(`OneStageZk.inputsOf`: the statement `verity/flock-circuit` under `--zk`, one table, the member's partition object and
-program), at no sample and with the member's registered reads (`memberRaw`). A session statement of the member is this
-statement at its record's sample and its own public file and registered reads, which `pinOk` blanks.
+circuit is the one the params name for `t`), its circuit and public files on the blobs, and its own lookup tables
+(`OneStageZk.ownTables`: the blobs' pinned tables its circuit looks up), as the per-member form's
+`verity-verify-proof verify --zk` reads them (`OneStageZk.inputsAt`: the statement `verity/flock-circuit` under `--zk`,
+one table, the member's partition object and program), at no sample and with the member's registered reads
+(`memberRaw`). A session statement of the member is this statement at its record's sample and its own public file and
+registered reads, which `pinOk` blanks.
 
 ## What this does not show
 
@@ -44,12 +45,14 @@ def memberOf (p : VStar.Recursive.SampledTwo.Params) (t : ℕ) : Option Spot.One
   (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
 
 /-- **Template `t`'s reference statement**: its member's statement on the blobs at no sample, with the member's public
-file and registered reads; none where the template has no member or a file is on no blob. -/
+file, own lookup tables and registered reads; none where the template has no member, a file is on no blob or the
+member's circuit's lookups do not read. -/
 def refRawOf (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (t : ℕ) : Option FlockDeploy.Raw := do
   let m ← memberOf p t
   let circuit ← (bs.get m.own.circuit "circuit").toOption
   let pub ← (bs.get m.own.pub "public file").toOption
-  pure (memberRaw m circuit pub (Spot.OneStageZk.tablesOf bs) none
+  let tables ← (Spot.OneStageZk.ownTables m.own bs).toOption
+  pure (memberRaw m circuit pub tables none
     (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8))
 
 /-- **The templates' reference statements**, in the params' template order, each `refRawOf`'s bytes. -/

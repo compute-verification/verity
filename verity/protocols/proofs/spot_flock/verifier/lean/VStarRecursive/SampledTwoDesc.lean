@@ -8,8 +8,9 @@ before a run is read against them, decided on the form's params, its blobs and t
   (`designOk`);
 * the second stage's cells and counts, as `Run.run` computes them (`cellsOf`), a count of at least `1` and a cell for
   each template;
-* each template's reference statement: its member's (`memberOf`) circuit and public files on the blobs, the pinned
-  tables, and its partition object and registered reads as `verity-verify-proof verify --zk` reads their text (`refOf`),
+* each template's reference statement: its member's (`memberOf`) circuit and public files on the blobs, its own
+  lookup tables (`Spot.OneStageZk.ownTables`: the blobs' pinned tables its circuit looks up), and its partition
+  object and registered reads as `verity-verify-proof verify --zk` reads their text (`refOf`),
   set up as `verifyCmd` sets a statement up (`setupAt`), in Flock's masked scope (`zkOk`), of a length each field's
   encoding holds (`fits`), reading as a member's (`templateOk`), fitting the two-stage scope (`memberOk`) and in the
   scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
@@ -140,8 +141,8 @@ def setupAt (tz tags : Tags) (circuit pub : ByteArray) (coins : Coins) (tables :
   pure (spec, sts)
 
 /-- **A template's reference statement, read and set up**: its statement's tags, `--zk`'s tags, its circuit and public
-files, the pinned tables, the text of its partition object and registered reads, as read back, its program, and the
-session and tables its setup gives. -/
+files, its member's own lookup tables, the text of its partition object and registered reads, as read back, its
+program, and the session and tables its setup gives. -/
 structure Ref where
   tags : Tags
   tz : Tags
@@ -157,7 +158,8 @@ structure Ref where
   sts : Array Flock.Stmt
 
 /-- **Template `t`'s reference statement**: its member's statement under `--zk` on the blobs, at no sample, with its
-member's public file and registered reads, read and set up as `verity-verify-proof verify --zk` reads and sets it up. -/
+member's public file, its own lookup tables (`Spot.OneStageZk.ownTables`, as `Member.statement` hands the member's
+session) and registered reads, read and set up as `verity-verify-proof verify --zk` reads and sets it up. -/
 def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
   let some m := memberOf p t | throw s!"template {t}: no member's circuit is the one the params name"
   let circuit ← bs.get m.own.circuit "circuit"
@@ -168,7 +170,7 @@ def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
   let partition ← jsonOf "partition" partitionB
   let registeredB := m.own.registered.map fun j => (RecordText.printT j).toUTF8
   let registered ← registeredB.mapM fun b => do Registered.ofJson (← jsonOf "registered reads" b)
-  let tables := Spot.OneStageZk.tablesOf bs
+  let tables ← Spot.OneStageZk.ownTables m.own bs
   let tz := Zk.tags tags (Zk.maskLogOf circuit) 1
   let (spec, sts) ← setupAt tz tags circuit pub (.tree (Zk.coinSpec (tags.tableNames 1))) tables (some partition)
     (some m.own.program) registered
