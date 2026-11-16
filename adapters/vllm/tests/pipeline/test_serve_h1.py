@@ -178,7 +178,9 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     None."""
     import stat
 
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        prover as PV,
+    )
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
