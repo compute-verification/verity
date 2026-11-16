@@ -66,6 +66,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/velocity.py", "tools/research/src/research/goals_audit.py",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
+          # the silent-excepts lint, whose own definition holds deploy's slot reader (BUSY), a string the lint can't see
+          "tests/lint/test_repo_silent_excepts.py",
           # infra's checkout on the nodes, which needs no sudo there
           "infra/control/infra_checkout.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py",
