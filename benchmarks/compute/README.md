@@ -198,7 +198,7 @@ research run --on NODE --project verity --source . --cwd clone --timeout 2h -- b
 
 The first line is the one for your own machine. The second is how we run it on Verity's machines: `research run` is
 our job runner, which runs the command on one of our machines (a node; `NODE` is its name) and records the run under
-a run id such as `r20261115-200421-8c63`. You need neither.
+a run id. You need neither.
 
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
@@ -237,8 +237,7 @@ It needs:
 - memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
   run's processes peaked at 400 GB resident, summed over the workers.
 
-A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-core machine with `COINS=local`, took
-59 minutes. The steps took:
+A run takes about an hour. Our measured run, on one H200 of a 96-core machine with `COINS=local`, took 59 minutes. The steps took:
 
 | step | seconds |
 |---|---|

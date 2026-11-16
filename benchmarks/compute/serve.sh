@@ -106,7 +106,7 @@ mkdir -p "$W/tmp" && chmod 700 "$W" || exit 3
 export TMPDIR=$W/tmp
 umask 077
 failed=0
-#: each long step's minutes in the measured run (r20261115-200421-8c63: one H200, 96 cores), printed as it starts
+#: each long step's minutes in the measured run (one H200, 96 cores), printed as it starts
 declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [python-verify]=15 [lean]=32 [policy]=2 [circuit]=2)
 step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
   local name=$1 t rc
