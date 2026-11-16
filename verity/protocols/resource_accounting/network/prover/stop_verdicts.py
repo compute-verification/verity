@@ -107,7 +107,7 @@ the command does not write itself, closes that, and the reader is handed none.
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 attester's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
-written, by the offline check of the network attester's run (`network_certifier_serve.py check --registrations`,
+written, by the offline check of the network attester's run (`network_attester_serve.py check --registrations`,
 `connection_rows_check.check`). The auditor hands that check the SHA-512 of the network attester's public key and
 the session; it holds the run's deployment record to them, verifies each registration under that key and session
 (`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file only

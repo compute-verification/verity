@@ -34,7 +34,7 @@ from verity.protocols.resource_accounting.network.verifier import class_charge a
 from verity.protocols.resource_accounting.network.verifier import connection_rows as C  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"
