@@ -22,7 +22,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   (KO + 1); ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI
   100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
-* **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkCertifier._tick`
+* **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkAttester._tick`
   ticks them) carries the setup's network-certifier-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
   fifth waits in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's
   arrivals (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's),
@@ -266,7 +266,7 @@ class Setup(NamedTuple):
 
     name: str
     cls: IS.Class
-    params: W.NetworkCertifierParams
+    params: W.NetworkAttesterParams
     prompts: tuple[tuple[int, ...], ...]
     arrivals: tuple[int, ...]
     responses: tuple[tuple[int, ...], ...]
@@ -294,7 +294,7 @@ W63K4 = Setup(
     windows=2, A=9, max_tokens=4, seed=7)
 TEST = Setup(
     "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
-    W.NetworkCertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+    W.NetworkAttesterParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
@@ -710,7 +710,7 @@ def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path
     from verity.protocols.resource_accounting.network.verifier import blob_files as bf, record_files as RF, relay_check as RC
 
     dep = json.loads(_found(run, "deployment.json").read_text())
-    params = W.NetworkCertifierParams(**dep["params"])
+    params = W.NetworkAttesterParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
     try:

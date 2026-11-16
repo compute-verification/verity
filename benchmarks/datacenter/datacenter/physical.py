@@ -3,7 +3,7 @@
 This mirrors Lean's physical model (`security/Definitions/Registration/Physical.lean`, `Hardware`): a datacenter is a
 tree of locations whose leaves are devices; a block is a set of devices behind one boundary (`Hardware.SpatialUnit`);
 a link joins two devices, and a link that crosses a block boundary must pass a network attester (coverage,
-`Accounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
+`ResourceAccounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
 proved: each number is an `Assumption` with its source, and the account reads them by name.
 """
 from __future__ import annotations

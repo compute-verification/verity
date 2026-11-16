@@ -90,8 +90,8 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 `PYTHONPATH=. python tests/test_walkthrough.py` prints the walkthrough ("Accounting for a datacenter, from a circuit up") section by
 section.
 
-The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.resource_accounting.memory.poub.verifier.timing`),
-`Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
-`Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
-`Interval` is `Accounting.Window`.
+The objects mirror the Lean physical model: `Datacenter` is `ResourceAccounting.Hardware`, a `DeviceEntry` is
+`ResourceAccounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.resource_accounting.memory.poub.verifier.timing`),
+`Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `ResourceAccounting.Placed` (and
+`ResourceAccounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `ResourceAccounting.Requirement.Store`, and an
+`Interval` is `ResourceAccounting.Window`.

@@ -38,18 +38,18 @@ import Mathlib.Topology.Sheaves.Init
 
 `TileChecks`: the session's key program computes `PouwH1TileZy_v1`'s Definition at its decoded registered ports, so
 that its `ok` wires carrying the `ok` row means the tile's cells check. It is the tile counterpart of
-`Accounting.Assumptions.TS.LeafChecks` (option A's 33 statements), and like it reads `RowsSession`, in the proofs
-package, so it sits here beside `Accounting.Assumptions.TS`'s other session premises.
-`Accounting.Guarantees.TS.TileSessionSound` takes what stays of it once the Definition's `ok = 1` is proved to mean
-`TileOk`, that the circuit computes its Definition (`Accounting.TS.Tile.TileComputes`, which gives it by
+`ResourceAccounting.Assumptions.TS.LeafChecks` (option A's 33 statements), and like it reads `RowsSession`, in the proofs
+package, so it sits here beside `ResourceAccounting.Assumptions.TS`'s other session premises.
+`ResourceAccounting.Guarantees.TS.TileSessionSound` takes what stays of it once the Definition's `ok = 1` is proved to mean
+`TileOk`, that the circuit computes its Definition (`ResourceAccounting.TS.Tile.TileComputes`, which gives it by
 `tileChecks_of_computes`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Held Accounting.TS.Tile Flock.SoundAtBridge
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Held ResourceAccounting.TS.Tile Flock.SoundAtBridge
 
 /-- `accounting-ts-tile-checks` (a fact of `PouwH1TileZy_v1`'s circuit, to be computed by a check).
 **A tile session's circuit computes its Definition at its decoded ports**: at the session `s`,
@@ -72,4 +72,4 @@ def TileChecks {R C K : ℕ} (dq : List ℤ → ℤ) (s : RowsSession) (ok : Str
     (∀ g, OkWire s ok u g → ∃ w, OkVal s (s.vb.pos g) w ∧ vals g = s.vb.bit w g) →
     TileOk dq (dec (rowsReg s vals) u.val)
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

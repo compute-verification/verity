@@ -7,7 +7,7 @@ public import Mathlib.Tactic.FinCases
 /-!
 # Serving-block layouts: the honest instance and the counter-examples (trusted)
 
-The instances the honest and nontrivial lemmas of `Accounting.Guarantees.ServingBlocks` are stated at
+The instances the honest and nontrivial lemmas of `ResourceAccounting.Guarantees.ServingBlocks` are stated at
 (`security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean`). Each is a small Boolean declaration with its
 registered input gates, a partition into serving blocks and the dark remainder, its inference blocks, counted operations
 and caps. In each, the inference blocks are the serving blocks themselves (`refl`), one inference block per serving block,
@@ -34,7 +34,7 @@ The counter-examples, each on one server:
 
 @[expose] public section
 
-namespace Accounting.ServingBlocks
+namespace ResourceAccounting.ServingBlocks
 
 open Verity
 
@@ -198,4 +198,4 @@ noncomputable abbrev q : ℕ → ℕ → ℝ := fun _ _ => 0
 
 end Detached
 
-end Accounting.ServingBlocks
+end ResourceAccounting.ServingBlocks

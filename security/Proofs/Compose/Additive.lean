@@ -8,7 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 /-!
 # Compute additivity's capacity from the machine model 𝓜: proofs
 
-`Accounting.Guarantees.AccelRate` and `AccelAdditive`. The one step that reads 𝓜 is that units add over runs back to
+`ResourceAccounting.Guarantees.AccelRate` and `AccelAdditive`. The one step that reads 𝓜 is that units add over runs back to
 back: a period's stream is its runs' instructions one after another (`stream_cons`, `Machine.units_append`).
 -/
 
@@ -16,7 +16,7 @@ back: a period's stream is its runs' instructions one after another (`stream_con
 
 open scoped NNRat
 
-namespace Accounting.SecurityProofs.Additivity
+namespace ResourceAccounting.SecurityProofs.Additivity
 
 open Finset Verity.Accel
 
@@ -41,9 +41,9 @@ theorem sum_range_getElem? {α : Type*} (l : List α) (f : α → ℚ≥0) :
 theorem sum_issued (iss : List m.Instr) (r : Res) : ∑ p ∈ issued iss, occUse iss r p = Machine.units iss r :=
   sum_range_getElem? iss _
 
-end Accounting.SecurityProofs.Additivity
+end ResourceAccounting.SecurityProofs.Additivity
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
 open Finset Verity.Accel Additivity
 
@@ -65,4 +65,4 @@ theorem AccelAdditive : Guarantees.AccelAdditive := by
     _ = Machine.units iss r := sum_issued _ _
     _ ≤ _ := hrate r
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

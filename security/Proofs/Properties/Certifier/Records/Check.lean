@@ -59,7 +59,7 @@ and a certified one's head is of the ingress grid (`ingress_none`). Conversely e
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks screen verifies expectedGrid noSync
   unitSync inSyncSet)
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid recordsOf Signs Settled
   IngressAccepted HeadString headStrings mem_headStrings head_inj)
 open Properties.Certifier.CheckProofs (ba_beq bind_ok syncTest_iff not_not_true not_true declares_declared

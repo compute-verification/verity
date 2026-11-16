@@ -39,7 +39,7 @@ import Proofs.Pouw.MonitoringPeriodJ10R
 # Proof of `H1J10RCheckedCreditMonitoringPeriodStrata`
 
 At each stratum `s ∈ S`, what `Proofs.Pouw.MonitoringPeriodJ10R` applies to its one stratum:
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
+`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
 (`pathsAt`). Its joint soundness comes from `StrataSampleIsCoin`'s half that puts stratum `s`'s sampled proof blocks among the
 proof blocks `Credit.window`'s sample demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
 salt being its live coin, read on the view (`saltAt`). Its accepted prefix and live words are the period's
@@ -53,7 +53,7 @@ the summed credit has a stratum whose own fall short, so the union bound gives t
 namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## Stratum `s`'s view, window by window -/
 
@@ -165,7 +165,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
           (j10rRate (k s) ρ) δs) ≤ δs + n * (δbind + δks) := by
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k s := hKd
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk s) Wp Pl
+  have h := ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk s) Wp Pl
     (tileRun σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
       (rightAt hM hr σ s enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k s) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos

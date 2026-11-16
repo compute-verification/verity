@@ -57,13 +57,13 @@ def failReasons : List String := ["late", "limit", "upstream", "ingress", "malfo
 /-- The fail reason a schedule with a response cap adds after `failReasons` (`network_certifier.REASONS`' last): a request past
 the cap, or whose `max_tokens` doesn't parse. -/
 def capReason : String := "cap"
-/-- The egress form (`NetworkCertifierParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
+/-- The egress form (`NetworkAttesterParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
 of another form has a digest no schedule here has. -/
 def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 /-- The byte of an id request past its `max_tokens` field (`id_form.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
-cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
+cell's payload holds at least this much, so the network attester reads the field off the request's first cell. -/
 def maxTokensEnd : Nat := 130
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
@@ -77,7 +77,7 @@ structure Audit where
   units : Nat
   entries : Array (String × Nat × String)
 
-/-- The network certifier's schedule when it functions as an active network certifier (`network_certifier.NetworkCertifierParams`). -/
+/-- The network attester's schedule when it functions as an active network attester (`network_certifier.NetworkAttesterParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat
@@ -90,55 +90,55 @@ structure Schedule where
   queue : Nat
   slots : Nat
   window : Nat
-  /-- The response cap (`NetworkCertifierParams.max_tokens_cap`), or none. -/
+  /-- The response cap (`NetworkAttesterParams.max_tokens_cap`), or none. -/
   maxTokensCap : Option Nat := none
-  /-- The lengths rows' form (`NetworkCertifierParams.lengths`), 1 or 2, or none. -/
+  /-- The lengths rows' form (`NetworkAttesterParams.lengths`), 1 or 2, or none. -/
   lengths : Option Nat := none
-  /-- The content rows' classes (`NetworkCertifierParams.content`), each (P, O, rows) under the lengths rows' form 1 and (P, O)
+  /-- The content rows' classes (`NetworkAttesterParams.content`), each (P, O, rows) under the lengths rows' form 1 and (P, O)
   under form 2, or none. -/
   content : Option (Array (Array Nat)) := none
-  /-- Whether the schedule has request words (`NetworkCertifierParams.request_words`, true or unset): a words row a release,
+  /-- Whether the schedule has request words (`NetworkAttesterParams.request_words`, true or unset): a words row a release,
   in its class. -/
   requestWords : Bool := false
 
 /-- The `fails` record's reasons under the schedule: `failReasons`, and `capReason` after them under a response cap
-(`NetworkCertifierParams.reasons`). -/
+(`NetworkAttesterParams.reasons`). -/
 def Schedule.reasons (s : Schedule) : List String :=
   if s.maxTokensCap.isSome then failReasons ++ [capReason] else failReasons
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
-/-- A slot stride's Program slots, one a lane (`NetworkCertifierParams.program_slots`). -/
+/-- A slot stride's Program slots, one a lane (`NetworkAttesterParams.program_slots`). -/
 def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
-/-- A window's Program slots: T / `every` slot strides of `programSlots` (`NetworkCertifierParams.window_programs`). -/
+/-- A window's Program slots: T / `every` slot strides of `programSlots` (`NetworkAttesterParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
-/-- An execution phase in milliseconds on the network certifier's clock: its T buckets of `bucket_ms` each. -/
+/-- An execution phase in milliseconds on the network attester's clock: its T buckets of `bucket_ms` each. -/
 def Schedule.windowMs (s : Schedule) : Nat := s.window * s.bucketMs
 
 /-- The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
-(`NetworkCertifierParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
+(`NetworkAttesterParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
 def Schedule.span (s : Schedule) : Nat := s.delay + (s.egressCells - 1) / s.slots
 
-/-- The most requests the network certifier releases in one slot stride with lengths rows, a lengths row's slots
-(`NetworkCertifierParams.stride_releases`): a released connection holds its lane at least D + 2 − `ingress_buckets` buckets from
+/-- The most requests the network attester releases in one slot stride with lengths rows, a lengths row's slots
+(`NetworkAttesterParams.stride_releases`): a released connection holds its lane at least D + 2 − `ingress_buckets` buckets from
 its release, so that many buckets hold at most `lanes` releases, and it holds it D + 1 buckets around its release, so
 a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets. It is read where ingress ends by the
 delay (`ingress_buckets` ≤ D), as a schedule with lengths rows has it. -/
 def Schedule.strideReleases (s : Schedule) : Nat :=
   s.lanes * min (divCeil s.every (s.delay + 2 - s.ingressBuckets)) (1 + divCeil (s.every - 1) (s.delay + 1))
 
-/-- A bound on the requests the network certifier releases in one execution phase with lengths rows
-(`NetworkCertifierParams.phase_releases`): `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉, as a release is at most
+/-- A bound on the requests the network attester releases in one execution phase with lengths rows
+(`NetworkAttesterParams.phase_releases`): `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉, as a release is at most
 `ingress_buckets` − 1 buckets after its connection's admission and the connections admitted in any D + 1 buckets in
 a row are live together, at most `lanes` of them. -/
 def Schedule.executionPhaseReleases (s : Schedule) : Nat :=
   s.lanes * divCeil (s.window + s.ingressBuckets - 1) (s.delay + 1)
 
 /-- Whether the lengths rows end every execution phase of a run, its last included: their form 2
-(`NetworkCertifierParams.closes`). -/
+(`NetworkAttesterParams.closes`). -/
 def Schedule.closes (s : Schedule) : Bool := s.lengths == some 2
 
 /-- Whether the schedule registers connection rows (`connection_rows`): its lengths rows, which a schedule with
@@ -146,13 +146,13 @@ content rows has too, as one with request words has content rows. Each is asked,
 build may have one without the other. -/
 def Schedule.connectionRows (s : Schedule) : Bool := s.lengths.isSome || s.content.isSome || s.requestWords
 
-/-- The rows form's cells over `windows` of a link's execution phases (`NetworkCertifierParams.rows_cells`): `egressCells` for
-each of the `lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a
+/-- The rows form's cells over `windows` of a link's execution phases (`NetworkAttesterParams.rows_cells`): `egressCells` for
+each of the `lanes · windows · window` connections the network attester can carry, as at most `lanes` are live in a
 bucket and each is live in its admission bucket. -/
 def Schedule.rowsCells (s : Schedule) (windows : Nat) : Array Nat :=
   Array.replicate (s.lanes * (windows * s.window)) s.egressCells
 
-/-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network certifier's frames,
+/-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network attester's frames,
 `link_frame.encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a cell's `B` bytes are under
 2^32, so its payload's length is a u32, and the `lanes · windows · window` connections of a period of `windows` of a
 link's execution phases, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames
@@ -188,7 +188,7 @@ inductive Form where
 def Form.maxTokensCap : Form → Option Nat
   | .rows s .. => s.maxTokensCap
 
-/-- One entry of the link's network certifier's listed keys (`"keys"`), a certifier session's: its LMS public key, its
+/-- One entry of the link's network attester's listed keys (`"keys"`), a certifier session's: its LMS public key, its
 session, and the start of its stretch of execution phases, in the numbers the period's `first` is in. -/
 structure Entry where
   key : ByteArray
@@ -252,7 +252,7 @@ structure ExecutionPhase where
 
 /-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
 `deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
-certifier's clock; its ordinal, the number of the key's sessions its device state started before it; the parameters
+attester's clock; its ordinal, the number of the key's sessions its device state started before it; the parameters
 digest of the schedule it runs under; and the certificate, which signs their start digest (`startDigest`). -/
 structure Start where
   baseMs : Nat
@@ -384,7 +384,7 @@ def scheduleOf (j : Json) : V Schedule := do
     if let some why := classesRefusal s classes then throw s!"schedule: {why}"
   pure s
 
-/-- `NetworkCertifierParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
+/-- `NetworkAttesterParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
 tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
 before the cap was a parameter. So with the lengths rows' form, the content rows' classes and the request words: a
 schedule without one has nothing of it in its digest. -/
@@ -725,7 +725,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   pure { steps := T, free := 0, ingress := bitsOf di.ret, egress := bitsOf de.ret,
          entries := s.lanes * nb * bitsOf ety, start := bitsOf ds.params[0]!.2 }
 
-/-- The link's network certifier's keys, as the parameters list them (`"keys"`): an entry for each certifier session,
+/-- The link's network attester's keys, as the parameters list them (`"keys"`): an entry for each certifier session,
 its LMS public key under `lms`, its session and the start of its stretch of execution phases. At least one entry, and
 the starts strictly increasing, so the stretches are in order and no two hold one execution phase: entry `i`'s runs from
 its start up to the next entry's start, and the last entry's from its start on (`entryAt`). No two entries with one key

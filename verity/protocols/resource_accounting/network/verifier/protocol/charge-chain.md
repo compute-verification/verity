@@ -203,7 +203,7 @@ premise (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`
   segment, the tail keeps the execution phase's code prefix-free and its Kraft sum unchanged.
 
 The Lean definitions (`security/Definitions/Certifier/WindowCharge.lean`) mirror `reference_window` one for one,
-and `certifier-window-difftest` holds them to it: the network attester's program's `NetworkCertifier.WindowCharge`, proved equal to them
+and `certifier-window-difftest` holds them to it: the network attester's program's `NetworkAttester.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`../../attester/program/lean/scripts/window_vectors.py`), among
 them an execution phase whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 

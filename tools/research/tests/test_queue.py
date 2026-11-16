@@ -4401,7 +4401,7 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     main = _move_main(world, {"tools/move/l_map.toml": '[paths]\n"old/" = "new/"\n"kept.py" = "kept.py"\n'
                                                        '[retired]\npaths = ["gone/"]\n[drop]\npaths = ["x.toml"]\n'
                                                        '[modules]\n"old" = "new"\n"pkg.old" = "pkg.new"\n',
-                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkCertifier"\n'
+                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkAttester"\n'
                                                        '[[words_in]]\nfiles = ["a/*"]\nwords = { tap = "certifier" }\n',
                               "tools/move/bad_map.toml": "[paths\n"})
     layout, words = (Q.map_retires(world.origin, main, f"tools/move/{m}_map.toml") for m in ("l", "w"))

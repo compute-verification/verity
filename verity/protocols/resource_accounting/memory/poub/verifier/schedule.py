@@ -3,10 +3,10 @@ requires before it credits an appended chunk (`audit.AuditRun.scheduled`).  Of r
 `lean/Poub/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
 word for word).
 
-Why.  The stacked guarantee (`Accounting.Guarantees.RegisteredCircuitRequirement`) lets a pass's layout follow the codec
-and the append coins through an `a`-bit summary (`Accounting.Assumptions.SteeredLayout`) and charges `2^a` for it.
+Why.  The stacked guarantee (`ResourceAccounting.Guarantees.RegisteredCircuitRequirement`) lets a pass's layout follow the codec
+and the append coins through an `a`-bit summary (`ResourceAccounting.Assumptions.SteeredLayout`) and charges `2^a` for it.
 Every layout satisfies that premise at `a` = the coins' own bits, so `a` means something only once the layout is a fixed
-public function of something whose bits are bounded whatever the coins (`Accounting.ScheduleDeterministic`).  Here that
+public function of something whose bits are bounded whatever the coins (`ResourceAccounting.ScheduleDeterministic`).  Here that
 is the schedule: the verifier computes each pass's plan from it, refuses any other, and refuses a schedule over the
 cap `a` on its bits the prover committed before the session's first coin (`audit.Params.schedule_cap`).  The bits of
 the one schedule the prover publishes after the coins bound nothing: a prover whose schedule is 200 bits on most coins

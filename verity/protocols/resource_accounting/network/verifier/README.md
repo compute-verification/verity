@@ -82,10 +82,10 @@ Open premises (`open`):
   - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
     `NetworkCheck.Certificate`'s.
 - **Lean beside it**: `../attester/program/lean/`, the network attester's program, is the Lake package `certifier_program`, whose
-  library `NetworkCertifier` the packages at `lean` and `security/Proofs` require by path. Its
+  library `NetworkAttester` the packages at `lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
   `INSTANCES PYTHON N`. The Lean check runs each `../attester/program/lean/scripts` script, then its difftest
-  (`../attester/program/lean/lean-audit.json`). Its `NetworkCertifier.Rows` is the active network attester's records
+  (`../attester/program/lean/lean-audit.json`). Its `NetworkAttester.Rows` is the active network attester's records
   as rows and their audit, the code form of `RecordRows` over the network attester's lanes with `network_attester.py`'s `audit`
   its reference, which `network-rows` (`lean/`) runs on a run's certified records; no proof ties it to `RecordRows`.
   Against the reference it refuses three kinds of run the network attester never writes and holds two things less:
@@ -123,7 +123,7 @@ A spec-level reference for network certification's timing channel:
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, and its record digest under the network attester's salt against the digest its certificate signs). A link is
-  the network attester's (`service.NetworkCertifierProfile`), and its claim is the heads' only: on every execution phase both
+  the network attester's (`service.NetworkAttesterProfile`), and its claim is the heads' only: on every execution phase both
   are the network attester's, on its grid under its parameters digest, so the link's timing is its schedule's.
   Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
   `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every execution phase of the
@@ -285,7 +285,7 @@ A spec-level reference for network certification's timing channel:
 - the release order on the server's side (`release`): a network attester puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
   releases, for `serve-openai --admit release-order`. The network attester adds `x-verity-release-bucket: a`, the
-  bucket of the request's `END`. With `NetworkCertifier(watermark=…)` it also sends the server a watermark stream:
+  bucket of the request's `END`. With `NetworkAttester(watermark=…)` it also sends the server a watermark stream:
   one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
   each release of bucket t is written or lost. An engine that admits at a logical time in network attester buckets waits on
@@ -300,8 +300,8 @@ A spec-level reference for network certification's timing channel:
   wiring pins (`Units`, whose digest the port's value names), with the network attester's wiring (`PROTOCOL.md`,
   "The network attester's cells as rows"; `verity/protocols/resource_accounting/network/prover/network_attester_zk.py`);
 - the network attester's connection rows (`connection_rows`), in a schedule with lengths rows
-  (`NetworkCertifierParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
-  and, with content rows (`NetworkCertifierParams.content`), three tables a class of what each filed release carried
+  (`NetworkAttesterParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
+  and, with content rows (`NetworkAttesterParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
   makes public; with `request_words`, a fourth of its request's words), all committed as the cells' rows are and listed under one
   head the network attester signs once; the registration the verifier reads (`check_registration`) and its
@@ -453,7 +453,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
-- on a network attester's link (`service.NetworkCertifierProfile`) the gap list is empty too: the Lean's form for it (`Kind.networkCertifier`) is the
+- on a network attester's link (`service.NetworkAttesterProfile`) the gap list is empty too: the Lean's form for it (`Kind.networkAttester`) is the
   plain proof block's public row with both ends' grids at the network attester's parameters digest, which both take as
   an input (the network attester's deployment publishes it), and no sync read, as in the Python; it refuses a network
   attester case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.

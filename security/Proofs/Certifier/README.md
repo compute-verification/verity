@@ -206,7 +206,7 @@ CountWitnesses.lean  the six ingress counts' pairs: the honest run has every sta
     false at the verifier that accepts everything (`acceptAll`)
 MonitoringPeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
     false at one incorrect proof block
-Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
+Code.lean       the certifier program (`certifier_program`, `NetworkAttester`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
 
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
@@ -433,23 +433,23 @@ The other 16 are the rest of the Capacity table's bounds:
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the network attester's program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkCertifier`), and
+to the network attester's program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkAttester`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
 
-- `CodeExpectedRow`: `NetworkCertifier.expectedRow` over its `W` execution phases is `expectedRow` of one execution block
-  of them, for frames with the same payloads sent at the program's hand ticks (`NetworkCertifier.handingBuckets`) under
+- `CodeExpectedRow`: `NetworkAttester.expectedRow` over its `W` execution phases is `expectedRow` of one execution block
+  of them, for frames with the same payloads sent at the program's hand ticks (`NetworkAttester.handingBuckets`) under
   its syncs (the difftest's `rows`, `diff` and `mismatch`);
-- `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of
+- `CodeAcceptedConstantRate`: `NetworkAttester.Accepted` of `NetworkAttester.constantRate` is `Accepted` of
   `constantRate` with one execution block of the `W` execution phases, for observations with the same rows and complete
   statuses, operators giving the same ingress on them, and frames with the same payloads sent at the program's hand
   ticks under the syncs the advice names (`accepted`);
-- `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
+- `CodeStatusComplete`: `NetworkAttester.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
-- `CodeChargesV1`: `NetworkCertifier.AdviceV1.charges` of the execution phases' decision streams is `AdviceV1.charges` for books
+- `CodeChargesV1`: `NetworkAttester.AdviceV1.charges` of the execution phases' decision streams is `AdviceV1.charges` for books
   with the same fields (the charge difftest's `charges`);
-- `CodeChargesWhole`: `NetworkCertifier.WindowCharge.charges` of the execution phases is `WindowCharge.charges` for books with
+- `CodeChargesWhole`: `NetworkAttester.WindowCharge.charges` of the execution phases is `WindowCharge.charges` for books with
   the same tables and priors and execution phases with the same decisions, hits and order entries
   (`certifier-window-difftest`'s `charges`).
 
@@ -529,7 +529,7 @@ The constant-rate Program adds these:
 13. **Send ticks, one FIFO per execution block.** `NetTiming.Protocol.Schedule` takes each frame's send tick as the
     Program gives it: a frame is handed at `max(send, last)`, so hand ticks only rise in canonical order, and the FIFO
     starts empty at each execution block's first bucket, a frame handed at or after its span's end never enqueued. The
-    network attester's program (`NetworkCertifier.Schedule`, `schedule.py`) still computes its hand ticks from a declared
+    network attester's program (`NetworkAttester.Schedule`, `schedule.py`) still computes its hand ticks from a declared
     clock sync per execution phase, and over its `W` execution phases it is one execution block (`CodeExpectedRow`). The audit checks `E`
     execution blocks, so the counts take `n ≤ E·g·T` (`hn`): every step they count is a step the audit checks.
 14. **The frames are the Program's computation, left abstract.** `frames ins e v ℓ` gives link `ℓ`'s frames of
