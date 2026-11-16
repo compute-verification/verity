@@ -3,6 +3,7 @@ module
 public import Properties.NetworkScan
 public import Proofs.Properties.NetworkScan.Fits
 public import Proofs.Properties.NetworkScan.Causal
+public import Proofs.Properties.NetworkScan.Parsed
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -53,6 +54,9 @@ The witnesses (the two-lemma rule): `scan_honest` exhibits what both take that n
 returns nothing (`not_fits_of_no_outs`), the second at a statement in the sampling scope whose circuit returns only an
 input (`not_fits_of_outs_inputs`). `scanScopeAcc_nontrivial_of` is the second's transfer form, at any compiled sampled
 verifier.
+
+`Proofs.Properties.NetworkScan.Parsed`: the deployed sampled verifiers' statements have the constant at gate 0, so
+none is the flattening of a Program whose gate 0 is an input gate (`not_flattens_bitsProgs`, `not_flattens_stmtA`).
 -/
 
 @[expose] public section
