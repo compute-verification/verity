@@ -6,7 +6,7 @@ cleanup lanes pay the exceptions down; a feature PR owes none.
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
 them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
-ratchet is a shrink-only allowlist under ``adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
+ratchet is a shrink-only allowlist under ``tests/adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
@@ -21,8 +21,8 @@ counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow wh
 lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
 per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
-ratchet, a ``*.py`` file under ``adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
-``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``adapters/vllm/tests/lint/ruff_vllm.toml``
+ratchet, a ``*.py`` file under ``tests/adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
+``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``tests/adapters/vllm/tests/lint/ruff_vllm.toml``
 (the integration's lint with vLLM's rules, ``test_ruff_vllm.py``) and the ruff the root ``dev`` group pins.  It passes
 when:
 
@@ -194,7 +194,7 @@ KIND = "vllm-ratchet-gate/v2"
 #: this file's bytes, part of every cached verdict's key, so a changed gate judges every change again
 SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "adapters/vllm"
-TESTS = f"{INTEGRATION}/tests/"
+TESTS = f"tests/{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
 #: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
 RUFF_LINT = "ruff"
@@ -234,10 +234,26 @@ RUFF_VLLM_CONFIG = f"{LINT}/ruff_vllm.toml"
 RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), RUFF_VLLM_LINT: (LINT, (RUFF_VLLM_CONFIG,)),
               REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
 RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
-#: the ruff lints that are the integration's: each names a file from ``INTEGRATION`` and holds a list of its own, keyed alike
+#: the ruff lints that are the integration's: each names a file from ``INTEGRATION`` (its tests, under ``TESTS``, as
+#: ``tests/...``: `key_of`) and holds a list of its own, keyed alike
 INTEGRATION_RUFF = (RUFF_LINT, RUFF_VLLM_LINT)
 #: where a ruff lint runs ruff, when that isn't its first config's directory: its config's paths are relative to there
 RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
+
+
+def in_integration(path: str) -> bool:
+    """Whether ``path`` is the integration's: under ``INTEGRATION`` or its tests (``TESTS``)."""
+    return path.startswith((f"{INTEGRATION}/", TESTS))
+
+
+def key_of(path: str) -> str:
+    """How the integration's lints name a file of the tree: from ``INTEGRATION``, and its tests as ``tests/...``."""
+    return f"tests/{path.removeprefix(TESTS)}" if path.startswith(TESTS) else path.removeprefix(f"{INTEGRATION}/")
+
+
+def path_of(key: str) -> str:
+    """The file of the tree an integration lint's key names (`key_of`'s inverse)."""
+    return f"{TESTS}{key.removeprefix('tests/')}" if key.startswith("tests/") else f"{INTEGRATION}/{key}"
 MOVE_CHECK = "tools/check/move_check.py"
 #: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
 #: directory's own files) and the pins list
@@ -669,7 +685,7 @@ def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]
     ``*.py`` files it changes under ``adapters/vllm``.  Lines are matched by their stripped text across those files, so
     one that moves, within a file or to another, is neither.  Of lines with the same text, those the diff adds are named
     first, so a new copy of a common line (a bare ``noqa: BLE001``) is named where it was added."""
-    files = [f for f in diff if f.startswith(f"{INTEGRATION}/") and f.endswith((".py", ".pyi"))]
+    files = [f for f in diff if in_integration(f) and f.endswith((".py", ".pyi"))]
     was = Counter(text for f in files for _, text in noqa_lines(lo, f))
     now = [(f, n, text) for f in files for n, text in noqa_lines(hi, f)]
     added, removed = Counter(t for *_, t in now) - was, was - Counter(t for *_, t in now)
@@ -680,7 +696,7 @@ def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]
             if left[text] and (f, n) not in picked and (n in fresh[f]) == new_first:
                 left[text] -= 1
                 picked.add((f, n))
-    named = [f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}" for f, n, text in now if (f, n) in picked]
+    named = [f"{key_of(f)}:{n}: {text}" for f, n, text in now if (f, n) in picked]
     return named, sum(added.values()), sum(removed.values())
 
 
@@ -774,6 +790,7 @@ def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, byt
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_bytes(data)
         at = root / run_from if run_from is not None else (root / next(iter(configs))).parent
+        at.mkdir(parents=True, exist_ok=True)       # the integration's tests and their config lie outside ``run_from``
         r = subprocess.run([*ruff, "check", "--config", os.path.relpath(root / next(iter(configs)), at), "--no-cache",
                             "--exit-zero", "--output-format", "json", "--",
                             *(os.path.relpath(root / f, at) for f in sorted(files))],
@@ -1231,7 +1248,7 @@ def own_ruff(c: Change, s: str, f: str) -> list[str] | None:
         return None
     own = tree_files(c.hi, {f})
     found = ruff_findings([*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"], texts, own, RUFF_FROM.get(s)) if own else []
-    name = f.removeprefix(f"{INTEGRATION}/") if s in INTEGRATION_RUFF else f
+    name = key_of(f) if s in INTEGRATION_RUFF else f
     if s in INTEGRATION_RUFF:
         try:
             doc = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json"))
@@ -1261,7 +1278,7 @@ def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[
     out, by = [], {}
     for v in found:
         s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
-        f = m and (f"{INTEGRATION}/{m[1]}" if s in INTEGRATION_RUFF else m[1])
+        f = m and (path_of(m[1]) if s in INTEGRATION_RUFF else m[1])
         if m and f in at and (s in names or s in RUFF_LINTS):
             by.setdefault((s, f), []).append(v)
         else:
@@ -1364,15 +1381,15 @@ def renamed(c: Change) -> dict[str, str]:
 def at_paths(items: list[str], to: dict[str, str], repo_lints: frozenset[str]) -> list[str]:
     """``items``, each violation that names a file ``to`` maps named at that file's path there.  A repository lint (one of
     ``repo_lints``, the names of ``tests/lint``'s modules) names a file from the root, the integration's lints from
-    ``INTEGRATION``."""
+    ``INTEGRATION`` (`key_of`)."""
     out = []
     for v in items:
         s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
         new = None
         if m and s in repo_lints:
             new = to.get(m[1])
-        elif m and (n := to.get(f"{INTEGRATION}/{m[1]}", "")).startswith(f"{INTEGRATION}/"):
-            new = n.removeprefix(f"{INTEGRATION}/")
+        elif m and in_integration(n := to.get(path_of(m[1]), "")):
+            new = key_of(n)
         out.append(v[:m.start(1)] + new + v[m.end(1):] if new is not None else v)
     return out
 

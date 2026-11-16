@@ -229,7 +229,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
-    sys.path[:0] = [str(HERE), str(TREE / "benchmarks" / "pouw" / "tests")]
+    sys.path[:0] = [str(HERE), str(TREE / "tests" / "benchmarks" / "pouw")]
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
