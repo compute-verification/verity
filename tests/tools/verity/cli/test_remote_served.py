@@ -23,10 +23,6 @@ BINDINGS = {"challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-
 KEYS = ["challenger.pearl-plus.gate", "challenger.pearl-plus.peer", "challenger.pearl-plus.key-sha512"]
 PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
              "PEARLC_CHALLENGER_PEER": "peer-1", "H1_KEY_SHA512": KEY}
-VARIABLES = PEARLPLUS | {
-    "DEVELOPMENT": "1", "LOAD": "varied", "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
-    "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SLOTS": "4", "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
-}
 OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE_UNIFORM"}
 
 
@@ -86,12 +82,15 @@ def test_a_dry_run_without_bindings_names_the_three_pearl_plus_lacks(capsys):
 
 def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_none():
     cfg = R.load(CONFIG, REG)
-    deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
-    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
+    serve = T.SERVE.variables(cfg, BINDINGS)
+    assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
+        "REPO": "verity-int8/Llama-3.2-1B-INT8", "PRECISION": "verity_int8", "SLOTS": "4", "WINDOW_STEPS": "16",
+        "LOAD": "varied"}
+    variables = serve | {"DEVELOPMENT": "1"} | PEARLPLUS | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
+    assert T.variables(cfg, BINDINGS) == variables
     both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
                                           "main-file": "/tmp/main.json"}}}
-    assert T.variables(cfg, both) == VARIABLES | deployed | {"PEARLC_CHALLENGER_LANE": "vllm-2",
-                                                             "MAIN_FILE": "/tmp/main.json"}
+    assert T.variables(cfg, both) == variables | {"PEARLC_CHALLENGER_LANE": "vllm-2", "MAIN_FILE": "/tmp/main.json"}
     onsite = T.variables(R.load(ONSITE, REG), {})
     assert not (set(PEARLPLUS) - {"H1_KEY_SHA512"} | {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "PEARLPLUS_TIE_UNIFORM"}) \
         & set(onsite)
@@ -139,6 +138,7 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
     state = tmp_path / "state"
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
     assert rc == 0, capsys.readouterr()
-    assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "workers")]
+    here = sorted(p["name"] for p in R.load(CONFIG, REG)["party"] if p["machine"] == T.PROVER_NODE)
+    assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks == PEARLPLUS | {"SLOTS": "4", "WINDOW_STEPS": "16"}
