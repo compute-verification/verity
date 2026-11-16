@@ -15,7 +15,7 @@ Notes are records, never messages.
   research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
                    --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
-  research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
+  research msg linear check|state|comment|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
   research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
@@ -37,7 +37,7 @@ Notes are records, never messages.
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
                                                                    # channel; a chat's doorbells carry no text (`chat_targets`)
-  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE] [--cursor-bot U...]
+  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE]
                                                                    # a person's private #chat-NAME; the person goes to people.d;
                                                                    # --lane: the lane their unaddressed posts go to ('' clears it)
   research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
@@ -2079,7 +2079,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if owner and owner != worker_lane:
             raise SlackError(f"--worker {ns.worker}: this checkout's branch ends in @{owner}'s suffix, so its worker signs as "
                              f"{owner}/{worker_name}")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
+    if ns.dry_run and ns.verb not in ("check", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
     if ns.close_strays and (ns.verb != "audit" or ns.asks):
@@ -2094,11 +2094,6 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             lines, ok = lin.check(ns.write, name_entry(ns, reg, ns.handle or "comms")["handle"])
             print("\n".join(lines))
             return 0 if ok else 1
-        if ns.verb == "list":
-            for i in lin.issues(need(ns.target, "the TEAM (a handle or its key)"), ns.state):
-                print(f"{i['identifier']}  {i['state']['name']}  {i['title']}")
-            print(f"states: {LINEAR_STATES}")
-            return 0
         if ns.verb == "audit":
             keys = {h["handle"]: h["linear"] for h in reg["handles"] if h.get("linear")}
             teams = [keys.get(t.lstrip("@"), t) for t in ([ns.target] if ns.target else []) + ns.value]
@@ -2226,7 +2221,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{issue} commented as {author}")
             if unrung:
                 print(unrung_note(unrung, worker_lane, reg, posted=True))
-                return 0 if ns.quiet_unrung else 1
+                return 1
             return 0
         print(f"{issue} commented")
         ring_comment(ns, reg, author, info, text)
@@ -2245,7 +2240,7 @@ def unrung_note(names: list[str], lane: str | None, reg: dict, posted: bool) -> 
     return (f"not rung: {', '.join('@' + n for n in names)}. A worker's comment rings no one"
             + (", and this one is posted: don't post it again. " if posted else ". ")
             + f"Return its text to your lead (@{lane}) to ring, or have your lead grant this run with `research msg names "
-            f"open --as {lane} --poster {me}` and post it with --as {lane}. With --quiet-unrung it exits 0.")
+            f"open --as {lane} --poster {me}` and post it with --as {lane}.")
 
 
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
@@ -3539,8 +3534,6 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError(f"--email {ns.email!r} is not an address")
     if ns.start_here and not re.match(r"^https?://\S+$", ns.start_here):
         raise SlackError(f"--start-here {ns.start_here!r} is not an http(s) link")
-    if ns.cursor_bot and not SLACK_USER_RE.match(ns.cursor_bot):
-        raise SlackError(f"--cursor-bot {ns.cursor_bot!r} is not a Slack user id (U...)")
     members = api.paged("users.list", "members")
     if ns.user:
         user = next((m for m in members if m.get("id") == ns.user and not m.get("deleted")), None)
@@ -3573,14 +3566,13 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     cid, new = chat_channel(api, key, (prev or {}).get("channel", {}).get("id"))
     rec["channel"]["id"] = cid
     print(f"{plan}#{key} {cid}: " + ("created, private" if new else "reused"))
-    bot = ns.cursor_bot or cursor_bot(members)
+    bot = cursor_bot(members)
     if bot:
         print(f"{plan}Cursor's bot {bot}: {chat_invite(api, cid, bot)}")
     elif api.dry_run:
-        print("plan: invite Cursor's bot, the users.list bot whose name says cursor (or --cursor-bot U...)")
+        print("plan: invite Cursor's bot, the users.list bot whose name says cursor")
     else:
-        print(f"Cursor's bot: no bot named cursor in users.list, so subscriptions to #{key} wake no one until it is in: rerun "
-              "with --cursor-bot U...")
+        print(f"Cursor's bot: no bot named cursor in users.list, so subscriptions to #{key} wake no one until it is in")
     daniel = None
     if uid:
         print(f"{plan}{name} {uid}: {chat_invite(api, cid, uid)}")
@@ -4328,14 +4320,10 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
             if ns.choice == OTHERWISE and not 1 <= len((ns.note or "").strip()) <= OTHERWISE_NOTE_MAX:
                 raise SlackError(f"ask-daniel resolve --choice otherwise needs --note: what Daniel decided instead, in 1 to "
                                  f"{OTHERWISE_NOTE_MAX} characters")
-            if ns.on_page and provisional:
-                raise SlackError("ask-daniel resolve: --on-page records Daniel's word and --provisional the lane's own "
-                                 "decision; a resolve is one or the other")
             if ns.choice == OTHERWISE and provisional:
                 raise SlackError("ask-daniel resolve --choice otherwise is Daniel's word, never provisional: a lane decides only "
                                  "among its card's options")
-            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {}),
-                    **({"page": True} if ns.on_page else {})}
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {})}
             if ns.dry_run:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
@@ -4512,8 +4500,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("linear", "Linear issues, relations, projects and milestones, through the app (never the Linear MCP connector, "
                       "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
-                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
-                      "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
+                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
                       "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
                       "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
                       "with a comment naming the rule), `place ISSUE PROJECT [--milestone M]` (by name "
@@ -4526,14 +4513,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's), `response [--since ISO|--hours N] "
                       "[--lane HANDLE] [--open-over MINUTES]` (how fast each lane answers the comments that ring it: "
                       "research/response.py); none sends a state")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
+    p.add_argument("verb", choices=("check", "state", "comment", "audit", "place", "edit", "relate", "unrelate", "update",
                                     "project", "milestone", "create", "response"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; project edit: the project; milestone: the project (one word or quoted) and the milestone's name")
-    p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
@@ -4543,9 +4529,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
                         "alone, LANE is the handle of the issue's team. A comment that starts with @names posts, says "
                         "which it didn't ring and how your lead rings them, and exits 1")
-    p.add_argument("--quiet-unrung", action="store_true",
-                   help="comment --worker: exit 0 when the comment names handles it doesn't ring (you return its text "
-                        "to your lead, who rings them)")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
@@ -4671,9 +4654,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--choice", default=None, metavar="VALUE",
                    help="resolve: the option Daniel chose in the thread, or `otherwise` (with --note: what he decided "
                         "instead), which also replaces a lane's provisional decision")
-    p.add_argument("--on-page", action="store_true",
-                   help="resolve: Daniel said it on the card's page, not in its thread (`status` names a card that differs "
-                        "from its page: record the page with `--choice otherwise --on-page --note ...`)")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "
@@ -4692,7 +4672,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--lane", default=None, metavar="HANDLE",
                    help="open, expect: the lane they usually work with, which their posts that name no lane ring in place of "
                         f"@{CHAT_WATCHER} (default: kept; '' clears it)")
-    p.add_argument("--cursor-bot", default=None, metavar="U...", help="open: Cursor's bot user (default: users.list's bot named cursor)")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
     gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")

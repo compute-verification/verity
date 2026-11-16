@@ -1372,7 +1372,6 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     for argv, says in ((["--user", "U0NOBODY"], "no Slack user U0NOBODY in the workspace"),
                        (["--user", LUKE, "--email", "luke@example.org"], "--user U... (their Slack id) or --email E"),
                        ([], "--user U... (their Slack id) or --email E"), (["--user", "luke"], "is not a Slack user id"),
-                       (["--user", LUKE, "--cursor-bot", "cursor"], "is not a Slack user id"),
                        (["--user", LUKE, "--start-here", "example.org/start"], "is not an http(s) link")):
         rc, _, err = run(capsys, "chat", "open", "luke-two", *argv)
         assert rc == 2 and says in err, (argv, err)
@@ -2066,19 +2065,14 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
-def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
-    """A page that decided something no option names: `otherwise` records it with the note and `page`, never as the
-    lane's own provisional decision."""
+def test_resolve_records_a_decision_outside_the_cards_options_as_daniels(route, registry, capsys):
+    """A decision no option names: `otherwise` records it with the note, never as the lane's own provisional decision."""
     route.resolve = True
-    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
-    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
-                                  {"choice": "otherwise", "note": "both, in order", "page": True})
-    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--on-page")
-    assert route.requests[-1][2] == {"choice": "a", "page": True}
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order")
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "otherwise", "note": "both, in order"})
     sent = len(route.requests)
     for extra, why in ((["--note", " "], "needs --note"), (["--note", "x" * 1001], "1 to 1000"),
-                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note"),
-                       (["--note", "both", "--on-page", "--provisional"], "one or the other")):
+                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note")):
         rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", *extra)
         assert rc == 2 and why in err, (extra, err)
     assert len(route.requests) == sent
