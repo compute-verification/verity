@@ -53,7 +53,7 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
 public size class (32 + 96·K bits of at most `SIZE_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
-schedule with lengths rows is held to when its parameters are built (`NetworkCertifierParams.stride_releases`). B is a cell
+schedule with lengths rows is held to when its parameters are built (`NetworkAttesterParams.stride_releases`). B is a cell
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.
 
@@ -82,7 +82,7 @@ from verity.protocols.resource_accounting.network.verifier import io_request as 
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_FIELD_BYTES
 from verity.protocols.resource_accounting.network.verifier.connection_rows import Rows, Table
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 BIT = HC.BIT
 U16 = Array(16, BIT)
@@ -154,10 +154,10 @@ class Shape:
                              f"no lengths slot holds: a smaller LW")
 
     @classmethod
-    def of(cls, params: NetworkCertifierParams, IW: int, LW: int) -> Shape:
+    def of(cls, params: NetworkAttesterParams, IW: int, LW: int) -> Shape:
         """The shape that reads a schedule's rows: its K and B. ValueError for a schedule without lengths rows."""
         if params.lengths is None:
-            raise ValueError("the schedule has no lengths rows (NetworkCertifierParams.lengths)")
+            raise ValueError("the schedule has no lengths rows (NetworkAttesterParams.lengths)")
         return cls(params.stride_releases, params.cell_bytes, IW, LW)
 
     @cached_property

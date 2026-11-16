@@ -40,7 +40,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import id_req
 from verity.protocols.resource_accounting.network.verifier.grid import Reason, Status
 
 B = 512
-PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, delay=3, lanes=4, window=8, egress_cells=64)
+PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, delay=3, lanes=4, window=8, egress_cells=64)
 T, R, D = PARAMS.window, PARAMS.slots, PARAMS.delay
 EOS = (2,)
 FAST = 1 << 20

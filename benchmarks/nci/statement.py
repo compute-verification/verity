@@ -223,7 +223,7 @@ def symbols() -> list[dict]:
         ("GPU / r̂", "share of r̂", p["free"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
         ("r̂", "at the best plausible PoUW design", T.audited_free(p | BEST)),
-        ("K", "novel bits per inference block", p["K"]),
+        ("K", "fresh input bits per inference block", p["K"]),
         ("Γ", "gates per inference block", p["Gamma"]),
         ("α = K/Γ", "", p["K"] / p["Gamma"]),
         ("d", "entry fee", p["d"]),

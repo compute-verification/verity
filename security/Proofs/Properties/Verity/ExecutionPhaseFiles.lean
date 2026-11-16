@@ -426,10 +426,10 @@ open Classical in
 under the openings at `C`'s gates, then `Q`'s that `D`'s part doesn't under the openings at `D`'s. -/
 theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
-    Accounting.unbound (P.beside Q) opens X =
-      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
+    ResourceAccounting.unbound (P.beside Q) opens X =
+      (ResourceAccounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
         (Circuit.traceLeft X)).map (Fin.castAddEmb m) ∪
-      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
+      (ResourceAccounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
         (Circuit.traceRight X)).map (Fin.natAddEmb n) := by
   have hL : ∀ i : Fin C.N, ((Circuit.traceLeft X) i).cast (Fin.append_left C.w D.w i).symm =
       X (Fin.castAdd D.N i) := fun i => by
@@ -440,7 +440,7 @@ theorem unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Part
     show ((X (Fin.natAdd C.N j)).cast _).cast _ = _
     exact cast_cast_self _ _ _
   ext w
-  simp only [Accounting.unbound, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
+  simp only [ResourceAccounting.unbound, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
   refine Fin.addCases (motive := fun w =>
     (¬ (P.beside Q).Correct X w ∨ ∃ g ∈ (P.beside Q).io w, ¬ opens g (X g)) ↔
       w ∈ (Finset.univ.filter fun u => ¬ P.Correct (Circuit.traceLeft X) u ∨ ∃ g ∈ P.io u,
@@ -500,10 +500,10 @@ open Classical in
 /-- **The unbound units of two circuits side by side are counted a circuit at a time.** -/
 theorem card_unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q : Partition D m)
     (opens : (g : Fin (C.beside D).N) → BitVec ((C.beside D).w g) → Prop) (X : (C.beside D).Trace) :
-    (Accounting.unbound (P.beside Q) opens X).card =
-      (Accounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
+    (ResourceAccounting.unbound (P.beside Q) opens X).card =
+      (ResourceAccounting.unbound P (fun i v => opens (Fin.castAdd D.N i) (v.cast (Fin.append_left C.w D.w i).symm))
         (Circuit.traceLeft X)).card +
-      (Accounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
+      (ResourceAccounting.unbound Q (fun j v => opens (Fin.natAdd C.N j) (v.cast (Fin.append_right C.w D.w j).symm))
         (Circuit.traceRight X)).card := by
   rw [unbound_beside, Finset.card_union_of_disjoint, Finset.card_map, Finset.card_map]
   refine Finset.disjoint_left.2 fun w hl hr => ?_
@@ -526,9 +526,9 @@ open Classical in
 member's that its part of the trace doesn't bind under the openings at its gates, then the rest's at theirs. -/
 noncomputable def unboundWith : (r : FileRead) → (rs : List FileRead) →
     ((g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) → (circuitWith r rs).Trace → ℕ
-  | r, [], opens, X => (Accounting.unbound r.parts opens X).card
+  | r, [], opens, X => (ResourceAccounting.unbound r.parts opens X).card
   | r, s :: rs, opens, X =>
-    (Accounting.unbound r.parts
+    (ResourceAccounting.unbound r.parts
         (fun i v => opens (Fin.castAdd (circuitWith s rs).N i)
           (v.cast (Fin.append_left r.circuit.w (circuitWith s rs).w i).symm))
         (Circuit.traceLeft X)).card +
@@ -541,7 +541,7 @@ open Classical in
 /-- **The units a trace of the members' circuits side by side doesn't bind are counted a member at a time.** -/
 theorem card_unbound_partsWith (r : FileRead) (rs : List FileRead)
     (opens : (g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) (X : (circuitWith r rs).Trace) :
-    (Accounting.unbound (partsWith r rs) opens X).card = unboundWith r rs opens X := by
+    (ResourceAccounting.unbound (partsWith r rs) opens X).card = unboundWith r rs opens X := by
   induction rs generalizing r with
   | nil => rfl
   | cons s rs ih =>

@@ -1,4 +1,4 @@
-"""The tick an execution phase's head leaves at (`NetworkCertifierParams.head_offset`, `NetworkCertifierParams.head_wait`, `network_attester`'s
+"""The tick an execution phase's head leaves at (`NetworkAttesterParams.head_offset`, `NetworkAttesterParams.head_wait`, `network_attester`'s
 "The head's tick"), driven tick by tick on a `VirtualClock`. A schedule sets the two together or neither. With them
 whoever takes an execution phase's hand hands its head back to the network attester, which publishes it at a tick
 of the schedule: the due one for a head back by then, never sooner; the first it is back by for a late one, within
@@ -16,7 +16,7 @@ import pytest
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.tests.test_network_attester_lengths import LEN, T
 from verity.protocols.resource_accounting.network.verifier.tests.test_network_attester import TAU
-from verity.protocols.resource_accounting.network.verifier.network_attester import OPTIONAL_FIELDS, NetworkCertifier, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import OPTIONAL_FIELDS, NetworkAttester, NetworkAttesterParams
 
 #: the lengths tests' schedule under form 2, and the same with a head due 3 buckets after its hand's close and no
 #: tick to wait, then one
@@ -29,7 +29,7 @@ PHASES = 3
 DUE = (2 * T - 1 + 3, 3 * T - 1 + 3, 3 * T - 1 + 3)
 
 
-async def drive(params: NetworkCertifierParams, back: dict[int, int | None] | None = None, *, phases: int = PHASES,
+async def drive(params: NetworkAttesterParams, back: dict[int, int | None] | None = None, *, phases: int = PHASES,
                 late: dict[int, float] | None = None):
     """A run of `phases` execution phases without a connection, each tick at its boundary (`late[t]` seconds past it
     for tick t). Whoever takes a hand is this driver: it hands execution phase w's head back just before tick
@@ -45,7 +45,7 @@ async def drive(params: NetworkCertifierParams, back: dict[int, int | None] | No
         if w not in back and params.head_offset is not None:
             returned[w] = device.head_back(w, f"head {w}")
 
-    device = NetworkCertifier(params, None, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, lengths=lengths,
+    device = NetworkAttester(params, None, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, lengths=lengths,
                     leave=lambda w, tick, head: left.append((device.ticks, w, tick, head)))
     running = asyncio.create_task(device.run())
     running.add_done_callback(lambda _: device._changed.set())
@@ -61,7 +61,7 @@ async def drive(params: NetworkCertifierParams, back: dict[int, int | None] | No
     return device, hands, left, returned
 
 
-def run(params: NetworkCertifierParams, back=None, **kw):
+def run(params: NetworkAttesterParams, back=None, **kw):
     return asyncio.run(drive(params, back, **kw))
 
 
@@ -73,13 +73,13 @@ def test_the_head_offset_and_the_wait_are_parameters_no_other_schedule_hashes():
     offset, in buckets, and the wait, in ticks, together: each enters the digest, the wait at 0 as at any other
     value. They are the lengths rows' head's, so a schedule without lengths rows has none, under either form it
     may; and a value that is no count of buckets or of ticks is refused, naming the field."""
-    assert NetworkCertifierParams().head_offset is None and NetworkCertifierParams().head_wait is None
+    assert NetworkAttesterParams().head_offset is None and NetworkAttesterParams().head_wait is None
     assert dataclasses.replace(SET, head_offset=None, head_wait=None) == TWO
     assert dataclasses.replace(SET, head_offset=None, head_wait=None).digest == TWO.digest
     assert OPTIONAL_FIELDS[-2:] == ("head_offset", "head_wait")
     others = [dataclasses.replace(TWO, head_offset=o, head_wait=w) for o, w in ((3, 0), (3, 1), (4, 0), (1, 3), (3, T))]
     assert len({TWO.digest, *(p.digest for p in others)}) == len(others) + 1 and others[:2] == [SET, WAIT]
-    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(WAIT)))) == WAIT
+    assert NetworkAttesterParams(**json.loads(json.dumps(dataclasses.asdict(WAIT)))) == WAIT
     assert dataclasses.replace(LEN, head_offset=3, head_wait=0).digest not in (LEN.digest, SET.digest)
     with pytest.raises(ValueError, match="a schedule with head_offset has lengths rows"):
         dataclasses.replace(LEN, lengths=None, head_offset=3, head_wait=0)
@@ -99,7 +99,7 @@ def test_a_schedule_that_sets_the_wait_and_no_offset_is_refused_by_name_and_so_i
                                              f"may wait are counted from the tick it is due at"):
             dataclasses.replace(TWO, head_wait=wait)
     with pytest.raises(ValueError, match="head_wait \\(0\\) is set and head_offset is not"):
-        NetworkCertifierParams(head_wait=0)
+        NetworkAttesterParams(head_wait=0)
     with pytest.raises(ValueError, match="head_offset \\(3\\) is set and head_wait is not: a head not back at its "
                                          "tick leaves within head_wait ticks of it or never"):
         dataclasses.replace(TWO, head_offset=3)
@@ -199,7 +199,7 @@ def test_a_head_is_handed_back_once_for_an_execution_phase_that_was_handed_under
     with pytest.raises(ValueError, match="execution phase 1 was not handed, so no head of it is due"):
         run(SET, {1: 2 * T})
     with pytest.raises(ValueError, match="execution phase 0's head is handed back, not None"):
-        NetworkCertifier(SET, None, origin=0.0, windows=PHASES, clock=VirtualClock(0.0)).head_back(0, None)
+        NetworkAttester(SET, None, origin=0.0, windows=PHASES, clock=VirtualClock(0.0)).head_back(0, None)
     for at in (DUE[0] - 1, DUE[0] + 1):
         with pytest.raises(ValueError, match="execution phase 0's head was handed back before"):
             asyncio.run(_twice(at))
@@ -209,7 +209,7 @@ async def _twice(at: int) -> None:
     """A run under SET in which execution phase 0's head is handed back at its hand and again just before tick
     `at`."""
     clock = VirtualClock(-TAU / 2)
-    device = NetworkCertifier(SET, None, origin=0.0, windows=PHASES, clock=clock, sleep=clock.sleep,
+    device = NetworkAttester(SET, None, origin=0.0, windows=PHASES, clock=clock, sleep=clock.sleep,
                     lengths=lambda w, strides: device.head_back(w, f"head {w}"))
     running = asyncio.create_task(device.run())
     try:
@@ -228,9 +228,9 @@ def test_the_device_names_the_execution_phases_whose_head_it_awaits():
     hand to the tick its head is handed back before, or to the last tick the head could have left at."""
     seen: dict[int, list[int]] = {}
 
-    async def main() -> NetworkCertifier:
+    async def main() -> NetworkAttester:
         clock = VirtualClock(-TAU / 2)
-        device = NetworkCertifier(WAIT, None, origin=0.0, windows=PHASES, clock=clock, sleep=clock.sleep)
+        device = NetworkAttester(WAIT, None, origin=0.0, windows=PHASES, clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(device.run())
         running.add_done_callback(lambda _: device._changed.set())
         t = 0

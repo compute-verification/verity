@@ -22,7 +22,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
 - PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/resource_accounting/memory/poub/verifier/`, `Poub`,
-  `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
+  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/verifier/challenger/remote.py`), a remote challenger's client;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
@@ -43,7 +43,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
   code running on the auditor device (`verity/protocols/compose/verifier/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network attester anywhere, is specified yet.
-- **No auditor devices at the site.** There are no network attesters or memory challengers. So network certification,
+- **No auditor devices at the site.** There are no network attesters or memory attesters. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
   see `security/Definitions/Certifier` and its `Guarantees`.
 
@@ -97,7 +97,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityPooled` for SPOT, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
+   (`Flock.Guarantees.IntegrityPooled` for SPOT, `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
    for PoUW), and the slowdown calculator turns them into the slowdown bound (see Results).
 
 ## The security argument, end to end
@@ -118,7 +118,7 @@ endpoint, and part 6 gives its total failure probability over a monitoring perio
 
 The argument has seven parts. **Each part is proved, stated or open on its own: no Lean theorem yet chains one part's
 conclusion into the next part's hypothesis**, apart from the composition, whose targets are premises. The one partial
-link is `Accounting.Guarantees.TS.SessionSoundAt`, which consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
+link is `ResourceAccounting.Guarantees.TS.SessionSoundAt`, which consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
 what it establishes, what it assumes, its Lean and that Lean's status:
 
 - **proved**: its proof is in a lock (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
@@ -142,7 +142,7 @@ else is a theorem or a named gap.
 |---|---|---|---|
 | Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
 | The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedDevice`, `RecordCustodyZKJPLaw`, `UniformRandomBytes`; `CoinsAfterCommitment` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
-| The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `SlowdownRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
+| The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `ResourceAccounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `SlowdownRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
@@ -228,8 +228,8 @@ The time credit adds the data sheet's rates.
 - PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
-- The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
-- The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
+- The time credit: `ResourceAccounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
+- The proofs behind PoUW's credit, `ResourceAccounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
   served path meets it yet), `ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
   `ProofLayer.SoundAt` from part 1's theorem; it doesn't discharge `ServiceSound`.
 - The verifier's verdicts tied to these theorems: **open** (What's open, below).
@@ -304,8 +304,8 @@ also needs δ_s below 2⁻¹⁰⁰.
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityPooled`
-(SPOT) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. `JointPooledLive`
+**Lean.** `ResourceAccounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityPooled`
+(SPOT) and `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -486,17 +486,17 @@ PoUW, as `H1J10RCheckedCreditMonitoringPeriod` takes them (`security/Properties/
   (`security/Properties/Pouw/MonitoringPeriod.lean`, `SaltIsLiveCoin`'s docstring).
 - `Properties.Pouw.MonitoringPeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
   and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
-- `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
+- `ResourceAccounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
-- `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
+- `ResourceAccounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `verity-verify-proof --zk --registered` reads them. No served path meets it yet.
-- `Accounting.Assumptions.TS.ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
+- `ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
   the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
   registered ones.
-- The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
+- The data sheet: `ResourceAccounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditMonitoringPeriod`,
-  `H1J10RCheckedCreditMonitoringPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
+  `H1J10RCheckedCreditMonitoringPeriod`) doesn't read them. The time credit `ResourceAccounting.Guarantees.Compose.CircuitCredit` does, and it
   is what backs the slowdown bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
 The slowdown, `SlowdownRemote`:

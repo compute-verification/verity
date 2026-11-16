@@ -17,7 +17,7 @@ hypothesis is one its goal proves; once each is a theorem, the conclusion holds 
 
 namespace Verity
 
-variable {ι α : Type} [Fintype α] {d : Accounting.Device ι}
+variable {ι α : Type} [Fintype α] {d : ResourceAccounting.Device ι}
 
 /-- **Soundness at remote, from the targets still open**: remote's compiled verifier accepts files that passed the
 commit phase's check while one of its three claims fails with probability at most their errors summed, for a vocabulary

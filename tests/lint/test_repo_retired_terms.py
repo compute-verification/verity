@@ -170,8 +170,8 @@ OWN_CAPS = {
                           for area in ("Pous", "Poub")),
                     "PoUS's and PoUB's caps in their Lean (an audit's duration, a schedule's bits, a chip's steps, an "
                     "oracle's queries, a side channel's rate); Pearl's is PoUW's"),
-    **dict.fromkeys(("security/Definitions/Accounting/Gates", "security/Definitions/Accounting/Guarantees/Gates.lean",
-                     "security/Proofs/Accounting/Gates"),
+    **dict.fromkeys(("security/Definitions/ResourceAccounting/Gates", "security/Definitions/ResourceAccounting/Guarantees/Gates.lean",
+                     "security/Proofs/ResourceAccounting/Gates"),
                     "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
     **dict.fromkeys(tuple(f"benchmarks/{b}/"
                           for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
@@ -980,7 +980,7 @@ def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_reti
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
-    kept = "a served cap S charges each replay block at most F S; `NetworkCertifierParams.max_tokens_cap`\n"
+    kept = "a served cap S charges each replay block at most F S; `NetworkAttesterParams.max_tokens_cap`\n"
     assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
     assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
         (2, "cap"), (2, "cap")]
@@ -1078,7 +1078,7 @@ def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> 
     assert period_sites("monitoringPeriodG, monitoringPeriod_every, liveAt_monitoringPeriod") == []
     assert period_sites("ledgerPeriod_le_monitoringPeriod") == []
     assert period_sites("ComposePeriod, CircuitWorkPeriod, DampenerRemotePeriod, MONITORINGPeriod, "
-                        "Accounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
+                        "ResourceAccounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
         "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod",
         "composePeriod", "ledgerPeriod"]
     assert period_sites("ComposeHorizon, PooledHorizonBound, the horizon") == [
