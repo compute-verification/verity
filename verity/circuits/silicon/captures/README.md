@@ -2,7 +2,7 @@
 
 These files are byte-faithful replicas (with a `provenance` block: source repo, path, sha256, import time) of evidence
 that was measured on real silicon in other repositories, so that `verity.circuits.silicon.instructions` points at
-something checked in. `autoproof-probe-vectors.json` is a replicated fixture (`fixtures/artifacts.json`): the tree holds its
+something checked in. `autoproof-probe-vectors.json` is a replicated fixture (`artifacts.json`): the tree holds its
 pointer and the store its bytes.
 
 | file | source | pins |
