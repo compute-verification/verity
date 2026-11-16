@@ -41,10 +41,10 @@ The pieces are modular by construction:
 
 - **A premise reaches the counting only through its budget.** Any premise that yields `HeldPriceAtMost` works with any
   structure that consumes one.
-- **Caps compose.** For the same blocks, the smallest cap whose premises all hold applies; a refuted premise contributes
-  nothing. Over disjoint counted families (forward products, backward products, optimizer updates), the caps and the
+- **Bounds compose.** For the same blocks, the smallest bound whose premises all hold applies; a refuted premise contributes
+  nothing. Over disjoint counted families (forward products, backward products, optimizer updates), the bounds and the
   weighted totals add.
-- **Weights are shared.** A cap bounds Ω in its weights, and coverage has to supply Ω_* in the same weights.
+- **Weights are shared.** A bound bounds Ω in its weights, and coverage has to supply Ω_* in the same weights.
 - **A new kind of dependency is a new `Consumers` value, not a new argument.** Uses, accumulated outputs and anything
   else with an upstream region go through the same three dependency bounds.
 - **Improving a structure never strengthens a premise.** A stronger premise is a new hypothesis, named as one.
@@ -145,7 +145,7 @@ covered structure is two gates, and a one-gate guess lacks it and reaches the ta
 | update hardness | accumulated outputs | gradient sums finished ≤ k + c/g, each needing its addends |
 | a recoverable hard source | outputs | (k' + δ + amb)/β_v |
 
-**When a cap binds.** A cap matters only when it is well below what a block could do anyway, about c·ζ̄ of the
+**When a bound binds.** A bound matters only when it is well below what a block could do anyway, about c·ζ̄ of the
 weighted total.
 
 ## How to test each premise
@@ -163,7 +163,7 @@ weighted total.
 - **One meaningful instantiation.** The witnesses so far are a four-gate toy: they show the premises consistent, each
   parameter spent, against a decoder that compresses one string. The next advance is one instance on a training
   circuit satisfying them simultaneously: a block-extraction capability at the protocol's decoder budget, a positive
-  information rate, a checked dependency certificate, and parameters giving a nontrivial cap. A failed instantiation
+  information rate, a checked dependency certificate, and parameters giving a nontrivial bound. A failed instantiation
   says concretely which premise breaks.
 - **A use's import cost.** The dependency bounds charge one fresh bit per imported use. A justified joint input cost of
   b bits per use gives a served weight of at most k/b + c/g. A hidden state's literal width is not that cost:
