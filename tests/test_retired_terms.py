@@ -118,7 +118,7 @@ DOC_TERMS = {
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
+    "uplink tap, the auditor's tap": "the network attester, and its records network attestations",
     "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
@@ -166,7 +166,7 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network attestation), the bandwidth audit's or the "
            "memory wipe's, or run",
     "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
         "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",

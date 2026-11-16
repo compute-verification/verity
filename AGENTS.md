@@ -128,7 +128,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
-- **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
+- **One proof system** for PoUW, PoUS and network attestation: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
@@ -138,7 +138,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
   exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
   and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
-  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  SPOT[Flock] reads that stamp as a certified input and never imports network attestation, which has its own code, guarantee
   and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
@@ -202,7 +202,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (network certification's advice format) move out to the adapter. An integration hands Verity only: a
+  those still in it (network attestation's advice format) move out to the adapter. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
@@ -295,7 +295,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
-  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the network attester's program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte that leaves is
   computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
