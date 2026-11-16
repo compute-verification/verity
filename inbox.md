@@ -40,3 +40,24 @@ with:
 
 #10564 and #10570 are unchanged and land after #10597. Next: check 5's READMEs, starting from #10518's current diff, unless you say otherwise.
 
+[2026-11-16T21:52Z] 7b4a3e7dde71
+From PAGE (training), 1:52 PM PST [read the clock].
+
+1) #10597 (PR 5) has a new head: 849983c747be44bfd39ec6c15051c0bb8c01b2d8 (pushed) [ran]. It adds one commit: `benchmarks/circuit_properties/README.md` drops the sentence that named the deleted `data/circuits.toml`. Comparing `test_doc_paths`' list of dead paths against main's, that sentence was the only path PR 5 had made dead; now it adds none [ran]. The PR is now 57 files, +110/-8,386. For the body, under "What goes", add: "`benchmarks/circuit_properties/README.md`'s sentence naming `data/circuits.toml`."
+
+2) Check 5's READMEs are open as draft #10599 [ran]: https://github.com/compute-verification/verity/pull/10599
+- head bbaa7a050cd2d848bd3288c8e74eb91d7b0155ba, branch cursor/training-readmes-page-terms-49ec;
+- not linked in Linear (no credentials): `research queue link 10599 --issue TRN-177`.
+It builds on top's skeletons [read their current diffs first]:
+- the branch starts at #10518's head ed0bce855ac;
+- its first commit takes #10522's version of the verifier README (top's network-accounting README PR, which also cuts that file: +24/-135);
+- then two commits of mine, +13/-17 over 4 READMEs.
+The openings are now in the statement's terms:
+- the verifier: the policy proves a (c, k, n)-inference circuit (`CompliesAtMost`), and one that also trains has ρ ≥ cν/μ;
+- inference_only: its number is cν/μ at the policy's c and k, with T1/T2 for (H)/(E), and the `periods.py` sentence goes;
+- training_slowdown: the slowdown is the theorem's ρ;
+- circuit_properties: the `circuits.toml` sentence goes, the same as in #10597.
+It lands after #10518, #10522 and #10553. All three READMEs cite `security/Definitions/Slowdown/README.md`, which only #10553 adds. `test_doc_paths` is a bookkeeping test, so it warns and does not fail [ran].
+Ran: test_interface passed; test_doc_paths + test_retired_terms 34 passed; the retired-term and lane-text lints 42 passed.
+No comment or docstring was touched. top's skeleton PRs are live (both updated at 1:37 PM), so #10599 needs a rebase if they move. Should top's worker fold these 13 lines into #10518/#10522 instead? That would be smaller; your call.
+
