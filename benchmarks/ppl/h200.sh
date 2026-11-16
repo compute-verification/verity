@@ -11,7 +11,7 @@ export WORK=${WORK:-$HOME/verity-work} HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
 
 command -v nvidia-smi > /dev/null || { echo "nvidia-smi isn't on PATH: h200.sh runs on one H100 or H200" >&2; exit 3; }
 if [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease > /dev/null; then
-  exec env GPU_LEASE_WHO="${GPU_LEASE_WHO:-ppl-bench}" gpu-lease 1 --wait ${GPU:+--on "$GPU"} \
+  exec env GPU_LEASE_WHO="${GPU_LEASE_WHO:-ppl-bench}" gpu-lease 1 --wait ${GPU:+--on "$GPU"} ${CORES:+--cores "$CORES"} \
     --max-min "${LEASE_MIN:-75}" -- bash "$SELF"
 fi
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}

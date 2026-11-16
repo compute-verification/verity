@@ -25,7 +25,8 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --max-m
 `benchmarks/compute/serve.sh` uses (`$WORK/venv312`, bootstrapped as serve.sh does when absent; `$WORK/hf`, where the
 checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
-and then `run.py metrics`.
+and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
+`--gpus 1` (research's own lease would take any card and leave the script none to pin).
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,
