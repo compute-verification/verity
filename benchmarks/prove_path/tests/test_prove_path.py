@@ -787,6 +787,8 @@ def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_
 
 
 def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(tmp_path):
+    from verity_vllm.program.predict import steps as ST
+
     for name, ok, digest in (("build_request_LP5_T2", True, "d0" * 64), ("build_request_LP3_T1", False, "d1" * 64),
                              ("build_step", True, "d2" * 64)):
         (tmp_path / name).mkdir()
@@ -796,7 +798,10 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
     for rank, world in ((1, 2), (0, 2), (1, 1)):
         with pytest.raises(ValueError, match="I2 compiles a single-GPU session"):
             i2.load(rank, world, [])
-    with pytest.raises(ValueError, match="request r1: no Build dir under .* holds I2's Program d1d1"):
+    i2.units["d1" * 64] = ST.RequestUnit(1, "d1" * 64, 3, 1, {"kind": "greedy"}, None, 0, "r1", stop={"max_tokens": 2})
+    with pytest.raises(ValueError, match=r"request r1: no Build dir under .* holds I2's Program d1d1.*\(its trace: "
+                                         r"build_request_LP3_T1_greedy_s[0-9a-f]{12}/; the Builds there: build_request_LP5_T2 d0d0.*\)"
+                                         r".*cannot be proved by the single-GPU arm.*length rule.*served arm \(PP_SERVE_RUN"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
@@ -1225,6 +1230,45 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     assert phi.digest() != PP.phi_of_serve(serve, hf_config=str(PP.LLAMA32_1B_CONFIG)).digest()
     bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
     assert PP.phi_of_serve(bf16).model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+
+
+def test_a_declared_runs_phi_reads_the_config_of_record_of_its_workloads_pin():
+    """A single-GPU Commit's φ (`i2_of_record`) reads the config of record of the pin its workload serves (`workload_hf_config`),
+    as a served pin's does: an int8 row's carries the quantization config its Programs were built under, never the bf16
+    fixture's; a bf16 row's is the fixture's, so that row compiles as before; a model no manifest pins reads the fixture; a doc
+    with no engine.revision, the old flat layout's among them, is refused by name, never read as the fixture's."""
+    int8 = {"model": "verity-int8/Llama-3.2-1B-INT8", "engine": {"revision": "15b0976d400d796ee589e7737d03a919526bf800"}}
+    assert json.loads(PP.workload_hf_config(int8).read_text())["quantization_config"]["quant_method"] == "verity_int8"
+    bf16 = {"model": "unsloth/Llama-3.2-1B", "engine": {"revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}}
+    assert json.loads(PP.workload_hf_config(bf16).read_text()) == json.loads(PP.LLAMA32_1B_CONFIG.read_text())
+    assert PP.workload_hf_config({"model": "org/unpinned", "engine": {"revision": "0" * 40}}) == PP.LLAMA32_1B_CONFIG
+    assert PP.workload_hf_config(int8, "given.json") == Path("given.json")
+    for flat in ({"model": "org/unpinned", "engine": {}}, {"model": int8["model"], "revision": int8["engine"]["revision"]}):
+        with pytest.raises(ValueError, match="names no engine.revision"):
+            PP.workload_hf_config(flat)
+
+
+def test_the_ran_with_line_names_the_coins_and_the_parameters_of_their_key(tmp_path, capsys):
+    """A local challenger's key is at its development parameters; a gate's is its key record's, deployed only at
+    `lms.DEPLOYED`'s, and without the record no word is stated."""
+    from verity.protocols.proofs.spot.device import challenger as Ch
+
+    assert PP.ran_with("local") == ("ran with: coins local challenger; parameters development (the local challenger's LMS key "
+                                    "at W=4, H=5, not the deployed W=1, H=20)")
+    pub = bytes(range(Ch.PUBLIC_BYTES))
+
+    def record(W: int, H: int) -> dict:
+        return {"schema": Ch.KEY_RECORD_SCHEMA, "W": W, "H": H, "pubkey": pub.hex(), "pubkey_sha512": hashlib.sha512(pub).hexdigest()}
+
+    gate = "gate:vy@auditor-2"
+    assert PP.ran_with(gate, record(1, 20)).endswith("parameters deployed (the challenger's LMS key at W=1, H=20, its key record's)")
+    assert "parameters development (the challenger's LMS key at W=4, H=10" in PP.ran_with(gate, record(4, 10))
+    assert PP.ran_with(gate) == f"ran with: coins the auditor device's challenger ({gate}); parameters not stated (no challenger key record given)"
+    with pytest.raises(ValueError, match="local, or gate:USER@HOST"):
+        PP.ran_with("remote")
+    (f := tmp_path / "key.json").write_text(json.dumps(record(1, 20)))
+    assert PP.main(["ran-with", "--challenger", gate, "--challenger-key", str(f)]) == 0
+    assert capsys.readouterr().out.strip() == PP.ran_with(gate, record(1, 20))
 
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):

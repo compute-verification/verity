@@ -6,8 +6,10 @@ of logits at a time. PoUW's row in the run's composed record is printed whatever
 node reports of what it served is read.
 
 Nothing here reaches the evidence store: `FakeStore` stands in for research's local store over the small record under
-`fixtures/record` (a run's `out/`), which each test copies and edits. A record withdrawn whole, or in a part that holds
-a file the command reads, is refused before anything is fetched, and a withdrawal of other files of it is printed."""
+`fixtures/record` (a run's directory: its `job.json` and its `out/`), which each test copies and edits. A record
+withdrawn whole, or in a part that holds a file the command reads, is refused before anything is fetched, and a
+withdrawal of other files of it is printed. `--record` reads the same record from a directory, through no store, and
+prints what `--from` prints of it."""
 from __future__ import annotations
 
 import json
@@ -30,14 +32,18 @@ MACS = {"linears": 136_230_993_920, "attention": 165_150_720, "lm_head": 4_202_6
 TOTAL = 140_598_837_248
 #: the fixture's credit, three quarters of TOTAL
 CREDITED = 105_449_127_936
+#: the revision of the benchmark's load (load.toml), which the fixture's policy registers
+REVISION = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
+#: the fixture's parameters as the coins line prints them, a development run's
+PARAMETERS = "parameters: draws 459, delta 1/100, development"
 
 
 def a_record(tmp_path: Path, **edits) -> Path:
-    """A copy of the fixture record, laid out as a run's (its files under `out/`), with `edits` applied, each a file's
-    name under `C` (ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS) and what becomes of it: None deletes it, a string
-    replaces its text, and a function edits its JSON in place."""
+    """A copy of the fixture record, a run's directory (its `job.json`, and its files under `out/`), with `edits`
+    applied, each a file's name under `C` (ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, VERIFY, DEVELOPMENT, JOB) and what becomes of
+    it: None deletes it, a string replaces its text, and a function edits its JSON in place."""
     record = tmp_path / "record"
-    shutil.copytree(RECORD, record / "out")
+    shutil.copytree(RECORD, record)
     for name, edit in edits.items():
         path = record / getattr(C, name)
         if edit is None:
@@ -113,6 +119,7 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store with no `research run` around the command."""
     monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     return FakeStore(tmp_path / "store")
 
 
@@ -155,15 +162,17 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     text, doc, err = printed(capsys)
     assert err == ""
     assert text == [
-        ("compute: 75.00% of the served model's MACs are credited by Pearl+ (105,449,127,936 of 140,598,837,248), "
-         "below the 97% target"),
+        ("compute: 75.00% of the served model's MACs (105,449,127,936 of 140,598,837,248), below the 97% target. This "
+         "is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts"),
+        f"  coins: node sample, salt coins from in-process; Lean verifier run as development; {PARAMETERS}",
         (f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, δ_s 1/100 "
          f"(sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's "
          f"verdict is the same"),
         ("  PoUW's row in the run's composed record is `missing`, not an accept, so the credit is the Pearl+ piece's "
          "alone: development run, credits nothing: the registration can't be read"),
-        ("  unsloth/Llama-3.2-1B at 4 slots of 32 prompt and 4 output tokens: linears 136,230,993,920, attention "
-         "165,150,720 and LM head 4,202,692,608 MACs, which is the policy's own count of its class"),
+        (f"  unsloth/Llama-3.2-1B at revision {REVISION}, 4 slots of 32 prompt and 4 output tokens, the benchmark's load "
+         "(load.toml): linears 136,230,993,920, attention 165,150,720 and LM head 4,202,692,608 MACs, which is the "
+         "policy's own count of its class"),
         ("  Pearl+ credits linears alone, 96.89% of the model's MACs at this class: its passes hold 120,000,000,000 of "
          "them and its credit is 77.40% of them all"),
         ("  tokens, the class's since the record holds no count of those served: 128 prompt and 16 output, over 140 "
@@ -205,7 +214,7 @@ def test_the_number_is_held_to_the_target_exactly(store, tmp_path, capsys, monke
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[0].endswith("at or above the 75% target") and doc["met"] is True and doc["target"] == 0.75
+    assert "at or above the 75% target. " in text[0] and doc["met"] is True and doc["target"] == 0.75
     under = tmp_path / "under"
     under.mkdir()
     one_less = a_record(under, ANSWER=to("public", "work", "credited", value=CREDITED - 1),
@@ -213,7 +222,7 @@ def test_the_number_is_held_to_the_target_exactly(store, tmp_path, capsys, monke
     store.add(RUN, one_less)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[0].startswith("compute: 75.00% ") and text[0].endswith("below the 75% target") and doc["met"] is False
+    assert text[0].startswith("compute: 75.00% ") and ", below the 75% target. " in text[0] and doc["met"] is False
 
 
 @pytest.mark.parametrize("verdicts, said", [
@@ -229,7 +238,7 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     store.add(RUN, a_record(tmp_path, VERDICTS=verdicts))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[2] == said and doc["value"] == 0.75
+    assert text[3] == said and doc["value"] == 0.75
 
 
 @pytest.mark.parametrize("edits, why", [
@@ -253,6 +262,10 @@ def test_pouws_row_in_the_composed_record_is_printed_whatever_it_says(store, tmp
     ({"LEAN_CHECK": to("differ", value=["work"])},
      "the record's comparison of the Lean verifier's verdict with the answer differs on ['work']"),
     ({"LEAN_CHECK": lambda d: d.pop("differ")}, "the run's Pearl+ verdicts don't read as verdicts"),
+    ({"ANSWER": lambda d: (d["profile"].update(test_instance=True), d["public"]["work"].update(credited=0)),
+      "LEAN": to("work", "credited", value=0)},
+     "Pearl+'s answer is a test instance's (its profile's test_instance): its passes are not the served instance's"),
+    ({"ANSWER": to("profile", "test_instance", value=True)}, "Pearl+'s answer is a test instance's"),
 ])
 def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_number_and_exits_1(store, tmp_path, capsys,
                                                                                               edits, why):
@@ -262,13 +275,25 @@ def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_numb
     assert out == "" and f"compute: no number: {why}" in err
 
 
-def test_a_record_with_no_lean_verdict_prints_the_answers_number_and_says_so(store, tmp_path, capsys):
-    store.add(RUN, a_record(tmp_path, LEAN=None, LEAN_CHECK=None), dirty=True)
+@pytest.mark.parametrize("edits, missing", [({"LEAN": None}, C.LEAN), ({"LEAN_CHECK": None}, C.LEAN_CHECK),
+                                             ({"LEAN": None, "LEAN_CHECK": None}, C.LEAN)])
+def test_a_record_with_no_lean_verdict_prints_no_number_and_names_the_file(store, tmp_path, capsys, edits, missing):
+    """The answer's credit is no number without the Lean verifier's verdict and the record's comparison of the two."""
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert bench(store, *argv) == 1
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: no number: the record holds no {missing}, so no Lean verdict" in err
+
+
+def test_a_dirty_commit_is_printed_as_one(store, tmp_path, capsys):
+    store.add(RUN, a_record(tmp_path), dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
-                       f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the record holds no Lean verdict")
-    assert doc["lean"] is False and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
+    assert text[2] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
+                       f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the Lean verifier's verdict is the same")
+    assert doc["lean"] is True and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
 
 
 @pytest.mark.parametrize("edits", [{"ANSWER": None}, dict.fromkeys(("ANSWER", "LEAN", "LEAN_CHECK", "POLICY", "VERDICTS"))])
@@ -310,7 +335,7 @@ def test_a_store_that_cannot_be_read_exits_2(store, tmp_path, capsys, monkeypatc
     assert "compute: the evidence store's client isn't installed here" in capsys.readouterr().err
 
 
-OTHERS = "out/pieces/pouw/coin-put.json, out/pieces/pouw/development.json"
+OTHERS = "out/pieces/pouw/coin-put.json, out/pieces/pouw/period.json"
 
 
 @pytest.mark.parametrize("target", [f"art:{RUN}", RUN])
@@ -346,7 +371,7 @@ def test_a_withdrawal_of_other_files_of_the_record_is_printed_beside_the_number(
     text, doc, _ = printed(capsys)
     said = f"'the private value of a coin can be recovered (only {OTHERS})', by infra"
     assert doc["withdrawn"] == [said] and doc["value"] == 0.75
-    assert text[3] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert text[4] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
     assert store.fetched == [[*C.RECORDS, C.VERIFY]] and store.pulled == [[RUN, f"art:{RUN}"]]
     # a later withdrawal of the whole record refuses it
     store.withdraw(f"art:{RUN}", "the rest holds private values too")
@@ -375,8 +400,17 @@ def test_the_command_line_names_a_run(store, capsys):
     ({"POLICY": to("n_inputs", "work", "lm_head", value=1)},
      ("the policy counts its class's MACs as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4} and "
       "run.py as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4202692608}")),
+    ({"POLICY": lambda d: (d["class"].update(slots=1, prompt=90, outputs=1, positions=90), d.pop("n_inputs"))},
+     (f"the record's policy registers unsloth/Llama-3.2-1B at revision {REVISION}, class 1,90,1 and the benchmark's "
+      f"load is unsloth/Llama-3.2-1B at revision {REVISION}, class 4,32,4 (load.toml; class is slots, prompt tokens "
+      "and output tokens a request): the number is of that load alone")),
+    ({"POLICY": to("serve", "revision", value="0" * 40)},
+     f"the record's policy registers unsloth/Llama-3.2-1B at revision {'0' * 40}, class 4,32,4 and the benchmark's"),
+    ({"POLICY": lambda d: d["serve"].pop("revision")},
+     "the record's policy registers unsloth/Llama-3.2-1B at revision None, class 4,32,4 and the benchmark's"),
     ({"VERDICTS": "[]"}, "the run's composed record doesn't read as one"),
-    ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1), "LEAN": None},
+    ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1),
+      "LEAN": to("work", "credited", value=MACS["linears"] + 1)},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
       "its passes are not one load of the class")),
     ({"ANSWER": to("public", "work", "macs", value=2 * MACS["linears"])},
@@ -393,19 +427,23 @@ def test_a_policy_that_counts_no_macs_of_its_own_still_gives_the_number(store, t
     store.add(RUN, a_record(tmp_path, POLICY=lambda d: (d.pop("n_inputs"), d["class"].pop("positions"))))
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert doc["policy_agrees"] is None and doc["value"] == 0.75 and text[3].endswith("LM head 4,202,692,608 MACs")
+    assert doc["policy_agrees"] is None and doc["value"] == 0.75 and text[4].endswith("LM head 4,202,692,608 MACs")
 
 
 def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tmp_path, capsys):
     """The run's record also holds the Pearl+ piece's own document, with the tokens and seconds the node says it
-    served: the command asks the store for the verifier's files alone, and prints no capacity share."""
+    served: the command reads its salt coins' source alone, asks the store for no other file of the piece's, and prints
+    no capacity share."""
     record = a_record(tmp_path)
-    (record / "out/pieces/pouw/development.json").write_text(json.dumps(
-        {"verdict": "accept", "served_tokens": 16, "generate_s": 2.0, "credit": {"credited": 1}}))
+    (record / C.DEVELOPMENT).write_text(json.dumps(
+        {"verdict": "accept", "coin_source": "in-process", "served_tokens": 16, "generate_s": 2.0,
+         "credit": {"credited": 1}}))
+    (record / "out/pieces/pouw/served.json").write_text(json.dumps({"served_tokens": 16, "generate_s": 2.0}))
     store.add(RUN, record)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert store.fetched == [[*C.RECORDS, C.VERIFY]] and not any("development" in g or "*" in g for g in [*C.RECORDS, C.VERIFY])
+    assert store.fetched == [[*C.RECORDS, C.VERIFY]] and not any("served" in g or "*" in g for g in [*C.RECORDS, C.VERIFY])
+    assert doc["tokens"] == {"prompt": 128, "output": 16, "positions": 140} and doc["coins"]["salt"] == "in-process"
     assert doc["wall_s"] is None and doc["capacity_share"] is None and text[-1] == f"  capacity share: {C.ABSENT}"
     assert doc["credited_macs"] == CREDITED
 
@@ -436,8 +474,8 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     doc = json.loads(alone.out.splitlines()[-1])
     assert json.loads((out / "compute.json").read_text()) == doc
     assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
-                         "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "record", "withdrawn",
-                         "model", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
+                         "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "coins", "record",
+                         "withdrawn", "model", "revision", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
     written = (out / "result.json").read_bytes()
     store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
     (out / "compute.json").unlink()
@@ -569,7 +607,7 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert sum(Fraction(c["macs"]) for c in got["causes"]) == got["give_up"]
     assert [(c["call"], c["linear"]) for c in got["top"]] == [(71, "1x1"), (2, "gate_up")]
     assert got["top"][1]["causes"] == {"epsilon_macs": "3000000001/3", "rho_macs": "9884901887/1200"}
-    assert text[7:] == [
+    assert text[8:] == [
         ("  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of "
          "its 4 calls (out/pieces/pouw/verify.json):"),
         "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   11.96%",
@@ -638,9 +676,10 @@ def test_the_uncredited_words_are_the_calls_own_sum_over_every_call(store, tmp_p
 
 
 @pytest.mark.parametrize("edits, why", [
-    ({"VERIFY": None}, ("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
-                        "verifier side of the per-call give-up is on main")),
-    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
+    ({"VERIFY": None}, ("the record holds no per-call give-up: its verify document has no `uncredited`, which "
+                        "`served_passes.py uncredited` writes from the run's passes and verify.json, and --uncredited F "
+                        "reads")),
+    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up: its verify document has no"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
     ({"VERIFY": lambda d: (d["uncredited"]["calls"][1].update(macs=d["uncredited"]["calls"][1]["macs"] + 1), resum(d))},
@@ -695,7 +734,7 @@ def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load
 def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):
     """``--uncredited F`` reads a split in a file of its own, with its commitment and its passes' records, in place of
     the verify document, which isn't fetched, and holds those records to the answer's where the answer names them."""
-    split = json.loads((RECORD / "pieces/pouw/verify.json").read_text())["uncredited"]
+    split = json.loads((RECORD / C.VERIFY).read_text())["uncredited"]
     given = tmp_path / "uncredited.json"
     given.write_text(json.dumps({"schema": split["schema"], "verify": "verify.json", "commitment": "c0" * 64,
                                  "records": ["aa" * 64, "bb" * 64], "uncredited": split}))
@@ -758,7 +797,7 @@ def test_a_record_whose_passes_hold_the_lm_heads_calls_counts_the_head_and_drops
     text, doc, err = printed(capsys)
     credited, can = doc["credited_macs"], MACS["linears"] + MACS["lm_head"]
     assert err == "" and doc["lm_head"] == {"calls": 1, "creditable_macs": can, "creditable_share": can / TOTAL}
-    assert text[4] == (f"  Pearl+ credits the linears and the LM head, whose calls the passes hold, {100 * can / TOTAL:.2f}% of "
+    assert text[5] == (f"  Pearl+ credits the linears and the LM head, whose calls the passes hold, {100 * can / TOTAL:.2f}% of "
                        f"the model's MACs at this class: its passes hold {120_000_000_000 + HEAD_MACS - HEAD_OUT:,} of them "
                        f"and its credit is {100 * credited / can:.2f}% of them all")
     assert bench(store, "--from", RUN, "--per-call", "--top", "5") == 0
@@ -807,3 +846,182 @@ def test_a_split_whose_lm_head_calls_hold_more_than_the_classs_lm_head_is_refuse
     assert bench(store, "--from", RUN, "--per-call") == 2
     assert (f"compute: the per-call split's LM head calls hold {17 * 128_256 * 2048:,} real MACs, more than the "
             f"{MACS['lm_head']:,} of the class's LM head") in capsys.readouterr().err
+
+
+def no_store(*args, **kwargs):
+    raise AssertionError("--record touched the evidence store")
+
+
+@pytest.fixture
+def local(monkeypatch) -> None:
+    """No `research run` around the command, so it writes no output."""
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+
+
+@pytest.mark.parametrize("argv", [[], ["--per-call", "--top", "2"]])
+def test_a_record_directory_prints_what_the_store_prints_for_the_same_record(store, tmp_path, capsys, argv):
+    """The fixture is a run's directory as the store keeps its record: `--record` reads it as it lies, with the run id
+    and commit its `job.json` states, and prints byte for byte what `--from` prints of the same record."""
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN, *argv) == 0
+    from_store = capsys.readouterr()
+    assert C.main(["--record", str(RECORD), *argv], store_of=no_store) == 0
+    assert capsys.readouterr() == from_store
+    doc = json.loads(from_store.out.splitlines()[-1])
+    assert (doc["value"], doc["run"], doc["commit"], doc["credited_macs"]) == (0.75, RUN, COMMIT, CREDITED)
+
+
+def test_a_record_directory_is_read_with_no_store_client_at_all(tmp_path, capsys, monkeypatch, local):
+    """`--record` imports nothing of research's: with its store client's modules unimportable and the store's opener
+    raising, the number is printed, its per-call split too."""
+    import sys
+    for name in ("research", "research.store", "research.store.local", "research.store.labels_sync",
+                 "research.store.vocab"):
+        monkeypatch.setitem(sys.modules, name, None)
+    with pytest.raises(C.Unreadable, match="the evidence store's client isn't installed here"):
+        C.opened()
+    assert C.main(["--record", str(RECORD), "--per-call"], store_of=no_store) == 0
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert doc["value"] == 0.75 and doc["withdrawn"] == [] and doc["per_call"]["give_up"] == TOTAL - CREDITED
+
+
+@pytest.mark.parametrize("name", ["ANSWER", "POLICY"])
+def test_a_record_directory_missing_a_required_file_exits_2_naming_it(tmp_path, capsys, local, name):
+    record = a_record(tmp_path, **{name: None})
+    assert C.main(["--record", str(record)], store_of=no_store) == 2
+    out, err = capsys.readouterr()
+    path = getattr(C, name)
+    assert out == "" and f"compute: the record directory {record} holds no {path} ({C.REQUIRED[path]})" in err
+
+
+def test_a_record_directory_that_is_no_run_directory_exits_2_and_says_what_to_name(tmp_path, capsys, local):
+    """A run's `out/` named in place of the run's directory is refused with a hint, and a path that is no directory is
+    refused as a path, never sent to the store as a run id."""
+    assert C.main(["--record", str(RECORD / "out")], store_of=no_store) == 2
+    err = capsys.readouterr().err
+    assert f"holds no {C.ANSWER}" in err and "it is a run's out/ directory; name the directory holding it" in err
+    assert C.main(["--record", str(tmp_path / RUN)], store_of=no_store) == 2
+    assert f"compute: {tmp_path / RUN} is not a directory" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as e:
+        C.main(["--record", str(RECORD), "--from", RUN], store_of=no_store)
+    assert e.value.code == 2 and "not allowed with argument" in capsys.readouterr().err
+
+
+def test_a_record_directory_with_no_job_is_the_directorys_run_with_no_commit(tmp_path, capsys, local):
+    record = a_record(tmp_path, JOB=None)
+    assert C.main(["--record", str(record)], store_of=no_store) == 0
+    text, doc, _ = printed(capsys)
+    assert (doc["run"], doc["commit"], doc["value"]) == ("record", None, 0.75)
+    assert text[2].startswith("  record, commit unknown: Pearl+'s answer accepts")
+    dirty = a_record(tmp_path / "dirty", JOB=to("store", "conditions", "source.dirty", value=True))
+    assert C.main(["--record", str(dirty)], store_of=no_store) == 0
+    assert printed(capsys)[1]["commit"] == f"{COMMIT}-dirty"
+    assert C.main(["--record", str(a_record(tmp_path / "bad", JOB="not json"))], store_of=no_store) == 2
+    assert f"compute: the record's {C.JOB} doesn't read as the run's" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("edits, rc, why", [
+    ({"ANSWER": to("verdict", value="reject"), "LEAN": to("verdict", value="reject")}, 1,
+     "no number: Pearl+'s answer is reject, not accept (no reason recorded)"),
+    ({"LEAN": to("work", "credited", value=CREDITED + 1)}, 1,
+     f"no number: the Lean verifier's credit is {CREDITED + 1} and the answer's {CREDITED}"),
+    ({"VERIFY": to("commitment", value="c1" * 64)}, 2, "the per-call split is of another run commitment than the answer's"),
+])
+def test_a_record_directory_is_refused_as_the_store_refuses_the_same_record(store, tmp_path, capsys, edits, rc, why):
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert C.main([*argv, "--per-call"], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn")) == rc
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: {why}" in err
+
+
+def test_a_record_directory_writes_the_same_outputs_as_the_store(store, tmp_path, capsys, monkeypatch, stamped):
+    store.add(RUN, a_record(tmp_path))
+    written = {}
+    for mode, argv in (("store", ["--from", RUN]), ("dir", ["--record", str(RECORD)])):
+        out = tmp_path / mode / "out"
+        monkeypatch.setenv("OUT", str(out))
+        assert bench(store, *argv) == 0
+        written[mode] = [(out / f).read_text() for f in ("compute.json", "result.json")]
+    capsys.readouterr()
+    assert written["dir"] == written["store"]
+
+
+def of_record(argv: list[str]) -> list[str]:
+    return [*argv[:-1], "--of-record", argv[-1]]
+
+
+@pytest.mark.parametrize("edits, said, development", [
+    ({}, f"node sample, salt coins from in-process; Lean verifier run as development; {PARAMETERS}", True),
+    ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger"),
+      "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))},
+     f"challenger sample, salt coins from challenger; Lean verifier run as of record; {PARAMETERS}", True),
+    ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": None,
+      "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))},
+     ("challenger sample, salt coins: not stated in the record; Lean verifier run as of record; parameters: draws 459, "
+      "delta 1/100, development"), True),
+    ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger")},
+     f"challenger sample, salt coins from challenger; Lean verifier run as development; {PARAMETERS}", True),
+    ({"DEVELOPMENT": None},
+     f"node sample, salt coins: not stated in the record; Lean verifier run as development; {PARAMETERS}", True),
+    ({"ANSWER": lambda d: d["profile"].pop("source_from"), "LEAN_CHECK": lambda d: d.pop("argv"), "DEVELOPMENT": None},
+     ("sample source not stated in the record sample, salt coins: not stated in the record; Lean verifier run not "
+      f"stated in the record; {PARAMETERS}"), True),
+    ({"ANSWER": lambda d: (d["profile"].pop("draws"), d["profile"].pop("delta"))},
+     ("node sample, salt coins from in-process; Lean verifier run as development; parameters: draws not stated in the "
+      "record, delta not stated in the record, development"), True),
+])
+def test_the_coins_line_says_which_coins_and_parameters_the_record_states_and_never_refuses(store, tmp_path, capsys,
+                                                                                         edits, said, development):
+    """Under the number, one line names the answer's sample source, the piece's salt coins, whether the Lean verifier
+    ran as of record and the answer's draws and δ; the record's own words, each `not stated` where it holds none, and
+    `development` where the record holds PoUW's development piece or any of the three is not live: live coins and a
+    Lean verdict of record in a development piece are still development. Both ways of reading the record print it."""
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert bench(store, *argv) == 0
+        text, doc, _ = printed(capsys)
+        assert text[1] == f"  coins: {said}" and doc["value"] == 0.75
+        assert doc["coins"]["development"] is development
+
+
+def test_the_benchmarks_load_is_the_fixtures_and_the_harness_class_of_record():
+    """`load.toml` is the class the tied path serves (`served_verdicts.sh`'s V3C_CLASS default, 4,32,4) of the
+    checkpoint it serves, and the fixture's policy registers it."""
+    assert C.fixed_load() == {"model": "unsloth/Llama-3.2-1B", "revision": REVISION, "slots": 4, "prompt": 32,
+                              "outputs": 4}
+    policy = json.loads((RECORD / C.POLICY).read_text())
+    assert {**policy["serve"], **{k: policy["class"][k] for k in ("slots", "prompt", "outputs")}} == C.fixed_load()
+
+
+def test_a_development_piece_that_does_not_read_as_json_exits_2_naming_it(store, tmp_path, capsys):
+    record = a_record(tmp_path, DEVELOPMENT="not json")
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--record", str(record)]):
+        assert bench(store, *argv) == 2
+        out, err = capsys.readouterr()
+        assert out == "" and f"compute: the record's {C.DEVELOPMENT} doesn't read as JSON" in err
+
+
+def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_required_file_still_refuses(store, tmp_path,
+                                                                                                   capsys):
+    """`development.json` is optional (`OPTIONAL`): withdrawn, it is neither fetched nor read, the coins line says the
+    salt coins are not stated, and the withdrawal is printed beside the number; the number is unchanged."""
+    record = a_record(tmp_path)
+    (record / "out/pieces/pouw/coin-put.json").write_text("{}")
+    store.add(RUN, record)
+    why = f"hashes of a coin record (only out/pieces/pouw/coin-put.json, {C.DEVELOPMENT})"
+    store.withdraw(f"art:{RUN}", why)
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    said = f"{why!r}, by infra"
+    assert doc["value"] == 0.75 and doc["withdrawn"] == [said] and doc["coins"]["salt"] is None
+    assert text[1].startswith("  coins: node sample, salt coins: not stated in the record;")
+    assert text[4] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert store.fetched == [[p for p in [*C.RECORDS, C.VERIFY] if p != C.DEVELOPMENT]]
+    store.withdraw(f"art:{RUN}", f"private values were published (only {C.LEAN_CHECK}, {C.DEVELOPMENT})")
+    assert bench(store, "--from", RUN) == 2
+    assert "was withdrawn" in capsys.readouterr().err

@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, settings
+from . import carry, policy, settings, suite_layout
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -690,13 +690,18 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
         return {}
 
 
+@functools.lru_cache(maxsize=16)
+def member_dirs(repo: Path, commit: str) -> dict[str, str]:
+    """{directory: distribution} of the workspace's members at ``commit`` but the root (`suite_layout.member_dirs`)."""
+    return suite_layout.member_dirs(lambda d: suite_pyproject(repo, commit, d))
+
+
 def suite_name(repo: Path, commit: str, suite: str) -> str:
-    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`): `repository` for the root,
-    else its pyproject.toml's project name, normalized, else its path."""
-    if suite.strip("/") in ("", "."):
-        return "repository"
-    name = suite_pyproject(repo, commit, suite).get("project", {}).get("name")
-    return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
+    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`: `suite_layout.suite_name`)."""
+    path = suite.strip("/") or "."
+    if path == ".":
+        return suite_layout.ROOT_SUITE
+    return suite_layout.suite_name(path, suite_pyproject(repo, commit, path).get("project", {}), member_dirs(repo, commit))
 
 
 def lean_errors(log: str) -> set[str]:
@@ -954,6 +959,42 @@ def not_run(st: dict) -> bool:
     return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
 
 
+def failed_names(dirs: list[Path]) -> set[str]:
+    """The steps the run whose records are ``dirs`` failed, but those that found nothing (`not_run`)."""
+    return {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
+
+
+def allowed(pol: policy.Policy, now: float, key: str, d: Path, rec: dict) -> policy.Coverage:
+    """Whether an allowance of ``pol`` live at ``now`` covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
+    log's failures), with the expired ones that would have."""
+    if key.startswith("suite "):
+        return pol.suite(key.split(" ", 1)[1], rec, now)
+    if key == CIRCUIT_RED:
+        return pol.circuit(_step_log(d, rec), now)
+    return policy.Coverage(False)
+
+
+def allowed_steps(pol: policy.Policy, now: float, dirs: list[Path]) -> set[str]:
+    """The steps that failed in the run whose records are ``dirs`` only on failures ``pol``'s allowances live at ``now`` cover:
+    pytest and lean-suites when each suite of theirs that failed is covered, circuit-check when each failure its log names is;
+    none that failed uncovered in any of them."""
+    ok: set[str] = set()
+    bad: set[str] = set()
+    for d in dirs:
+        rows = suite_rows(d)
+        for st in step_records(d):
+            step = st.get("step") or ""
+            if st.get("status") != "failed" or not_run(st):
+                continue
+            if step in ("pytest", "lean-suites"):
+                failed = [(n, s) for n, s in rows.items() if s["status"] == "failed" and s["step"] == step]
+                covered = bool(failed) and all(allowed(pol, now, f"suite {n}", d, s).covered for n, s in failed)
+            else:
+                covered = allowed(pol, now, f"step {step}", d, st).covered
+            (ok if covered else bad).add(step)
+    return ok - bad
+
+
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
     checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
@@ -1153,40 +1194,18 @@ class Landing:
         return cache[commit]
 
     def _allowed(self, tip: str, key: str, d: Path, rec: dict) -> policy.Coverage:
-        """Whether an allowance of ``tip``'s policy covers failed ``key`` (`suite NAME`, or a step: circuit-check's by its
-        log's failures), with the expired ones that would have."""
-        pol, now = self._policy(tip), self.now()
-        if key.startswith("suite "):
-            return pol.suite(key.split(" ", 1)[1], rec, now)
-        if key == CIRCUIT_RED:
-            return pol.circuit(_step_log(d, rec), now)
-        return policy.Coverage(False)
+        """`allowed` under ``tip``'s policy."""
+        return allowed(self._policy(tip), self.now(), key, d, rec)
 
     def _allowed_steps(self, tip: str, dirs: list[Path]) -> set[str]:
-        """The steps that failed in the run whose records are ``dirs`` only on failures ``tip``'s allowances cover: pytest and
-        lean-suites when each suite of theirs that failed is covered, circuit-check when each failure its log names is; none
-        that failed uncovered in any of them."""
-        ok: set[str] = set()
-        bad: set[str] = set()
-        for d in dirs:
-            rows = suite_rows(d)
-            for st in step_records(d):
-                step = st.get("step") or ""
-                if st.get("status") != "failed" or not_run(st):
-                    continue
-                if step in ("pytest", "lean-suites"):
-                    failed = [(n, s) for n, s in rows.items() if s["status"] == "failed" and s["step"] == step]
-                    covered = bool(failed) and all(self._allowed(tip, f"suite {n}", d, s).covered for n, s in failed)
-                else:
-                    covered = self._allowed(tip, f"step {step}", d, st).covered
-                (ok if covered else bad).add(step)
-        return ok - bad
+        """`allowed_steps` under ``tip``'s policy."""
+        return allowed_steps(self._policy(tip), self.now(), dirs)
 
     def _only_allowed(self, run: dict, at: str | None = None) -> bool:
         """Whether ``run`` failed only on failures its tip's allowances (``at``'s, given) cover: some step failed, and each
         failed step is `_allowed_steps`'."""
         dirs = [d for ds in self._shards(run) for d in ds]
-        failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
+        failed = failed_names(dirs)
         return bool(failed) and failed <= self._allowed_steps(at or run["tip"], dirs)
 
     def _lost(self, run: dict, states: dict) -> bool:

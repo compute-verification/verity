@@ -1,4 +1,4 @@
-"""The harness kit: the four calls benchmarks' runners share, each written once.
+"""The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
@@ -10,6 +10,10 @@
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
+- `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
+  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
+  writes its number.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
@@ -38,7 +42,8 @@ where the value stands against its target (``"within target"``). **A validation 
 protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
 whole guard, and its `detail` says in the gates' own words what passed or failed.
 
-Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
+Standard library and `verity_bench.settings` only (`record_dir` imports research's store client only for a run id), so a
+kernel's runner imports it without vLLM or torch.
 """
 
 from __future__ import annotations
@@ -503,3 +508,11 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
     return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)
+
+
+# the core benchmarks' interface, written in kit_report and called as the kit's
+from verity_bench import kit_report  # noqa: E402
+
+COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
+NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
+record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report
