@@ -58,12 +58,15 @@ import all Init.WF
 `θ₀` is canonical and decodes to one component whose parameters `paramsOfJson` reads at the one-stage form (`params_spec`):
 the verifier's partition object and program are `partitionObj` and `programFile`, its program, query, law and work table
 the session's, and its challenger the deployed key at `label₀`. The digests it names are the circuit and public files'
-(`digests`). Every step rewrites by `Flock.canon`'s equation lemmas and the JSON facts (`JsonCanon.JsonFacts`), taken as
-a hypothesis here; nothing is decided over a hash.
+(`digests`). Every step rewrites by `Flock.canon`'s equation lemmas and the JSON facts (`JsonCanon.JsonFacts`), which
+`params_full` discharges by `JsonCanon.jsonFacts` (the canonical-JSON reader's deliverable); nothing is decided over a
+hash.
 
-`programJ` nests the served unit's definitions many levels deep. That it is plain (`ProgramPlain`) is a concrete-JSON
-fact of this instance that no tactic here shows robustly, so this piece takes it as a hypothesis; its full `plain_mkObj`
-decomposition over the descriptor's definitions is deferred.
+Two facts about `programJ` remain this piece's hypotheses, as `ProgramPlain` and `NormFacts`: that it is plain, and that
+the parser rebuilds its exact tree (`jnorm programJ = programJ`). Both are concrete-JSON facts of this instance that no
+tactic here shows robustly; their `plain_mkObj`/`norm_mkObj_fix` decomposition over the descriptor's deeply nested,
+partly non-ascending `definitions` is deferred. The composite's and the component's own norm and plainness facts are
+discharged below from these two (`normFacts_derive`, `plain_θJ`, `plain_paramsJ`).
 -/
 
 @[expose] public section
@@ -608,12 +611,13 @@ private theorem normFacts_derive (hN : NormFacts) : jnorm θJ = θJ ∧ jnorm pa
 
 set_option maxHeartbeats 4000000 in
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
-private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
+private theorem params_full (hpp : ProgramPlain) (hN : NormFacts) :
     ∃ p : Spot.OneStageZk.Params,
     ParamsAt θ₀ p ∧ p.own.partition = partitionObj ∧ p.own.program = programFile ∧
     p.own.circuit = hexOf circuitSha ∧ p.own.pub = hexOf (Sha512.hash publicFile) ∧
     p.base.verifier.program = program ∧ p.base.verifier.query = query ∧ p.base.verifier.law = law ∧
     p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) := by
+  have hJ := JsonCanon.jsonFacts
   have hA := canon_θ₀ hJ hpp
   have hC := canon_params hJ hpp
   -- Annotate `hE`'s type so `fwd_walk`'s `ruleAt` sees a concrete `Eq` (its inferred type otherwise carries the `Except`
@@ -707,17 +711,17 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
       { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, by rfl, hwalk⟩,
       hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩
 
-theorem params_spec (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) : ∃ p, ParamsAt θ₀ p ∧
+theorem params_spec (hpp : ProgramPlain) (hN : NormFacts) : ∃ p, ParamsAt θ₀ p ∧
     p.own.partition = partitionObj ∧ p.own.program = programFile ∧ p.base.verifier.program = program ∧
     p.base.verifier.query = query ∧ p.base.verifier.law = law ∧ p.base.verifier.workTable = none ∧
     p.base.challenger = some (key₀, label₀) := by
-  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full hJ hpp hN
+  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full hpp hN
   exact ⟨p, hpat, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩
 
-theorem digests (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
+theorem digests (hpp : ProgramPlain) (hN : NormFacts) :
     programDigestOf θ₀ = some (Verity.sha512 circuitFile.data.toList) ∧
       publicDigestOf θ₀ = some (Verity.sha512 publicFile.data.toList) := by
-  obtain ⟨p, hpat, _, _, hc, hpub, _⟩ := params_full hJ hpp hN
+  obtain ⟨p, hpat, _, _, hc, hpub, _⟩ := params_full hpp hN
   refine ⟨?_, ?_⟩
   · rw [programDigestOf, paramsOf_eq hpat, Option.bind_some, hc]
     simp only [digestOf, Flock.Hex.unhex_hexOf, circuitSha]
