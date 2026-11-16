@@ -1089,7 +1089,8 @@
         "Mark circuits/masked-keyblock done; it landed in #10439.",
         "Move proofs/spot-figures to Tue 17 Nov; the figures wait on a rerun.",
         "Add a subgoal under proofs/zero-knowledge for the ZK server's live path, owned by proofs."
-      ]
+      ],
+      "usergroup": "S0CJ87B2CBW"
     }
   ]
 }
