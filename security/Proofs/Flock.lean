@@ -110,6 +110,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Decode
 public import Proofs.Flock.SpotFlock.InstanceStmt.Inputs
 public import Proofs.Flock.SpotFlock.InstanceStmt.Round2
 public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
+public import Proofs.Flock.SpotFlock.InstanceStmt.ScopeZk
 public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 public import Proofs.Flock.SpotFlock.InstanceStmt.Setup
 public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
