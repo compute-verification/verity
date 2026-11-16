@@ -21,9 +21,8 @@ first gate with its refusals (`gate0.txt`), `sass/`, each chunk's `gate.json`, `
 `chunks/`, every chunk's rows in `rows.jsonl`, and `loads.jsonl` and `summary.txt`. The `loads.py` commands after it
 read any runs' `rows.jsonl` on a CPU. The tests are `../../../tests/benchmarks/pouw/test_facet_break.py`.
 
-`loads.py` is the one module other code imports: `generate.py`, `../sass_census/diff_menu.py` (a SASS
-opcode's census class, `class_of`), the census-cover fixtures' generator and the tests, which import `generate.py`
-too. Its `__all__` lists what they read.
+`loads.py` is the one module other code imports: `generate.py`, the census-cover fixtures' generator and the tests,
+which import `generate.py` too. Its `__all__` lists what they read.
 It reads the ACCEL model and never writes it: a refit or a refitted family is printed, as the lines to add by
 hand under `--emit`. No Python here starts a process or touches a GPU; `run.sh` does.
 

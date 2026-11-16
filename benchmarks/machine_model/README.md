@@ -515,11 +515,8 @@ hole has no severity.
 
 The evidence a row's source cites, each a `research run` with its verdict line:
 
-- `../pouw/sass_census/lowering.sh` (`--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and checks the
-  SASS it lowers to or that ptxas refuses it (`verdict: N/N cases lower as expected`).
 - On one leased RTX PRO 6000, through `../pouw/opcode_probe/run.sh`: `../pouw/opcode_probe/probes/match.cu` (MATCH.ANY by class
   count and .U64, beside LOP3 and FFMA) and `collective.cu` (REDUX and VOTE beside LOP3, REDUX beside MATCH.ANY), whose
   verdict is `../pouw/opcode_probe/collective_verdict.py`; both build for sm_90a too (`../pouw/dc/emp.sh build`, then `emp.sh
   time` on the H200). `pipes.cu` times each lane opcode beside its pipe's partner (LOP3, MUFU.EX2 or DFMA), and
   `pipes_verdict.py` holds each to the pipe's ρ.
-- `../pouw/sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.

@@ -131,8 +131,8 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
 
 The directory is no Python package, so a caller loads a module by its path.
 
-- `probe.cuh` is what a probe source includes, here and in `../dc/probes/`, `../facet_break/` and `../sass_census/`.
-- `probe.py` is the launcher their scripts start (`../dc/`'s, `../facet_break/run.sh`, `../sass_census/rates.sh`). A GPU
+- `probe.cuh` is what a probe source includes, here and in `../dc/probes/` and `../facet_break/`.
+- `probe.py` is the launcher their scripts start (`../dc/`'s and `../facet_break/run.sh`). A GPU
   machine's own `python3` runs it, so it and `rows.py` read nothing outside the standard library, this directory and
   `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`'s gate.
 - `rows.py` is the census line, and `eps1.py` gives the frontier's points and facets to `sm89/census.py`,
