@@ -13,13 +13,13 @@
 #   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
 #      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
 #   4. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
-#      fixed load, DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
+#      fixed load, a sample of DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   5. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
 #      written only where it is the Python's;
 #   6. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
 #      (`benchmarks/one_stage/inference_only.py policy`), which names the class and the model `run.py` counts MACs at;
 #   7. circuit: the class's circuit record cut at Pearl+'s linears (`prove_path.py class-circuit`), into out/record/.
-#   8. verdicts: record/verdicts.json, PoUW's row: `missing`, as the window's compose (which composes it of record)
+#   8. verdicts: record/verdicts.json, PoUW's verdict: `missing`, as the window's compose (which composes it of record)
 #      isn't run here, so the credit is the Pearl+ piece's alone;
 #   9. publish and piece, after the verdicts: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in
 #      no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
@@ -30,7 +30,7 @@
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
 # and the sample a withheld sample session's on the run's commitment, so the Lean verdict is taken of record. `in-process`:
-# the salt coin the in-process challenger's and the sample the node's own draw (`verify_run.node_draw`), the Lean's verdict
+# the salt coin the in-process challenger's and the sample the node's own (`verify_run.node_draw`), the Lean's verdict
 # a development one. Both are development parameters, which $OUT/compute-run.json and the COINS line say.
 # Writes under OUT, RUN_DIR/out: pieces/pouw/pearlplus-answer.json,
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
@@ -154,7 +154,7 @@ if mode == "local":
 else:
     held = {"challenger": "in-process", "salt_coin_from": "in-process challenger",
             "sample_coin": "node draw (verify_run.node_draw)", "lean": "development (no --of-record)"}
-    line = "in-process challenger (salt) and the node's draw (sample)"
+    line = "in-process challenger (salt) and the node itself (sample)"
 # the salt coin as the piece states it (development.json's coin_source), null until the piece is written
 held["salt_coin"] = json.load(open(piece)).get("coin_source") if os.path.exists(piece) else None
 steps = {}
@@ -168,7 +168,8 @@ doc = {"schema": "verity-bench/compute-run/v1", **held, "development": True, "dr
        "over_cap": "uncredited", "class": cls, "scheme": scheme, "model": repo, "revision": rev, "commit": commit,
        "steps": steps, "seconds": sum(v["seconds"] for v in steps.values())}
 open(out, "w").write(json.dumps(doc, indent=1) + "\n")
-print(f"COINS {line}; parameters: development ({draws} draws at delta {delta}, over-cap uncredited, {scheme}, class "
+print(f"COINS {line}; parameters: development (sample size {draws} at delta {delta}, tiles over the inert-work bound "
+      f"uncredited, {scheme}, class "
       f"{cls}), {repo}@{rev[:10]}, commit {commit[:12]}")
 EOF
 }
@@ -182,14 +183,14 @@ gate_down() {
   [ -s "$P/coin.json" ] && cp "$P/coin.json" "$PIECE/coin.json"
   return 0
 }
-verdicts() {  # PoUW's row as run.py reads it: missing, the window's compose not run here
+verdicts() {  # PoUW's verdict as run.py reads it: missing, the window's compose not run here
   "$PY" - "$REC/verdicts.json" "$PIECE/pearlplus-answer.json" "$OUT/compute-run.json" <<'EOF'
 import json, os, sys
 out, answer, run = sys.argv[1:4]
 a = json.load(open(answer)) if os.path.exists(answer) else {}
 row = {"verdict": "missing", "owner": "compute-accounting",
-       "why": "PoUW's row of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's alone "
-              f"(its verdict {a.get('verdict')}, development coins and parameters)"}
+       "why": "PoUW's verdict of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's "
+              f"alone (its verdict {a.get('verdict')}, development coins and parameters)"}
 doc = {"format": "verity-bench/compute-verdicts/v1", "development": True, "run": json.load(open(run)),
        "protocols": {"work": row}}
 open(out, "w").write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
