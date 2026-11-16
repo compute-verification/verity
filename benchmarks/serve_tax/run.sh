@@ -102,8 +102,8 @@
 # rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
 # that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
 # counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
-# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
-# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b,
+# qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
 # pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
@@ -165,8 +165,8 @@ case $MODEL_ID in
     REV=aca966e4e02791568aa6a4ced368624b3d897f42
     if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
-  llama8b|qwen3-30b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
-  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b or qwen3-30b, not $MODEL_ID"; exit 2 ;;
+  llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
+  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
 # nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
 # /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
