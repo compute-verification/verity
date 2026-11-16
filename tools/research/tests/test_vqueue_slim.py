@@ -1462,7 +1462,7 @@ ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth
 def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_by_its_machine():
     """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
     directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
-    row = _row("verity/protocols/accounting/certifier/verifier", "verity/protocols/accounting/certifier/verifier",
+    row = _row("verity/protocols/resource_accounting/network/verifier", "verity/protocols/resource_accounting/network/verifier",
                "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
@@ -1706,7 +1706,7 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
     `include_str`, as pouw's `check/models.json`, a script, the vectors its tests read, and those of a package nested in it.
     Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
     above the package or in a directory named like it."""
-    pouw, rand, pous = ("verity/protocols/accounting/pouw/verifier/lean/check", "verity/commitments/randomness",
+    pouw, rand, pous = ("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "tools/pous_grader")
     lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
             f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
@@ -1714,8 +1714,8 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
             f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
     other = [f"{pouw}/README.md", f"{pouw}/tests/test_pouw_check.py", f"{pouw}/tests/conftest.py", f"{pouw}/pyproject.toml",
              f"{pouw}/.gitignore", f"{pouw}/inner/README.md", f"{rand}/tests/test_vectors.py", f"{pous}/DESIGN.md",
-             "verity/protocols/README.md", "verity/protocols/accounting/pouw/models.json", "verity/commitments/randomness2/x.py",
-             "verity/protocols/accounting/pous/leaner/x.json", "a.txt"]
+             "verity/protocols/README.md", "verity/protocols/resource_accounting/compute/pouw/models.json", "verity/commitments/randomness2/x.py",
+             "verity/protocols/resource_accounting/memory/pous/leaner/x.json", "a.txt"]
     assert _lean([*lean, *other], [*lean, *other]) == lean
     assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
 
@@ -1736,7 +1736,7 @@ def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
     """The audit's declaration says of a path what it says of a file there, and the tree a change leaves no longer lists a
     file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
     a deleted README of it still isn't."""
-    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
+    pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
     left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
     gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
     assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]

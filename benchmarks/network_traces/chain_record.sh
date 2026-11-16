@@ -153,9 +153,9 @@ mkdir -p "$OUT/gates"
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
-(cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records) \
+(cd verity/protocols/resource_accounting/network/verifier/lean && lake build network-records) \
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-records
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 "$PY" "$CR" certs --warden-run "$NETWORK_CERTIFIER" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" \
   --witness "$Q/witness/certs/certs.json" 2>&1 \

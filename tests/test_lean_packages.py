@@ -331,7 +331,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/accounting/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -565,7 +565,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -593,12 +593,12 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
-    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
         "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
         "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/accounting/pouw/verifier/lean/check": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:

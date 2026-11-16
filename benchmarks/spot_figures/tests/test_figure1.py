@@ -10,7 +10,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")

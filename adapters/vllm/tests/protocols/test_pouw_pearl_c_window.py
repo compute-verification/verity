@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     activation_binding,
@@ -30,9 +30,9 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity_vllm.program.predict.window_class import PearlTables
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"

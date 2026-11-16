@@ -180,7 +180,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -210,7 +210,7 @@ LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap",
 LEAN_CHECK = "pearlplus-lean-check.json"
 #: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
 BUILD = "build"
-LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
+LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
 LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 #: why the step refuses where the two verdicts disagree
@@ -277,8 +277,8 @@ def seed_install(pouw: dict) -> None:
     """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, and the hm96 salt key the
     install's commitment of the fixed operands takes (`pearl_c.new_salt_key`, which the vLLM option binds by name as
     ``pearl_c_salt_key``) a `seeded` one, in this process."""
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from verity_vllm.protocols import pouw as PO
 
     pouw["coins"] = Challenger(0, seeded("coins"))
@@ -316,7 +316,7 @@ def serve(args: argparse.Namespace) -> int:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
     from verity_vllm import LLM
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
@@ -569,7 +569,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     if args.window_record:
         from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
             before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None

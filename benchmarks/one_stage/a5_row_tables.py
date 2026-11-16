@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 import a5  # noqa: E402
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
