@@ -228,7 +228,11 @@
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
 # live, since both open on the window's run root: step 3 is then a development check. With V3c off (V3C_CLASS empty) step
-# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
+# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. Step 3's
+# SAMPLED-PROOFS line says whose coins they were, the gate's or a development session's, and the audit's coin_trees; on
+# the gate's coins, an audit whose summary says its sessions took their coin trees from anywhere but the session that
+# sampled them (coin_trees other than window, `served_verdicts.py coin-trees`), which the auditor's Lean verifier refuses,
+# stops the run there (`sampled_coins`, exit 20; `served_verdicts.sh sampled-coins` runs that check alone on D). A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
 # research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
@@ -670,6 +674,13 @@ v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   else
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
+}
+sampled_coins() {  # step 3's audit on the gate's coins took its sessions' coin trees from the session that sampled them
+  # (`served_verdicts.py coin-trees`), else 20 with the reason; a development session's coins pass as before
+  local why
+  why=$("$PY" "$SV" coin-trees --challenger "$SP_CHALLENGER" --summary "$D/sampled-proofs-served/summary.json" 2>&1) && return 0
+  say "SAMPLED-PROOFS refused: $(tail -1 <<< "$why" | cut -c1-1200)"
+  return 20
 }
 v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
   local g=(ssh -o BatchMode=yes)
@@ -1709,6 +1720,7 @@ if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone
 if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
 if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
+if [ "${1:-}" = sampled-coins ]; then sampled_coins; exit $?; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = pous-pins ]; then pous_pins_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
@@ -2221,8 +2233,9 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "$PP_PARTITION" 2>&1 | cut -c1-3000)$(
+  --partition "$PP_PARTITION" --challenger "$SP_CHALLENGER" --summary "$SP/summary.json" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
+sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
