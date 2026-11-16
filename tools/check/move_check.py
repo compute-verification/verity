@@ -1,5 +1,5 @@
-"""`move-check`: certify that BASE..HEAD is a pure move: drive's queue lands a layout move it regenerated on `next` only once this
-certifies it. It relaxes no gate: a certified move still goes through `check`.
+"""`move-check`: certify that BASE..HEAD is a pure move: the verified queue lands a move's PR only once this certifies
+its rerun of the move's map. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--words MAP] [--json]
 

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from conftest import BOT, CHAT, LUKE, SIGNING, T0
 from slack_events import app as app_mod
-from slack_events.deps import DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC
+from slack_events.deps import DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, SLACK_HEARD, TOPIC
 
 
 def client(world) -> TestClient:
@@ -35,17 +35,44 @@ def callback(eid: str = "Ev1", **ev) -> dict:
             "event": {"type": "message", "channel": CHAT, "user": LUKE, "ts": f"{int(T0)}.000100", "text": "hello", **ev}}
 
 
-def test_a_signed_event_is_published_keyed_on_its_event_id_and_answered_200(world):
+def test_a_signed_message_is_published_keyed_on_its_channel_and_ts_and_answered_200(world):
+    """Reconciliation keys a post it finds the same way (`message_key`), so the one that comes second is dropped; an event
+    that is no message keeps Slack's id."""
     r = post_event(client(world), world, callback())
     assert r.status_code == 200 and r.json() == {"ok": True}
     [(topic, payload, key)] = world.deps.queue.sent
-    assert (topic, key) == (TOPIC, "Ev1") and payload["kind"] == "event" and payload["event"]["channel"] == CHAT
+    assert (topic, key) == (TOPIC, f"message:{CHAT}:{int(T0)}.000100") and payload["event_id"] == "Ev1"
+    assert payload["kind"] == "event" and payload["event"]["channel"] == CHAT
     assert world.deps.cache.get(LAST_ENQUEUED) == T0                         # the watchdog's stall check reads it
+    joined = {"type": "event_callback", "event_id": "Ev2", "event": {"type": "team_join", "user": {"id": LUKE}}}
+    assert post_event(client(world), world, joined).status_code == 200 and world.deps.queue.sent[-1][2] == "Ev2"
 
 
 def test_url_verification_answers_the_challenge_and_publishes_nothing(world):
     r = post_event(client(world), world, {"type": "url_verification", "challenge": "abc123"})
     assert r.status_code == 200 and r.text == "abc123" and world.deps.queue.sent == []
+
+
+def test_every_signed_request_stamps_slack_heard_at_ignored_ones_too_and_a_refused_one_never(world):
+    """Reconciliation's silence check reads it: any signed request proves Slack still calls, whatever the service does next."""
+    c = client(world)
+    assert post_event(c, world, callback(), secret="dummy-other-secret").status_code == 401
+    assert world.deps.cache.get(SLACK_HEARD) is None
+    for data in ({"type": "url_verification", "challenge": "abc"}, callback(bot_id=BOT, username="circuits", user=None),
+                 {"type": "app_rate_limited"}):
+        world.clock.t += 60
+        assert post_event(c, world, data).status_code == 200 and world.deps.cache.get(SLACK_HEARD) == world.clock()
+    assert world.deps.queue.sent == []
+
+
+def test_slacks_event_and_reconciliations_find_of_one_post_enqueue_it_once(world):
+    from slack_events import crons
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    world.clock.t += crons.SETTLE_S + 1
+    assert crons.reconcile(world.deps)["queued"] == 1
+    data = {"type": "event_callback", "event_id": "EvLate", "event": {"type": "message", "channel": CHAT, **post}}
+    assert post_event(client(world), world, data).status_code == 200
+    assert [k for _, _, k in world.deps.queue.sent] == [f"message:{CHAT}:{post['ts']}"]
 
 
 @pytest.mark.parametrize("case,why", [("bad", "bad signature"), ("stale", "stale"), ("future", "stale"),
@@ -126,9 +153,10 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
     cache.set(LAST_SUCCESS, T0 - 2)
     cache.set(LAST_DONE, T0 - 600)
     cache.set(LAST_ENQUEUED, T0 - 60)
+    cache.set(SLACK_HEARD, T0 - 7)
     assert health(c) == {"notes_token_source": "env", "notes_token_why": "no OIDC identity", "oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
                          "last_success_at": T0 - 2, "last_done_at": T0 - 600, "last_enqueued_at": T0 - 60,
-                         "canary_sent_at": None, "canary_done_at": None,
+                         "canary_sent_at": None, "canary_done_at": None, "slack_heard_at": T0 - 7,
                          "queue": "slack-events", "dead_letter": "slack-events-dead"}
     cache.set(OLDEST, {"ts": None, "at": T0})
     assert health(c)["oldest_unprocessed_age_s"] == 0.0
@@ -182,7 +210,7 @@ def test_the_identity_the_service_passes_in_reaches_the_broker_without_the_envir
 def test_a_cold_or_unreachable_cache_reads_as_unknown_not_as_down(world):
     unknown = {"notes_token_source": "env", "notes_token_why": "no OIDC identity", "oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
                "last_success_at": None, "last_done_at": None, "last_enqueued_at": None, "canary_sent_at": None,
-               "canary_done_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
+               "canary_done_at": None, "slack_heard_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
     assert health(client(world)) == unknown
     world.deps.cache.set(LAST_SUCCESS, T0)
     world.deps.cache.fail = True

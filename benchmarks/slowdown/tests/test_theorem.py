@@ -94,7 +94,7 @@ def test_the_padded_size_ratio_is_the_unregistered_leaves_plus_the_monitored_wei
 
 
 def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_1():
-    """Under a bound the unregistered leaves train like the reference and the monitored share converts at `a`
+    """Under a bound the unregistered leaves train like the reference and the registered share converts at `a`
     (`multiple_bound`): 1 under reference efficiency, so the slowdown is the padded size ratio; `1/MFU₀` without it.
     A construction's padded circuit already holds the capacity it leaves idle, so its slowdown is `MFU₀` times its
     padded size ratio. `rates` splits `1 / slowdown` before the floor."""

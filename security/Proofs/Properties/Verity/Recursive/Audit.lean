@@ -73,7 +73,7 @@ open scoped ENNReal
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 open RecDeploy
-open Accounting (Device)
+open ResourceAccounting (Device)
 
 /-- **The deployment `RecursiveKS` is stated at**: the deployed weights `DeployedR.wER` and `DeployedR.wR`, with the
 brings `b`, the challenger's live-coin part's record (`aux`, `nOf`, `hd`, `recRest`) and the decoders `decI` and `decO`. -/

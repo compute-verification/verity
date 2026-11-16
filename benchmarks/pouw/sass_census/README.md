@@ -40,7 +40,8 @@ python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]            
 
 - `sass_count.py` is stdlib only, so it runs on a node's own Python beside the toolkit.
 - `diff_menu.py` buckets every opcode of the census and of NVIDIA's instruction-set table for the architecture
-  (`../../machine_model/data/cover/sass_isa_tables.json`): priced on a lane, tensor or side route, a mover, harmless, or a
+  (`../../machine_model/data/cover/sass_isa_tables.json`, a fetched fixture:
+  `uv run research data fetch-fixtures benchmarks/machine_model/data/cover`): priced on a lane, tensor or side route, a mover, harmless, or a
   gap (a tensor form with no rate, a product on no route, a paired multiply counted as one, a word the model prices at
   nothing), and flags where its own table and the model's classifier (`../facet_break/loads.py`'s `class_of`) disagree.
   Its module docstring defines each bucket.

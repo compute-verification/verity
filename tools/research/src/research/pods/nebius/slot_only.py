@@ -4,7 +4,7 @@ exists (deploy.toml installs it on vy-nebius-cpu-1), stop every live `research r
 (`through_slot`).
 
 With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
-run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
+run's processes to N, so the candidates' checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
 With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the

@@ -37,11 +37,11 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
 
 /-!
-# The network certifier's per-period guarantee, pooled over a monitoring period of sampled audits (proof)
+# The network attester's per-period guarantee, pooled over a monitoring period of sampled audits (proof)
 
-`Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted`: `comm_of_pooledLeak` at `PooledLeakAccepted`'s proof
+`ResourceAccounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted`: `comm_of_pooledLeak` at `PooledLeakAccepted`'s proof
 (`NetTiming.pooledLeak`, which `NetTiming.SecurityProofs.PooledLeakAccepted` is). On a run that realizes the network
-certifier's monitoring period of `m` sampled audits (`Accounting.JointBridge.RealizesCommOfPooledLeakAccepted`), under
+attester's monitoring period of `m` sampled audits (`ResourceAccounting.JointBridge.RealizesCommOfPooledLeakAccepted`), under
 the two inputs `hesc` and `hleak`, the network audit's `Sound` holds at `e^(−q·Fmax) + Σ e + Σ e'`.
 
 At a value `ξ` of the other audits' coins, the network audit's own coins are the execution phases' coins (`coins`), so
@@ -53,15 +53,15 @@ the bound is on the period's coins and no secret enters it. Its `δ` is taken at
 `PooledLeakAccepted` is taken as it is stated, so the proof also supplies what only its count reads, none of which the
 realization holds: each execution phase's number of proof blocks (one past the largest index in its incorrect sets),
 the bits a proof block commits (the most over those), the schedules (the run's, at the phases' coins) and the most
-cells each gives a connection. The network certifier's trust (`trusted-device`) and its record format holding the run's
+cells each gives a connection. The network attester's trust (`trusted-device`) and its record format holding the run's
 schedules are the realization's `trusted` and `fits`.
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge
+open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge
 
 /-- `Guarantees.Bridge.CommOfPooledLeakAccepted` from `PooledLeakAccepted`. -/
 theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
@@ -119,9 +119,9 @@ theorem comm_of_pooledLeak (hsrc : NetTiming.Guarantees.PooledLeakAccepted) {ι 
   rw [Equiv.symm_apply_apply] at hc
   exact hc
 
-/-- **The network certifier's per-period guarantee, pooled**, at `PooledLeakAccepted`'s proof. -/
+/-- **The network attester's per-period guarantee, pooled**, at `PooledLeakAccepted`'s proof. -/
 theorem CommOfPooledLeakAccepted : Guarantees.Bridge.CommOfPooledLeakAccepted := by
   intro ι d α _ C I Ω _ _ r c p L Kₒ S lay k reg Dj m Fmax R e e' he q hq0 hq1 hesc hleak
   exact comm_of_pooledLeak NetTiming.pooledLeak c p R e e' he q hq0 hq1 hesc hleak
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

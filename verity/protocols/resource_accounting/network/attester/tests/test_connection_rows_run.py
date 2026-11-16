@@ -26,7 +26,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
-from verity.protocols.resource_accounting.network.verifier.network_attester import REFUSED, Released, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import REFUSED, Released, NetworkAttesterParams
 
 from verity.protocols.resource_accounting.network.attester.tests.relay_runs import _run, ws
 from verity.protocols.resource_accounting.network.attester import connection_rows_run, runner_parts as rp
@@ -36,7 +36,7 @@ from verity.protocols.resource_accounting.network.verifier import (connection_ro
 
 crr = connection_rows_run
 #: a schedule with lengths rows and three classes, two of one size: 16 buckets an execution phase, a slot stride of 2
-PLAIN = NetworkCertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=6, window=16, ingress_cells=4,
+PLAIN = NetworkAttesterParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=6, window=16, ingress_cells=4,
                      ingress_buckets=3, egress_cells=9, every=2)
 CLASSES = ((4, 4, 2), (128, 8, 3), (128, 8, 1))
 ROWS = dataclasses.replace(PLAIN, lengths=1, content=CLASSES)
@@ -59,7 +59,7 @@ PROMPTS = ((1,), (2, 3, 4, 5, 6), (7,), (8, 9), (10,), (11, 12, 13))
 ANSWERS = ((11, 22, 33), tuple(range(8)), (), (7,), (5, 6), (9,))
 
 
-def schedule_of(argv: list[str]) -> NetworkCertifierParams:
+def schedule_of(argv: list[str]) -> NetworkAttesterParams:
     args = ws.parser().parse_args(argv)
     return rp.schedule(ws._params(args), args)
 
@@ -161,7 +161,7 @@ def test_a_hand_is_queued_a_slot_stride_an_item_and_kept_whole():
     assert kept == [(4, ((),) * 8), (5, None), (3, strides)] and keeper.open == {}
 
 
-def served(out, key, *, windows: int = 4, process: bool = False, params: NetworkCertifierParams = ROWS, prompts=PROMPTS,
+def served(out, key, *, windows: int = 4, process: bool = False, params: NetworkAttesterParams = ROWS, prompts=PROMPTS,
            answers=ANSWERS, **kw):
     """A run of `params` with `prompts`' requests, each answered with its `answers`; `kw` is `_run`'s."""
     B = params.cell_bytes

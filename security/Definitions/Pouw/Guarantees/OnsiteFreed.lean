@@ -13,7 +13,7 @@ composes:
 
 * the remote form's floor (`RemoteWorkFloor`): an accepted period of a prover whose whole inventory is the registered
   devices spent at least `F` of priced timed work on them, but with probability `κ`;
-* the network certifier's count (`CertifierSeesImports`): its signed counts take in every bit the period's programs
+* the network attester's count (`CertifierSeesImports`): its signed counts take in every bit the period's programs
   exchange with machines outside the registered devices, and its check refuses counts past `K` (`CountedWithin`);
 * the price of an exchanged bit over the period's programs together (`OutsourceWithinEgressPeriod`):
   every prover has an exchange-free one with the same transcript that costs at most `β` a bit more;
@@ -39,7 +39,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 any round protocol, and the only ones the Lean defines are Dither's no-fold round's, so it doesn't cover Dither v3.2's
 proof block, which no guarantee states yet. In every accelerator model `G` at its
 device premises (G1, G2, P1, P2), for every round protocol `P` over a period of `k` sampling blocks, every work check
-`vw` on the transcript (the proof system's, which reads no device), every network certifier's check `vn` on the
+`vw` on the transcript (the proof system's, which reads no device), every network attester's check `vn` on the
 transcript and the devices' readings `dev`, with its signed counts `cin`, `cout` of the bits into and out of the
 devices, every period `Pd` of the registered devices and every price `μ` that is the period's dual price at one credit
 (`Period.DualOpt μ 1`), with `C = μ · hon > 0` the credited work's honest cost there and `β ≥ 0`: if
@@ -64,7 +64,7 @@ Open (stated so the red team can aim at them):
   `Properties.Pouw.Served.ServedFreed` composes `ServedWork` itself;
 * `CertifierSeesImports` counts bits (`Prover.ext`) surely, while the certifier's guarantee
   (`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out (at most `2^K`
-  values) in Accounting's device vocabulary, but with the period's error `n (δ + ε_ks + ε_bind + ε_tap)`: the step
+  values) in ResourceAccounting's device vocabulary, but with the period's error `n (δ + ε_ks + ε_bind + ε_tap)`: the step
   from one to the other is open;
 * `OutsourceWithinEgressPeriod` is claimed where the coins stay in the certifier's boundary (`CoinsConfidential`);
   for the MVP that is placement (`WitnessPathPrivate`), whose discharge is the secure-transport workstream's. -/
