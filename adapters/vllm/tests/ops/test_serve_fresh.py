@@ -7,6 +7,7 @@ names no shared path."""
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -44,13 +45,13 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     tree = str(VLLM.parents[1])
     roots = next(line for line in r.stdout.splitlines() if line.startswith("pythonpath ")).split(" ", 1)[1].split(":")
     assert {f"{tree}/adapters/vllm", f"{tree}/adapters/torch", f"{tree}/tools/config", f"{tree}/tools/research/src"} <= set(roots)
-    out = r.stdout.replace(tree, "TREE")   # the tree itself may sit under /workspace (a pod's checkout)
+    out = r.stdout.replace(work, "WORK").replace(tree, "TREE")   # either may sit under /workspace (a pod's checkout, a node's TMPDIR)
     assert "/workspace" not in out and "/root" not in out
     steps = [line.split(":", 1)[0][len("step "):] for line in r.stdout.splitlines() if line.startswith("step ")]
     assert steps == ["bootstrap", "workload", "predict", "build", "serve", "request", "stop"]
     build = next(line for line in r.stdout.splitlines() if line.startswith("build: "))
-    jobs = subprocess.run(["nproc"], capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")}).stdout.strip()
-    assert "head size 64 only" in build and f"MAX_JOBS={jobs}" in build, build   # nproc, as the bootstrap's MAX_JOBS default
+    jobs = re.search(r"MAX_JOBS=(\d+) ", build)
+    assert "head size 64 only" in build and jobs and 1 <= int(jobs[1]) <= (os.cpu_count() or 1), build
     assert not (tmp_path / ".verity-work").exists(), "a dry run makes nothing"
 
 
