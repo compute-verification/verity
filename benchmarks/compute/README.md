@@ -220,11 +220,12 @@ It needs:
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
   `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`
-  (from the clone's root: `cd adapters/vllm && bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`). The
-  bootstrap works only where `/workspace` is writable, whatever `WORK` says: it checks the checkpoint at the
-  manifest's `/workspace/hf` path, and builds flash-attention's taps into `/workspace/cp` and loads them in its own
-  check (serve.sh's serve loads none of them). It also deletes root's uv and pip caches (`/root/.cache/uv` and
-  `/root/.cache/pip`). Neither the time it takes nor the disk the environment fills has been measured;
+  It puts everything under the directory `WORK` names, `/workspace` unless set: the venv, the checkpoint,
+  flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
+  made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
+  clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
+  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. Neither the time it takes
+  nor the disk the environment fills has been measured;
 - this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import): `research run`
   puts it on `PYTHONPATH`; a bare `bash benchmarks/compute/serve.sh` needs it there where `benchmarks/harness/env.sh`
   doesn't put it (`export PYTHONPATH=$PWD/adapters/torch:$PYTHONPATH`); serve.sh checks it before any step;
