@@ -80,7 +80,6 @@ public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
-public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut

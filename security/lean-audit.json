@@ -2954,12 +2954,6 @@
    "issue": "TRN-167",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.CoversEfficientMethods": {
-   "owner": "@training",
-   "digest": "31434d1d96fba03501675e23b856036bf46703007954325e7d695059f52cb538",
-   "issue": "TRN-168",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.ExecutionPhaseLength": {
    "owner": "@lean",
    "digest": "1dc767d5429ed240388b694750d513791e18b4b17ede1c6b9aa4cdec58db7f4c",
@@ -3510,12 +3504,8 @@
   "Definitions.Compose",
   "Definitions.Poub",
   "Definitions.Registration",
-  "Definitions.Slowdown.CoverageToy",
   "Definitions.Slowdown.ServingBlocks",
-  "Definitions.Slowdown.Tasks",
-  "Definitions.Slowdown.Assumptions.Coverage",
   "Definitions.Slowdown.Guarantees.Actual",
-  "Definitions.Slowdown.Guarantees.Coverage",
   "Definitions.Slowdown.Guarantees.ServingBlocks",
   "Definitions.Poub.Bandwidth",
   "Definitions.Poub.Guarantees.Bandwidth",
@@ -4188,10 +4178,6 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
-  },
-  "Slowdown.SecurityProofs.CapabilityFloor": {
-   "honest": ["Slowdown.SecurityProofs.CapabilityFloorHonest"],
-   "nontrivial": "Slowdown.SecurityProofs.CapabilityFloorNontrivial"
   },
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
@@ -5837,7 +5823,6 @@
     "Definitions.Compose.JointLive",
     "Definitions.Compose.PeriodBinding",
     "Definitions.Registration.Physical",
-    "Definitions.Slowdown.Tasks",
     "Definitions.Certifier.NetWitness",
     "Definitions.Poub.RateAudit",
     "Definitions.Poub.RateAuditDeployed",
@@ -6223,7 +6208,6 @@
     "Definitions.Compose.JointLive",
     "Definitions.Compose.PeriodBinding",
     "Definitions.Registration.Physical",
-    "Definitions.Slowdown.Tasks",
     "Definitions.Certifier.NetWitness",
     "Definitions.Poub.RateAudit",
     "Definitions.Poub.RateAuditDeployed",
@@ -6367,7 +6351,6 @@
     "Definitions.Compose.JointLive",
     "Definitions.Compose.PeriodBinding",
     "Definitions.Registration.Physical",
-    "Definitions.Slowdown.Tasks",
     "Definitions.Certifier.NetWitness",
     "Definitions.Poub.RateAudit",
     "Definitions.Poub.RateAuditDeployed",
@@ -6512,7 +6495,6 @@
     "Definitions.Compose.JointLive",
     "Definitions.Compose.PeriodBinding",
     "Definitions.Registration.Physical",
-    "Definitions.Slowdown.Tasks",
     "Definitions.Certifier.NetWitness",
     "Definitions.Poub.RateAudit",
     "Definitions.Poub.RateAuditDeployed",
@@ -24536,73 +24518,6 @@
    "type_hash": "b4f0481fb06e48450679e94180f3a312a3a098d317d0132eda0c59691e36d778",
    "unfolded_hash": "750a58e67bb2124908618b962efa6e2a8d4285d094380fd1cd6bf3ab71927045"
   },
-  "Slowdown.SecurityProofs.CapabilityFloor": {
-   "owner": "@training",
-   "signature": ["Slowdown.SecurityProofs.CapabilityFloor : Slowdown.Guarantees.CapabilityFloor"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "ResourceAccounting.Placed.Faithful",
-     "ResourceAccounting.Placed.Holding",
-     "Slowdown.Assumptions.CoversEfficientMethods"
-    ],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cell",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.x"
-    ]
-   },
-   "type_hash": "a7367e15779ec9b7b2fb7baf417901e59be85ba8b2ce9d995880d1778debf1ae",
-   "unfolded_hash": "11801b02f3868a563ddc697f922243b30248cb93a5d3486e5755788e1b85c847"
-  },
-  "Slowdown.SecurityProofs.CapabilityFloorHonest": {
-   "owner": "@training",
-   "signature": ["Slowdown.SecurityProofs.CapabilityFloorHonest : Slowdown.Guarantees.CapabilityFloorHonest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["ResourceAccounting.Placed.Faithful", "ResourceAccounting.Placed.Holding"],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.cell",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.x",
-     "Slowdown.Assumptions.CoversEfficientMethods"
-    ]
-   },
-   "type_hash": "51b2f6ddf0d10e88629afa4703437eeb609b509ca8c8d87fc049c9ae3d8628d3",
-   "unfolded_hash": "1107c562274470e8ada830d4604d290130e9a6e5a6fea38ea0f08590c9572957"
-  },
-  "Slowdown.SecurityProofs.CapabilityFloorNontrivial": {
-   "owner": "@training",
-   "signature": ["Slowdown.SecurityProofs.CapabilityFloorNontrivial : Slowdown.Guarantees.CapabilityFloorNontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "ResourceAccounting.Placed",
-     "ResourceAccounting.Placed.Faithful",
-     "ResourceAccounting.Placed.Holding",
-     "ResourceAccounting.Placed.cell",
-     "ResourceAccounting.Placed.mk",
-     "ResourceAccounting.Placed.t",
-     "ResourceAccounting.Placed.toCircuit",
-     "ResourceAccounting.Placed.x"
-    ]
-   },
-   "type_hash": "c412049209c53a962bb6344192a032bc00ab52a11baebb87473af8955b6af46e",
-   "unfolded_hash": "d6e85948923c8c026022e852c8894098641b3c884eb671d25e6180919fecad45"
-  },
   "Slowdown.SecurityProofs.CertificateSlack": {
    "owner": "@lean",
    "signature": ["Slowdown.SecurityProofs.CertificateSlack : Slowdown.Guarantees.CertificateSlack"],
@@ -28115,7 +28030,6 @@
    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and (H) and (E) on each declared day's work (security/Definitions/Assumptions.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds) and each day's count verdict (InferenceOnly.CompliesAtMost, what InferenceOnlyCheck.Properties.DescCountsCK gives a published complies) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_honest": "frozen (no-function): It states that SlowdownRemoteMonitoringPeriod's premises hold at a constructed honest developer over one window at p = 3 * 2^-40, a value no guarantee gives, and eps' = 2p/10^-6, with one declared day, the toy Slowdown.Cut.Toy complying with CompliesAtMost 1 2 2 under (H) at unit costs and (E) at b = 2, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
    "Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate and no declared day, every other premise of SlowdownRemoteMonitoringPeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
-   "Slowdown.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (ResourceAccounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Slowdown.Assumptions.CoversEfficientMethods, security/Definitions/Slowdown/Assumptions/Coverage.lean), not a function's acceptance.",
    "Slowdown.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Slowdown.Formalism.Caps, security/Definitions/Slowdown/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Slowdown.Formalism.PartitionBound, security/Definitions/Slowdown/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Slowdown.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Slowdown.Formalism.Annotation, security/Definitions/Slowdown/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Slowdown.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Slowdown/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Slowdown.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (security/Definitions/Assumptions.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Slowdown.Formalism.Annotation, security/Definitions/Slowdown/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Slowdown.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Slowdown/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
@@ -29487,9 +29401,6 @@
    "ResourceAccounting.SecurityProofs.pouwRow": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.CapabilityFloor": {
-    "∀ (C : In → ResourceAccounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Slowdown.SecurityProofs.CertificateSlack": {
     "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -40585,12 +40496,6 @@
     "Slowdown.Cover.Assumptions.CapBelowDepth": "c0129077e2ad931b0722c5c52ee0bc1bad5fea62e6ab172a242e712d593441a5"
    }
   },
-  "Definitions.Slowdown.Assumptions.Coverage": {
-   "digest": "6a8f041fb6f1eb38bd452d67ee149b797bce4f1a9a06c158fd9b38a3304ba694",
-   "definitions": {
-    "Slowdown.Assumptions.CoversEfficientMethods": "31434d1d96fba03501675e23b856036bf46703007954325e7d695059f52cb538"
-   }
-  },
   "Definitions.Slowdown.Assumptions.Covering": {
    "digest": "1f849a805be80e8ee61a6297455f3d235b8c70cafbca6ae387544c10f3dcdd12",
    "definitions": {
@@ -40706,18 +40611,6 @@
     "Slowdown.Cover.MulBlocks.m": "e36953d716a21577da75ab2406d7ce36b550a7c5dae435ae568bea983c369594",
     "Slowdown.Cover.MulBlocks.o": "f3a1a6ec8e895af516913a0c22deb575cea8408c302c18e359eefd89f0865155",
     "Slowdown.Cover.MulBlocks.uses": "2260719b2d46c629b9a2200e53968b195efc7d6421c2a357d01f2264e5aa1f5a"
-   }
-  },
-  "Definitions.Slowdown.CoverageToy": {
-   "digest": "ce7133e286f977650421c0b574fff269e5b2276d2982d61d3d021e16a01043dd",
-   "definitions": {
-    "ResourceAccounting.Slowdown.Toy.comp": "8e81cb33e35225d7e9497368c66dc7cab3c5d415262b11a5c659095ff8c1a6e1",
-    "ResourceAccounting.Slowdown.Toy.cost": "c6c8db52baac9a6c7bb41cbf282a0555ec99ae3e9865825cdbf0a8e985a305e4",
-    "ResourceAccounting.Slowdown.Toy.covered": "aea1eacd65431e610bd634eb005b97567900c113d7c67669759b761d81968401",
-    "ResourceAccounting.Slowdown.Toy.guess": "e2eba9f0b930bb9412f718d0e648ba1c95e772b1ec92127f85ac5f5d9de32046",
-    "ResourceAccounting.Slowdown.Toy.oneGate": "02825ff41e098f0fcab1ffeb1557ef1960c4185da837d466a94e0160316442dc",
-    "ResourceAccounting.Slowdown.Toy.pos": "566fc0b69399ed942bb5210dcffe9db85607c548b99affe8ea728638337122f5",
-    "ResourceAccounting.Slowdown.Toy.task": "744aa7fe558bc2ca8bd2f1577db8af369c8da581db3cf00a6778baadbdc35538"
    }
   },
   "Definitions.Slowdown.Covering": {
@@ -40939,14 +40832,6 @@
    "digest": "f35e85967edff8ee53a2a3b7899928e280244ce7c2f0e86cc4269e7a9b0536dd",
    "definitions": {
     "Slowdown.Cover.Guarantees.CoverTraining": "2a4fa9fbdd4d6f513289feeabb30a016213e96ec9ebe7838ce9ec77f18547a08"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.Coverage": {
-   "digest": "45fd41ba6f6f28c6899ebbac4a04da93de011c8bc4c70e821b56875717259e84",
-   "definitions": {
-    "Slowdown.Guarantees.CapabilityFloor": "ed51aeaca4a4ab99370b820d2759dc8f052f372fee227964861c5cd41e11768c",
-    "Slowdown.Guarantees.CapabilityFloorHonest": "a70b2bea8a72a6207fde408b1f13b94dbb4c275e436a7f3ef843c52ad5cac333",
-    "Slowdown.Guarantees.CapabilityFloorNontrivial": "44e392c08eba2e6547b87d58cfce53e802050d1f5794eef38a4c726ed52bbc7f"
    }
   },
   "Definitions.Slowdown.Guarantees.Covering": {
@@ -41207,20 +41092,6 @@
     "Slowdown.Slowdown.residualShare": "fceaa2b8b8b8f1e8627390dc580d20cc76ed43903a82086d4178bb6ab77727bc",
     "Slowdown.Slowdown.rhoT": "f1764ffab5407406a6b1aee23e75a3d4d2aa1f1dbe9c3929c3506220354baf85",
     "Slowdown.Slowdown.unregisteredShare": "4747fbf485ca4f0a89d062fd4f3c3242b8be245985e361e6e331735b43724ebb"
-   }
-  },
-  "Definitions.Slowdown.Tasks": {
-   "digest": "2c90e91771fcdb29845c1077832a8ac72290b8322450647fe9c367b4ddb47805",
-   "definitions": {
-    "ResourceAccounting.Slowdown.Class": "ec7630e1470de498ce931360985f464f6180dcb83ee0d17990c394d59cfc1a31",
-    "ResourceAccounting.Slowdown.Reads": "c7c3dfa486707f4bb8f8599fda05de1fe5b013f6b7bc0ff49fce5b03773ec568",
-    "ResourceAccounting.Slowdown.Succeeds": "1edc9aa7e83f0b3bf0970626160e8d9c5a4d7750ce5bf2c444df364b5d721520",
-    "ResourceAccounting.Slowdown.Task": "fc3fcef6a7f5ece611b76309980314b6fc12b36347d7b430335de7a48179abfc",
-    "ResourceAccounting.Slowdown.Task.draw": "a3f894202188a0098b64cb80550609f43619bc5eb7d11999c0a0be95c79968fc",
-    "ResourceAccounting.Slowdown.Task.fintype": "84c8b67738f0accf03e8070455f23013de5dd3dcf5ee7ee6e29fac9a68400e33",
-    "ResourceAccounting.Slowdown.Task.game": "ba10f1419a606d692ee2f6dc1dcf20faaf88f441ef8fccbf2b8b85fd0a6ff1ab",
-    "ResourceAccounting.Slowdown.Task.prob": "742354866250e6c27481ed32c99dca6a95e490f4a59b31655976b39481f7cd17",
-    "ResourceAccounting.Slowdown.Task.Ω": "0f104ba67a3fd332bc4b1cf6e5009c5700d3d3ef453ad9625c963894a7742ea5"
    }
   },
   "Definitions.Slowdown.Threads": {

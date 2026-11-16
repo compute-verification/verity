@@ -218,7 +218,7 @@ arithmetic, and the range T_max of computation the claim rules out. Information 
 through preparation that isn't charged. The setting does not say that θ can't produce an acceptable model cheaply: that
 is the question.
 
-**Coverage of efficient methods** (`Slowdown.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
+**Coverage of efficient methods**. Let Core(A, x) say that the
 computation meets the premises of one of part 2's assemblies at the block budgets and carries at least its minimum
 weighted total Ω_*. Uniformly over the programs, the initial information and the experiment,
 
@@ -402,8 +402,8 @@ so the bound is relative to that reference. If f is bounded uniformly over 𝒜 
 $$ \mathrm{slowdown} \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
 and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
-lacks the covered structure, which coverage allows below T_max with probability at most η
-(`Slowdown.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
+lacks the covered structure, which coverage allows below T_max with probability at most η,
+or lies outside 𝒜, which protocol soundness allows with probability at most δ
 (part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
 floor Ω_* ≥ Ω_ref/α,
 
@@ -443,25 +443,25 @@ None of these is assumed silently; each would restate the conclusion:
 |---|---|---|
 | The actual circuit | `ResourceAccounting.Placed`, `ResourceAccounting.Placed.region` | Defined |
 | Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
-| Coverage | `Slowdown.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
+| Coverage | not in Lean | Open |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | not in Lean | Open |
 | Structure | not in Lean | Open |
 | The repertoire | not in Lean | Open |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`, `Slowdown.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
-| Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`, `ResourceAccounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
+| Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
-| Protocol soundness | `ResourceAccounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
+| Protocol soundness | `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `ResourceAccounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses`, `InferenceOnly.CompliesRate`, `InferenceOnly.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `InferenceOnlyCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per period; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Slowdown.Guarantees.SlowdownRemote`; a named Prop not yet in Lean | Open |
-| The floor | `Slowdown.Guarantees.CapabilityFloor` | Proved, under coverage |
-| Slowdown | `ResourceAccounting.Slowdown.slowdown`, `ResourceAccounting.Slowdown.threshold`, `ResourceAccounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
+| The floor | not in Lean | Open |
+| Slowdown | not in Lean | Open |
 | The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees

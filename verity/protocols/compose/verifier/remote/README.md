@@ -148,7 +148,7 @@ else is a theorem or a named gap.
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The registered information | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | not in Lean | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Slowdown.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | not in Lean | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
@@ -318,7 +318,7 @@ times the fleet-time the reference training algorithm takes with no protocol (fl
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
-`Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
+`Verity.Guarantees.Counting` and the floor. The Lean bound `SlowdownRemote` is a different,
 older formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
@@ -372,9 +372,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The floor `Slowdown.Guarantees.CapabilityFloor`: **proved** (`security/Proofs/Slowdown/Coverage.lean`) from its premise
-  `Slowdown.Assumptions.CoversEfficientMethods`, a named assumption in the lock, not tested yet. The local bounds are not in
-  Lean.
+- The local bounds and the floor are not in Lean.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
@@ -428,8 +426,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
-  - The floor is proved, and its witness is a toy: at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
-    premises on a training circuit.
+  - No instance meets the premises on a training circuit.
   - The displayed slowdown bound has no Lean statement.
 
 ### Promising directions
@@ -500,12 +497,6 @@ The slowdown, `SlowdownRemote`:
 - (H) and (E), `Slowdown.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the registered
   circuit's work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
   `DescCountsCK` is proved (part 4, link 7).
-
-The local bounds (part 6):
-
-- `Slowdown.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
-  way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
-  count Ω_*, except with probability η. It is the open part, untested.
 
 ## Results per monitoring period
 
