@@ -20,7 +20,7 @@ import argparse
 import re
 from typing import Any
 
-from . import router
+from . import comms, router
 from .deps import CANARY_DONE, DEAD, DEAD_TOPIC, LAST_DONE, LAST_SUCCESS, Deps, error
 
 MAX_DELIVERIES = 5
@@ -73,8 +73,15 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
     try:
         decision = process(deps, payload)
     except Exception as e:  # noqa: BLE001 - every failure retries, then dead-letters
-        deps.log("failed", event_id=eid, delivery=delivery_count, error=error(e))
-        if delivery_count < MAX_DELIVERIES:
+        if not isinstance(e, comms.Pending):
+            deps.log("failed", event_id=eid, delivery=delivery_count, error=error(e))
+        if payload.get("kind") == "comms-relay":
+            # Pending polls count as queue deliveries. A transient failure after a
+            # long model turn must get the same recovery window as an early one.
+            ts = float(payload["event"]["ts"])
+            if not isinstance(e, comms.Unsupported) and deps.clock() - ts < comms.MAX_WAIT_S:
+                raise Retry(30, "waiting for comms delivery") from e
+        elif delivery_count < MAX_DELIVERIES:
             raise Retry(backoff(delivery_count), error(e)) from e
         dead_letter(deps, payload, delivery_count, e)
         deps.write(LAST_DONE, deps.clock())
@@ -86,6 +93,18 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
 
 
 def process(deps: Deps, payload: dict) -> str:
+    if payload.get("kind") == "comms-relay":
+        ev = payload.get("event") or {}
+        if comms.candidate(deps, ev):
+            return comms.forward(deps, ev)
+        # A previously accepted event can outlive the window. If there is no
+        # Cursor holder to receive its original, bring it to an operator.
+        comms_route = deps.rs.Routes().get_route("comms", fresh=True)
+        if (not comms_route or comms_route.get("closed") or not comms_route.get("holder")
+                or comms_route["holder"] == comms.SEAT
+                or (comms_route.get("channel"), comms_route.get("inbox_ts")) != (ev["channel"], ev["thread_ts"])):
+            raise comms.Unsupported("relay closed before the delivery was completed")
+        return "comms relay closed"
     if payload.get("kind") == "interactivity":
         # TODO: #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
         # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".
@@ -259,8 +278,26 @@ def dead_letter(deps: Deps, payload: dict, delivery_count: int, e: BaseException
     """Park the message on DEAD_TOPIC and count it (best effort, in the cache health reads), then, best effort too, a
     failure line in its thread, which is its routing line from now on, and the admin rung."""
     eid = str(payload["event_id"])
-    deps.queue.send(DEAD_TOPIC, {"payload": payload, "error": type(e).__name__, "deliveries": delivery_count},
+    relay = payload.get("kind") == "comms-relay"
+    parked = payload
+    if relay:
+        # Keep the original in the comms inbox. Only identifiers belong in this
+        # operational alert and its dead letter, including for private sources.
+        ev = payload["event"]
+        parked = {**payload, "event": {k: ev[k] for k in ("channel", "thread_ts", "ts")}}
+    deps.queue.send(DEAD_TOPIC, {"payload": parked, "error": type(e).__name__, "deliveries": delivery_count},
                     idempotency_key=eid)
+    if relay:
+        top = deps.rs.Routes().get_route("top", fresh=True)
+        if not top or top.get("closed") or not top.get("holder"):
+            raise Retry(30, "cannot find top for comms delivery recovery")
+        notice = f"Comms relay needs recovery for inbox message {ev['ts']} ({type(e).__name__})."
+        previous = deps.slack.paged("conversations.replies", "messages", channel=top["channel"],
+                                    ts=top["inbox_ts"], oldest=ev["ts"])
+        if not any(deps.rs.is_doorbell(m, deps.registry) and m.get("text", "").startswith(notice) for m in previous):
+            deps.slack.call("chat.postMessage", channel=top["channel"], thread_ts=top["inbox_ts"], username="router",
+                            text=notice + " Check the original in the comms inbox and its delivery receipt before replying.",
+                            unfurl_links="false", unfurl_media="false")
     rec = deps.read(DEAD) or {"count": 0, "since": deps.clock()}
     deps.write(DEAD, {"count": int(rec.get("count") or 0) + 1, "since": rec.get("since")})
     deps.log("dead-lettered", event_id=eid, delivery=delivery_count, error=error(e))
