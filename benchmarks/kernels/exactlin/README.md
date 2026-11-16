@@ -21,9 +21,6 @@ its script:
 ~~~text
 RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh                 # gate, then kbench.py
 RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=kgate.py bash benchmarks/kernels/exactlin/kbench.sh  # the gate alone
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
-  --arms stock,exact,exact-fused --gate --ops decode --t 64                                       # served
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh                  # uncredited share
 ~~~
 
 A failed gate times nothing and exits 4.
@@ -67,19 +64,12 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     copies to stream from DRAM. `--arms` also takes single kernels.
   - `ksweep.py`: the fused GEMM's configs swept at the decode shapes, each gated before it is timed, and the
     quantizer's warps.
-- Served:
-  - `served.sh`: `benchmarks/hash/dither/sbench.py`'s stock and exact arms (`stock`, `stock-percall`, `exact`,
-    `exact-fused`, and `stock-cutlass` on sm_90) on the leased GPU's NUMA node. With `exact-fused` it runs `kgate.py` in the same lease first.
-    `DITHER_NSYS=1` captures the decode step's kernels for `steps.py`.
-  - `percall.py`: sbench's `stock-percall` arm, stock's `triton_scaled_mm` behind a custom op
-    (`exactlin_stock::scaled_mm`), so its tile heuristic runs on each call's M.
 - Analysis:
-  - `steps.py`: a served decode step's kernels by category, from an sbench `prof` capture's nsys SQLite export.
+  - `steps.py`: a served decode step's kernels by category, from a `prof` capture's nsys SQLite export.
     `--compare` puts arms side by side.
-  - `share.py` and `share.sh`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
+  - `share.py`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
     decode and prefill scenarios, and `--analyse` splits a forward's GPU time into the credited int8 GEMMs, the
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
 
-Outside this directory, `benchmarks/hash/dither/sbench.py`'s `exact` and `exact-fused` arms are one engine, the ops'
-CUDA bodies as registered, and `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
+Outside this directory, `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
 `copies_for`, `nvml`).
