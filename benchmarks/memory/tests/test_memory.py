@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import fnmatch
 import json
-import shlex
 import sys
 import tomllib
 from pathlib import Path
@@ -107,21 +106,26 @@ def a_record(*sessions: dict, blocks: int = GIB // 4096, binding: dict | None = 
             "allowance_ns": 1, "process_cpu_ns": 1, "wire": {}, **({"binding": binding} if binding else {})}
 
 
+#: `M.PACE` as the verifier's `pace_of` records it
+PACE = {"k": 1, "t_ms": 1000.0, "draws_t": 2773, "windows": 7, "groups": 12, "draws": 232, "pass_ms": 85.0}
+
+
 def as_local(record: dict) -> dict:
     """`record` as a `--local` session's verifier records it: its own challenger's coins, the registration's 16 sketch
-    rows, the one session form (`M.FORM`) and the prover its error is priced against."""
+    rows, the one paced session form (`M.PACE`, as `pace_of` reads it at an 85 ms pass) and the prover its error is
+    priced against."""
     record["registration"]["rows"] = 16
     for s in record["sessions"]:
-        s.update(challenger={"challenger": "local"}, samples=2773, delta=2.0 ** -101, windows=7, window_ns=10 ** 9,
-                 allowance_ns=2 * 10 ** 6)
+        s.update(challenger={"challenger": "local"}, samples=232, delta=2.0 ** -101, windows=96, window_ns=1,
+                 allowance_ns=2 * 10 ** 6, pace=PACE)
         s["ledger"]["sketch_failure"] = {"queries_log2": 80}
     return record
 
 
 #: the `ran with` detail of such a record, under `--local` on an H200
-LOCAL_DETAIL = ("16 sketch rows, not the deployed registration's 64; 2773 openings a window; δ = 2^-101.0 a window; 7 "
-                "windows of 1,000 ms; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 compressions on "
-                "any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
+LOCAL_DETAIL = ("2773 openings a window; 7 windows of 1,000 ms; 16 sketch rows, not the deployed registration's 64; the "
+                "sample's term a window 2^-101.0; lateness allowed 2 ms; the error against a prover of 2^80 SHA-512 "
+                "compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one card")
 
 
 class FakeStore:
@@ -161,7 +165,8 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; no `research run` around
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
     for name in ("RESEARCH_RUN_DIR", "OUT", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
-                 "HOST_GIB", "LEAF_CTAS", "PLAN", "LOCAL_WORK", "LOCAL_ROW", "VLLM_PY", "GPU", "GPU_LEASE_DIR",
+                 "HOST_GIB", "LEAF_CTAS", "PLAN", "LOCAL_WORK", "VLLM_PY", "GPU", "GPU_LEASE_DIR", "ARENA_GIB", "UTIL",
+                 "PACE_PASS_MS", "ENGINE_ARGS", "NODE_ARGS", "VERIFIER_ARGS", "JITTER_MS", "QUANTILE", "ENGINE_CPUS",
                  "VERIFIER_CPUS", "PROVER_CPUS", *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))
@@ -222,7 +227,7 @@ def test_the_number_is_printed_with_the_error_its_ledger_declares(store, capsys)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[0].startswith("memory: 0.250 of the node's memory read rate is left uncertified by this session")
-    assert text[0].endswith("not priced, not assumed), δ = 4.65e-10 in the verifier's ledger")
+    assert text[0].endswith("not priced, not assumed), δ = 4.65e-10 (2^-31.0) in the verifier's ledger")
     assert (doc["value"], doc["error"], doc["no_bound"]) == (0.25, 4.654e-10, None)
 
 
@@ -237,8 +242,8 @@ def test_a_session_whose_error_is_1_or_more_prints_no_bound_and_no_number(store,
     why = f"{protocol.NO_BOUND}: the row's error, {error:.4g}, is 1 or more"
     assert protocol.NO_BOUND == "no bound at this period"
     assert text[0] == (f"memory: {why}: this session certifies no share of the node's memory read rate, at the data "
-                       f"sheet's read bandwidth (2.0000 TB/s); its error reads {M.ERROR_FORM}, δ = {error:.3g} in the "
-                       f"verifier's ledger")
+                       f"sheet's read bandwidth (2.0000 TB/s); its error reads {M.ERROR_FORM}, δ = {M.power(error)} in "
+                       f"the verifier's ledger")
     assert "0.250" not in text[0] and (doc["value"], doc["error"], doc["no_bound"]) == (None, error, why)
     got = written(held)
     assert {n: m["value"] for n, m in got.items()} == {
@@ -1028,16 +1033,26 @@ def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds
     assert verdict(2.0 ** -31, 2.0 ** -120) == "within target; its error is above 2^-100"
 
 
+#: a --local store: the arena `arena_of` gives an H200, which the store guard takes
+ARENA = 112
+
+
+def a_local_record(*sessions: dict, arena: int = ARENA) -> dict:
+    """A `--local` session's verifier's record over an arena of `arena` GiB (`as_local`)."""
+    return as_local(a_record(*sessions, blocks=arena * GIB // 4096))
+
+
 class Machine:
     """This machine as `--local` asks it, one stand-in for every process it starts: nvidia-smi answers `card` (or fails
-    with `smi_rc`, or is not installed, `driver` false), the bootstrap ends `boot_rc` having written `boot_fail` to its
-    `bootstrap.fail`, and `run.sh` writes `record` as its verifier's and ends `rc`."""
+    with `smi_rc`, or is not installed, `driver` false), the checkpoint's fetch ends `fetch_rc`, and `run.sh` writes
+    `record` as its verifier's, its engine's record with the `--arena-gib` and `--util` it was handed as `engine.py`
+    does (unless `engine` is false), and ends `rc`."""
 
-    def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, boot_rc: int = 0, rc: int = 0,
-                 record: dict | None = None, driver: bool = True, boot_fail: str | None = None) -> None:
-        self.card, self.smi_rc, self.boot_rc, self.rc = card, smi_rc, boot_rc, rc
-        self.driver, self.boot_fail = driver, boot_fail
-        self.record = as_local(a_record(a_session(gamma=0.199))) if record is None else record
+    def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, fetch_rc: int = 0, rc: int = 0,
+                 record: dict | None = None, driver: bool = True, engine: bool = True) -> None:
+        self.card, self.smi_rc, self.fetch_rc, self.rc, self.driver = card, smi_rc, fetch_rc, rc, driver
+        self.engine = engine
+        self.record = a_local_record(a_session(gamma=0.199)) if record is None else record
         self.started: list[tuple[list[str], dict]] = []
 
     def __call__(self, argv, **kw):
@@ -1049,109 +1064,160 @@ class Machine:
                                    stderr="" if not self.smi_rc else "NVIDIA-SMI has failed")
         if argv[0] == "git":
             return SimpleNamespace(returncode=0, stdout=COMMIT + "\n" if argv[1] == "rev-parse" else "")
-        if argv[1] == str(M.BOOTSTRAP):
-            if self.boot_fail is not None:
-                out = Path(argv[argv.index("--out") + 1])
-                out.mkdir(parents=True, exist_ok=True)
-                (out / "bootstrap.fail").write_text(self.boot_fail)
-            return SimpleNamespace(returncode=self.boot_rc)
+        if argv[1:3] == ["-c", M.FETCH]:
+            return SimpleNamespace(returncode=self.fetch_rc)
         out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
         (out / "verifier.json").write_text(json.dumps(self.record))
+        if self.engine:
+            given = kw["env"].get("ENGINE_ARGS", "").split()
+            args = {k: float(given[given.index(f) + 1]) for k, f in (("arena_gib", "--arena-gib"), ("util", "--util"))
+                    if f in given}
+            args["arena_gib"] = int(args["arena_gib"]) if "arena_gib" in args else None
+            (out / "engine.0.json").write_text(json.dumps({"schema": "verity/remote-session/engine/v0", "args": args}))
         return SimpleNamespace(returncode=self.rc)
 
     def runs(self) -> list[tuple[list[str], dict]]:
         """The `run.sh` processes started."""
         return [(a, e) for a, e in self.started if a[:2] == ["bash", str(M.RS / "run.sh")]]
 
+    def fetches(self) -> list[list[str]]:
+        return [a for a, _ in self.started if a[1:3] == ["-c", M.FETCH]]
+
 
 @pytest.fixture
 def work(tmp_path, monkeypatch) -> Path:
-    """LOCAL_WORK in the test's directory, no `gpu-lease` installed, and a bootstrap that keeps to LOCAL_WORK."""
+    """LOCAL_WORK in the test's directory, a vLLM interpreter of the person's own, and no `gpu-lease` installed nor a
+    lease directory of the machine's."""
     monkeypatch.setenv("LOCAL_WORK", str(tmp_path / "work"))
+    monkeypatch.setattr(M, "LEASE_DIR", tmp_path / "no-lease-dir")
+    monkeypatch.setenv("VLLM_PY", str(tmp_path / "vllm" / "python"))
     monkeypatch.setattr(M.shutil, "which", lambda name: None)
-    script = tmp_path / "tree" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
-    script.parent.mkdir(parents=True)
-    script.write_text('WORK=${WORK:-/workspace}\nFA2=${FA2:-$WORK/cp/fa2}\n')
-    monkeypatch.setattr(M, "BOOTSTRAP", script)
     return tmp_path / "work"
 
 
-@pytest.mark.parametrize("held", sorted(M.OUTSIDE_WORK))
-def test_local_refuses_a_bootstrap_that_touches_files_outside_local_work(store, capsys, work, held):
-    """A person runs `--local` as themselves on their own machine: a bootstrap that removes the machine's package caches
-    or reads its tap builds at a fixed path is refused before it runs, with no number and the way out."""
-    M.BOOTSTRAP.write_text(f"{M.BOOTSTRAP.read_text()}x {held}/y\n")
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 3
-    assert not [a for a, _ in machine.started if a[1:2] == [str(M.BOOTSTRAP)]] and machine.runs() == []
-    text, doc, _ = printed(capsys)
-    assert text[0] == f"memory: no number: this tree's bootstrap (pod_bootstrap.sh) {M.OUTSIDE_WORK[held]}, so --local " \
-                      "doesn't run it: set VLLM_PY to a vLLM environment of your own, or run from a tree whose bootstrap " \
-                      "keeps to LOCAL_WORK"
-    assert doc["value"] is None and not work.exists()
-
-
-def test_local_keeps_the_bootstrap_and_the_row_inside_local_work(store, work):
-    """The bootstrap's package caches and tap builds, and the taps the served row loads, are all in LOCAL_WORK, set
-    without reading HOME, so the first run downloads and builds there only."""
+def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_and_says_first_it_is_no_audit(
+        store, capsys, work, tmp_path):
+    """`--local` runs `run.sh` with ROLE=both, SERVE=node and GPUS=1: one engine serving the role's pinned checkpoint
+    from an arena of most of the card's memory, the node prover's paced passes over it, and the verifier beside them
+    on the one-card node, all kept in LOCAL_WORK. Its number is its verifier's, and the text's first lines and the
+    JSON say the verifier and the coins ran on the machine measured; the references are left out with that reason."""
     machine = Machine()
     assert bench(store, "--local", run=machine) == 0
-    ((_, boot),) = [(a, e) for a, e in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
-    assert {k: boot[k] for k in ("UV_CACHE_DIR", "PIP_CACHE_DIR", "XDG_CACHE_HOME", "FA2", "NT", "RT")} == {
-        "UV_CACHE_DIR": str(work / "cache/uv"), "PIP_CACHE_DIR": str(work / "cache/pip"),
-        "XDG_CACHE_HOME": str(work / "cache"), "FA2": str(work / "cp/fa2"), "NT": str(work / "cp/norm_tap"),
-        "RT": str(work / "cp/router_tap")}
-    ((_, env),) = machine.runs()
-    args = shlex.split(env["ROW_ARGS"])
-    named = dict(zip(args[::2], args[1::2]))
-    assert set(named) == set(M.TAP_SOS) and all(Path(v).is_relative_to(work) for v in named.values())
-    assert named["--hidden-so-fa2"] == str(work / "cp/fa2/build/matReq/verity_fa2_matReq.so")
-    assert env["UV_CACHE_DIR"] == str(work / "cache/uv")
-
-
-def test_local_keeps_a_persons_own_row_args_after_the_taps(store, work, monkeypatch):
-    monkeypatch.setenv("ROW_ARGS", "--norm-tap 0")
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    ((_, env),) = machine.runs()
-    assert env["ROW_ARGS"].endswith(" --norm-tap 0") and env["ROW_ARGS"].startswith("--hidden-so-fa2 ")
-
-
-def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_it_is_no_audit(store, capsys, work):
-    """`--local` bootstraps the vLLM environment and the checkpoint in LOCAL_WORK, then runs `run.sh` with ROLE=both
-    and SERVE=row on the Llama 3.2 1B row for this card, the tree's own lease keeping its locks in LOCAL_WORK; its
-    number is its verifier's, and the text's first lines and the JSON say the verifier and the coins ran on the machine
-    measured. It reads no evidence store, so the references are left out with that reason."""
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    boot = [(a, e) for a, e in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
-    assert [a for a, _ in boot] == [["bash", str(M.BOOTSTRAP), "--cases", M.LOCAL_CASE, "--out", str(work / "bootstrap")]]
-    assert (boot[0][1]["WORK"], boot[0][1]["HF_HOME"]) == (str(work), str(work / "hf"))
     ((argv, env),) = machine.runs()
-    assert (env["ROLE"], env["SERVE"], env["ROW"], env["PLAN"]) == ("both", "row", M.LOCAL_ROWS["9.0"], "serve")
-    assert (env["VLLM_PY"], env["NODE_WORKSPACE"], env["HF_HOME"]) == (str(work / "venv312/bin/python"), str(work),
-                                                                       str(work / "hf"))
-    assert env["GPU_LEASE_DIR"] == str(work / "gpu-lease")
+    pin = json.loads(M.PIN.read_text())[M.ROLE]
+    snap = work / "hf" / "hub" / f"models--{pin['repo'].replace('/', '--')}" / "snapshots" / pin["revision"]
+    assert (env["ROLE"], env["SERVE"], env["GPUS"], env["PLAN"], env["MODEL"]) == ("both", "node", "1", "honest",
+                                                                                   str(snap))
+    assert machine.fetches() == [[str(tmp_path / "vllm" / "python"), "-c", M.FETCH, pin["repo"], pin["revision"],
+                                  *sorted(pin["files"])]]
+    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.88"
+    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
+    assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
+    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
+                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
+    assert (env["JITTER_MS"], env["QUANTILE"]) == ("50", "max")
+    assert (env["NODE_WORKSPACE"], env["HF_HOME"], env["UV_CACHE_DIR"], env["GPU_LEASE_DIR"]) == (
+        str(work), str(work / "hf"), str(work / "cache/uv"), str(work / "gpu-lease"))
+    assert not [k for k in (*WINDOWED, "ROW", "ROW_ARGS") if k in env] and "UNPACED" not in env, \
+        "the windowed form and the row are not passed"
     assert Path(env["RESEARCH_RUN_DIR"]).parent == work / "runs", "outside a research run its records are kept"
-    assert (Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json").is_file()
+    assert json.loads((Path(env["RESEARCH_RUN_DIR"]) / M.NODE_FILE).read_text()) == M.one_card("h200-sxm-141gb-x1")[0]
     text, doc, err = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
-    assert doc["ran_with"] == {"coins": "local challenger", "parameters": "development", "detail": LOCAL_DETAIL}
-    assert doc["audit"] is False
+    assert doc["audit"] is False and doc["ran_with"]["coins"] == "local challenger"
+    assert doc["ran_with"]["detail"].startswith(f"an arena of {ARENA} GiB at vLLM's 0.88 of the card, the store "
+                                                f"{ARENA * GIB / 1e9:.2f} GB of its ")
+    assert "; paced: 7 credited stretches of 1,000 ms, 12 groups a stretch at 85 ms a pass" in doc["ran_with"]["detail"]
     assert text[1] == f"  {M.LOCAL}" and doc["local"] == M.LOCAL
     assert text[2] == (f"  card: NVIDIA H200, the verifier's node one card of hardware/nodes/h200-sxm-141gb-x1.toml; "
                        f"data sheets sha256 {M.digest(M.SHEETS)[:16]}, verifier sha256 {M.digest(M.VERIFIER)[:16]}")
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
-    assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "sheet_sha256": M.digest(M.SHEETS),
-                              "verifier_sha256": M.digest(M.VERIFIER)}
-    node = json.loads((Path(env["RESEARCH_RUN_DIR"]) / M.NODE_FILE).read_text())
-    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
-                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
-    assert node == M.one_card("h200-sxm-141gb-x1")[0]
+    assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "arena_gib": ARENA, "util": 0.88,
+                              "sheet_sha256": M.digest(M.SHEETS), "verifier_sha256": M.digest(M.VERIFIER)}
     assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
     assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
-    assert M.LOCAL_ROWS["9.0"] in err
+    assert f"a {ARENA} GiB arena of its 141 GiB" in err
+
+
+@pytest.mark.parametrize("card, arena", [("NVIDIA H200, 9.0", 112),
+                                         ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", 72)])
+def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card, arena):
+    """floor(0.88 × the card's GiB) − 12: 112 GiB on an H200, 72 on an RTX PRO 6000."""
+    machine = Machine(card=card, record=a_local_record(a_session(gamma=0.199), arena=arena))
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.88"
+
+
+def test_the_arena_vllm_py_gpu_and_cores_are_the_persons_to_set(store, capsys, work, monkeypatch, tmp_path):
+    """ARENA_GIB and UTIL size the arena, GPU names the card nvidia-smi is asked about (and `run.sh` leases), the
+    person's own cores win, an installed `gpu-lease` keeps its own locks, and a checkpoint already there is not
+    fetched."""
+    pin = json.loads(M.PIN.read_text())[M.ROLE]
+    snap = work / "hf" / "hub" / f"models--{pin['repo'].replace('/', '--')}" / "snapshots" / pin["revision"]
+    snap.mkdir(parents=True)
+    for f in pin["files"]:
+        (snap / f).write_text("")
+    for k, v in {"ARENA_GIB": "80", "UTIL": "0.7", "GPU": "3", "PROVER_CPUS": "4-7"}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(M.shutil, "which", lambda name: "/usr/local/bin/gpu-lease")
+    machine = Machine(record=a_local_record(a_session(gamma=0.199), arena=80))
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 80 --util 0.7"
+    assert (env["GPU"], env["PROVER_CPUS"]) == ("3", "4-7") and "GPU_LEASE_DIR" not in env
+    assert machine.started[0][0][-2:] == ["-i", "3"] and machine.fetches() == []
+    assert printed(capsys)[1]["machine"]["arena_gib"] == 80
+
+
+def test_a_machines_own_lease_directory_stays_the_one_its_lease_counts_in(store, work, monkeypatch, tmp_path):
+    """A lease in LOCAL_WORK would take a card no other lane on the machine sees taken: where the machine has its
+    lease directory, `--local` leaves GPU_LEASE_DIR to it."""
+    (tmp_path / "no-lease-dir").mkdir()
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert "GPU_LEASE_DIR" not in env
+
+
+def test_local_splits_this_process_cores_among_the_engine_the_prover_and_the_verifier(store, work):
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert (env["ENGINE_CPUS"], env["PROVER_CPUS"], env["VERIFIER_CPUS"]) == M.thirds()
+    have = sorted(M.os.sched_getaffinity(0))
+    assert sorted(int(c) for k in ("ENGINE_CPUS", "PROVER_CPUS", "VERIFIER_CPUS") for c in env[k].split(",")) == have \
+        or len(have) < 4
+
+
+@pytest.mark.parametrize("given", [{"PACED": "1:60000:33273:2"}, {"PACE_PASS_MS": "85"}, {"WINDOWS": "7"},
+                                   {"UNPACED": "7:60000:33273"}, {"SESSIONS": "2", "SAMPLES": "64"}])
+def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, given):
+    for k, v in given.items():
+        monkeypatch.setenv(k, v)
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 2
+    assert machine.started == []
+    err = capsys.readouterr().err
+    assert "--local runs one session form, PACED=1:1000:2773:7 at PACE_PASS_MS=0" in err
+    assert all(f"{k}={v}" in err for k, v in given.items())
+
+
+def test_a_store_below_half_the_cards_memory_prints_no_number(store, capsys, work, tmp_path, monkeypatch):
+    """The share is of the card's read rate while its memory is read in timed passes: a session whose store is a
+    request's bytes (the served row's 0.02 GB, which left 1.000 uncertified) is not this benchmark's, so a store
+    below `STORE_MIN` of the card's memory prints no number and its row says why, whatever its share."""
+    monkeypatch.setenv("OUT", str(tmp_path / "mine"))
+    record = as_local(a_record(a_session(gamma=0.199), blocks=16_322_560 // 4096))
+    assert bench(store, "--local", run=Machine(record=record)) == 1
+    text, doc, _ = printed(capsys)
+    assert text[0] == ("memory: no number: the store is 0.02 GB, 0.000 of the card's 151.40 GB, below the 0.5 this "
+                       "benchmark reads: the session read a request's bytes and not the card's memory, so its share "
+                       "is not this benchmark's") and doc["value"] is None
+    (m,) = json.loads((tmp_path / "mine" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["value"]) == (M.LOCAL_METRIC, None) and "below the 0.5" in m["why"]
+    assert bench(store, "--local", run=Machine(record=a_local_record(a_session(gamma=0.199), arena=71))) == 0
 
 
 def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, capsys, work, tmp_path, monkeypatch):
@@ -1160,7 +1226,7 @@ def test_a_local_session_under_a_research_run_writes_its_own_metrics_row(store, 
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
     monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    machine = Machine(record=as_local(a_record(undecided(with_amounts(a_session(gamma=0.199))))))
+    machine = Machine(record=a_local_record(undecided(with_amounts(a_session(gamma=0.199)))))
     assert bench(store, "--local", run=machine) == 0
     ((_, env),) = machine.runs()
     assert env["RESEARCH_RUN_DIR"] == str(tmp_path / "rundir")
@@ -1189,43 +1255,17 @@ def test_a_local_session_with_out_writes_its_document_and_result_there(store, ca
     assert names[:2] == ["metric", M.LOCAL_METRIC]
 
 
-@pytest.mark.parametrize("card, row", [("NVIDIA H200, 9.0", M.LOCAL_ROWS["9.0"]),
-                                       ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", M.LOCAL_ROWS["12.0"])])
-def test_local_takes_the_row_of_the_cards_compute_capability(store, capsys, work, card, row):
-    machine = Machine(card=card)
-    assert bench(store, "--local", run=machine) == 0
-    ((_, env),) = machine.runs()
-    assert env["ROW"] == row
-
-
-def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, monkeypatch, tmp_path):
-    """LOCAL_ROW names the row, GPU the card nvidia-smi is asked about, and VLLM_PY an environment of their own, so
-    no bootstrap runs; an installed `gpu-lease` keeps its own locks."""
-    monkeypatch.setenv("LOCAL_ROW", "my-row")
-    monkeypatch.setenv("VLLM_PY", str(tmp_path / "py"))
-    monkeypatch.setattr(M.shutil, "which", lambda name: "/usr/local/bin/gpu-lease")
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    assert not [a for a, _ in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
-    ((_, env),) = machine.runs()
-    assert (env["ROW"], env["VLLM_PY"]) == ("my-row", str(tmp_path / "py")) and "GPU_LEASE_DIR" not in env
-    monkeypatch.delenv("LOCAL_ROW")
-    monkeypatch.setenv("GPU", "3")
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    assert machine.started[0][0][-2:] == ["-i", "3"]
-
-
 def test_the_ran_with_line_names_the_coins_the_form_and_the_prover_the_error_is_priced_against():
     """The kit's `ran with` line, from the record: a local challenger's coins at the development registration's 16
     rows, with the session's form and the prover its error is priced against in the detail; `deployed` only for the
-    auditor device's coins over the deployed 64 rows; not stated for a record that names no challenger."""
+    auditor device's coins over the deployed 64 rows; not stated for a record that names no challenger. The
+    record's `delta` is the sample's term a window, which the line doesn't call the error."""
     v = {"registration": {"rows": 16}}
     vs = {"challenger": {"challenger": "local"}, "samples": 2773, "delta": 2 ** -101, "windows": 7,
           "window_ns": 10 ** 9, "allowance_ns": 2 * 10 ** 6, "ledger": {"sketch_failure": {"queries_log2": 80}}}
     p = M.parameters(v, vs)
     assert p == {"coins": "local", "rows": 16, "samples": 2773, "delta": 2 ** -101, "windows": 7, "window_ms": 1000.0,
-                 "allowance_ms": 2.0, "budget_log2": 80}
+                 "allowance_ms": 2.0, "budget_log2": 80, "passes": None}
     machine = {"sheet": "h200-sxm-141gb-x1"}
     line, said = M.ran({"parameters": p, "machine": machine})
     assert line == f"ran with: coins local challenger; parameters development ({LOCAL_DETAIL})"
@@ -1234,82 +1274,86 @@ def test_the_ran_with_line_names_the_coins_the_form_and_the_prover_the_error_is_
     _, said = M.ran({"parameters": p | {"coins": "gate", "rows": 64}})
     assert (said["coins"], said["parameters"]) == ("deployed challenger", "deployed") and "not the deployed" not in said["detail"]
     assert M.ran({"parameters": M.parameters({}, {})}) is None
-    assert M.detail(M.parameters({}, {})).endswith("a prover of SHA-512 compressions not stated")
+    assert M.detail(M.parameters({}, {})).endswith("the error against a prover of SHA-512 compressions not stated")
+    assert "; error 2.8e-05 (2^-15.1) against a prover of 2^80" in M.detail(p, error=2.8047495865732136e-05)
 
 
-def test_local_runs_the_one_session_form_on_this_process_cores(store, capsys, work, monkeypatch):
-    """Its numbers compare because every `--local` session has one form, and its cores are this machine's, not the
-    team node's that `run.sh` assumes; the person's own VERIFIER_CPUS and PROVER_CPUS win."""
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    ((_, env),) = machine.runs()
-    assert {k: env[k] for k in WINDOWED} == M.FORM == {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "1000",
-                                                       "SAMPLES": "2773"}
-    assert (env["VERIFIER_CPUS"], env["PROVER_CPUS"]) == M.cores()
-    monkeypatch.setenv("PROVER_CPUS", "4-7")
-    monkeypatch.setenv("WINDOWS", "7")
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 0
-    ((_, env),) = machine.runs()
-    assert env["PROVER_CPUS"] == "4-7"
+def test_a_paced_sessions_line_is_its_records_pace_and_states_no_windows():
+    """A paced session, in the shape the node's verifier records one (`PACED=1:1000:2773:7` at the calibration's
+    pass): its record's `windows` are the pass groups it ran and its `window_ns` a placeholder of 1, and its ledger
+    counts its passes as one number. The parameters state the pace, the pass groups and the passes, and no windows
+    or window length; every figure on the line is the record's."""
+    pace = {"k": 1, "t_ms": 1000.0, "draws_t": 2773, "windows": 7, "groups": 19, "draws": 146, "pass_ms": 52.906315}
+    vs = {"challenger": {"challenger": "local"}, "samples": 146, "delta": 3.944304526105059e-31, "windows": 152,
+          "window_ns": 1, "allowance_ns": 190416547, "pace": pace,
+          "ledger": {"sketch_failure": {"queries_log2": 80}, "inputs": {"passes": 152}}}
+    p = M.parameters({"registration": {"rows": 16}}, vs)
+    assert p == {"coins": "local", "rows": 16, "samples": 146, "delta": 3.944304526105059e-31, "pace": pace,
+                 "pass_groups": 152, "allowance_ms": 190.416547, "budget_log2": 80, "passes": 152}
+    assert M.detail(p, {"sheet": "h200-sxm-141gb-x1", "arena_gib": 112, "util": 0.88}, 2.8047495865882895e-05,
+                    120259084288, GPU_HBM["h200-sxm-141gb-x1"]) == (
+        "an arena of 112 GiB at vLLM's 0.88 of the card, the store 120.26 GB of its 151.40 GB; paced: 7 credited "
+        "stretches of 1,000 ms, 19 groups a stretch at 52.9063 ms a pass, a coin every 1 pass, 2773 openings a "
+        "stretch, 146 a group; 152 passes in 152 groups; 16 sketch rows, not the deployed registration's 64; the "
+        "sample's term a pass group 2^-101.0; lateness allowed 190 ms; error 2.8e-05 (2^-15.1) against a prover of "
+        "2^80 SHA-512 compressions on any hardware; the share against hardware/nodes/h200-sxm-141gb-x1.toml at one "
+        "card")
+    assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": [12] * 96}}})["passes"] == 1152
+    assert M.parameters({}, vs | {"ledger": {"inputs": {"passes": True}}})["passes"] is None
 
 
-@pytest.mark.parametrize("given", [{"WINDOWS": "3"}, {"SAMPLES": "64", "WINDOW_MS": "500"}, {"SESSIONS": "2"}])
-def test_local_refuses_another_session_form(store, capsys, work, monkeypatch, given):
-    for k, v in given.items():
-        monkeypatch.setenv(k, v)
-    machine = Machine()
-    assert bench(store, "--local", run=machine) == 2
-    assert machine.started == []
-    err = capsys.readouterr().err
-    assert "--local runs one session form, 7 windows of 1000 ms at 2773 openings a window" in err
-    assert all(f"{k}={v}" in err for k, v in given.items())
+def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(store, capsys, work):
+    """The arena and vLLM's share on the line are the engine's record of them (`out/engine.0.json`), not what
+    `--local` handed `run.sh`; an engine that left no record leaves them unstated."""
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, _ = printed(capsys)
+    assert (doc["machine"]["arena_gib"], doc["machine"]["util"]) == (ARENA, 0.88)
+    assert bench(store, "--local", run=Machine(engine=False)) == 0
+    _, doc, _ = printed(capsys)
+    assert (doc["machine"]["arena_gib"], doc["machine"]["util"]) == (None, None)
+    assert doc["ran_with"]["detail"].startswith("an arena its engine's record doesn't state, the store ")
 
 
 @pytest.mark.parametrize("machine, why, code", [
     (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
      3),
-    (Machine(card="NVIDIA L40S, 8.9"), "NVIDIA L40S is compute capability 8.9, and the tree has a Llama 3.2 1B row only "
-                                       "for 9.0 and 12.0", 3),
     (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (hardware/nodes/ "
      "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
-    (Machine(boot_rc=3), "the bootstrap failed (pod_bootstrap.sh exited 3, naming no step)", 3),
-    (Machine(boot_rc=3, boot_fail="BOOTSTRAP_FAIL_PIP: x\nBOOTSTRAP_FAIL_NORM_TAP: fatal error: cusparse.h: No such file\n"),
-     "the bootstrap failed at its NORM_TAP step (fatal error: cusparse.h: No such file); its logs are in", 3),
-    (Machine(boot_rc=3, boot_fail="BOOTSTRAP_FAIL_CHECKPOINT: 404 from huggingface.co\n"),
-     "the bootstrap failed at its CHECKPOINT step (404 from huggingface.co)", 3),
-    (Machine(rc=6), "the served session failed (run.sh exited 6)", 3),
+    (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
+     "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
+    (Machine(rc=6), "the node's session failed (run.sh exited 6)", 3),
     (Machine(record=a_record(a_session(accepted=False, failure="window 2: a receipt doesn't open"))),
      "session 0 was not accepted (window 2: a receipt doesn't open)", 1),
-], ids=["no-driver", "no-gpu", "no-row", "no-sheet", "bootstrap", "bootstrap-step", "checkpoint", "run-sh", "rejected"])
+], ids=["no-driver", "no-gpu", "no-sheet", "checkpoint", "run-sh", "rejected"])
 def test_a_local_session_that_cannot_run_exits_3_and_one_not_accepted_exits_1(store, capsys, work, machine, why, code):
     """Both print no number: an accepted session prints its number and exits 0, one the verifier refused exits 1, and
     one that never reached a verdict (this machine lacks what it needs, or a process failed) exits 3."""
     assert bench(store, "--local", run=machine) == code
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None and doc["local"] == M.LOCAL
-    if "CHECKPOINT" in why:
-        assert text[0].endswith(": a checkpoint that won't download means Hugging Face can't be reached from here")
+
+
+def test_local_without_vllm_py_runs_nothing_and_says_how_to_make_one(store, capsys, work, monkeypatch):
+    monkeypatch.delenv("VLLM_PY")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 3
+    assert [a[0] for a, _ in machine.started] == ["git"] * len(machine.started)
+    text, _, _ = printed(capsys)
+    assert text[0].startswith("memory: no number: --local serves with vLLM, and VLLM_PY names no vLLM interpreter")
 
 
 def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, capsys, work, monkeypatch):
     """PLAN reaches `run.sh` under both one-machine ways in, and whatever session it makes, the verifier's refusal is
-    the command's, with no number and exit 1. (A served row's `run.sh` runs `serve` alone and refuses another plan
-    before any session, `test_run_serve.py`; a served cheat is a changed prover.)"""
+    the command's, with no number and exit 1."""
     monkeypatch.setenv("PLAN", "skip:0.0625")
     rejected = a_record(a_session(accepted=False, failure="window 0: 4 of 16 openings missing"))
-    loop = Machine(record=rejected)
-    assert bench(store, "--loopback", run=loop) == 1
-    ((_, env),) = loop.runs()
-    assert env["PLAN"] == "skip:0.0625"
-    assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
-    monkeypatch.setenv("PLAN", "servedrop:1")
-    served = Machine(record=rejected)
-    assert bench(store, "--local", run=served) == 1
-    ((_, env),) = served.runs()
-    assert env["PLAN"] == "servedrop:1"
-    assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
+    for way in ("--loopback", "--local"):
+        machine = Machine(record=rejected)
+        assert bench(store, way, run=machine) == 1
+        ((_, env),) = machine.runs()
+        assert env["PLAN"] == "skip:0.0625"
+        assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
 
 
 def test_a_refused_local_session_writes_its_row_with_no_value_and_why(store, capsys, work, tmp_path, monkeypatch):
@@ -1330,7 +1374,7 @@ def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_the_py
     print the Python ledger's γ and error, which the verifier's record carries beside the undecided reading, and the
     text's first lines and the JSON's `gamma_decided_by` say the Lean verifier has not decided them."""
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
-    machine = Machine(record=a_record(a_python_ledger_session(gamma=0.199, error=2.0 ** -40)))
+    machine = Machine(record=a_local_record(a_python_ledger_session(gamma=0.199, error=2.0 ** -40)))
     assert bench(store, way, run=machine) == 0
     text, doc, _ = printed(capsys)
     assert text[0].startswith("memory: 0.199 of the node's memory read rate") and "δ = 9.09e-13" in text[0]

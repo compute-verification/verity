@@ -2,8 +2,8 @@
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
 one line of JSON (`value`, `unit`, `commit`, `run`, `error`), exiting 0. A session that the Lean verifier didn't accept
 (its record's `verdict` is not `lean`) prints no number and exits 1; a command line or a record that can't be read exits
-2; and where no session ran to a verdict (`CouldNotRun`: no NVIDIA driver, no row or data sheet for the card, a
-bootstrap that failed or that `--local` won't run, a session's processes that failed) it prints no number and exits 3.
+2; and where no session ran to a verdict (`CouldNotRun`: no NVIDIA driver, no data sheet for the card, no VLLM_PY,
+a checkpoint that can't be fetched, a session's processes that failed) it prints no number and exits 3.
 The number is printed with its error, the ledger's δ for that γ summed over the session's windows, and the text says
 how it reads (`ERROR_FORM`): that δ, and the term no δ holds. Where the error is 1 or more the session bounds nothing:
 the command prints "no bound at this period" (`verity.protocol.NO_BOUND`) with the error and no number, and its
@@ -12,7 +12,7 @@ document's `value` is null with the reason under `no_bound`.
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
     verity bench memory --from RUN [--session K]  a recorded run
     verity bench memory --loopback                both processes on this machine: a test of this command
-    verity bench memory --local                   vLLM serving Llama 3.2 1B on this machine's GPU, audited beside it
+    verity bench memory --local                   the node's session on one card of this machine, audited beside it
 
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
@@ -36,14 +36,16 @@ run this command's `--loopback` left, that it was one.
 `--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
 
-`--local` is the served session on one machine of your own: `remote_session/run.sh` with ROLE=both and SERVE=row, vLLM
-serving the Llama 3.2 1B row for this machine's card (`LOCAL_ROWS`, or LOCAL_ROW) on one GPU under the audit, the Lean
-verifier and its coins in processes beside it. Unless VLLM_PY names a vLLM interpreter, the tree's bootstrap
-(`pod_bootstrap.sh`) first makes one in LOCAL_WORK, with the row's checkpoint made from its public pin on Hugging Face.
-With no `gpu-lease` installed, the lease is the tree's own program, its locks in LOCAL_WORK. The run's records stay in
-LOCAL_WORK/runs/ (the research run's own directory under one). The verifier and the coins ran on the machine being
-measured, so the number is a measurement to improve on and not an audit: the text says so first, and the JSON says it
-under `local`. It reads no evidence store, so the two references beside it are left out with that reason.
+`--local` is the node's session on one card of a machine of your own: `remote_session/run.sh` with ROLE=both,
+SERVE=node and GPUS=1, a vLLM engine (VLLM_PY's) serving ROLE's pinned checkpoint with its weights in one arena of
+most of the card's memory (`arena_of`), which is the store; the node prover reads the whole arena in paced, timed
+passes beside the serving, and the Lean verifier and its coins run in processes beside them, in one session form
+(`PACE`, refused otherwise). The checkpoint is fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
+the tree's own program, its locks in LOCAL_WORK unless the machine has a lease directory of its own (`LEASE_DIR`).
+The run's records stay in LOCAL_WORK/runs/ (the research run's own directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
+and the coins ran on the machine being measured, so the number is a measurement to improve on and not an audit: the
+text says so first, and the JSON says it under `local`. It reads no evidence store, so the two references beside it
+are left out with that reason.
 
 Beside the number it prints two references, each from its run in the store with the run's date and card and the error
 its record states: PoUS's state bound over a card's memory, and the share a wipe left foreign at most.
@@ -123,39 +125,38 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
-#: the served row `--local` runs for a card's compute capability (nvidia-smi's `compute_cap`): Llama 3.2 1B in int8 on
-#: one GPU, one request at a time; a card of another capability needs a row of its own (LOCAL_ROW)
-LOCAL_ROWS = {"9.0": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
-              "12.0": "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"}
 #: the node sheet (`hardware/nodes/`) of a --local session's card, by a word of the name nvidia-smi gives it, taken at
 #: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
 LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
 SHEETS = ROOT / "hardware"
-#: the one session form `--local` runs, as `run.sh`'s variables: one session of seven windows of a second at 2773
-#: openings a window, the form the board's numbers are compared at
-FORM = {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "1000", "SAMPLES": "2773"}
+#: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
+#: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
+#: the pass the session's calibration measures on the card (`--pace-pass-ms 0`)
+PACE = {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "0"}
+#: the machine's own lease directory (`gpu_lease.sh`'s default), which every lane's lease on the machine counts in
+LEASE_DIR = Path("/run/gpu-lease")
+#: `run.sh`'s windowed form, which the paced session replaces: --local refuses each of them set
+WINDOWED = ("UNPACED", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
+#: the node run's engine and prover, with one engine (`gate_run.sh`'s ENGINE_ARGS and NODE_ARGS), and its verifier's
+#: lateness and quantile (`gate.sh`'s)
+ENGINE_ARGS, NODE_ARGS = "--step-hz 2 --align-steps", "--decode-s 60 --warm-openings 2773 --wait-s 1800"
+LATENESS = {"JITTER_MS": "50", "QUANTILE": "max"}
+#: vLLM's share of the card, and the GiB of it the arena leaves vLLM for its KV cache and activations: the node run's
+#: 112 GiB of an H200's 141 and 72 of an RTX PRO 6000's 96 (`arena_of`); vLLM keeps VLLM_ROOM_GIB of its share for
+#: the served model's cache and activations, and the prover's context takes what is outside the share
+UTIL, VLLM_ROOM_GIB = 0.88, 12
+#: the least share of the card's memory a --local store may be: a session that read less read a request's bytes and
+#: not the card's, and its share is not this benchmark's
+STORE_MIN = 0.5
+#: the pin of the checkpoint ROLE serves: its repo, revision and files, fetched into LOCAL_WORK/hf
+PIN = ROOT / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "check" / "models.json"
+FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
+         "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
 #: who drew a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
 #: or serve.py's on the verifier's machine, or the auditor device's through its gate
 COINS = {"local": "local challenger", "serve": "local challenger", "gate": "deployed challenger"}
-#: the checkpoint those rows serve, which the bootstrap makes from its ungated BF16 pin (`unsloth/Llama-3.2-1B`)
-LOCAL_CASE = "LLAMA32_1B_INT8"
-BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
-#: what a bootstrap that touches files outside LOCAL_WORK holds, which `--local` won't run: removing the machine's package
-#: caches, and reading tap builds at a fixed path
-OUTSIDE_WORK = {"rm -rf /root/.cache": "removes /root/.cache/uv and /root/.cache/pip, other programs' package caches",
-                "/workspace/cp/fa2/build": "reads its tap builds from /workspace/cp/fa2, not from LOCAL_WORK"}
-#: where the bootstrap builds each tap under LOCAL_WORK (its scripts' variables), and the served row's option that
-#: names each build there
-TAPS = {"FA2": "cp/fa2", "NT": "cp/norm_tap", "RT": "cp/router_tap"}
-TAP_SOS = {"--hidden-so-fa2": "cp/fa2/build/matReq/verity_fa2_matReq.so",
-           "--hidden-so-fa3": "cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
-           "--hidden-so-fa2-guarded": "cp/fa2/build/matReqG/verity_fa2_matReqG.so",
-           "--hidden-so-fa3-guarded": "cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
-           "--norm-tap-so": "cp/norm_tap/build/verity_norm_tap.so",
-           "--router-tap-so": "cp/router_tap/build/verity_router_tap.so",
-           "--native-collect-default": "cp/nc_build"}
 #: why `--local` prints no reference beside its number
 NO_STORE = "a --local run reads no evidence store, and the references are other runs' numbers in ours"
 #: `gamma_decided_by` for a share read from the Python ledger where the Lean's answer for γ's terms isn't written, and
@@ -322,16 +323,25 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
 
 def parameters(v: dict, vs: dict) -> dict:
     """What session `vs` of the verifier's record `v` ran with, as its record states it: where its coins came from
-    (the verifier's `--challenger`), the store's rows, the openings a window, δ a window, and the windows, their
-    length and the lateness allowed, and the prover its error is priced against: `budget_log2`, the log2 of the SHA-512
-    compressions it may make on any hardware (`audit.QUERIES_LOG2`). None where the record states none."""
+    (the verifier's `--challenger`), the store's rows, the openings a window, the sample's term a window (`delta`),
+    and the windows, their length and the lateness allowed, and the prover its error is priced against:
+    `budget_log2`, the log2 of the SHA-512 compressions it may make on any hardware (`audit.QUERIES_LOG2`), and
+    `passes` the passes the ledger counted in all. A paced session has no windows: its record's `windows` are the pass
+    groups it ran (`pass_groups`) and its `window_ns` a placeholder, so it states neither as windows; its `pace` is
+    its verifier's (`pace_of`: the passes a coin, a stretch's milliseconds and openings, the openings a group, the
+    credited stretches, the groups a stretch and the pass they are counted at). None where the record states none."""
     def ns(x):
         return x / 1e6 if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
+    passes = ((vs.get("ledger") or {}).get("inputs") or {}).get("passes")
+    pace = vs.get("pace") if isinstance(vs.get("pace"), dict) else None
+    form = ({"pace": pace, "pass_groups": vs.get("windows")} if pace else
+            {"windows": vs.get("windows"), "window_ms": ns(vs.get("window_ns"))})
     return {"coins": (vs.get("challenger") or {}).get("challenger"), "rows": (v.get("registration") or {}).get("rows"),
-            "samples": vs.get("samples"), "delta": vs.get("delta"), "windows": vs.get("windows"),
-            "window_ms": ns(vs.get("window_ns")), "allowance_ms": ns(vs.get("allowance_ns")),
-            "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2")}
+            "samples": vs.get("samples"), "delta": vs.get("delta"), **form, "allowance_ms": ns(vs.get("allowance_ns")),
+            "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2"),
+            "passes": passes if type(passes) is int else
+            sum(passes) if isinstance(passes, list) and passes and all(type(x) is int for x in passes) else None}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
@@ -485,30 +495,6 @@ def gpu_of(run: Callable = subprocess.run) -> tuple[str, str]:
     return name.strip(), cc.strip()
 
 
-def bootstrap_failed(out: Path, rc: int) -> str:
-    """Why the bootstrap failed, from the step it names last in `out/bootstrap.fail` (`BOOTSTRAP_FAIL_STEP: why`)."""
-    fail = out / "bootstrap.fail"
-    lines = fail.read_text(errors="replace").strip().splitlines() if fail.is_file() else []
-    step, _, why = (lines[-1] if lines else "").partition(": ")
-    if not step.startswith("BOOTSTRAP_FAIL_"):
-        return f"the bootstrap failed (pod_bootstrap.sh exited {rc}, naming no step); its logs are in {out}"
-    step = step.removeprefix("BOOTSTRAP_FAIL_")
-    hint = ": a checkpoint that won't download means Hugging Face can't be reached from here" if step == "CHECKPOINT" else ""
-    return f"the bootstrap failed at its {step} step ({why.strip()[-300:]}); its logs are in {out}{hint}"
-
-
-def card_row(name: str, cc: str) -> str:
-    """The served row for card `name` of compute capability `cc`: LOCAL_ROW where it is set, else `LOCAL_ROWS`'."""
-    if row := SETTINGS.LOCAL_ROW:
-        return row
-    if (row := LOCAL_ROWS.get(cc)) is None:
-        raise CouldNotRun(f"{name} is compute capability {cc}, and the tree has a Llama 3.2 1B row only "
-                       f"for {' and '.join(LOCAL_ROWS)} ({', '.join(LOCAL_ROWS.values())}): make one for this card "
-                       "(`verity-vllm workload --row-id ROW ...`, its target with \"async_scheduling\": false) and "
-                       "name it with LOCAL_ROW")
-    return row
-
-
 def sheet_of(name: str) -> str:
     """The node sheet of card `name`: LOCAL_NODE where it is set, else `LOCAL_SHEETS`'."""
     if kind := SETTINGS.LOCAL_NODE:
@@ -548,61 +534,119 @@ def digest(path: Path) -> str:
     return h.hexdigest()
 
 
-def local(run: Callable = subprocess.run) -> dict:
-    """One served session on this machine: `run.sh` with ROLE=both and SERVE=row, the Llama 3.2 1B row for this
-    machine's card under the audit on one GPU and the verifier beside it, read from its records. Unless VLLM_PY is
-    set, the tree's bootstrap makes the vLLM environment and the row's checkpoint in LOCAL_WORK first (it skips what
-    is already there); with no `gpu-lease` installed the tree's own lease keeps its locks there too. The run's records
-    are kept, in the research run's directory under one and else in a directory of LOCAL_WORK/runs/."""
-    given = SETTINGS.environ()
-    if other := [f"{k}={given[k]}" for k, v in FORM.items() if given.get(k, v) not in (v, "")]:
-        raise Unreadable(f"--local runs one session form, {FORM['WINDOWS']} windows of {FORM['WINDOW_MS']} ms at "
-                         f"{FORM['SAMPLES']} openings a window, so its numbers compare: {', '.join(other)} is another")
-    name, cc = gpu_of(run)
-    row, kind, work = card_row(name, cc), sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
-    node, hbm_bytes = one_card(kind)
-    verifier_cpus, prover_cpus = cores()
-    env = {"VERIFIER_CPUS": verifier_cpus, "PROVER_CPUS": prover_cpus, **SETTINGS.environ(), **FORM, "ROLE": "both",
-           "SERVE": "row", "ROW": row, "PLAN": SETTINGS.PLAN or "serve"}
-    if not SETTINGS.VLLM_PY:
-        script = BOOTSTRAP.read_text()
-        if outside := [why for held, why in OUTSIDE_WORK.items() if held in script]:
-            raise CouldNotRun(f"this tree's bootstrap ({BOOTSTRAP.name}) {' and '.join(outside)}, so --local doesn't run "
-                           "it: set VLLM_PY to a vLLM environment of your own, or run from a tree whose bootstrap "
-                           "keeps to LOCAL_WORK")
-        work.mkdir(parents=True, exist_ok=True)
-        boot = {**SETTINGS.environ(), "WORK": str(work), "VENV": str(work / "venv312"), "HF_HOME": str(work / "hf"),
-                "UV_CACHE_DIR": str(work / "cache" / "uv"), "PIP_CACHE_DIR": str(work / "cache" / "pip"),
-                "XDG_CACHE_HOME": str(work / "cache"), **{k: str(work / v) for k, v in TAPS.items()}}
-        done = run(["bash", str(BOOTSTRAP), "--cases", LOCAL_CASE, "--out", str(work / "bootstrap")],
-                   cwd=BOOTSTRAP.parents[2], env=boot, stdout=sys.stderr)
+def thirds() -> tuple[str, str, str]:
+    """The cores this process may use, split among `run.sh`'s ENGINE_CPUS (the first quarter), PROVER_CPUS (the
+    middle) and VERIFIER_CPUS (the last quarter); with fewer than four, the prover and the verifier share."""
+    have = sorted(os.sched_getaffinity(0))
+    q = len(have) // 4
+    engine, verifier = have[:max(1, q)], have[len(have) - q:] if q else have[-1:]
+    prover = have[q:len(have) - q] or have
+    return tuple(",".join(map(str, c)) for c in (engine, prover, verifier))
+
+
+def arena_of(hbm_bytes: int) -> tuple[int, float]:
+    """The engine's weights arena in whole GiB and vLLM's share of the card: ARENA_GIB and UTIL where set, else
+    floor(`UTIL` × the card's GiB) − `VLLM_ROOM_GIB`: 112 GiB on an H200."""
+    try:
+        util = float(SETTINGS.UTIL or UTIL)
+        arena = int(SETTINGS.ARENA_GIB or math.floor(util * hbm_bytes / 2 ** 30) - VLLM_ROOM_GIB)
+    except ValueError as e:
+        raise Unreadable(f"ARENA_GIB is whole GiB and UTIL a share of the card ({e})") from e
+    if not 0 < util <= 1 or arena < 1:
+        raise Unreadable(f"the arena is {arena} GiB at UTIL {util}: ARENA_GIB is at least 1 and UTIL in (0, 1]")
+    return arena, util
+
+
+def checkpoint(work: Path, vllm_py: str, run: Callable) -> Path:
+    """ROLE's pinned checkpoint in LOCAL_WORK/hf, its snapshot directory: the files the pin names that aren't there
+    are fetched from the Hub with VLLM_PY's `huggingface_hub`."""
+    pin = json.loads(PIN.read_text())[ROLE]
+    hf = work / "hf"
+    snap = hf / "hub" / f"models--{pin['repo'].replace('/', '--')}" / "snapshots" / pin["revision"]
+    if missing := sorted(f for f in pin["files"] if not (snap / f).is_file()):
+        done = run([vllm_py, "-c", FETCH, pin["repo"], pin["revision"], *missing],
+                   env={**SETTINGS.environ(), "HF_HOME": str(hf), "HF_HUB_OFFLINE": "0"}, stdout=sys.stderr)
         if done.returncode:
-            raise CouldNotRun(bootstrap_failed(work / "bootstrap", done.returncode))
-        env.update(VLLM_PY=str(work / "venv312" / "bin" / "python"), NODE_WORKSPACE=str(work), HF_HOME=str(work / "hf"),
-                   UV_CACHE_DIR=boot["UV_CACHE_DIR"], PIP_CACHE_DIR=boot["PIP_CACHE_DIR"],
-                   XDG_CACHE_HOME=boot["XDG_CACHE_HOME"],
-                   ROW_ARGS=" ".join([*(f"{flag} {shlex.quote(str(work / at))}" for flag, at in TAP_SOS.items()),
-                                      *filter(None, [env.get("ROW_ARGS")])]))
-    if shutil.which("gpu-lease") is None:
-        env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
+            raise CouldNotRun(f"{pin['repo']}@{pin['revision'][:12]} ({', '.join(missing)}) couldn't be fetched into "
+                              f"{hf} (rc {done.returncode}): Hugging Face can't be reached from here, or VLLM_PY has no "
+                              "huggingface_hub")
+    return snap
+
+
+def local(run: Callable = subprocess.run) -> dict:
+    """The node's session on one card of this machine: `run.sh` with ROLE=both, SERVE=node and GPUS=1, a vLLM engine
+    serving ROLE's pinned checkpoint with its weights in one arena (`engine.py`), the store, which the node prover
+    (`node.py`) reads whole in paced, timed passes, and the verifier beside them on cores of its own, in the one
+    session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint and the caches are
+    kept in LOCAL_WORK, and on a machine with no lease of its own (no `gpu-lease` and no `LEASE_DIR`) the tree's
+    lease's locks too, while a machine's own lease directory stays the one every lane there counts in. The run's records are kept, in
+    the research run's directory under one and else in a directory of LOCAL_WORK/runs/. A session whose store is
+    below `STORE_MIN` of the card's memory prints no number."""
+    given = SETTINGS.environ()
+    other = [f"{k}={given[k]}" for k, v in PACE.items() if given.get(k, v) not in (v, "")]
+    if other := other + [f"{k}={given[k]}" for k in WINDOWED if given.get(k)]:
+        raise Unreadable(f"--local runs one session form, PACED={PACE['PACED']} at PACE_PASS_MS={PACE['PACE_PASS_MS']} "
+                         f"(a coin a pass group, seven credited stretches of a second at 2773 openings each, at the "
+                         "pass the calibration measures), so its "
+                         f"numbers compare: {', '.join(other)} is another")
+    if not SETTINGS.VLLM_PY:
+        raise CouldNotRun("--local serves with vLLM, and VLLM_PY names no vLLM interpreter: make one (`uv venv "
+                          "VENV && uv pip install --python VENV/bin/python vllm`) and set VLLM_PY=VENV/bin/python")
+    name, _ = gpu_of(run)
+    kind, work = sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
+    node, hbm_bytes = one_card(kind)
+    arena, util = arena_of(hbm_bytes)
+    work.mkdir(parents=True, exist_ok=True)
+    snap = checkpoint(work, SETTINGS.VLLM_PY, run)
+    engine_cpus, prover_cpus, verifier_cpus = thirds()
     held = SETTINGS.RESEARCH_RUN_DIR
     if not held:
         (work / "runs").mkdir(parents=True, exist_ok=True)
         held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
-    env["RESEARCH_RUN_DIR"] = held
     (Path(held) / NODE_FILE).parent.mkdir(parents=True, exist_ok=True)
     (Path(held) / NODE_FILE).write_text(json.dumps(node, sort_keys=True))
-    env["VERIFIER_ARGS"] = " ".join(filter(None, [env.get("VERIFIER_ARGS"), "--node", shlex.quote(f"{held}/{NODE_FILE}"),
-                                                  "--hbm-bytes", str(hbm_bytes)]))
-    print(f"memory: --local serves {row} on {name}, the verifier's node one card of {kind}; its records go to "
-          f"{held}/out", file=sys.stderr)
+    env = {"ENGINE_CPUS": engine_cpus, "PROVER_CPUS": prover_cpus, "VERIFIER_CPUS": verifier_cpus, **LATENESS,
+           **given, **PACE, "ROLE": "both", "SERVE": "node", "GPUS": "1", "PLAN": SETTINGS.PLAN or "honest",
+           "MODEL": str(snap),
+           "NODE_WORKSPACE": str(work), "HF_HOME": str(work / "hf"), "UV_CACHE_DIR": str(work / "cache" / "uv"),
+           "PIP_CACHE_DIR": str(work / "cache" / "pip"), "XDG_CACHE_HOME": str(work / "cache"),
+           "RESEARCH_RUN_DIR": held,
+           "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
+                                                 given.get("ENGINE_ARGS")])),
+           "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
+                                               given.get("NODE_ARGS")])),
+           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
+                                                   shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
+    if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
+        env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
+    print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
+          f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
-        raise CouldNotRun(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
-                       f"{held}/out")
+        raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
+                          f"{held}/out")
     s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
-    machine = {"card": name, "sheet": kind, "sheet_sha256": digest(SHEETS), "verifier_sha256": digest(VERIFIER)}
+    if s["store_bytes"] < STORE_MIN * hbm_bytes:
+        raise NoNumber(f"the store is {_gb(s['store_bytes'])}, {s['store_bytes'] / hbm_bytes:.3f} of the card's "
+                       f"{_gb(hbm_bytes)}, below the {STORE_MIN} this benchmark reads: the session read a request's "
+                       "bytes and not the card's memory, so its share is not this benchmark's")
+    machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
+               "verifier_sha256": digest(VERIFIER)}
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+
+
+def engine_args(held: Path) -> dict:
+    """The arena's GiB and vLLM's share of the card as the session's engine recorded them (`out/engine.0.json`'s
+    `args`), None where it states none."""
+    path = held / "out" / "engine.0.json"
+    if not path.is_file():
+        return {"arena_gib": None, "util": None}
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise Unreadable(f"the session's engine record {path} doesn't read ({type(e).__name__}: {e})") from e
+    args = record.get("args") if isinstance(record, dict) and isinstance(record.get("args"), dict) else {}
+    return {"arena_gib": args.get("arena_gib"), "util": args.get("util")}
 
 
 def session_form() -> dict[str, str]:
@@ -795,7 +839,7 @@ def text(doc: dict) -> str:
     references."""
     rate, error = doc.get("rate_bytes_per_s"), doc.get("error")
     at = "at the data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")
-    reads = f"its error reads {ERROR_FORM}, " + (f"δ = {error:.3g} in the verifier's ledger" if error is not None
+    reads = f"its error reads {ERROR_FORM}, " + (f"δ = {power(error)} in the verifier's ledger" if error is not None
                                                  else "and the verifier's record holds no δ for it")
     if doc.get("no_bound"):
         lines = [f"memory: {doc['no_bound']}: this session certifies no share of the node's memory read rate, {at}; "
@@ -843,21 +887,44 @@ def ran(doc: dict) -> tuple[str, dict] | None:
     if (coins := COINS.get(p.get("coins"))) is None:
         return None
     deployed = coins == "deployed challenger" and p.get("rows") == receipts.WIDE_ROWS
-    return kit.ran_with(coins, "deployed" if deployed else "development", detail(p, doc.get("machine")))
+    return kit.ran_with(coins, "deployed" if deployed else "development",
+                        detail(p, doc.get("machine"), doc.get("error"), doc.get("store_bytes"), doc.get("node_gpu_bytes")))
 
 
-def detail(p: dict, machine: dict | None = None) -> str:
-    """The `ran with` line's detail (`parameters`): the rows, the openings and δ a window, the windows, the lateness,
-    the prover the error is priced against, and under `--local` the sheet the share is of."""
+def power(x: float) -> str:
+    """`x` and its power of two, as 2.8e-05 (2^-15.1)."""
+    return f"{x:.3g}" + (f" (2^{math.log2(x):.1f})" if x > 0 else "")
+
+
+def detail(p: dict, machine: dict | None = None, error: float | None = None, store: int | None = None,
+           whole: int | None = None) -> str:
+    """The `ran with` line's detail (`parameters`): under `--local` the arena against the card's memory first; the
+    session's form (a paced one's stretches, groups and pass, or the windows), the passes, the rows, the openings,
+    the sample's term a pass group or a window (the record's `delta`, which is not the error), the lateness, the error
+    with its power of two and the prover it is priced against, and under `--local` the sheet the share is of. Every
+    figure is the record's: the arena and vLLM's share as the engine's record states them (`engine_args`)."""
     def ms(x):
         return "not stated" if x is None else f"{x:,.0f} ms"
-    delta, rows = p.get("delta"), p.get("rows")
-    return (f"{rows or 'no'} sketch rows" + ("" if rows in (None, receipts.WIDE_ROWS) else
-                                             f", not the deployed registration's {receipts.WIDE_ROWS}")
-            + f"; {p.get('samples') or 'no'} openings a window; δ = "
+    delta, rows, pace = p.get("delta"), p.get("rows"), p.get("pace")
+    held = f", the store {_gb(store)} of its {_gb(whole)}" if store and whole else ""
+    arena = ("" if not machine or "arena_gib" not in machine else
+             (f"an arena of {machine['arena_gib']} GiB at vLLM's {machine['util']:g} of the card"
+              if machine.get("arena_gib") is not None and machine.get("util") is not None
+              else "an arena its engine's record doesn't state") + held + "; ")
+    form = (f"paced: {pace['windows']} credited stretches of {ms(pace['t_ms'])}, {pace['groups']} groups a stretch at "
+            f"{pace['pass_ms']:g} ms a pass, a coin every {pace['k']:g} pass{'' if pace['k'] == 1 else 'es'}, "
+            f"{pace['draws_t']} openings a stretch, {pace['draws']} a group"
+            if pace else f"{p.get('samples') or 'no'} openings a window; {p.get('windows') or 'no'} windows of "
+            f"{ms(p.get('window_ms'))}")
+    groups = f" in {p['pass_groups']:,} groups" if pace and p.get("pass_groups") is not None else ""
+    return (arena + form + (f"; {p['passes']:,} passes{groups}" if p.get("passes") is not None else "")
+            + f"; {rows or 'no'} sketch rows" + ("" if rows in (None, receipts.WIDE_ROWS) else
+                                                f", not the deployed registration's {receipts.WIDE_ROWS}")
+            + f"; the sample's term a {'pass group' if pace else 'window'} "
             + (f"2^{math.log2(delta):.1f}" if isinstance(delta, (int, float)) and delta > 0 else "not stated")
-            + f" a window; {p.get('windows') or 'no'} windows of {ms(p.get('window_ms'))}; lateness allowed "
-            f"{ms(p.get('allowance_ms'))}; the error against a prover of "
+            + f"; lateness allowed {ms(p.get('allowance_ms'))}; "
+            + (f"error {power(error)}" if error is not None else "the error")
+            + " against a prover of "
             + ("SHA-512 compressions not stated" if p.get("budget_log2") is None
                else f"2^{p['budget_log2']} SHA-512 compressions on any hardware")
             + (f"; the share against hardware/nodes/{machine['sheet']}.toml at one card" if machine else ""))
@@ -891,8 +958,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     ap.add_argument("--session", type=int, metavar="K", help="the session, in a run that holds several")
     ap.add_argument("--loopback", action="store_true", help="both processes on this machine; certifies nothing")
     ap.add_argument("--local", action="store_true",
-                    help="vLLM serving Llama 3.2 1B on this machine's GPU with the verifier beside it: a measurement, "
-                         "not an audit")
+                    help="the node's session on one card of this machine, vLLM serving Llama 3.2 1B from the store "
+                         "and the verifier beside it: a measurement, not an audit")
     a = ap.parse_args(argv)
     if sum((a.period is not None, a.run is not None, a.loopback, a.local)) != 1:
         ap.error("one of PERIOD (the node run), --from RUN, --loopback or --local")
