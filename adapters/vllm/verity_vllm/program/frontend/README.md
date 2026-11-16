@@ -1,26 +1,33 @@
 # verity_vllm.program.frontend
 
-The vLLM half of the Torch-to-circuit translator, whose walk is the PyTorch adapter's (`verity_torch.frontend`): `rules/`
-holds the rules for vLLM's ops and the default rule set, `targets` and `gemm_targets` bind a rule to the kernels of the
-served hardware, `target_profile` is the target a Program is derived for, `seed_rule` and `stop_rule` are the two
-served rules, and `vllm_derive` is the walk under all of them. Each module's docstring says what it holds.
+This is the vLLM half of the translator from PyTorch to circuits. The walk over a model's graph is the PyTorch
+adapter's ([`verity_torch.frontend`](../../../../torch/verity_torch/frontend/README.md)); this package adds what vLLM
+serving needs on top of it: the rules for vLLM's own ops ([`rules/`](rules/README.md)), the binding of a rule to the
+kernels of the served hardware, the target a Program is derived for, and the two served rules applied after the walk,
+the seed rule and the length rule. `vllm_derive` is the walk under all of them, and the adapter's public way to derive
+under vLLM's rules.
 
-## What other packages import
+## Try it
 
-A module of this directory that another package of the adapter, a benchmark or a tool imports from declares those
-names in its `__all__`; a name outside that list is the translator's own. The package itself gives no name: each is
-imported from its module, and importing a module loads only what that module imports. From the rest of the adapter:
-`vllm_derive`'s `derive_report` (`pipeline`); `target_profile`'s `TargetProfile`, `DEFAULT_TARGET`, `ArtifactIdentity`, `parse_target_arg` and `profile_mismatches`
-(`engine`, `observe`, `pipeline`, `program`, `query`); the specs, launch contexts and tensor-core steps of `targets`
-(`program`, `observe`, `acquire`, `pipeline`); `gemm_targets`' `gemm_target_for`, `try_gemm_target_for`,
-`UnregisteredGemmTarget` and `ADA_TUNED_GEMM` (`acquire`, `observe`, `pipeline`, `program`); the two served rules
-`seed_rule` and `stop_rule`, each with its name, parameters, Definition and check (`program`, `check`, `pipeline`);
-what a build needs of vLLM and of the export, in `vllm_meta`, `export_compat`, `export_ops`, `triton_capture`,
-`loader_parity`, `relabel` and `inputs_trace` (`pipeline`, `engine`, `observe`); which kernels a loaded model applies,
-in `kernel_readback` (`pipeline`, `engine`, `protocols`); `collective_kinds` (`pipeline`, `query`);
-`dsv4_leaves.FP8_DS_MLA_QB` (`observe`); and `marlin_moe_leaf.mxfp4_marlin_layers` (`acquire`). From outside the
-adapter: `benchmarks/network_sim` reads `derive_examples.GreedyServe` and `vllm_derive.derive_report`, `benchmarks/harness` reads
-`kernel_readback.int8_exact_of`, `benchmarks/one_stage`, `benchmarks/spot_proved` and `tools/verity/circuit_check` read
-specs of `targets`, and `benchmarks/pouw` reads `target_profile.TargetProfile`. `target_profile` also passes on four
-names of `kernel_readback` that its own list leaves out: `applied_kernels`, `fp8_block_gemm_kernel_of`, `int8_exact_of`
-and `moe_experts_class_of`. `rules/` is imported from outside the package too and is not listed here.
+With the workspace synced with CPU torch (`uv sync --all-packages --extra torch-cpu`), derive a two-layer serving
+loop, built on meta tensors:
+
+~~~python
+import torch
+from verity_vllm.definitions.registry import b1
+from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend.vllm_derive import derive_report
+
+C = {**b1.B0_CONFIG, "NL": 2, "V": 64, "MAX_POS": 64}
+with torch.device("meta"):
+    model = ex.GreedyServe(C, 2)
+rep = derive_report(model, (torch.empty(3, dtype=torch.int32, device="meta"),), mode="profile", profile="b1-eager",
+                    config=C, name="Serve")
+rep.family["family"]                                        # 'Serve_v1{C={f7fd46dceb48},LP=3,STEPS=2}'
+rep.program.annotations["derive"]["rules_applied"][:3]      # ['ArgmaxTokenSelect_v1', 'Embedding[profile]_v1', 'FusedAddRmsNorm[vllm]_v1']
+~~~
+
+`GreedyServe` is an ordinary serving loop: a prompt's prefill, then greedy decode steps. Its derived Program is
+recognised as the registered family `Serve_v1`, and the rules applied include vLLM's own, such as the fused add and
+RMSNorm. Each module's docstring says what it holds, and [`DESIGN.md`](DESIGN.md) lists the names other packages
+import from here.
