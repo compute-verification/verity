@@ -204,7 +204,7 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
     when the declaration can't be loaded."""
     audit, files = _declaration(), sorted(set(files))
     under: dict[str, list[str]] = {f.rpartition("/")[0]: [] for f in files
-                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith(audit.LEAN_TOOL)}
+                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith((audit.LEAN_TOOL, f"tests/{audit.LEAN_TOOL}"))}
     if "" in under:
         return ("**",)
     for f in files:

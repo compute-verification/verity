@@ -4,6 +4,7 @@
 # coins stubbed (`tests/stub_serve.py`).
 [tool.pytest.ini_options]
 testpaths = ["."]
+pythonpath = ["../../../../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree

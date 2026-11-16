@@ -51,7 +51,7 @@ def run(a, extra: list[str]) -> int:
     argv = [sys.executable, "-m", "pytest", str(resolver.HERE), "-m", "regression", "-q", "-p", "no:cacheprovider",
             "--junit-xml", str(Path(a.record) / "junit.xml"), *extra]
     print("$ " + " ".join(argv), flush=True)
-    return subprocess.call(argv, cwd=str(resolver.VLLM_ROOT), env=env)
+    return subprocess.call(argv, cwd=str(resolver.TESTS_ROOT), env=env)
 
 
 # ---- the recorded results ----------------------------------------------------------------------------------------------------------------

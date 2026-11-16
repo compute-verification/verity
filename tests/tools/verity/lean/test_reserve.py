@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TOOL = HERE.parent
+TOOL = HERE.parents[3] / "tools" / "verity" / "lean"
 FILE, DATA = TOOL / "reserve.py", TOOL / "reserve.json"
 
 

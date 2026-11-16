@@ -13,7 +13,7 @@ set -euo pipefail
 name=${1:?usage: glm53_mtp_capture_card.sh NAME [args...]}; shift
 card=${CARD:?CARD}; cores=${CORES:?CORES}; out=${OUT:?OUT}/$name
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-root=$(cd "$here/../../../../../adapters" && pwd -P); tree=$(cd "$root/../../../../adapters" && pwd -P)
+root=$(cd "$here/../../../../../adapters/vllm" && pwd -P); tree=$(cd "$root/../.." && pwd -P)
 script=$here/glm53_mtp_${name}_capture_gpu.py
 [ -f "$script" ] || { echo "no capture $script"; exit 2; }
 py=${VENV:-/workspace/venv312}/bin/python
