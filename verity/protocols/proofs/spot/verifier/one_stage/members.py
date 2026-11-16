@@ -74,7 +74,6 @@ from .proofs import V2_EXE, LeanError, v2_executable
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
 EXITS = {"accept": 0, "reject": 1, "undecided": 2}
-#: `OneStageZk.MULTI_REFUSED`: the reason the per-member form's check refuses what would accept
 MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
                  "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})")
 
