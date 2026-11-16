@@ -424,9 +424,9 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   with `made_up: true`; with `accepted` false, `NAME: no number: WHY` in place of the text's headline (a first line opening with `NAME:`),
   `value` null beside `no_number` and each
   measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`. Given none of them it
-  prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
+  prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/benchmarks/harness/test_report.py` holds
   compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
-  stated policy), and `tests/test_interface.py` the interface's arguments.
+  stated policy), and `tests/benchmarks/harness/test_interface.py` the interface's arguments.
 - **`kit.record_dir(arg, *, paths=None)`:** the directory of the run's record `arg` names: a directory as given, with
   nothing of research's imported; a run id fetched through research's store client where it is installed, refused where
   it was withdrawn whole or in a part holding a file read, as `benchmarks/compute/run.py`'s `EvidenceStore.files`
