@@ -913,7 +913,7 @@ private theorem params_full :
     case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, heither, ratio_half, split_half, poolValues_none,
       keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
       unwindowed_some, Array.mapM_empty]
-      block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow [] trace
+      block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
     case f1 => rw [hq]; kernel_rfl'   -- own.partition = partitionObj (resolve the RHS's `keys? query` keys check by `hq`)
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
