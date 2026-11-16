@@ -76,7 +76,7 @@ Every subprotocol of both products is ported to its own `Core.Protocol`.
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
 `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
-checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
+checks), and deletes the stub. The difftest's reference (`tests/verity/protocols/compose/verifier/lean/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's own
 difftest or its period hook.
 
@@ -91,7 +91,7 @@ audited.
 A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
 everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
-padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
+padded profile) replaces it. `tests/verity/protocols/compose/verifier/lean/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
 
