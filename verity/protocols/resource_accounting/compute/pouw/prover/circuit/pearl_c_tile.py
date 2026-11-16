@@ -42,7 +42,7 @@ is that add.  α is `pearl_c.s5_stats`' (the rows' FP32 words), which `Pc8RowA` 
 
 `verity.protocols.resource_accounting.compute.pouw.verifier.circuit.pc8`'s `Pc8Tile` is the same function as TileRead at the same device: core can't read
 this registry, nor this registry core, so the two are separate bodies, and core's tests hold them equal and to `pearl_c_u`
-(``verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pearl_c_tile.py``).
+(``tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pearl_c_tile.py``).
 """
 from __future__ import annotations
 
@@ -61,9 +61,9 @@ E4M3, BF16, F32 = Value(8), Value(16), Value(32)
 SLICE, PEEL, K16 = 32, 64, 16
 ONE_BITS = 0x3F800000
 CONFORMANCE = ("protocol-defined; equal to verity.protocols.resource_accounting.compute.pouw.verifier.schemes.pearl_c_u, the pin of the Hopper kernel's gate "
-               "problem, on its vectors (verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pearl_c_tile.py)")
+               "problem, on its vectors (tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pearl_c_tile.py)")
 UNSCALE_CONFORMANCE = ("protocol-defined; the Pearl-C kernels' store_y, the order their check fixtures' glue_y states "
-                       "(verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pearl_c_tile.py)")
+                       "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pearl_c_tile.py)")
 
 
 def _refuse(b: dict) -> str | None:

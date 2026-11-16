@@ -18,6 +18,7 @@ verifier times every pass and checks each one's answers against the store's comm
 
 ## What you need
 
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
 - **A Linux machine with one NVIDIA H200 or RTX PRO 6000 Blackwell.** These are the cards the tree has a data sheet
   (`hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
   there, saying so, before it starts anything. Another card needs a data sheet (named with `LOCAL_NODE`), and a result
@@ -235,7 +236,9 @@ prints.
 The command prints and writes through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
 `verity bench compute` does: under `research run` it writes the printed document to
 `$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
-neither nothing. Where it writes, an accepted session of a node run or of `--from` also writes the run's result,
+neither nothing, but `--local` outside a research run also leaves it as `out/memory.json` beside its records, where
+`--from` reads it; the loopback, a node run and `--from` leave nothing with neither. Where the kit writes, an
+accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
 writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the

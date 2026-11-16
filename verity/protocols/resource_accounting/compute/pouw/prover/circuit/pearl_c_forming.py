@@ -71,7 +71,7 @@ LINE = Array(SLICE, E4M3)
 #: β_row's factor √32 / (256 · 16), each an FP32 word but the stride
 STRIDE, FLOOR, FOUR, QMAX, LINE_FACTOR = 8, 0x2F800000, 0x40800000, 0x43E00000, 0x3AB504F3
 
-_TESTS = "adapters/vllm/verity_vllm/definitions/tests/test_pearl_c_forming.py"
+_TESTS = "tests/adapters/vllm/verity_vllm/definitions/test_pearl_c_forming.py"
 _HELD = f"protocol-defined; equal to `verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c.{{}}` on its vectors ({_TESTS})"
 
 

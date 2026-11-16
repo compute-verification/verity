@@ -56,4 +56,4 @@ all three include, holds the lane and mma.sync chains `unpriced.cu` and `unprice
 independent chains a thread, alone or alternating with another op). `dump.sh`, `lowering.sh` and `eps_counts.sh`
 never take a GPU.
 
-The tests are `../tests/test_sass_census.py` and `../tests/test_eps_counts.py`.
+The tests are `../../../tests/benchmarks/pouw/test_sass_census.py` and `../../../tests/benchmarks/pouw/test_eps_counts.py`.
