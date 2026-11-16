@@ -49,8 +49,8 @@ theorem keyProg_inputs_pos (c : Flock.Circuit) (n : ℕ) : 0 < (Spot.Bits.keyPro
 theorem lower_zero (c : Flock.Circuit) (n : ℕ) :
     Spot.Bits.lower (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) 0 = [.const true] := by
   have hr : (Spot.Bits.keyProg c n).row? 0 = none := by
-    simp only [Spot.Bits.KeyProg.row?, keyProg_inputs_pos c n, if_true]
-  simp only [Spot.Bits.lower, hr, Spot.Bits.consts, beq_self_eq_true, if_true]
+    simp only [Spot.Bits.KeyProg.row?, keyProg_inputs_pos c n, ite_true]
+  simp only [Spot.Bits.lower, hr, Spot.Bits.consts, beq_self_eq_true, ite_true]
 
 /-- **A member's gate 0 is the constant**: the key program's gate 0 is an input gate its constants set. -/
 theorem memberProg_gate_zero (c : Flock.Circuit) (n : ℕ) :
@@ -113,7 +113,8 @@ theorem stmtA_gate_zero (A : Verity.Sampled.Live) :
   have hg : g.val = 0 := rfl
   have hc : Flock.Bridge.constsOfP A.D.unroll A.hU A.n {} A.pub g = some true := by
     rw [Flock.Bridge.constsOfP_empty, Flock.Bridge.constWiresOf_eq_ite]
-    simp [hg]
+    simp
+    exact hg
   have hin : A.Cc.op g = .input := by
     have h1 : (A.Cc.op g).isInput = true :=
       Flock.Bridge.constsOfP_isInput (FlockSoundness.Discharge.Layout.outsOfP A.D.unroll A.hU A.n {}) hc
