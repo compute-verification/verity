@@ -151,7 +151,7 @@ def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advi
     assert got["bound_why"].startswith("from the fixed workload, not this run")
 
 
-EP = HERE / "tests" / "data" / "endpoint"
+EP = HERE.parents[1] / "tests" / "benchmarks" / "network_e2e" / "data" / "endpoint"
 
 
 def _endpoint(tmp_path: Path) -> Path:
@@ -467,7 +467,7 @@ def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_
     assert gone["commit_windows"][0] == {"window": 0, "refused": "a request it holds only part of"}
 
 
-CARRY = HERE / "tests" / "data" / "endpoint_carry"
+CARRY = HERE.parents[1] / "tests" / "benchmarks" / "network_e2e" / "data" / "endpoint_carry"
 
 
 def _reregister(d: Path, data: bytes) -> None:

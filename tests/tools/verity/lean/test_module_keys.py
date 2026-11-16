@@ -14,12 +14,12 @@ import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_module_keys_under_test", HERE.parent / "module_keys.py")
+spec = importlib.util.spec_from_file_location("lean_module_keys_under_test", HERE.parents[3] / "tools" / "verity" / "lean" / "module_keys.py")
 MK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MK)
 C = MK.C
 #: the vectors the task graph's contract reproduces, which Verity and the executor share
-VECTORS = HERE.parents[1] / "graph" / "tests" / "key_vectors.json"
+VECTORS = HERE.parent / "graph" / "key_vectors.json"
 
 TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
 
@@ -66,7 +66,7 @@ def _built(keyed: dict, out=_out) -> dict[str, str]:
 def test_the_key_rule_is_the_contract_s_and_reproduces_its_vectors():
     """`module_keys` keys through the task graph's contract (`contract.key`), loaded from its file, and that contract gives
     the digests and keys `key_vectors.json` pins: the cache and the task graph hash a task one way."""
-    assert MK.CONTRACT == HERE.parents[1] / "graph" / "verity_graph" / "contract.py"
+    assert MK.CONTRACT == HERE.parents[3] / "tools" / "verity" / "graph" / "verity_graph" / "contract.py"
     frozen = json.loads(VECTORS.read_text())
     for f in frozen["files"]:
         assert C.digest(bytes.fromhex(f["bytes_hex"])) == f["digest"], f["path"]

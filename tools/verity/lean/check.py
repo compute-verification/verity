@@ -140,7 +140,7 @@ FIXED = Path("/var/tmp/verity")
 #: `--tree`: the tree the audited packages are in, which a build binds at `FIXED` (default: this file's checkout)
 TREE = ROOT
 #: the controls' own packages; `--all` does not audit them as the repository's
-FIXTURES = HERE / "tests" / "fixtures"
+FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"
 #: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
 #: proofs and unexposed bodies are only in each `.olean`'s private part
 CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}

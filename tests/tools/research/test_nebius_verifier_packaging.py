@@ -59,7 +59,7 @@ def test_the_deployed_verifier_json_has_the_shape_the_gates_tests_run_on():
         return float if isinstance(v, (int, float)) and not isinstance(v, bool) else type(v)
 
     deployed = json.loads((PACKAGING / "verifier.json").read_text())
-    tested = json.loads((LIVE_VERIFIER / "tests/verifier.json").read_text())
+    tested = json.loads((LIVE_VERIFIER.parents[6] / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier" / "verifier.json").read_text())
     peer = {k: v for k, v in next(iter(tested["peers"].values())).items() if k != "addresses"}
     assert shape({k: v for k, v in deployed.items() if k != "peers"}) == shape({k: v for k, v in tested.items() if k != "peers"})
     assert deployed["peers"] and all(shape(p) == shape(peer) for p in deployed["peers"].values())

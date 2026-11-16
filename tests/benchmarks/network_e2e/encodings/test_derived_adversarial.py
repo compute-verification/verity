@@ -27,7 +27,7 @@ HERE = Path(__file__).parent
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("enc_derived", HERE.parent / "derived.py")
+    spec = importlib.util.spec_from_file_location("enc_derived", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "derived.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)

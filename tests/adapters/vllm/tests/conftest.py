@@ -103,14 +103,14 @@ cases stay in the default run, and circuit-check's `word_view` checks each Boole
 merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
 
-import importlib
-import os
-import shutil
-import subprocess
+import importlib  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
 
-import pytest
-import verity_torch.pouw  # noqa: F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+import pytest  # noqa: E402
+import verity_torch.pouw  # noqa: E402,F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (  # noqa: E402
     use_int8_arm,
 )
 
@@ -118,13 +118,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
 
 KNOWN_FAILURES = {
-    "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
+    "program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
-    "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
+    "engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
         "15 inv_freq elements differ at D=96; the model expects 14",
-    "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-bf16]":
+    "program/test_ref_prims.py::test_gelu_ref_vs_torch[none-bf16]":
         "exact GELU against torch CPU: max ulp 128, normalised error inf",
-    "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
+    "program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
         "exact GELU against torch CPU: max ulp 875,646,710, normalised error nan",
 }
 
