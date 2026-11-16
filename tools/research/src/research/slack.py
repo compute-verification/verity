@@ -8,52 +8,9 @@ announcement, only the names it starts with). Each gets a doorbell in its inbox
 thread, which its agent subscribes to. The footer carries the post's kind and flags.
 Notes are records, never messages.
 
-  research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
-                    [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
-  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team on its current
-                                                                   # milestone, its tag and doorbell (`send` files nothing)
-  research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
-                   --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
-  research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
-  research msg linear check|state|comment|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
-  research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
-  research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
-  research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
-  research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
-  research msg linear project edit PROJECT [--team KEY...] [--date D|none] [--status S]   # teams, target date, status
-  research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
-  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
-  research msg read --as NAME --mark-through TS [--json]           # mark read only those at or before TS (a --peek listing's last)
-  research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
-  research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
-  research msg pickup --thread TS                                  # 👀 on an ask you own
-  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent
-  research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
-  research msg handles [--json] | subscriptions --as HANDLE        # the registry, holders from routes; the subscribe calls a holder makes
-  research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
-  research msg match --as HANDLE --event JSON|TEXT|@PATH|- [--why] # exit 0 addressed, 1 not, 2 error
-  research msg verify-author --event JSON|@PATH|- [--why] [--authorizes]  # exit 0 only for our bot, a channel's bot or a named person;
-                                                                   # --authorizes: only for a named human, who may authorize spend
-  research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
-  research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
-                                                                   # channel; a chat's doorbells carry no text (`chat_targets`)
-  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE]
-                                                                   # a person's private #chat-NAME; the person goes to people.d;
-                                                                   # --lane: the lane their unaddressed posts go to ('' clears it)
-  research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
-  research msg chat expect NAME --email E [--note T] [--lane HANDLE]  # someone invited to the workspace: people.d, no channel
-                                                                   # yet; the Slack events service opens it at their team_join
-  research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
-  research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
-  research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
-                          --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
-                          # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
-  research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
-                          # status follows the ask's page once its Status has left Waiting on Daniel: the page's Status and
-                          # Decision, and one `differs:` line when the card says otherwise; an unreadable page leaves the card alone
-  research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
-                          # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
-  research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
+Each subcommand's flags are its `-h`.  `send` prints `<ts> <permalink>` and `ask-daniel` `<id> <ts> <permalink>`.  Once an
+ask's page has left Waiting on Daniel, `ask-daniel status` and `resolve` follow it, with one `differs:` line when the card
+says otherwise; `extend` and `withdraw` are the asker's alone, while the card is pending.
 
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and an ask to @daniel is a page in the
 Asks for Daniel database; `traffic` reads that record's state for whether it was answered.

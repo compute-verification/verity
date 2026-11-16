@@ -14,7 +14,7 @@ description: >
 
 # Using Slack
 
-The tool is `research msg` (`tools/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
+The tool is `research msg` (`tools/research/src/research/slack.py`; `research msg -h` lists its subcommands);
 every subcommand takes `--dry-run`, which sends nothing and prints each request. `registry.json` beside this file names
 every handle (remit, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
 holder (who else posts as it is its route's), the PR reader names it `staffs`, up to 5 `examples` of
@@ -136,7 +136,7 @@ unreachable for as long as it lasts. At each working checkpoint of a long turn, 
 ## Chat channels
 
 A person who asks the lanes gets a private `#chat-NAME`, which `@top` runs with `research msg chat open|expect|list|close`
-(slack.py's docstring). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
+(`research msg chat -h`). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
 publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. `--lane
 HANDLE` (on `open` or `expect`; `--lane ''` clears it) records the lane the person usually works with. The events
 service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to the
