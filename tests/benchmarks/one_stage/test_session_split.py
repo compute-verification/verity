@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import server_rate as SR  # noqa: E402  (scripts beside the suite, importable only once their dir is on the path)
 import session_split as SS  # noqa: E402
 

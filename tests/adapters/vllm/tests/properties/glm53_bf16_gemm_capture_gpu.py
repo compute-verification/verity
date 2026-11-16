@@ -954,7 +954,7 @@ def scan_subprocess(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     argv = [sys.executable, str(Path(__file__).resolve()), "--scan-run", "--out", str(sub),
             "--models", a.models, "--only", a.only, "--scan-m", f"{SCAN_M[0]}:{SCAN_M[-1]}"]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--served-default"] if a.served_default else [])
-    proc = subprocess.run(argv, capture_output=True, text=True, cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "scan.log").write_text(proc.stdout + proc.stderr)
     try:
         doc = json.loads((sub / "scan.json").read_text())
@@ -1299,7 +1299,7 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
             "--want-cc", a.want_cc, "--want-sms", str(a.want_sms)]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--quick"] if a.quick else [])
     argv += (["--dump-operands"] if a.dump_operands else []) + (["--no-scan"] if a.no_scan else [])
-    proc = subprocess.run(argv, capture_output=True, text=True, cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "served_default.log").write_text(proc.stdout + proc.stderr)
     doc = json.loads((sub / RECORD).read_text())
     return {"returncode": proc.returncode, "ok": doc["ok"], "digest": doc["digest"], "errors": sorted(doc["errors"]),

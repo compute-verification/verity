@@ -34,13 +34,13 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 import served_commit as SC
 import of_record_lean as ORL
 
-_CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
+_CASES = Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
     _spec = importlib.util.spec_from_file_location(_name, _CASES / f"{_name}.py")
     sys.modules[_name] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules[_name])
 openings, canon = sys.modules["pouw_opening_cases"], sys.modules["pouw_check_cases"]._canon
-_spec = importlib.util.spec_from_file_location("certified_salt", Path(CC.__file__).resolve().parent / "tests/certified_salt.py")
+_spec = importlib.util.spec_from_file_location("certified_salt", Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/verifier/certified_salt.py")
 CS = sys.modules["certified_salt"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CS)
 
