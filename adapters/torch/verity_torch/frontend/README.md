@@ -1,19 +1,30 @@
 # verity_torch.frontend
 
-The Torch-to-circuit translator: a traced torch model becomes a Program in which every Call names a registered
-Definition. `derive` exports the model and walks its graph (the walk's state is `derive_context`; a functional ATen
-graph, the one `torch.func` and `make_fx` produce, is `derive_graph`'s), `rules/` holds the rules on ATen ops the walk
-applies, `report` is what a derivation produced, `outcomes` and `errors` are its refusals, `boolean` gives its Program
-on bits, and `emit` writes a finished derivation's runtime correspondence. `train_step` derives one training step as a
-Program, and consecutive steps with torch's own optimizers, which `train_trace` traces as one graph. Each module's docstring says what it holds.
+This is the translator from PyTorch to circuits. It takes an ordinary torch model, with no Verity annotations,
+exports its ATen graph, and translates every node by exactly one rule into a Call of a registered Definition. The
+result is a Program, or a refusal with a named reason, never a partial Program. Nothing reads a tensor's values: the
+export runs on shapes and dtypes. It also derives one training step as a Program, and consecutive steps with torch's
+own optimizers.
 
-## What other packages import
+## Try it
 
-A module of this directory that another package imports from declares those names in its `__all__`; a name outside
-that list is the translator's own. The package itself gives no name: each is imported from its module, and importing a
-module loads only what that module imports. From the vLLM adapter: `derive.derive_report`, the entry point, which
-its `vllm_derive` calls with vLLM's rules, vocabulary and served rules, and `boolean.derived` (`pipeline`); `report`'s `DeriveReport` and `DerivationTail`, and the walk's types and refusals in
-`derive`, `outcomes` and `value_types` (`program`). From outside the adapters: `benchmarks/training_slowdown` reads `train_step`'s `step_program`, `export_steps`,
-`primitives` and `AdamW`, and `train_trace`'s `CaptureRefused`, `ATTENTION` and `BACKWARD`. The rule files of both adapters and the tests also read private names of `derive`, `strided_views` and
-`outcomes`; those are not part of what the package offers. `rules/` is imported from outside the package too and is
-not listed here.
+With the workspace synced with CPU torch (`uv sync --all-packages --extra torch-cpu`):
+
+~~~python
+import torch
+from verity_torch.frontend.derive import derive
+
+model = torch.nn.Sequential(torch.nn.Linear(8, 4), torch.nn.ReLU())
+program = derive(model, [torch.zeros(2, 8)], mode="reference")
+program.annotations["derive"]["applications"][0]["emitted"]    # "LinearRef_v1{K=8,N=4,DT='f32',BIAS=True} x2"
+
+derive(lambda x: x if x.sum() > 0 else -x, [torch.zeros(2, 8)], mode="reference").reason    # 'dynamic_control_flow'
+~~~
+
+The first is the Program's derivation record: which rule translated each node, and the Call it emitted. The second
+is refused, because its control flow depends on a value.
+
+The rules on ATen ops are in [`rules/`](rules/README.md), and the vLLM adapter adds the rules for vLLM's own ops
+([`verity_vllm.program.frontend`](../../../vllm/verity_vllm/program/frontend/README.md)). `derive`'s docstring says how
+a derivation works, and each other module's says what it holds. [`DESIGN.md`](DESIGN.md) lists the names other
+packages import from here.
