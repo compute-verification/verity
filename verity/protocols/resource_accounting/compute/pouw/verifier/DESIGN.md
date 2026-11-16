@@ -184,8 +184,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `verity/protocols/resource_accounting/compute/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,
   PoUW as `verity.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
-- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
-  `lean/window/README.md` map each Lean module to its Python.
+- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; each Lean module's docstring
+  names the Python it ports.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
 - `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/verity/protocols/resource_accounting/compute/pouw/verifier/vectors`.
   `benchmarks/pouw/` is the measuring side; nothing here imports it.
