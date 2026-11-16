@@ -5,7 +5,6 @@ public import Definitions.Slowdown.Threads
 public import Definitions.Slowdown.Dark
 public import Definitions.Slowdown.Fit
 public import Definitions.Slowdown.Layered
-public import Definitions.Slowdown.BitView
 public import Definitions.Slowdown.Covering
 
 /-!
@@ -20,7 +19,6 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `incorrect` at every
   outcome, and no incorrect proof block (`bad`).
 -/
@@ -142,19 +140,6 @@ def layered1 (d b : ℕ) : Layered T1 d 1 0 b where
   col_input _ h := absurd h (notMem_empty _)
   col_bits _ h := absurd h (notMem_empty _)
   col_disjoint _ h := absurd h (notMem_empty _)
-
-/-- The multiplication blocks of no product on a registered circuit's bit view: no counted product has a use, so the upstream
-certificate holds at every depth. -/
-def mb0 (r : RegisteredCircuit) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty Unit where
-  Pall := ∅
-  P := ∅
-  P_subset := subset_rfl
-  m _ := ∅
-  m_nonempty p := p.1.elim
-  m_computed p := p.1.elim
-  m_disjoint p := p.1.elim
-  o p := p.1.elim
-  m_outputs p := p.1.elim
 
 /-! One PoUW window of capacity `2` over the outcomes `Bool`, and no incorrect proof block. -/
 

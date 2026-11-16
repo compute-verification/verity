@@ -119,36 +119,6 @@ theorem bound_T1 (k : ℝ) (hk : 0 ≤ k) : T1.bound k (1 / 2) 1 0 = k / 2 := by
 
 theorem dark_Mθ : Mθ.dark = ∅ := Finset.sdiff_self _
 
-theorem mb0_updateHardness (r : RegisteredCircuit) (s : ℕ) (b : ℝ) : Cover.Assumptions.UpdateHardness (mb0 r) s b := by
-  intro S _ B hB _
-  rw [Finset.subset_empty.1 hB]
-  simp
-
-theorem mb0_upstream (r : RegisteredCircuit) (A : Empty → Finset (Fin (Cover.Circuit.ofDecl r).N)) (D' : ℕ) :
-    (mb0 r).Upstream A D' where
-  disjoint := by intro j; exact j.elim
-  disjoint_θ j := j.elim
-  upstream j := j.elim
-
-theorem mb0_coverage_zero : Assumptions.Coverage 0 D (mb0 D).P.card := by
-  unfold Assumptions.Coverage
-  simp [mb0]
-
-theorem mb0_not_coverage_two : ¬ Assumptions.Coverage 2 D (mb0 D).P.card := by
-  unfold Assumptions.Coverage
-  rw [size_D]
-  norm_num [mb0]
-
-theorem D_blockFits : Cover.Assumptions.BlockFits D 2 1 1 4 := by
-  refine ⟨by decide, ?_⟩
-  have h : (D.D.width D.θ : ℝ) ≤ 1 := by exact_mod_cast (show D.D.width D.θ ≤ 1 by decide)
-  push_cast
-  linarith
-
-theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
-  unfold Cover.Assumptions.CapBelowDepth
-  norm_num
-
 end Slowdown.Witness
 
 namespace Slowdown.SecurityProofs
@@ -300,17 +270,3 @@ theorem SlowdownRemote_nontrivial : Guarantees.SlowdownRemote_nontrivial := by
     norm_num [efficiency, unregisteredShare, residualShare, lagShare] at h1
 
 end Slowdown.SecurityProofs
-
-namespace Slowdown.Cover.SecurityProofs
-
-open Verity Slowdown.Capability.Toy Slowdown.Witness
-
-theorem CoverTraining_honest : Guarantees.CoverTraining_honest :=
-  ⟨compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two, D_blockFits,
-    mb0_coverage_zero⟩
-
-theorem CoverTraining_nontrivial : Guarantees.CoverTraining_nontrivial :=
-  ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
-    capBelowDepth_one_two, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
-
-end Slowdown.Cover.SecurityProofs

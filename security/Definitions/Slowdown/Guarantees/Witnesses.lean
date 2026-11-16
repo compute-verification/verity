@@ -13,7 +13,6 @@ public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.InferenceOnly.Assumptions.Theta
 public import Definitions.Slowdown.Assumptions.Layered
 public import Definitions.Slowdown.Assumptions.Slowdown
-public import Definitions.Slowdown.Guarantees.CoverTraining
 public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Cut.Toy
 
@@ -34,9 +33,7 @@ The premise each `X_nontrivial` drops is the one the bound rests on: the coverag
 reference training algorithm (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ExecutionPhasesHold`
 for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
-computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
-(`Slowdown.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
-`α₀ > 0` fails.
+computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E).
 -/
 
 @[expose] public section
@@ -266,25 +263,3 @@ def SlowdownRemote_nontrivial : Prop :=
           hardwareMultiple 1 2 100 100 0))
 
 end Slowdown.Guarantees
-
-namespace Slowdown.Cover.Guarantees
-
-open Verity Slowdown.Capability.Toy Slowdown.Witness
-
-/-- **`CoverTraining`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b = 1`, `r = d = Toy.D` through
-the containment of the toy in itself, the multiplication blocks `mb0` of no product at depth `D = 2`, block size
-`s = 4 = w₀ Γ + α Γ + width(θ)` at `w₀ = 1`, and `α₀ = 0`, the share of the toy's gates that are counted products. -/
-def CoverTraining_honest : Prop :=
-  InferenceOnly.CompliesRate 2 (1 / 2) D ∧ InferenceOnly.Assumptions.ThetaRegistered D D M1 ∧ Assumptions.UpdateHardness (mb0 D) 4 1 ∧
-    (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧ Assumptions.BlockFits D 2 1 1 4 ∧
-    InferenceOnly.Assumptions.Coverage 0 D (mb0 D).P.card
-
-/-- **`CoverTraining` without coverage**: at `CoverTraining_honest`'s instance, `α₀ = 2` is no coverage of the toy by
-`mb0`'s no product, and `α₀ b size(r) = 4` exceeds `(α² Γ + b α) size(d) = 2`. -/
-def CoverTraining_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 1 / 2 ∧ InferenceOnly.CompliesRate 2 (1 / 2) D ∧ InferenceOnly.Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
-    Assumptions.BlockFits D 2 1 1 4 ∧ ¬ InferenceOnly.Assumptions.Coverage 2 D (mb0 D).P.card ∧
-    ¬ (2 * 1 * D.D.size D.D.computed ≤ ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * (1 / 2)) * D.D.size D.D.computed)
-
-end Slowdown.Cover.Guarantees
