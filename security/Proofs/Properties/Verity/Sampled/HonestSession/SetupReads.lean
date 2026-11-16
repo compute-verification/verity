@@ -188,12 +188,12 @@ def coinsZ : Flock.Coins := .tree (Zk.coinSpec (Flock.Tags.circuit.tableNames 1)
 theorem parseCommit_tZ : HmOut.parseCommit tZ circuitFile [] = .ok cR := by rw [← tagsZ_eq]; exact parseCommit_eq
 theorem hmIn_parse_R : HmIn.parse cR = .ok {} := by rw [← cH_eq]; exact hmIn_parse
 theorem checkOwn_any (pop : Public) : HmIn.checkOwn {} pop none = .ok () := rfl
-theorem law_draw : (Draw.UnitDraw.ofJson draw₀).map (·.law) = .ok (Draw.Law.subset 1) := by
+theorem law_draw : (Draw.UnitSample.ofJson draw₀).map (·.samplingDesign) = .ok (Draw.SamplingDesign.subset 1) := by
   rw [draw_ofJson]; all_goals rfl
 
 open Lean Elab Term Meta in
-/-- `Stmt.setupHidden`'s auxiliary match on `(law, partition, program)`, the one whose discriminant's first component is
-an `Except _ Draw.Law`: the walk's `reduceMatcher?` cannot evaluate a draw it reads in a tuple, so `law_match` steps it. -/
+/-- `Stmt.setupHidden`'s auxiliary match on `(samplingDesign, partition, program)`, the one whose discriminant's first component is
+an `Except _ Draw.SamplingDesign`: the walk's `reduceMatcher?` cannot evaluate a draw it reads in a tuple, so `law_match` steps it. -/
 elab "lawMatch%" : term => do
   let some v := (← getConstInfo ``Stmt.setupHidden).value? | throwError "lawMatch%: Stmt.setupHidden has no body"
   let mut seen : MessageData := m!""
@@ -203,15 +203,15 @@ elab "lawMatch%" : term => do
       (List.range info.numDiscrs).mapM fun i => do whnfR (← inferType xs[info.numParams + 1 + i]!)
     seen := seen ++ m!"\n{n}: {ds}"
     if let [t] := ds then
-      if t.isAppOfArity ``Prod 2 && ((t.getArg! 0).find? (·.isConstOf ``Draw.Law)).isSome then
+      if t.isAppOfArity ``Prod 2 && ((t.getArg! 0).find? (·.isConstOf ``Draw.SamplingDesign)).isSome then
         return ← mkConstWithFreshMVarLevels n
-  throwError "lawMatch%: Stmt.setupHidden uses no match on an (Except _ Draw.Law × _); its matches:{seen}"
+  throwError "lawMatch%: Stmt.setupHidden uses no match on an (Except _ Draw.SamplingDesign × _); its matches:{seen}"
 
-/-- The setup's stratified-law match at `draw₀` takes its fall-through: `draw₀`'s law is `subset`. -/
+/-- The setup's stratified-law match at `draw₀` takes its fall-through: `draw₀`'s sampling design is `subset`. -/
 theorem law_match {β : Type} (h1 : _) (h2 : _) :
-    (lawMatch%) (fun _ => β) (Except.map (fun x => x.law) (Draw.UnitDraw.ofJson draw₀), some partitionObj,
+    (lawMatch%) (fun _ => β) (Except.map (fun x => x.samplingDesign) (Draw.UnitSample.ofJson draw₀), some partitionObj,
       some programFile) h1 h2 =
-    h2 (Except.map (fun x => x.law) (Draw.UnitDraw.ofJson draw₀), some partitionObj, some programFile) := by
+    h2 (Except.map (fun x => x.samplingDesign) (Draw.UnitSample.ofJson draw₀), some partitionObj, some programFile) := by
   rw [law_draw]
 
 theorem size_qsort {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).size = as.size := by
@@ -273,7 +273,7 @@ fwd_def stH setup_stH (f : HmRow.PartitionFinding) (note : String) (w : Nat) (po
     mapM_one, hderive, hlinks, hn, cR_pin, delta_DA, regions_Y, inRegions_Y, checkRegionBytes_Y pub hn hdig,
     identity_Z, hello_Z]
   block [HmIn.delta, DA, DB, HmRow.checkPartition, HmRow.deriveTemplateUnits, HmLinks.check, HmIn.loadPublic,
-    HmIn.drawn, HmOut.checkPublic, HmOut.parseCommit, Draw.UnitDraw.ofJson]
+    HmIn.drawn, HmOut.checkPublic, HmOut.parseCommit, Draw.UnitSample.ofJson]
   shallow []
 
 theorem shapeOk_stH (f : HmRow.PartitionFinding) (note : String) (w : Nat) (pop pub : Public) (U : Json) :

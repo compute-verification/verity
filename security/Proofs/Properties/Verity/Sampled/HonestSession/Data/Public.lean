@@ -54,6 +54,6 @@ def hdrJ : Json := Json.mkObj [("circuit_sha512", .str (hexOf circuitSha)), ("fo
   ("units", unitsJ)]
 
 /-- The registered public file: the header's line, then the row's leaf string. -/
-def publicFile : ByteArray := (Firewall.printJson hdrJ).toUTF8 ++ "\n".toUTF8 ++ rowBc
+def publicFile : ByteArray := (ZkServer.printJson hdrJ).toUTF8 ++ "\n".toUTF8 ++ rowBc
 
 end Verity.Sampled.Instance.HonestSession

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Program
 public import Proofs.Flock.SessionLoop.Concrete.File
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.SignedJson
 
 /-!
@@ -16,7 +16,7 @@ row's prefix, midstate and pad, and the dummy row's leaf string. `circuitFile` i
 
 The input leaf is `-1` because the file has no input row (`HmOut.checkRows` refuses a leaf at or past the input rows'
 words, here 0) and the unit's one leaf port takes exactly one leaf (`Circuit.checkLayout`); so META's line is written by
-`jsonCharsS`, which writes a negative number's sign, where `Firewall.printJson` would write `-1` as `0`.
+`jsonCharsS`, which writes a negative number's sign, where `ZkServer.printJson` would write `-1` as `0`.
 -/
 
 @[expose] public section

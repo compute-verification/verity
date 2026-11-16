@@ -23,7 +23,7 @@ open Flock
 
 /-- **Facts about the concrete program** (`ProgramPop.programFacts`): the descriptor parses to `program` with SHA-512 `programSha`, its
 query's population matches the public file's, the sampling design is the subset of one, a verifier holding the session's
-program, query, law and work table derives that design, and the partition object's digest is `partitionDigestB`. -/
+program, query, sampling design and work table derives that design, and the partition object's digest is `partitionDigestB`. -/
 structure ProgramFacts : Prop where
   /-- The descriptor parses to `program`. -/
   program_parse : Spot.Program.parse ⟨desc.toArray⟩ = .ok program
@@ -31,11 +31,11 @@ structure ProgramFacts : Prop where
   program_sha : program.sha512 = programSha
   /-- The query's population matches the descriptor's. -/
   popMatches : Flock.Bridge.PopMatches desc query nUnits
-  /-- The sampling design at the session's descriptor, query and law is the subset of one. -/
-  design_eq : Flock.Bridge.designAt desc query law none nUnits = .subset 1
-  /-- A verifier holding the session's program, query, law and work table derives that design at `nUnits`. -/
-  lawAt_of : ∀ (v : Spot.Registration.Verifier), v.program = program → v.query = query → v.law = law →
-    v.workTable = none → lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits)
+  /-- The sampling design at the session's descriptor, query and sampling design is the subset of one. -/
+  design_eq : Flock.Bridge.designAt desc query samplingDesign none nUnits = .subset 1
+  /-- A verifier holding the session's program, query, sampling design and work table derives that design at `nUnits`. -/
+  lawAt_of : ∀ (v : Spot.Docket.Verifier), v.program = program → v.query = query → v.samplingDesign = samplingDesign →
+    v.workTable = none → samplingDesignAt v nUnits = .ok (Flock.Bridge.designAt desc query samplingDesign none nUnits)
   /-- The partition object's digest is `partitionDigestB`. -/
   partitionDigest_ok : HmRow.partitionDigest partitionObj = .ok partitionDigestB
 

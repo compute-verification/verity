@@ -136,7 +136,7 @@ theorem plainS_metaJG : SignedJson.plainS (metaJG bD bP bT bS) = true := by
   and_intros
   all_goals (first | exact plainS_leafOs | plainT)
 
-theorem parse_metaG : JsonParse.parse (metaTextG bD bP bT bS) = .ok (FirewallJson.norm (metaJG bD bP bT bS)) :=
+theorem parse_metaG : JsonParse.parse (metaTextG bD bP bT bS) = .ok (ZkServerJson.norm (metaJG bD bP bT bS)) :=
   SignedJson.parse_jsonCharsS (plainS_metaJG bD bP bT bS)
 
 theorem last_brace (l : List Char) : ('{' :: (l ++ ['}'])).getLast? = some '}' := by
@@ -144,7 +144,7 @@ theorem last_brace (l : List Char) : ('{' :: (l ++ ['}'])).getLast? = some '}' :
   exact List.getLast?_concat
 
 theorem metaG_last : (jsonCharsS (metaJG bD bP bT bS)).getLast? = some '}' := by
-  rw [metaJG, FirewallObj.mkObj_eq]
+  rw [metaJG, ZkServerObj.mkObj_eq]
   exact last_brace _
 
 theorem trim_metaG : ("META " ++ metaTextG bD bP bT bS).trimAsciiEnd.toString = "META " ++ metaTextG bD bP bT bS := by
@@ -299,16 +299,16 @@ theorem opening_noneH : RecOpening.params unitName = none := by unfold RecOpenin
 theorem optD (x d : String) : (Except.ok x : Except String String).toOption.getD d = x := rfl
 
 theorem lk_prog (bD bP bT bS : ByteArray) :
-    (FirewallJson.norm (metaJG bD bP bT bS)).getObjValAs? String "program_sha512" = .ok (hexOf bS) := by kernel_rfl'
+    (ZkServerJson.norm (metaJG bD bP bT bS)).getObjValAs? String "program_sha512" = .ok (hexOf bS) := by kernel_rfl'
 
 theorem lk_part (bD bP bT bS : ByteArray) :
-    (((FirewallJson.norm (metaJG bD bP bT bS)).getObjVal? "partition").toOption.getD Json.null).getObjValAs? String
+    (((ZkServerJson.norm (metaJG bD bP bT bS)).getObjVal? "partition").toOption.getD Json.null).getObjValAs? String
       "digest" = .ok (hexOf bP) := by kernel_rfl'
 
 theorem sha_hex {b : ByteArray} (h : b.size = 64) : HmRow.isSha512Hex (hexOf b) = true := Hex.isSha512Hex_hexOf h
 
 def lsJG (bD bP bT bS : ByteArray) : Json :=
-  match J.get (FirewallJson.norm (metaJG bD bP bT bS)) "leaf_scheme" "" with | .ok j => j | .error _ => .null
+  match J.get (ZkServerJson.norm (metaJG bD bP bT bS)) "leaf_scheme" "" with | .ok j => j | .error _ => .null
 def pinJZ : Json := tZ.pinnedLeafScheme.getD .null
 
 theorem qsort_le1 {α : Type} (as : Array α) (lt : α → α → Bool) (h : as.size ≤ 1) : as.qsort lt = as := by
@@ -335,7 +335,7 @@ theorem mapM_one {α β ε : Type} (f : α → Except ε β) (a : Array α) (h :
 fwd_def cG parse_cG (ls lh : HmNets.Laid) (bD bP bT bS H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
     (hH : Sha512.hash (bytesG ls lh bD bP bT bS) = H)
     (hC : HmRow.classOf (bytesG ls lh bD bP bT bS) ("flock-circuit " ++ unitName)
-      (FirewallJson.norm (metaJG bD bP bT bS)) = .ok C)
+      (ZkServerJson.norm (metaJG bD bP bT bS)) = .ok C)
     (hD : bD.size = 128) (hP : bP.size = 64) (hS : bS.size = 64)
     (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
     (hps : Net.parse (netLs "sha512x3" ls).toArray = .ok (shaB A B))

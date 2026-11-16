@@ -48,15 +48,15 @@ private theorem circuitFileOf_head (ls lh : Flock.HmNets.Laid) : (circuitFileOf 
 
 private theorem circuitFile_head : circuitFile.data.toList.head? = some 102 := circuitFileOf_head _ _
 
-private theorem jsonChars_mkObj (l : List (String × Json)) : ∃ cs, Flock.Firewall.jsonChars (Json.mkObj l) = '{' :: cs := by
+private theorem jsonChars_mkObj (l : List (String × Json)) : ∃ cs, Flock.ZkServer.jsonChars (Json.mkObj l) = '{' :: cs := by
   unfold Json.mkObj
   exact ⟨_, rfl⟩
 
 private theorem print_mkObj_head (l : List (String × Json)) (rest : ByteArray) :
-    ((Flock.Firewall.printJson (Json.mkObj l)).toUTF8 ++ "\n".toUTF8 ++ rest).data.toList.head? = some 123 := by
+    ((Flock.ZkServer.printJson (Json.mkObj l)).toUTF8 ++ "\n".toUTF8 ++ rest).data.toList.head? = some 123 := by
   obtain ⟨cs, h⟩ := jsonChars_mkObj l
   exact head_append (head_append (toUTF8_head_of_toList (c := '{') (cs := cs) (by decide)
-    (by rw [Flock.Firewall.printJson, String.toList_ofList, h])) _) _
+    (by rw [Flock.ZkServer.printJson, String.toList_ofList, h])) _) _
 
 private theorem publicFile_head : publicFile.data.toList.head? = some 123 := by
   unfold publicFile hdrJ
@@ -264,7 +264,7 @@ theorem session_registered (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : 
 
 theorem error_top (a : Subprotocol) (θ' : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (base.game θ' F c)) : base.error a θ' F c σ = ⊤ := by
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   split_ifs <;> simp [base, Instance.Honest.base, Verity.Idle.vocab]
 
 theorem target_top (k : Verity.Registration.Composite) (a : Subprotocol) : base.Target k a := by

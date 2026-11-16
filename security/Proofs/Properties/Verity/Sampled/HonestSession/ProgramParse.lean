@@ -4,8 +4,8 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramProof
 public import Proofs.Properties.Verity.Sampled.HonestSession.JsonCanonFacts
 import Proofs.Flock.Verifier.Hash
 import Circuits.Program
-import Flock.Firewall
-import Proofs.Flock.Recursive.FirewallJson
+import Flock.ZkServer
+import Proofs.Flock.Recursive.ZkServerJson
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
@@ -40,7 +40,7 @@ import all Init.Data.Range.Basic
 # `Flock.Program.decode` on the descriptor (`ProgramFacts.program_parse`, `design_eq`, `lawAt_of`, `program_sha`)
 
 The descriptor's bytes are its JSON printed (`canon_programJ`), so `decode` reads `norm programJ`
-(`FirewallJson.parse_printJson`), which is `programJ` (`norm_programJ`), and `fwd_def` carries `decodeOf` over it rule by
+(`ZkServerJson.parse_printJson`), which is `programJ` (`norm_programJ`), and `fwd_def` carries `decodeOf` over it rule by
 rule to `decV` (`decode_V`, `decode_file`). Each rule is one stop of that walk: the descriptor's id checks, the node keys'
 sort (read by `qsort_of_sorted`, never run), `Ty`'s well-founded functions at the descriptor's types (`tyBeq_v16`,
 `tyOfJson_v16`, `leavesK`), the width check
@@ -58,27 +58,27 @@ open Flock
 open Lean (Json)
 open ProgramProof
 
-theorem printable_of (j : Json) (h : (Firewall.jsonChars j).all (fun c => decide (c.toNat < 0x7f)) = true) :
+theorem printable_of (j : Json) (h : (ZkServer.jsonChars j).all (fun c => decide (c.toNat < 0x7f)) = true) :
     JsonCanon.Printable j := by
   intro c hc
-  rw [Firewall.printJson, String.toList_ofList] at hc
+  rw [ZkServer.printJson, String.toList_ofList] at hc
   exact of_decide_eq_true (List.all_eq_true.1 h c hc)
 
 theorem printable_programJ : JsonCanon.Printable programJ := printable_of _ (by decide +kernel)
 
 theorem printable_programBare : JsonCanon.Printable programBare := printable_of _ (by decide +kernel)
 
-theorem canon_programJ : canon programJ = .ok (Firewall.printJson programJ) :=
+theorem canon_programJ : canon programJ = .ok (ZkServer.printJson programJ) :=
   JsonCanon.jsonFacts.canon_plain plain_programJ printable_programJ
 
-theorem canon_programBare : canon programBare = .ok (Firewall.printJson programBare) :=
+theorem canon_programBare : canon programBare = .ok (ZkServer.printJson programBare) :=
   JsonCanon.jsonFacts.canon_plain plain_programBare printable_programBare
 
 /-- `norm` leaves the descriptor as it is: its members are already in key order, as the parser's trees insert them. -/
-theorem norm_programJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm programJ = programJ := by kernel_rfl'
+theorem norm_programJ : FlockSoundness.Discharge.Recursion.ZkServerJson.norm programJ = programJ := by kernel_rfl'
 
 /-- The last stop: the bare descriptor `decode` hashes is `programBare`, whose canonical text is its printed JSON. -/
-theorem canon_bare (j : Json) (h : j = programBare) : canon j = .ok (Firewall.printJson programBare) := by
+theorem canon_bare (j : Json) (h : j = programBare) : canon j = .ok (ZkServer.printJson programBare) := by
   subst h; exact canon_programBare
 
 theorem ends_in16 : "Input16_v1".endsWith "_v1" = true := by
@@ -353,7 +353,7 @@ fwd_def decV decode_V : Program.decodeOf (some (.ok programJ))
       fold_in16, fold_not16, fold_unit, fold_root, forIn_arr_ex, forIn_range_ex,
       foldl_insert_get, inputId_in16, inputId_not16', qsort_sorted, tyBeq_v16, tyBeq_a16, recordFunctionIds_hs,
       isInputId_not16, registered_not16, bodyBad_run, mapM_st_nil, canon_bare]
-    block [String.hash, Flock.canon, Firewall.printJson, Sha512.hash] shallow []
+    block [String.hash, Flock.canon, ZkServer.printJson, Sha512.hash] shallow []
 
 /-! What a consumer reads of `decV`: its definitions by name, its root, and its one unit. -/
 
@@ -371,10 +371,10 @@ theorem decV_units :
     ((decV.defs[decV.root]!).body.nodes.toList.filter fun x => (decV.defs[x.fn]!).key == templateId).length = nUnits := by
   rw [decV_defs, decV_root]; decide +kernel
 
-theorem decV_sha512 : decV.sha512 = Sha512.hash (Firewall.printJson programBare).toUTF8 := by kernel_rfl'
+theorem decV_sha512 : decV.sha512 = Sha512.hash (ZkServer.printJson programBare).toUTF8 := by kernel_rfl'
 
 /-- The registered bytes are the descriptor's JSON printed. -/
-theorem programFile_eq : programFile = (Firewall.printJson programJ).toUTF8 := by
+theorem programFile_eq : programFile = (ZkServer.printJson programJ).toUTF8 := by
   unfold programFile
   rw [canon_programJ]
   rfl
@@ -388,7 +388,7 @@ theorem desc_bytes : (⟨desc.toArray⟩ : ByteArray) = programFile := by
 /-- **`decode programFile = .ok decV`**. -/
 theorem decode_file : Program.decode programFile = .ok decV := by
   rw [Program.decode_eq_of, Program.readJson, programFile_eq, Properties.CanonRoundTrip.fromUTF8?_toUTF8, Option.map_some,
-    FlockSoundness.Discharge.Recursion.FirewallJson.parse_printJson plain_programJ, norm_programJ]
+    FlockSoundness.Discharge.Recursion.ZkServerJson.parse_printJson plain_programJ, norm_programJ]
   exact decode_V
 
 theorem parse_file : Spot.Program.parse programFile = .ok ⟨.ofProg decV, decV⟩ := by
@@ -406,11 +406,11 @@ theorem program_parse : Spot.Program.parse ⟨desc.toArray⟩ = .ok program := b
   rw [desc_bytes, parse_file, program_eq]
 
 /-- **`ProgramFacts.design_eq`**. -/
-theorem design_eq : Flock.Bridge.designAt desc query law none nUnits = .subset 1 := design_eq_of_parse program_parse
+theorem design_eq : Flock.Bridge.designAt desc query samplingDesign none nUnits = .subset 1 := design_eq_of_parse program_parse
 
 /-- **`ProgramFacts.lawAt_of`**. -/
-theorem lawAt_of : ∀ (v : Spot.Registration.Verifier), v.program = program → v.query = query → v.law = law →
-    v.workTable = none → lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits) :=
+theorem lawAt_of : ∀ (v : Spot.Docket.Verifier), v.program = program → v.query = query → v.samplingDesign = samplingDesign →
+    v.workTable = none → samplingDesignAt v nUnits = .ok (Flock.Bridge.designAt desc query samplingDesign none nUnits) :=
   lawAt_of_parse program_parse
 
 /-- **`ProgramFacts.program_sha`**: the hash `decode` takes is of the bare descriptor's printed text, never evaluated. -/

@@ -58,7 +58,7 @@ theorem pubD_n (hC : CircuitFileFacts) : pubD.n = 1 := by
 `rowBc`'s first `BC_BYTES` bytes, whose size is `128` (no hash forced -- `rowBc` is the concrete zero row). -/
 theorem pubD_digest_size (hC : CircuitFileFacts) : (pubD.digest 0 0 1).size = 128 := by
   rw [pubD_eq hC, show Wdrawn.digest 0 0 1 = rowBc.extract 0 128 from by
-    simp [Flock.Public.digest, Wdrawn, drawnPF, pubPF, Draw.UnitDraw.proved, HmRow.BC_BYTES]]
+    simp [Flock.Public.digest, Wdrawn, drawnPF, pubPF, Draw.UnitSample.proved, HmRow.BC_BYTES]]
   kernel_rfl'
 
 /-- The program-side links check reads `pubI`; it is the loaded public value `Vout` (restated from the public-file

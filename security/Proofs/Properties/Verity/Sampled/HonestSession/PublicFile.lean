@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.CircuitFile
 
 Each side's reading of the public file over `cH` (`HmOut.loadPublic`, `HmIn.loadPublic` over no public input port), the
 sampled statement's public file at `draw₀` (`HmIn.drawn`) and its check (`HmOut.checkPublic`), from the circuit's fields
-`CircuitFileFacts` names. The header is `printJson hdrJ`, which parses back to `norm hdrJ` (`FirewallJson.parse_printJson`);
+`CircuitFileFacts` names. The header is `printJson hdrJ`, which parses back to `norm hdrJ` (`ZkServerJson.parse_printJson`);
 the walk is `Proofs.Flock.SessionLoop.Concrete.Public`'s, at the hidden-output header. These facts are the named
 proposition `PublicFileFacts`, proved from `CircuitFileFacts` by `publicFileFacts` (`PublicFileProof.lean`): the pieces that
 use it take it as a hypothesis, and `Witness` supplies the proof.

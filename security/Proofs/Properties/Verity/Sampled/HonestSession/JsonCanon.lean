@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import CoreProtocol.Protocol
 
 /-!
@@ -19,20 +19,20 @@ hypothesis, and `Witness` supplies the proof.
 namespace Verity.Sampled.Instance.HonestSession.JsonCanon
 
 open Lean (Json)
-open FlockSoundness.Discharge.Recursion.FirewallJson
+open FlockSoundness.Discharge.Recursion.ZkServerJson
 
 /-- Every character of a value's text is below `0x7f`: its strings and keys are ASCII without DEL. `Flock.canon` escapes
 every other character as `\uXXXX`, so only a value of this kind prints as its own canonical text. -/
-def Printable (j : Json) : Prop := ∀ c ∈ (Flock.Firewall.printJson j).toList, c.toNat < 0x7f
+def Printable (j : Json) : Prop := ∀ c ∈ (Flock.ZkServer.printJson j).toList, c.toNat < 0x7f
 
 /-- **The canonical-JSON reader's three facts** (proved: `JsonCanon.jsonFacts`): `Flock.canon` writes a plain value of ASCII strings as its
 `printJson` text, writes a plain value and its parsed form the same, and a canonical text of ASCII parses back to
 `norm` of its value. -/
 structure JsonFacts : Prop where
-  canon_plain : ∀ {j : Json}, Flock.Firewall.plain j = true → Printable j →
-    Flock.canon j = .ok (Flock.Firewall.printJson j)
-  canon_norm : ∀ {j : Json}, Flock.Firewall.plain j = true → Flock.canon (norm j) = Flock.canon j
-  canonicalJson_canon : ∀ {j : Json} {s : String}, Flock.Firewall.plain j = true →
+  canon_plain : ∀ {j : Json}, Flock.ZkServer.plain j = true → Printable j →
+    Flock.canon j = .ok (Flock.ZkServer.printJson j)
+  canon_norm : ∀ {j : Json}, Flock.ZkServer.plain j = true → Flock.canon (norm j) = Flock.canon j
+  canonicalJson_canon : ∀ {j : Json} {s : String}, Flock.ZkServer.plain j = true →
     (s.toUTF8.data.all (· < 0x7f)) = true → Flock.canon j = .ok s → Core.canonicalJson s.toUTF8 = .ok (norm j)
 
 end Verity.Sampled.Instance.HonestSession.JsonCanon

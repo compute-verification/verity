@@ -142,7 +142,7 @@ fwd_def dU derive_U (c : Flock.Circuit) (obj : Json) (bytes : ByteArray) (text s
     isInput_not16, forIn_range_ex, forIn_arr_ex, forIn_list_ex, forInEx.eq_def]
   block [String.hash, Flock.canon, JsonParse.parse] shallow []
 
-theorem programSha_eq : programSha = Sha512.hash (Firewall.printJson programBare).toUTF8 := by
+theorem programSha_eq : programSha = Sha512.hash (ZkServer.printJson programBare).toUTF8 := by
   unfold programSha
   rw [canon_programBare]
   rfl
@@ -150,15 +150,15 @@ theorem programSha_eq : programSha = Sha512.hash (Firewall.printJson programBare
 theorem queryTemplate_cH : HmRow.queryTemplate cH = some (templateId, false) := by
   rw [cH_eq]; kernel_rfl'
 
-theorem utf8_file : String.fromUTF8? programFile = some (Firewall.printJson programJ) := by
+theorem utf8_file : String.fromUTF8? programFile = some (ZkServer.printJson programJ) := by
   rw [programFile_eq, Properties.CanonRoundTrip.fromUTF8?_toUTF8]
 
-theorem parse_programJ : JsonParse.parse (Firewall.printJson programJ) = .ok programJ := by
-  rw [FlockSoundness.Discharge.Recursion.FirewallJson.parse_printJson plain_programJ, norm_programJ]
+theorem parse_programJ : JsonParse.parse (ZkServer.printJson programJ) = .ok programJ := by
+  rw [FlockSoundness.Discharge.Recursion.ZkServerJson.parse_printJson plain_programJ, norm_programJ]
 
 /-- **`hderive`** of `setupFacts_of`. -/
 theorem derive_ok : ∃ note, HmRow.deriveTemplateUnits cH partitionObj programFile #[0] = .ok note :=
-  ⟨_, derive_U cH partitionObj programFile (Firewall.printJson programJ) (Firewall.printJson programBare)
+  ⟨_, derive_U cH partitionObj programFile (ZkServer.printJson programJ) (ZkServer.printJson programBare)
     partitionObj_query (by rw [obj_program, programSha_eq]) queryTemplate_cH utf8_file parse_programJ canon_bare⟩
 
 /-! ## `HmLinks.check` -/
@@ -186,7 +186,7 @@ fwd_def lkW links_W (c : Flock.Circuit) (pop : Flock.Public) (bytes : ByteArray)
   block [String.hash, Sha512.hash] shallow []
 
 theorem readers_draw : HmLinks.readersOf (some draw₀) = some #[0] := by
-  show (Flock.Draw.UnitDraw.ofJson draw₀).toOption.map (·.proved) = _
+  show (Flock.Draw.UnitSample.ofJson draw₀).toOption.map (·.proved) = _
   rw [draw_ofJson]
   rfl
 

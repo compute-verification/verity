@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Inputs
 public import Proofs.Properties.Verity.Sampled.HonestSession.Hex
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 
 /-!
 # The circuit file parses
@@ -46,7 +46,7 @@ structure CircuitFileFacts : Prop where
   /-- `cH`'s `k_log` is `22`. -/
   cH_kLog : cH.kLog = 22
   /-- `cH`'s META is the parser's reading of `metaJ`. -/
-  cH_metaJ : cH.metaJ = FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ
+  cH_metaJ : cH.metaJ = FlockSoundness.Discharge.Recursion.ZkServerJson.norm metaJ
   /-- `cH` has one unit per VU. -/
   cH_upv : cH.upv = 1
   /-- `cH` pins the dummy row's leaf string `dummyBc`. -/

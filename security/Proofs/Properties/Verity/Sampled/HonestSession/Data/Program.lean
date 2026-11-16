@@ -5,10 +5,10 @@ public import Spot.Program
 public import Flock.HmRow
 
 /-!
-# The honest session's program, query, law and partition
+# The honest session's program, query, sampling design and partition
 
 The registered program: a root that reads one 16-bit input and calls one composite, `Unit_v1`, on it, whose one gate
-is the primitive `Not16_v1`: the session's one proof block (`nUnits`). Its query names that composite's one instance (`Q_template_instance` v0), its law samples one unit
+is the primitive `Not16_v1`: the session's one proof block (`nUnits`). Its query names that composite's one instance (`Q_template_instance` v0), its sampling design samples one unit
 (`subset`, `k = 1`), and its partition object is the one `Spot.Partition.build` writes at the program's SHA-512.
 Every digest is a term (`programSha`, `partitionDigestB`), never a literal, so a proof about these values compares hashes
 of terms and evaluates none.
@@ -89,7 +89,7 @@ def query : Json := Json.mkObj [("name", .str "Q_template_instance"),
   ("params", Json.mkObj [("template", .str templateId)]), ("version", jn 0)]
 
 /-- The registration's sampling-design object: one unit, sampled uniformly. -/
-def law : Json := Json.mkObj [("k", jn 1), ("law", .str "subset")]
+def samplingDesign : Json := Json.mkObj [("k", jn 1), ("law", .str "subset")]
 
 /-- The partition object the verifier builds from the program and the query. -/
 def partitionObj : Json := Spot.Partition.build (Flock.hexOf programSha) query

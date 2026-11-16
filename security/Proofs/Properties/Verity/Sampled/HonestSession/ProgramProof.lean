@@ -2,11 +2,11 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Program
 public import Proofs.Properties.Verity.Sampled
-public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 public import Proofs.Pouw.Period.Sort
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import Std.Data.String.ToNat
 import Circuits.Program
 import all Lean.Data.Json.Basic
@@ -35,8 +35,8 @@ import all Init.Data.List.Control
 * `partitionDigest_ok`: the partition object's digest is `partitionDigestB` by that constant's definition: both are
   `Sha512.hash` of the one text `canon partitionObj`, which exists since the object holds only integers
   (`FlockDeploy.Concrete.canon_eq`). No hash is evaluated.
-* `lawAt_subset`: the law is `subset`, so `Spot.Draw.deriveLaw` returns `none` without reading the program, and a verifier
-  holding the session's query, law and no work table derives the subset of one (`flockLaw_law`). The sort of the law's
+* `lawAt_subset`: the sampling design is `subset`, so `Spot.Draw.deriveSamplingDesign` returns `none` without reading the program, and a verifier
+  holding the session's query, sampling design and no work table derives the subset of one (`flockLaw_law`). The sort of the sampling design's
   keys is read by `qsort_of_sorted` and `qsort_eq_of_perm`, never run.
 * `design_eq_of_parse`, `lawAt_of_parse`: `ProgramFacts.design_eq` and `lawAt_of` at any descriptor that parses.
 
@@ -45,7 +45,7 @@ import all Init.Data.List.Control
 What that walk reads, proved here:
 
 * `plain_programJ`, `plain_programBare`: the descriptor is plain, so its printed text parses back to `norm programJ`
-  (`FirewallJson.parse_printJson`), by `plainK`, `plain` with each string's characters read as a list.
+  (`ZkServerJson.parse_printJson`), by `plainK`, `plain` with each string's characters read as a list.
 * `foldl_insert_get`: a lookup in the definitions' `HashMap`, as `decode` builds it, is a search of their list; the
   kernel never hashes a string.
 * `domainError_none`: a value `dKf` accepts is in the canonical JSON domain; `dKf` is `domainError`'s acceptance by
@@ -76,7 +76,7 @@ theorem partitionDigest_ok : HmRow.partitionDigest partitionObj = .ok partitionD
   rw [FlockDeploy.Concrete.canon_eq intJ_partitionObj]
   rfl
 
-theorem keys_law : Spot.keys? law = some (Spot.sortStrings #["k", "law"]) := by kernel_rfl'
+theorem keys_law : Spot.keys? samplingDesign = some (Spot.sortStrings #["k", "law"]) := by kernel_rfl'
 
 theorem sortStrings_kl : Spot.sortStrings #["k", "law"] = #["k", "law"] := by
   apply Array.toList_inj.1
@@ -88,46 +88,46 @@ theorem sortStrings_lawk : Spot.sortStrings #["law", "k"] = #["k", "law"] := by
   apply Array.toList_inj.1
   exact h.trans (congrArg Array.toList sortStrings_kl)
 
-theorem flockLaw_law : Spot.Draw.flockLaw law nUnits = .ok (.subset 1) := by
-  unfold Spot.Draw.flockLaw
+theorem flockLaw_law : Spot.Draw.flockSamplingDesign samplingDesign nUnits = .ok (.subset 1) := by
+  unfold Spot.Draw.flockSamplingDesign
   rw [keys_law, sortStrings_kl, sortStrings_lawk]
   kernel_rfl'
 
-theorem deriveLaw_law (p : Spot.Program) : Spot.Draw.deriveLaw p query law none = .ok none := by
+theorem deriveLaw_law (p : Spot.Program) : Spot.Draw.deriveSamplingDesign p query samplingDesign none = .ok none := by
   kernel_rfl'
 
-theorem derive_law (p : Spot.Program) : Spot.Draw.derive p query law none = .ok law := by
+theorem derive_law (p : Spot.Program) : Spot.Draw.derive p query samplingDesign none = .ok samplingDesign := by
   unfold Spot.Draw.derive
   rw [deriveLaw_law]
   rfl
 
-/-- A verifier holding the session's query, law and no work table derives the subset of one, whatever its program. -/
-theorem lawAt_subset (v : Spot.Registration.Verifier) (hq : v.query = query) (hl : v.law = law)
-    (ht : v.workTable = none) : lawAt v nUnits = .ok (.subset 1) := by
-  unfold lawAt
+/-- A verifier holding the session's query, sampling design and no work table derives the subset of one, whatever its program. -/
+theorem lawAt_subset (v : Spot.Docket.Verifier) (hq : v.query = query) (hl : v.samplingDesign = samplingDesign)
+    (ht : v.workTable = none) : samplingDesignAt v nUnits = .ok (.subset 1) := by
+  unfold samplingDesignAt
   rw [hq, hl, ht, derive_law, deriveLaw_law]
   simp only [Fwd.bind_ok]
   rw [flockLaw_law]
   rfl
 
-theorem lawObj_none (l : Json) : Properties.Spot.SecurityProofs.lawObj l none = l := rfl
+theorem lawObj_none (l : Json) : Properties.Spot.SecurityProofs.samplingDesignObj l none = l := rfl
 
 theorem drawnLaw_of_parse {p : Spot.Program} (h : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) :
-    Flock.Bridge.drawnLaw desc query law none nUnits = .ok (.subset 1) := by
-  unfold Flock.Bridge.drawnLaw
+    Flock.Bridge.sampledDesign desc query samplingDesign none nUnits = .ok (.subset 1) := by
+  unfold Flock.Bridge.sampledDesign
   simp only [h, Fwd.bind_ok, deriveLaw_law, lawObj_none, flockLaw_law]
   rfl
 
 /-- **`ProgramFacts.design_eq`** at a descriptor that parses. -/
 theorem design_eq_of_parse {p : Spot.Program} (h : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) :
-    Flock.Bridge.designAt desc query law none nUnits = .subset 1 := by
+    Flock.Bridge.designAt desc query samplingDesign none nUnits = .subset 1 := by
   unfold Flock.Bridge.designAt
   rw [drawnLaw_of_parse h]
 
 /-- **`ProgramFacts.lawAt_of`** at a descriptor that parses. -/
 theorem lawAt_of_parse {p : Spot.Program} (h : Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
-    (v : Spot.Registration.Verifier) (_ : v.program = program) (hq : v.query = query) (hl : v.law = law)
-    (ht : v.workTable = none) : lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits) := by
+    (v : Spot.Docket.Verifier) (_ : v.program = program) (hq : v.query = query) (hl : v.samplingDesign = samplingDesign)
+    (ht : v.workTable = none) : samplingDesignAt v nUnits = .ok (Flock.Bridge.designAt desc query samplingDesign none nUnits) := by
   rw [lawAt_subset v hq hl ht, design_eq_of_parse h]
 
 /-! ## The descriptor is plain -/
@@ -135,14 +135,14 @@ theorem lawAt_of_parse {p : Spot.Program} (h : Spot.Program.parse ⟨desc.toArra
 def okChar (c : Char) : Bool := c != '"' && c != '\\' && 0x20 ≤ c.val
 
 mutual
-/-- `Firewall.plain`, with each string's characters read as a list (`plainK_eq`). -/
+/-- `ZkServer.plain`, with each string's characters read as a list (`plainK_eq`). -/
 def plainK : Json → Bool
   | .null => true
   | .bool _ => true
   | .num ⟨m, e⟩ => e == 0 && decide (0 ≤ m)
   | .str s => s.toList.all okChar
   | .arr ⟨a⟩ => plainKList a
-  | .obj ⟨⟨t⟩⟩ => plainKObj t && Firewall.ascending t
+  | .obj ⟨⟨t⟩⟩ => plainKObj t && ZkServer.ascending t
 def plainKList : List Json → Bool
   | [] => true
   | j :: js => plainK j && plainKList js
@@ -151,30 +151,30 @@ def plainKObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → Bool
   | .inner _ k v l r => plainKObj l && k.toList.all okChar && plainK v && plainKObj r
 end
 
-theorem plainStr_eq (s : String) : Firewall.plainStr s = s.toList.all okChar := by
-  rw [Firewall.plainStr, String.all_bool_eq]; rfl
+theorem plainStr_eq (s : String) : ZkServer.plainStr s = s.toList.all okChar := by
+  rw [ZkServer.plainStr, String.all_bool_eq]; rfl
 
 mutual
-theorem plainK_eq : ∀ j, plainK j = Firewall.plain j
+theorem plainK_eq : ∀ j, plainK j = ZkServer.plain j
   | .null => rfl
   | .bool _ => rfl
   | .num ⟨_, _⟩ => rfl
-  | .str s => by simp only [plainK, Firewall.plain, plainStr_eq]
-  | .arr ⟨a⟩ => by simp only [plainK, Firewall.plain]; exact plainKList_eq a
-  | .obj ⟨⟨t⟩⟩ => by simp only [plainK, Firewall.plain]; rw [plainKObj_eq t]
-theorem plainKList_eq : ∀ a, plainKList a = Firewall.plainList a
+  | .str s => by simp only [plainK, ZkServer.plain, plainStr_eq]
+  | .arr ⟨a⟩ => by simp only [plainK, ZkServer.plain]; exact plainKList_eq a
+  | .obj ⟨⟨t⟩⟩ => by simp only [plainK, ZkServer.plain]; rw [plainKObj_eq t]
+theorem plainKList_eq : ∀ a, plainKList a = ZkServer.plainList a
   | [] => rfl
-  | j :: js => by simp only [plainKList, Firewall.plainList]; rw [plainK_eq j, plainKList_eq js]
-theorem plainKObj_eq : ∀ t, plainKObj t = Firewall.plainObj t
+  | j :: js => by simp only [plainKList, ZkServer.plainList]; rw [plainK_eq j, plainKList_eq js]
+theorem plainKObj_eq : ∀ t, plainKObj t = ZkServer.plainObj t
   | .leaf => rfl
   | .inner _ k v l r => by
-    simp only [plainKObj, Firewall.plainObj]; rw [plainKObj_eq l, plainK_eq v, plainKObj_eq r, plainStr_eq]
+    simp only [plainKObj, ZkServer.plainObj]; rw [plainKObj_eq l, plainK_eq v, plainKObj_eq r, plainStr_eq]
 end
 
-theorem plain_programJ : Firewall.plain programJ = true := by
+theorem plain_programJ : ZkServer.plain programJ = true := by
   rw [← plainK_eq]; decide +kernel
 
-theorem plain_programBare : Firewall.plain programBare = true := by
+theorem plain_programBare : ZkServer.plain programBare = true := by
   rw [← plainK_eq]; decide +kernel
 
 /-! ## Rules of `decode`'s walk -/

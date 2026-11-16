@@ -6,8 +6,8 @@ public import VStarRecursive.Sampled
 /-!
 # The honest session's parameters
 
-The composite's parameters `θ₀`: one component, sampled proofs at the one-stage form, whose parameters name the program,
-its query and partition object, the subset law of one unit, the challenger's deployed key and family, and the circuit
+The composite's parameters `θ₀`: one component, SPOT at the one-stage form, whose parameters name the program,
+its query and partition object, the subset sampling design of one unit, the challenger's deployed key and family, and the circuit
 and public files' SHA-512s (`proofs`), each spliced as a term.
 
 Piece P7 owns this file's values: it fixes the members to the ones `Spot.OneStageZk.paramsOfJson` reads.
@@ -36,7 +36,7 @@ def paramsJ : Json := Json.mkObj [
     ("label", .str label₀)]),
   ("delta", .str "1/2"),
   ("form", .str "one-stage"),
-  ("law", law),
+  ("law", samplingDesign),
   ("leaf_layer", .null),
   ("log", .arr #[]),
   ("partition", partitionObj),
@@ -55,6 +55,6 @@ def θJ : Json := Json.mkObj [("components", .arr #[Json.mkObj [("id", .str VSta
   ("params", paramsJ)]])]
 
 /-- The composite's parameters, `θJ`'s text. -/
-def θ₀ : ByteArray := (Firewall.printJson θJ).toUTF8
+def θ₀ : ByteArray := (ZkServer.printJson θJ).toUTF8
 
 end Verity.Sampled.Instance.HonestSession

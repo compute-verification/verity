@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled
-public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
@@ -35,12 +35,12 @@ reference table `Live` reads. -/
 theorem y₀_of_setup (n : ℕ) {I : Exec.Inputs} {D : Flock.Desc} {kd : ℕ} {d : Json} {st : Flock.Stmt}
     (hc1 : I.count = 1) (ht : I.tags.typed = false)
     (hD : Flock.Desc.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
-    (hprov : ∀ D', Flock.Draw.UnitDraw.ofJson d = .ok D' → D'.proved.size = kd)
+    (hprov : ∀ D', Flock.Draw.UnitSample.ofJson d = .ok D' → D'.proved.size = kd)
     (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
       (inputsJ I 0).coins (inputsJ I 0).tables (some d) (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
     (hshape : Flock.Zk.shapeOk st = .ok ()) :
     ∃ (S₀ : Finset (Fin n)) (d₀ : Json),
-      Nonempty (ZkHidden.DrawSetupZHJP (inputsJ I 0) none (Exec.mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) := by
+      Nonempty (ZkHidden.SampleSetupZHJP (inputsJ I 0) none (Exec.mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) := by
   have htJ : (inputsJ I 0).tags = ZkExec.zkTags I := by
     show Exec.tagsAt _ I.count 0 = _
     unfold Exec.tagsAt
@@ -55,13 +55,13 @@ theorem y₀_of_setup (n : ℕ) {I : Exec.Inputs} {D : Flock.Desc} {kd : ℕ} {d
   have hmPts : st.mPts = Exec.mPtsOf D.unroll.g (kd / nTab I) := by
     rw [hn1, Nat.div_one]
     exact ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat hD) hprov hst'
-  obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP hst
-  obtain ⟨Dd, hDd, -⟩ := Layout.drawn_spec
+  obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_sampledP hst
+  obtain ⟨Dd, hDd, -⟩ := Layout.sampled_spec
     (c := { st.c with outPorts := if pi'.ports.isEmpty then #[] else #[("public inputs", pi'.words)] }) hdr
-  obtain ⟨xx, hxx⟩ := HiddenExec.drawSetupHP_of_setupHiddenI (I := inputsJ I 0)
+  obtain ⟨xx, hxx⟩ := HiddenExec.sampleSetupHP_of_setupHiddenI (I := inputsJ I 0)
     (own := none) (S := (∅ : Finset (Fin n))) (Composed.typedJ ht 0) hst hf hDd
     (fun v hv => by simp at hv) hmPts
-  obtain ⟨y, -, -, -⟩ := ZkHidden.drawSetupZHJP_of xx (by rw [hxx]; exact hshape)
+  obtain ⟨y, -, -, -⟩ := ZkHidden.sampleSetupZHJP_of xx (by rw [hxx]; exact hshape)
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 
@@ -130,7 +130,7 @@ open ZkLink ZkBind ZkHidden Composed in
 /-- Every table of the plan meets the honest bound's rate. -/
 theorem hr_planZHJP {n mPts : ℕ} {I : Exec.Inputs} {own : Option ByteArray}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
     (hkρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k)) (S : Finset (Fin n)) (R : Reg)
     (j : Fin (planZHJP (Reg := Reg) dj y₀ S R).length) :
     rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ := by

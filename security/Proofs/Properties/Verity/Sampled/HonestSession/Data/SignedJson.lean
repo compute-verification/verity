@@ -5,7 +5,7 @@ public import Lean.Data.Json.Basic
 /-!
 # A JSON value's text with signed numbers
 
-`jsonCharsS` is `Flock.Firewall.jsonChars` with each number's mantissa as `Int.repr` writes it, its sign included, where
+`jsonCharsS` is `Flock.ZkServer.jsonChars` with each number's mantissa as `Int.repr` writes it, its sign included, where
 `jsonChars` writes it as a natural. The circuit file's META line is its text, since that META holds the input leaf `-1`.
 -/
 

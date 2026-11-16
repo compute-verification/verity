@@ -11,7 +11,7 @@ public import Proofs.Properties.Verity.Sampled.OpensAt
 # The honest session
 
 The session v2 sets up on `θ₀` and the registered files: each of `Live`'s binders the value the pieces name (the circuit
-`cH`, the public file as each side reads it, the descriptor, query and law), the reference table at `draw₀`
+`cH`, the public file as each side reads it, the descriptor, query and sampling design), the reference table at `draw₀`
 (`LiveFacts.y₀_of_setup` at `Setup`'s setup), the device's deployed bytes, and the honest bound (`k = 2^23`,
 `ρ = 3/8`). Its fields' facts are `exists_live`'s, read off by `live_*`.
 -/
@@ -35,9 +35,9 @@ theorem desc_ok (hC : CircuitFileFacts) :
 
 theorem nTab_inputs : Composed.nTab inputs = 1 := rfl
 
-theorem proved_size (hS : SetupFacts) (hPr : ProgramFacts) (D' : Flock.Draw.UnitDraw)
-    (h : Flock.Draw.UnitDraw.ofJson draw₀ = .ok D') :
-    D'.proved.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits) := by
+theorem proved_size (hS : SetupFacts) (hPr : ProgramFacts) (D' : Flock.Draw.UnitSample)
+    (h : Flock.Draw.UnitSample.ofJson draw₀ = .ok D') :
+    D'.proved.size = Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc query samplingDesign none nUnits) := by
   rw [hS.draw_ofJson] at h
   cases h
   rw [hPr.design_eq]
@@ -46,7 +46,7 @@ theorem proved_size (hS : SetupFacts) (hPr : ProgramFacts) (D' : Flock.Draw.Unit
 /-- The honest session supplies every field of a `Live`. -/
 theorem exists_live (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts) :
     ∃ A : Live,
-    A.I = inputs ∧ A.n = nUnits ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = law ∧ A.tb = none ∧ A.own = none ∧
+    A.I = inputs ∧ A.n = nUnits ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = samplingDesign ∧ A.tb = none ∧ A.own = none ∧
       A.Lb = deployedLb ∧ A.ε = 0 ∧ A.OpensReady := by
   have hD := desc_ok hC
   have ht : inputs.tags.typed = false := typed_false
@@ -57,7 +57,7 @@ theorem exists_live (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFa
       hP.hmOut_loadPublic hP.pubO_n (Scope.ports_ok hC hP)
   obtain ⟨S₀, d₀, hy⟩ :=
     LiveFacts.y₀_of_setup nUnits (I := inputs) (D := D)
-      (kd := Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits)) rfl ht hD (proved_size hS hPr)
+      (kd := Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc query samplingDesign none nUnits)) rfl ht hD (proved_size hS hPr)
       hS.setupHidden_ok hS.shapeOk_ok
   let A : Live :=
     { n := nUnits
@@ -79,7 +79,7 @@ theorem exists_live (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFa
       desc
       qr := query
       hpop := hPr.popMatches
-      lj := law
+      lj := samplingDesign
       tb := none
       hsub := by rw [hPr.design_eq]; rfl
       hdiv := by rw [nTab_inputs]; exact Nat.mod_one _
@@ -125,7 +125,7 @@ theorem live_desc :
 theorem live_query :
     (live hC hP hS hPr).qr = query := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.1
 theorem live_law :
-    (live hC hP hS hPr).lj = law := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.1
+    (live hC hP hS hPr).lj = samplingDesign := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.1
 theorem live_table :
     (live hC hP hS hPr).tb = none := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.1
 theorem live_own :

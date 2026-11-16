@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramParse
 public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramProof
 public import Proofs.Properties.Verity.Sampled.HonestSession.Hex
 public import Proofs.Properties.Verity.Sampled.Accepts
-public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.ZkServerObj
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Properties.Verity.Sampled.HonestSession.Delta
@@ -16,7 +16,7 @@ import Proofs.Pouw.Period.Sort
 import Base.Bytes
 import Flock.Scan
 import Flock.Canon
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.HmRow
 import Flock.Registered
@@ -58,7 +58,7 @@ import all Init.WF
 # v2's parameters in `θ₀`
 
 `θ₀` is canonical and decodes to one component whose parameters `paramsOfJson` reads at the one-stage form (`params_spec`):
-the verifier's partition object and program are `partitionObj` and `programFile`, its program, query, law and work table
+the verifier's partition object and program are `partitionObj` and `programFile`, its program, query, sampling design and work table
 the session's, and its challenger the deployed key at `label₀`. The digests it names are the circuit and public files'
 (`digests`). Every step rewrites by `Flock.canon`'s equation lemmas and the JSON facts (`JsonCanon.JsonFacts`), which
 `params_full` discharges by `JsonCanon.jsonFacts` (the canonical-JSON reader's deliverable); nothing is decided over a
@@ -77,9 +77,9 @@ namespace Verity.Sampled.Instance.HonestSession.Params
 
 open Flock
 open Lean (Json)
-open FlockSoundness.Discharge.Recursion.FirewallObj
-open FlockSoundness.Discharge.Recursion.FirewallJson renaming norm → jnorm
-open FlockSoundness.Discharge.Recursion.FirewallJson (normObj normObj_eq normList normList_eq jsonCharsList_eq
+open FlockSoundness.Discharge.Recursion.ZkServerObj
+open FlockSoundness.Discharge.Recursion.ZkServerJson renaming norm → jnorm
+open FlockSoundness.Discharge.Recursion.ZkServerJson (normObj normObj_eq normList normList_eq jsonCharsList_eq
   jsonCharsObj_eq memberChars)
 open Std.DTreeMap.Internal (Impl)
 
@@ -89,7 +89,7 @@ set_option maxRecDepth 200000
 /-- `plstr`: a plain literal string, number, null or empty array is plain, by the tree's canonical recipe (the string's
 text is reduced to its characters and each checked). The def-named strings are unfolded so their literals reduce too. -/
 local macro "plstr" : tactic =>
-  `(tactic| simp [Firewall.plain, Firewall.plainList, Firewall.plainStr, String.all_bool_eq, jn,
+  `(tactic| simp [ZkServer.plain, ZkServer.plainList, ZkServer.plainStr, String.all_bool_eq, jn,
       label₀, templateId, Flock.HmRow.PARTITION_V1, VStar.Recursive.Sampled.PROTOCOL])
 
 /-- An object's members have distinct keys: their keys ascend (`compare … = .lt`, which the kernel reduces), so no two
@@ -98,14 +98,14 @@ instance rather than looking for one on `Asc` (there is none); the result coerce
 private theorem keys_ne {L : List (String × Json)}
     (h : decide (L.Pairwise fun a b => compare a.1 b.1 = .lt) = true) :
     L.Pairwise fun a b => a.1 ≠ b.1 :=
-  FlockSoundness.Discharge.Recursion.FirewallObj.Asc.ne (key := Prod.fst)
+  FlockSoundness.Discharge.Recursion.ZkServerObj.Asc.ne (key := Prod.fst)
     (of_decide_eq_true h : L.Pairwise fun a b => compare a.1 b.1 = .lt)
 
 /-! ## Plain values and their ASCII texts -/
 
 /-- A digest's hex name is plain: no `"`, `\` or control character. -/
-private theorem plainStr_hexOf (b : ByteArray) : Firewall.plainStr (hexOf b) = true := by
-  rw [Firewall.plainStr, String.all_bool_eq, List.all_eq_true, Hex.hexOf_toList]
+private theorem plainStr_hexOf (b : ByteArray) : ZkServer.plainStr (hexOf b) = true := by
+  rw [ZkServer.plainStr, String.all_bool_eq, List.all_eq_true, Hex.hexOf_toList]
   have key : ∀ d < 16, ((Hex.hd d != '"' && Hex.hd d != '\\' && 0x20 ≤ (Hex.hd d).val) = true) := by
     decide +kernel
   intro c hc
@@ -149,7 +149,7 @@ private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = 
 
 /-- The program descriptor is plain (no hash is spliced into it): a concrete-JSON fact of this instance, proved by
 `ProgramProof.plain_programJ` and passed as `hpp : ProgramPlain` to every lemma below that reads `programJ`. -/
-def ProgramPlain : Prop := Firewall.plain programJ = true
+def ProgramPlain : Prop := ZkServer.plain programJ = true
 
 /-- The parser's rebuild (`norm`) of these two JSON literals is the literal itself. `canonicalJson` returns `norm` of the
 parsed value, and the decoders must then read that value's fields as a concrete object; but `norm` is
@@ -165,7 +165,7 @@ descriptor, whose keys ascend at every level). -/
 def NormFacts : Prop := jnorm programJ = programJ
 
 /-- The session's query is plain. -/
-private theorem plain_query : Firewall.plain query = true := by
+private theorem plain_query : ZkServer.plain query = true := by
   rw [query]
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
@@ -180,18 +180,18 @@ private theorem plain_query : Firewall.plain query = true := by
     exact ⟨by plstr, by plstr⟩                                     -- template
   · exact ⟨by plstr, by decide⟩                                    -- version
 
-/-- The session's subset law is plain. -/
-private theorem plain_law : Firewall.plain law = true := by
-  rw [law]
+/-- The session's subset sampling design is plain. -/
+private theorem plain_law : ZkServer.plain samplingDesign = true := by
+  rw [samplingDesign]
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl
   · exact ⟨by plstr, by decide⟩                                    -- k
-  · exact ⟨by plstr, by plstr⟩                                     -- law
+  · exact ⟨by plstr, by plstr⟩                                     -- samplingDesign
 
 /-- The query `build` falls back to for an empty one is plain. -/
-private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery = true := by
+private theorem plain_defaultQuery : ZkServer.plain Spot.Partition.defaultQuery = true := by
   unfold Spot.Partition.defaultQuery
   -- `defaultQuery`'s keys are name, version, params — distinct but not ascending, so prove distinctness directly.
   refine plain_mkObj (by decide) ?_
@@ -199,7 +199,7 @@ private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery 
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl
   · refine ⟨by plstr, ?_⟩                                          -- name
-    show Firewall.plain (Json.str "Q_word") = true
+    show ZkServer.plain (Json.str "Q_word") = true
     plstr
   · exact ⟨by plstr, by decide⟩                                    -- version
   · refine ⟨by plstr, ?_⟩                                          -- params
@@ -212,24 +212,24 @@ private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery 
 
 /-- The partition object is plain. The query member is `build`'s `if`, so split on it: either branch (`defaultQuery` or
 `query`) is plain, and nothing decides the stuck `keys? query`. -/
-private theorem plain_partition : Firewall.plain partitionObj = true := by
+private theorem plain_partition : ZkServer.plain partitionObj = true := by
   unfold partitionObj Spot.Partition.build
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl
   · refine ⟨by plstr, ?_⟩                                          -- format
-    show Firewall.plain (Json.str Flock.HmRow.PARTITION_V1) = true
+    show ZkServer.plain (Json.str Flock.HmRow.PARTITION_V1) = true
     plstr
   · refine ⟨by plstr, ?_⟩                                          -- program
-    show Firewall.plain (Json.str (hexOf programSha)) = true
+    show ZkServer.plain (Json.str (hexOf programSha)) = true
     exact plainStr_hexOf _
   · refine ⟨by plstr, ?_⟩                                          -- query (build's if)
     dsimp only
     split <;> first | exact plain_defaultQuery | exact plain_query
 
 /-- The composite's component parameters are plain. -/
-private theorem plain_paramsJ (hpp : ProgramPlain) : Firewall.plain paramsJ = true := by
+private theorem plain_paramsJ (hpp : ProgramPlain) : ZkServer.plain paramsJ = true := by
   rw [paramsJ]
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
@@ -254,7 +254,7 @@ private theorem plain_paramsJ (hpp : ProgramPlain) : Firewall.plain paramsJ = tr
     · exact ⟨by plstr, by plstr⟩                                   -- label
   · exact ⟨by plstr, by plstr⟩                                     -- delta
   · exact ⟨by plstr, by plstr⟩                                     -- form
-  · exact ⟨by plstr, plain_law⟩                                    -- law
+  · exact ⟨by plstr, plain_law⟩                                    -- samplingDesign
   · exact ⟨by plstr, by decide⟩                                    -- leaf_layer
   · exact ⟨by plstr, by decide⟩                                    -- log
   · exact ⟨by plstr, plain_partition⟩                              -- partition
@@ -276,15 +276,15 @@ private theorem plain_paramsJ (hpp : ProgramPlain) : Firewall.plain paramsJ = tr
   · exact ⟨by plstr, by decide⟩                                    -- work_table
 
 /-- The composite's parameters are plain. -/
-private theorem plain_θJ (hpp : ProgramPlain) : Firewall.plain θJ = true := by
+private theorem plain_θJ (hpp : ProgramPlain) : ZkServer.plain θJ = true := by
   rw [θJ]
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
   simp only [List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl
   refine ⟨by plstr, ?_⟩
-  show (Firewall.plain (Json.mkObj [("id", .str VStar.Recursive.Sampled.PROTOCOL), ("params", paramsJ)])
-      && Firewall.plainList []) = true
+  show (ZkServer.plain (Json.mkObj [("id", .str VStar.Recursive.Sampled.PROTOCOL), ("params", paramsJ)])
+      && ZkServer.plainList []) = true
   rw [Bool.and_eq_true]
   refine ⟨?_, by decide⟩
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
@@ -305,8 +305,8 @@ the kernel does not reduce. Instead we compose printability over the literal's s
 
 /-- `Printable j` reads back as a condition on `jsonChars j`, since `printJson` is their `String.ofList`. -/
 private theorem printable_iff_chars {j : Json} :
-    JsonCanon.Printable j ↔ ∀ c ∈ Firewall.jsonChars j, c.toNat < 0x7f := by
-  simp only [JsonCanon.Printable, Firewall.printJson, String.toList_ofList]
+    JsonCanon.Printable j ↔ ∀ c ∈ ZkServer.jsonChars j, c.toNat < 0x7f := by
+  simp only [JsonCanon.Printable, ZkServer.printJson, String.toList_ofList]
 
 /-- A member key's characters are ASCII whenever the string value `.str s` prints to ASCII: its text is the key in quotes
 (`jsonChars (.str s) = '"' :: s.toList ++ ['"']`), so the key's characters are among the printed ones. This routes the
@@ -316,7 +316,7 @@ private theorem printable_key {s : String} (h : JsonCanon.Printable (Json.str s)
     ∀ c ∈ s.toList, c.toNat < 0x7f := by
   intro c hc
   have hall := (printable_iff_chars.1 h) c
-  rw [Firewall.jsonChars] at hall
+  rw [ZkServer.jsonChars] at hall
   exact hall (List.mem_cons_of_mem _ (List.mem_append_left _ hc))
 
 /-- A character of an intercalation is the separator's, or one of a joined piece. -/
@@ -341,7 +341,7 @@ private theorem printable_arr {arr : Array Json} (h : ∀ e ∈ arr, JsonCanon.P
   obtain ⟨a⟩ := arr
   rw [printable_iff_chars]
   intro c hc
-  rw [Firewall.jsonChars] at hc
+  rw [ZkServer.jsonChars] at hc
   rcases List.mem_cons.1 hc with rfl | hc1
   · decide
   rcases List.mem_append.1 hc1 with hmid | hbr
@@ -360,7 +360,7 @@ private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun
     JsonCanon.Printable (Json.mkObj L) := by
   rw [printable_iff_chars]
   intro c hc
-  rw [mkObj_eq, Firewall.jsonChars] at hc
+  rw [mkObj_eq, ZkServer.jsonChars] at hc
   rcases List.mem_append.1 hc with hhd | htl
   · rcases List.mem_cons.1 hhd with rfl | hmid
     · decide
@@ -383,7 +383,7 @@ private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun
 
 /-- A digest's hex name prints to ASCII: every hex digit is below `0x7f`, as are the enclosing quotes. -/
 private theorem printable_hexOf (b : ByteArray) : JsonCanon.Printable (.str (hexOf b)) := by
-  rw [printable_iff_chars, Firewall.jsonChars]
+  rw [printable_iff_chars, ZkServer.jsonChars]
   intro c hc
   rcases List.mem_cons.1 hc with rfl | hc1
   · decide
@@ -444,7 +444,7 @@ theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
     · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩    -- label
   · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- delta
   · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- form
-  · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- law
+  · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- samplingDesign
   · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- leaf_layer
   · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), ProgramParse.printable_of _ (by decide +kernel)⟩      -- log
   · exact ⟨printable_key (ProgramParse.printable_of _ (by decide +kernel)), printable_partition⟩                         -- partition
@@ -495,21 +495,21 @@ private theorem canon_θ₀ (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
 
 /-- `canonicalJson` of the component parameters' text reads them back. -/
 private theorem canon_params (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 = .ok (jnorm paramsJ) :=
+    Core.canonicalJson (ZkServer.printJson paramsJ).toUTF8 = .ok (jnorm paramsJ) :=
   hJ.canonicalJson_canon (plain_paramsJ hpp) (canon_ascii_bytes (hJ.canon_plain (plain_paramsJ hpp) printable_paramsJ))
     (hJ.canon_plain (plain_paramsJ hpp) printable_paramsJ)
 
 /-- The program file is the descriptor's text. -/
 private theorem programFile_eq (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    programFile = (Firewall.printJson programJ).toUTF8 := by
-  have hp : Firewall.plain programJ = true := hpp
+    programFile = (ZkServer.printJson programJ).toUTF8 := by
+  have hp : ZkServer.plain programJ = true := hpp
   show ((Flock.canon programJ).toOption.getD "").toUTF8 = _
   rw [hJ.canon_plain hp ProgramParse.printable_programJ]
   rfl
 
 /-- The descriptor bytes `Program.parse` reads are the program file. -/
 private theorem desc_eq (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    (⟨desc.toArray⟩ : ByteArray) = (Firewall.printJson programJ).toUTF8 := by
+    (⟨desc.toArray⟩ : ByteArray) = (ZkServer.printJson programJ).toUTF8 := by
   have h : (⟨desc.toArray⟩ : ByteArray) = programFile := by
     show ByteArray.mk (programFile.data.toList).toArray = programFile
     rw [Array.toArray_toList]
@@ -517,7 +517,7 @@ private theorem desc_eq (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
 
 /-- `Program.parse` of the descriptor's text is the program. -/
 private theorem parse_program (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    Spot.Program.parse (Firewall.printJson programJ).toUTF8 = .ok program := by
+    Spot.Program.parse (ZkServer.printJson programJ).toUTF8 = .ok program := by
   rw [← desc_eq hJ hpp]; exact ProgramParse.program_parse
 
 /-- A spliced 64-byte-hash digest passes `paramsOfJson`'s form check (`digest?`): its hex is 128 characters, non-empty,
@@ -603,7 +603,7 @@ private theorem sortStrings_eq_sortLt (as : Array String) :
   have hl : (as.qsort (· < ·)).toList = sortLt as.toList :=
     List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2)
       (Properties.Pouw.Period.SecurityProofs.Sort.qsort_sorted as) (sortLt_sorted _)
-      ((Properties.RemoteAudit.qsort_toList_perm as _).trans (sortLt_perm _).symm)
+      ((Properties.Poub.qsort_toList_perm as _).trans (sortLt_perm _).symm)
   calc as.qsort (· < ·) = (as.qsort (· < ·)).toList.toArray := rfl
     _ = (sortLt as.toList).toArray := by rw [hl]
 
@@ -634,19 +634,19 @@ The `windowRoot := some r` field is structural in the statement (not a side cond
 rewrite matches the final guard's concrete record by `kabstract` alone — a side condition the walk cannot discharge, the
 record being tainted by the derived `query` and `partition`. -/
 private theorem unwindowed_some
-    (program : Spot.Program) (query law : Json) (workTable : Option Json) (scheme : String)
+    (program : Spot.Program) (query samplingDesign : Json) (workTable : Option Json) (scheme : String)
     (ports : Array (String × Json)) (leafLayer : Option String) (anchors log : Array Json) (partition : Option Json)
     (registered : Array (String × Nat)) (params : Array Spot.Registered.Param)
     (supplied : Array (String × Spot.Supplied.Rows)) (pinned : Array (String × String))
-    (outputs : Array (String × String × Spot.Registration.Earlier)) (binding : Option (String × String))
+    (outputs : Array (String × String × Spot.Docket.Earlier)) (binding : Option (String × String))
     (schemas : Array (String × String)) (r : String) (held : Array String)
-    (declared : Option (Nat × Array (Nat × String))) (seedSalt : Option String) (pool : Option Spot.Registration.Pool)
+    (declared : Option (Nat × Array (Nat × String))) (seedSalt : Option String) (pool : Option Spot.Docket.Pool)
     (tied : Array String) (members : Array (Array (Nat × Nat) × Nat)) :
-    Spot.Registration.unwindowed
-      { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered, params,
+    Spot.Docket.unwindowed
+      { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition, registered, params,
         supplied, pinned, outputs, binding, schemas, windowRoot := some r, held, declared, seedSalt, pool, tied,
         members } = #[] := by
-  unfold Spot.Registration.unwindowed; rfl
+  unfold Spot.Docket.unwindowed; rfl
 
 /-! ## The parser's rebuild (`jnorm`) of `θJ` and `paramsJ` is the literal
 
@@ -686,7 +686,7 @@ private theorem norm_mkObj_fix {L : List (String × Json)} (hasc : Asc Prod.fst 
 private theorem norm_arr_fix {a : Array Json} (hv : ∀ x ∈ a.toList, jnorm x = x) :
     jnorm (.arr a) = .arr a := by
   obtain ⟨l⟩ := a
-  show Json.arr ⟨FlockSoundness.Discharge.Recursion.FirewallJson.normList l⟩ = Json.arr ⟨l⟩
+  show Json.arr ⟨FlockSoundness.Discharge.Recursion.ZkServerJson.normList l⟩ = Json.arr ⟨l⟩
   rw [normList_eq]
   refine congrArg (fun z => Json.arr ⟨z⟩) ?_
   exact (List.map_congr_left (fun x hx => hv x hx)).trans (List.map_id l)
@@ -708,7 +708,7 @@ macro_rules
          repeat' apply And.intro) <;> (first | nfix | exact List.forall_mem_nil _))
 
 private theorem norm_query : jnorm query = query := by unfold query; nfix
-private theorem norm_law : jnorm law = law := by unfold law; nfix
+private theorem norm_law : jnorm samplingDesign = samplingDesign := by unfold samplingDesign; nfix
 
 /-- The partition object's `query` member is `build`'s `if` on `keys? query`; `query` is non-empty, so it is `query`,
 whose rebuild is `norm_query`; the other two members are string leaves. -/
@@ -753,7 +753,7 @@ private theorem θtop_tree (v0 : Json) :
       = ⟨⟨Impl.Const.ofList [("components", v0)]⟩⟩ := by kernel_rfl'
 
 /-- `paramsJ`'s rebuild is itself, given the program descriptor's own fixpoint (`hprog`). Every other member is a shallow
-literal (`nfix`), the subset law (`norm_law`), the partition object (`norm_partition`) or the query (`norm_query`). -/
+literal (`nfix`), the subset samplingDesign (`norm_law`), the partition object (`norm_partition`) or the query (`norm_query`). -/
 private theorem norm_paramsJ (hprog : jnorm programJ = programJ) : jnorm paramsJ = paramsJ := by
   rw [paramsJ]
   refine norm_mkObj_fix (asc_of (by kernel_rfl')) ?_ (paramsJ_tree _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
@@ -764,7 +764,7 @@ private theorem norm_paramsJ (hprog : jnorm programJ = programJ) : jnorm paramsJ
   · nfix                 -- challenger
   · nfix                 -- delta
   · nfix                 -- form
-  · exact norm_law       -- law
+  · exact norm_law       -- samplingDesign
   · nfix                 -- leaf_layer
   · nfix                 -- log
   · exact norm_partition -- partition
@@ -807,7 +807,7 @@ private theorem params_full :
     ∃ p : Spot.OneStageZk.Params,
     ParamsAt θ₀ p ∧ p.own.partition = partitionObj ∧ p.own.program = programFile ∧
     p.own.circuit = hexOf circuitSha ∧ p.own.pub = hexOf (Sha512.hash publicFile) ∧
-    p.base.verifier.program = program ∧ p.base.verifier.query = query ∧ p.base.verifier.law = law ∧
+    p.base.verifier.program = program ∧ p.base.verifier.query = query ∧ p.base.verifier.samplingDesign = samplingDesign ∧
     p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) := by
   -- The two instance facts are now proved (not hypotheses): the descriptor is plain (`ProgramProof.plain_programJ`) and
   -- `norm` leaves it fixed (`ProgramParse.norm_programJ`), so `ProgramPlain` and `NormFacts` are discharged here.
@@ -818,23 +818,23 @@ private theorem params_full :
   have hC := canon_params hJ hpp
   -- Annotate `hE`'s type so `fwd_walk`'s `ruleAt` sees a concrete `Eq` (its inferred type otherwise carries the `Except`
   -- error metavariable, which `ruleAt` only instantiates away since this change; the annotation makes the rule explicit).
-  have hE : Spot.Program.parse (Firewall.printJson programJ).toUTF8 = Except.ok program := parse_program hJ hpp
+  have hE : Spot.Program.parse (ZkServer.printJson programJ).toUTF8 = Except.ok program := parse_program hJ hpp
   have hU := Flock.Hex.unhex_hexOf keyPub
   have hpf := programFile_eq hJ hpp
   -- `canon` of each plain literal directly (the decoders read the literal's fields, not `norm`'s).
-  have hBp : Flock.canon paramsJ = .ok (Firewall.printJson paramsJ) :=
+  have hBp : Flock.canon paramsJ = .ok (ZkServer.printJson paramsJ) :=
     hJ.canon_plain (plain_paramsJ hpp) printable_paramsJ
-  have hDp : Flock.canon programJ = .ok (Firewall.printJson programJ) :=
-    hJ.canon_plain (show Firewall.plain programJ = true from hpp) ProgramParse.printable_programJ
+  have hDp : Flock.canon programJ = .ok (ZkServer.printJson programJ) :=
+    hJ.canon_plain (show ZkServer.plain programJ = true from hpp) ProgramParse.printable_programJ
   obtain ⟨hNθ, hNp⟩ := normFacts_derive hN
   -- The decode: `θJ` is canon-tainted only through the `paramsJ` constant, which the walk hands whole to `canon`; so
   -- generalize `paramsJ` to a fresh value, detainting the literal, and give the walk `canon`'s equation over it.
   have hdec : (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
-      [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)] := by
+      [({ id := VStar.Recursive.Sampled.PROTOCOL, params := ZkServer.printJson paramsJ } : Core.Composition.Named)] := by
     rw [hA, hNθ]
     unfold θJ
     generalize hgpj : paramsJ = gpj
-    have rC : Flock.canon gpj = .ok (Firewall.printJson gpj) := by rw [← hgpj]; exact hBp
+    have rC : Flock.canon gpj = .ok (ZkServer.printJson gpj) := by rw [← hgpj]; exact hBp
     -- Rebuild the `Eq` head so the walk's `eq?` is not defeated by `mdata` left on the goal by `unfold`/`generalize`.
     refine Eq.trans ?g rfl
     fwd_walk [rC] block [Flock.canon] shallow []
@@ -842,11 +842,11 @@ private theorem params_full :
   -- one tainted leaf is the program digest `hexOf programSha`; expose it (unfold the partition builder) and generalize it
   -- to a fresh string, so the whole literal the walk descends into mentions no `canon`.
   have hpar : ∃ P : Spot.OneStageZk.Params,
-      (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) =
+      (Core.canonicalJson (ZkServer.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) =
         .ok (.inl P) ∧
       P.own.partition = partitionObj ∧ P.own.program = programFile ∧ P.own.circuit = hexOf circuitSha ∧
       P.own.pub = hexOf (Sha512.hash publicFile) ∧ P.base.verifier.program = program ∧
-      P.base.verifier.query = query ∧ P.base.verifier.law = law ∧ P.base.verifier.workTable = none ∧
+      P.base.verifier.query = query ∧ P.base.verifier.samplingDesign = samplingDesign ∧ P.base.verifier.workTable = none ∧
       P.base.challenger = some (key₀, label₀) := by
     rw [hC, hNp]
     -- The two spliced digests pass the form check; proved off the hash so the walk rewrites by them.
@@ -900,17 +900,17 @@ private theorem params_full :
     case f4 => kernel_rfl'            -- own.pub
     case f5 => rfl                    -- verifier.program = program
     case f6 => kernel_rfl'            -- verifier.query = query
-    case f7 => kernel_rfl'            -- verifier.law = law
+    case f7 => kernel_rfl'            -- verifier.samplingDesign = samplingDesign
     case f8 => rfl                    -- verifier.workTable = none
     case f9 => kernel_rfl'            -- challenger = some (key₀, label₀)
   obtain ⟨P, hwalk, hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩ := hpar
-  exact ⟨P, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }], hdec,
-      { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, by rfl, hwalk⟩,
+  exact ⟨P, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := ZkServer.printJson paramsJ }], hdec,
+      { id := VStar.Recursive.Sampled.PROTOCOL, params := ZkServer.printJson paramsJ }, by rfl, hwalk⟩,
       hpart, hprog, hc, hpub, hvp, hvq, hvl, hvt, hch⟩
 
 theorem params_spec : ∃ p, ParamsAt θ₀ p ∧
     p.own.partition = partitionObj ∧ p.own.program = programFile ∧ p.base.verifier.program = program ∧
-    p.base.verifier.query = query ∧ p.base.verifier.law = law ∧ p.base.verifier.workTable = none ∧
+    p.base.verifier.query = query ∧ p.base.verifier.samplingDesign = samplingDesign ∧ p.base.verifier.workTable = none ∧
     p.base.challenger = some (key₀, label₀) := by
   obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full
   exact ⟨p, hpat, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩

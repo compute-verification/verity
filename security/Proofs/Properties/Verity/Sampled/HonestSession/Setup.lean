@@ -24,11 +24,11 @@ open FlockSoundness.Discharge
 
 /-- **Facts about `verify --zk`'s setup of the concrete session** (`ProgramSetup.setupFacts_prog`, given four reads of
 the public file): the sample file `draw₀` reads to one unit
-of a one-unit subset law, the setup at table 0 returns the statement `st₀`, and `st₀` passes the zero-knowledge shape
+of a one-unit subset sampling design, the setup at table 0 returns the statement `st₀`, and `st₀` passes the zero-knowledge shape
 check. -/
 structure SetupFacts : Prop where
-  /-- The sample file reads to the subset-of-one law over `nUnits` with unit `0`. -/
-  draw_ofJson : Flock.Draw.UnitDraw.ofJson draw₀ = .ok { law := .subset 1, population := nUnits, units := #[0] }
+  /-- The sample file reads to the subset-of-one sampling design over `nUnits` with unit `0`. -/
+  draw_ofJson : Flock.Draw.UnitSample.ofJson draw₀ = .ok { samplingDesign := .subset 1, population := nUnits, units := #[0] }
   /-- `Stmt.setupHidden` at table 0's inputs and `draw₀` returns `st₀`. -/
   setupHidden_ok :
     Stmt.setupHidden (Composed.inputsJ inputs 0).tags (Composed.inputsJ inputs 0).circuitFile

@@ -48,7 +48,7 @@ set_option maxRecDepth 200000
 
 namespace Verity.Sampled.Instance.HonestSession.CircuitFileProof
 
-open Flock.Firewall SignedJson
+open Flock.ZkServer SignedJson
 
 theorem tagsZ_eq : tagsZ = tZ := by
   show Zk.tags Flock.Tags.circuit (Zk.maskLogOf circuitFile) 1 = tZ
@@ -139,29 +139,29 @@ theorem fieldForms_toListModel (t : Impl String (fun _ => Json)) :
 
 mutual
 theorem normS_jsonEquiv : ∀ {j : Json}, plainS j = true →
-    FlockDeploy.jsonForm (FirewallJson.norm j) = FlockDeploy.jsonForm j
+    FlockDeploy.jsonForm (ZkServerJson.norm j) = FlockDeploy.jsonForm j
   | .null, _ => rfl
   | .bool _, _ => rfl
   | .num _, _ => rfl
   | .str _, _ => rfl
   | .arr ⟨a⟩, h => by
     simp only [plainS] at h
-    rw [FirewallJson.norm]
+    rw [ZkServerJson.norm]
     simp only [FlockDeploy.jsonForm, FlockDeploy.jsonForms_eq]
     rw [normS_jsonEquivList a h]
   | .obj ⟨⟨t⟩⟩, h => by
     simp only [plainS, Bool.and_eq_true] at h
     have hasc : t.toListModel.Pairwise (fun a b => compare a.1 b.1 = .lt) := of_decide_eq_true h.2
-    have hf : t.toListModel.foldl (fun a e => a.insert e.1 (FirewallJson.norm e.2)) (∅ : Std.TreeMap.Raw String Json) =
-        (t.toListModel.map fun e => (⟨e.1, FirewallJson.norm e.2⟩ : (_ : String) × Json)).foldl
+    have hf : t.toListModel.foldl (fun a e => a.insert e.1 (ZkServerJson.norm e.2)) (∅ : Std.TreeMap.Raw String Json) =
+        (t.toListModel.map fun e => (⟨e.1, ZkServerJson.norm e.2⟩ : (_ : String) × Json)).foldl
           (fun a e => a.insert e.1 e.2) ∅ := by
       rw [List.foldl_map]
     have h0 : (∅ : Std.TreeMap.Raw String Json).inner.inner.toListModel = [] := rfl
-    rw [FirewallJson.norm]
-    show FlockDeploy.jsonForm (.obj (FirewallJson.normObj t ∅)) = _
+    rw [ZkServerJson.norm]
+    show FlockDeploy.jsonForm (.obj (ZkServerJson.normObj t ∅)) = _
     rw [FlockDeploy.jsonForm, FlockDeploy.jsonForm, fieldForms_toListModel, fieldForms_toListModel,
-      FirewallJson.normObj_eq, hf,
-      FirewallJson.toListModel_foldl _ _ Impl.WF.empty (by rw [h0, List.nil_append, List.pairwise_map]; exact hasc), h0,
+      ZkServerJson.normObj_eq, hf,
+      ZkServerJson.toListModel_foldl _ _ Impl.WF.empty (by rw [h0, List.nil_append, List.pairwise_map]; exact hasc), h0,
       List.nil_append, List.map_map]
     congr 1
     apply FlockDeploy.FieldForms.ofList_inj.2
@@ -170,13 +170,13 @@ theorem normS_jsonEquiv : ∀ {j : Json}, plainS j = true →
     simp only [Function.comp]
     rw [normS_jsonEquivObj t h.1 e he]
 theorem normS_jsonEquivList : ∀ (a : List Json), plainSList a = true →
-    (FirewallJson.normList a).map FlockDeploy.jsonForm = a.map FlockDeploy.jsonForm
+    (ZkServerJson.normList a).map FlockDeploy.jsonForm = a.map FlockDeploy.jsonForm
   | [], _ => rfl
   | j :: js, h => by
     simp only [plainSList, Bool.and_eq_true] at h
-    simp only [FirewallJson.normList, List.map_cons, normS_jsonEquiv h.1, normS_jsonEquivList js h.2]
+    simp only [ZkServerJson.normList, List.map_cons, normS_jsonEquiv h.1, normS_jsonEquivList js h.2]
 theorem normS_jsonEquivObj : ∀ (t : Impl String (fun _ => Json)), plainSObj t = true →
-    ∀ e ∈ t.toListModel, FlockDeploy.jsonForm (FirewallJson.norm e.2) = FlockDeploy.jsonForm e.2
+    ∀ e ∈ t.toListModel, FlockDeploy.jsonForm (ZkServerJson.norm e.2) = FlockDeploy.jsonForm e.2
   | .leaf, _ => by simp [Impl.toListModel]
   | .inner _ k v l r, h => by
     simp only [plainSObj, Bool.and_eq_true] at h
@@ -193,18 +193,18 @@ theorem jsonForm_mkObj_perm {L L' : List (String × Json)} (h : L.Pairwise fun a
     (h' : L'.Pairwise fun a b => a.1 ≠ b.1)
     (hp : (L.map fun e => (e.1, FlockDeploy.jsonForm e.2)).Perm (L'.map fun e => (e.1, FlockDeploy.jsonForm e.2))) :
     FlockDeploy.jsonForm (Json.mkObj L) = FlockDeploy.jsonForm (Json.mkObj L') := by
-  rw [FirewallObj.mkObj_eq, FirewallObj.mkObj_eq]
+  rw [ZkServerObj.mkObj_eq, ZkServerObj.mkObj_eq]
   show FlockDeploy.JsonForm.obj (.ofList (FlockDeploy.fieldForms _)) =
     FlockDeploy.JsonForm.obj (.ofList (FlockDeploy.fieldForms _))
   rw [fieldForms_toListModel, fieldForms_toListModel]
   congr 2
-  refine FirewallObj.eq_of_perm Prod.fst ?_ ?_ ?_
-  · have e1 := (FirewallObj.perm_ofList h).map fun e : (_ : String) × Json => (e.1, FlockDeploy.jsonForm e.2)
-    have e2 := (FirewallObj.perm_ofList h').map fun e : (_ : String) × Json => (e.1, FlockDeploy.jsonForm e.2)
+  refine ZkServerObj.eq_of_perm Prod.fst ?_ ?_ ?_
+  · have e1 := (ZkServerObj.perm_ofList h).map fun e : (_ : String) × Json => (e.1, FlockDeploy.jsonForm e.2)
+    have e2 := (ZkServerObj.perm_ofList h').map fun e : (_ : String) × Json => (e.1, FlockDeploy.jsonForm e.2)
     rw [List.map_map] at e1 e2
     exact e1.trans (hp.trans e2.symm)
-  · exact FirewallObj.Asc.map (key := Prod.fst) _ (FirewallObj.asc_ordered (FirewallObj.ordered_ofList L))
-  · exact FirewallObj.Asc.map (key := Prod.fst) _ (FirewallObj.asc_ordered (FirewallObj.ordered_ofList L'))
+  · exact ZkServerObj.Asc.map (key := Prod.fst) _ (ZkServerObj.asc_ordered (ZkServerObj.ordered_ofList L))
+  · exact ZkServerObj.Asc.map (key := Prod.fst) _ (ZkServerObj.asc_ordered (ZkServerObj.ordered_ofList L'))
 
 /-! ## The class hash -/
 
@@ -217,16 +217,16 @@ theorem metaPairs_ne : metaPairs.Pairwise fun a b => a.1 ≠ b.1 := by
   unfold metaPairs
   first | decide +kernel | simp
 
-theorem plainSObj_meta : plainSObj (Impl.Const.ofList metaPairs : FirewallObj.Tree) = true := by
+theorem plainSObj_meta : plainSObj (Impl.Const.ofList metaPairs : ZkServerObj.Tree) = true := by
   have h := plainS_metaJ
   unfold metaJ at h
-  rw [FirewallObj.mkObj_eq] at h
+  rw [ZkServerObj.mkObj_eq] at h
   simp only [plainS, Bool.and_eq_true] at h
   exact h.1
 
 theorem plain_members : ∀ e ∈ metaPairs, plainStr e.1 = true ∧ plainS e.2 = true := fun e he =>
   (plainSObj_iff _).1 plainSObj_meta ⟨e.1, e.2⟩
-    ((FirewallObj.perm_ofList metaPairs_ne).mem_iff.2 (List.mem_map.2 ⟨e, he, rfl⟩))
+    ((ZkServerObj.perm_ofList metaPairs_ne).mem_iff.2 (List.mem_map.2 ⟨e, he, rfl⟩))
 
 theorem canon_metaX : canonUtf8 metaX = .ok sX :=
   FlockDeploy.Concrete.canonUtf8_eq (intJ_of_plainS _ (plainS_mkObj (metaPairs_ne.sublist List.filter_sublist)
@@ -267,19 +267,19 @@ theorem circuitFile_tail : circuitFile = (headLine ++ "\n" ++ (("META " ++ metaT
   rfl
 
 /-- **The class hash `HmRow.parse` computes for the circuit file is `classSha`.** -/
-theorem classOf_eq : HmRow.classOf circuitFile ("flock-circuit " ++ unitName) (FirewallJson.norm metaJ) = .ok classSha := by
-  obtain ⟨t', ht', hl'⟩ := FirewallObj.norm_obj (FirewallObj.ordered_ofList metaPairs)
-  have hm : FirewallJson.norm metaJ = .obj ⟨⟨t'⟩⟩ := by
-    show FirewallJson.norm (Json.mkObj metaPairs) = _
-    rw [FirewallObj.mkObj_eq]
+theorem classOf_eq : HmRow.classOf circuitFile ("flock-circuit " ++ unitName) (ZkServerJson.norm metaJ) = .ok classSha := by
+  obtain ⟨t', ht', hl'⟩ := ZkServerObj.norm_obj (ZkServerObj.ordered_ofList metaPairs)
+  have hm : ZkServerJson.norm metaJ = .obj ⟨⟨t'⟩⟩ := by
+    show ZkServerJson.norm (Json.mkObj metaPairs) = _
+    rw [ZkServerObj.mkObj_eq]
     exact ht'
-  have hT := FirewallObj.perm_ofList metaPairs_ne
+  have hT := ZkServerObj.perm_ofList metaPairs_ne
   have hmem := (plainSObj_iff _).1 plainSObj_meta
   have hL1 : ((⟨⟨t'⟩⟩ : Std.TreeMap.Raw String Json).toArray.filter
       (fun kv => !HmRow.BINDING_KEYS.contains kv.1)).toList =
-      ((Impl.Const.ofList metaPairs : FirewallObj.Tree).toListModel.map
-        fun e => (e.1, FirewallJson.norm e.2)).filter (fun kv => !HmRow.BINDING_KEYS.contains kv.1) := by
-    rw [Array.toList_filter, FirewallObj.toArray_toList, hl', List.map_map]
+      ((Impl.Const.ofList metaPairs : ZkServerObj.Tree).toListModel.map
+        fun e => (e.1, ZkServerJson.norm e.2)).filter (fun kv => !HmRow.BINDING_KEYS.contains kv.1) := by
+    rw [Array.toList_filter, ZkServerObj.toArray_toList, hl', List.map_map]
     rfl
   have hc : canonUtf8 (Json.mkObj ((⟨⟨t'⟩⟩ : Std.TreeMap.Raw String Json).toArray.filter
       (fun kv => !HmRow.BINDING_KEYS.contains kv.1)).toList) = .ok sX := by
@@ -288,22 +288,22 @@ theorem classOf_eq : HmRow.classOf circuitFile ("flock-circuit " ++ unitName) (F
     unfold metaX
     apply jsonForm_mkObj_perm
     · rw [List.filter_map, List.pairwise_map]
-      exact (FirewallObj.Asc.ne (FirewallObj.asc_ordered (FirewallObj.ordered_ofList metaPairs))).sublist
+      exact (ZkServerObj.Asc.ne (ZkServerObj.asc_ordered (ZkServerObj.ordered_ofList metaPairs))).sublist
         List.filter_sublist
     · exact metaPairs_ne.sublist List.filter_sublist
     · rw [List.filter_map, List.map_map]
       have e1 : ((List.filter ((fun kv : String × Json => !HmRow.BINDING_KEYS.contains kv.1) ∘
-          fun e : (_ : String) × Json => (e.1, FirewallJson.norm e.2))
-          (Impl.Const.ofList metaPairs : FirewallObj.Tree).toListModel).map
+          fun e : (_ : String) × Json => (e.1, ZkServerJson.norm e.2))
+          (Impl.Const.ofList metaPairs : ZkServerObj.Tree).toListModel).map
           ((fun e : String × Json => (e.1, FlockDeploy.jsonForm e.2)) ∘
-            fun e : (_ : String) × Json => (e.1, FirewallJson.norm e.2))) =
+            fun e : (_ : String) × Json => (e.1, ZkServerJson.norm e.2))) =
           (List.filter ((fun kv : String × Json => !HmRow.BINDING_KEYS.contains kv.1) ∘
-          fun e : (_ : String) × Json => (e.1, FirewallJson.norm e.2))
-          (Impl.Const.ofList metaPairs : FirewallObj.Tree).toListModel).map
+          fun e : (_ : String) × Json => (e.1, ZkServerJson.norm e.2))
+          (Impl.Const.ofList metaPairs : ZkServerObj.Tree).toListModel).map
           (fun e : (_ : String) × Json => (e.1, FlockDeploy.jsonForm e.2)) := by
         apply List.map_congr_left
         intro e he
-        show (e.1, FlockDeploy.jsonForm (FirewallJson.norm e.2)) = (e.1, FlockDeploy.jsonForm e.2)
+        show (e.1, FlockDeploy.jsonForm (ZkServerJson.norm e.2)) = (e.1, FlockDeploy.jsonForm e.2)
         rw [normS_jsonEquiv (hmem e (List.mem_of_mem_filter he)).2]
       refine (List.Perm.of_eq e1).trans (((hT.filter _).map _).trans ?_)
       rw [List.filter_map, List.map_map]
@@ -380,7 +380,7 @@ theorem cH_ports : cH.ports = #[yPort] := by rw [cH_eq]; kernel_rfl'
 theorem cH_outRowPorts : cH.outRowPorts = #[1] := by rw [cH_eq]; kernel_rfl'
 theorem cH_g : cH.g = 1 := by rw [cH_eq]; kernel_rfl'
 theorem cH_kLog : cH.kLog = 22 := by rw [cH_eq]; kernel_rfl'
-theorem cH_metaJ : cH.metaJ = FirewallJson.norm metaJ := by rw [cH_eq]; kernel_rfl'
+theorem cH_metaJ : cH.metaJ = ZkServerJson.norm metaJ := by rw [cH_eq]; kernel_rfl'
 theorem cH_upv : cH.upv = 1 := by rw [cH_eq]; kernel_rfl'
 
 theorem cR_dummyDigests : cR.dummyDigests = #[dummyBc] := rfl

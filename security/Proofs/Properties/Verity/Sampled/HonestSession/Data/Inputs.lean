@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled
 /-!
 # The honest session's inputs and the values the verifier derives from them
 
-`inputs` are the ones v2 hands `flock-verify` on `θ₀` and the registered files: the statement's tags, the circuit and
+`inputs` are the ones v2 hands `verity-verify-proof` on `θ₀` and the registered files: the statement's tags, the circuit and
 public files, one table, the verifier's partition object and program, no work, stratified or closure input. The sample
 file `draw₀` samples the one unit. The verifier's derived values (the circuit, the public file as each side reads it,
 its drawn statement and the table's statement) are named by `getD` on the function that computes them, so a piece states
@@ -21,7 +21,7 @@ open Lean (Json)
 open Flock
 open FlockSoundness.Discharge
 
-/-- The inputs v2 hands `flock-verify`. -/
+/-- The inputs v2 hands `verity-verify-proof`. -/
 def inputs : Exec.Inputs where
   tags := Flock.Tags.circuit
   circuitFile := circuitFile
@@ -38,8 +38,8 @@ def inputs : Exec.Inputs where
 /-- `verify --zk`'s tags at the inputs. -/
 def tagsZ : Flock.Tags := ZkExec.zkTags inputs
 
-/-- The sample file: the one unit of the population of one, under the subset law of one. -/
-def draw₀ : Json := Flock.Draw.UnitDraw.toJson { law := .subset 1, population := nUnits, units := #[0] }
+/-- The sample file: the one unit of the population of one, under the subset sampling design of one. -/
+def draw₀ : Json := Flock.Draw.UnitSample.toJson { samplingDesign := .subset 1, population := nUnits, units := #[0] }
 
 /-- The circuit `HmOut.parse` reads from the circuit file. -/
 def cH : Flock.Circuit := (HmOut.parse tagsZ circuitFile []).toOption.getD default

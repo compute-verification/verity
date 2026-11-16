@@ -54,10 +54,10 @@ remaining readers over the known public value.
 
 @[expose] public section
 
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Lean (Json)
 open Std.DTreeMap.Internal (Impl)
-open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (parse_printJson)
 open FlockDeploy.Concrete (objT plain_obj_of plainStr_hexOf noNl_hexOf noNl utf8_noTen findByte_eq
   canon_eq canonUtf8_eq canon_obj_congr ok_of_isOk objM IntJ)
 
@@ -162,7 +162,7 @@ theorem hdr_plainF (sSha sCls : String) (hpsSha : plainStr sSha = true) (hs : pl
 /-! ## The header text reads back (parameterized over the abstract class string). -/
 
 theorem fj_normF (sSha sCls : String) :
-    FlockSoundness.Discharge.Recursion.FirewallJson.norm (hdrF sSha sCls) = hdrF sSha sCls := by kernel_rfl'
+    FlockSoundness.Discharge.Recursion.ZkServerJson.norm (hdrF sSha sCls) = hdrF sSha sCls := by kernel_rfl'
 theorem RNF (sSha sCls : String) : Flock.norm (hdrF sSha sCls) = hdrF sSha sCls := by kernel_rfl'
 
 theorem hdr_noTenF (sSha sCls : String) (hpsSha : plainStr sSha = true) (hs : plainStr sCls = true) :

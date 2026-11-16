@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.SignedJson
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
@@ -11,9 +11,9 @@ import Std.Data.DTreeMap.Internal.WF.Lemmas
 # A value's text with signed numbers parses back to it
 
 `parse_jsonCharsS`: the text `jsonCharsS` writes of a value whose numbers are integers and whose strings, keys and
-objects are plain (`plainS`) parses (`JsonParse.parse`) to `FirewallJson.norm` of it. It is
-`FirewallJson.parse_printJson` with each number's sign: a number is read by `ReadBack.num_int`, and the rest is
-`FirewallJson.reads`' induction on the fuel over `jsonCharsS`.
+objects are plain (`plainS`) parses (`JsonParse.parse`) to `ZkServerJson.norm` of it. It is
+`ZkServerJson.parse_printJson` with each number's sign: a number is read by `ReadBack.num_int`, and the rest is
+`ZkServerJson.reads`' induction on the fuel over `jsonCharsS`.
 -/
 
 @[expose] public section
@@ -21,12 +21,12 @@ objects are plain (`plainS`) parses (`JsonParse.parse`) to `FirewallJson.norm` o
 namespace Verity.Sampled.Instance.HonestSession.SignedJson
 
 open Lean (Json JsonNumber)
-open Flock Flock.Firewall Flock.JsonParse
-open FlockSoundness.Discharge.Recursion.FirewallJson
+open Flock Flock.ZkServer Flock.JsonParse
+open FlockSoundness.Discharge.Recursion.ZkServerJson
 open Std.DTreeMap.Internal (Impl)
 
 mutual
-/-- A value whose `jsonCharsS` text parses back to it: `Firewall.plain` with integer numbers of either sign. -/
+/-- A value whose `jsonCharsS` text parses back to it: `ZkServer.plain` with integer numbers of either sign. -/
 def plainS : Json → Bool
   | .null => true
   | .bool _ => true

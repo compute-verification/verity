@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.HonestSession.Data.Circuit
 public import Proofs.Properties.Verity.Sampled.HonestSession.SignedJsonRead
 public import Proofs.Flock.SessionLoop.Concrete.Public
-public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.ZkServerObj
 import Flock.Zk
 import Flock.Bytes
 import all Lean.Data.Json.Basic
@@ -34,7 +34,7 @@ evaluates a digest: each is a `hexOf`, plain whatever its bytes.
 namespace Verity.Sampled.Instance.HonestSession.CircuitFileProof
 
 open Lean (Json)
-open Flock Flock.Firewall
+open Flock Flock.ZkServer
 open FlockSoundness.Discharge.Recursion
 open Std.DTreeMap.Internal (Impl)
 open SignedJson
@@ -43,11 +43,11 @@ open SignedJson
 
 theorem plainS_mkObj {L : List (String × Json)} (h : L.Pairwise fun a b => a.1 ≠ b.1)
     (hp : ∀ e ∈ L, plainStr e.1 = true ∧ plainS e.2 = true) : plainS (Json.mkObj L) = true := by
-  rw [FirewallObj.mkObj_eq]
+  rw [ZkServerObj.mkObj_eq]
   show (plainSObj _ && ascending _) = true
-  rw [FirewallObj.ascending_of_ordered (FirewallObj.ordered_ofList L), Bool.and_true, plainSObj_iff]
+  rw [ZkServerObj.ascending_of_ordered (ZkServerObj.ordered_ofList L), Bool.and_true, plainSObj_iff]
   intro e he
-  obtain ⟨e', he', rfl⟩ := List.mem_map.mp ((FirewallObj.perm_ofList h).mem_iff.mp he)
+  obtain ⟨e', he', rfl⟩ := List.mem_map.mp ((ZkServerObj.perm_ofList h).mem_iff.mp he)
   exact hp e' he'
 
 theorem plainS_hex (b : ByteArray) : plainS (.str (hexOf b)) = true := FlockDeploy.Concrete.plainStr_hexOf b
@@ -103,7 +103,7 @@ theorem plainS_metaJ : plainS metaJ = true := by
   all_goals (first | exact plainS_leafOs | plainT)
 
 /-- **The META line parses** to the parser's reading of `metaJ`. -/
-theorem parse_meta : JsonParse.parse metaText = .ok (FirewallJson.norm metaJ) := parse_jsonCharsS plainS_metaJ
+theorem parse_meta : JsonParse.parse metaText = .ok (ZkServerJson.norm metaJ) := parse_jsonCharsS plainS_metaJ
 
 /-! ## No newline -/
 
@@ -112,7 +112,7 @@ theorem repr_noNl (m : Int) : '\n' ∉ (Int.repr m).toList := by
   | ofNat n =>
     rw [repr_ofNat]
     intro hn
-    have := FirewallJson.toDigits_digits n '\n' hn
+    have := ZkServerJson.toDigits_digits n '\n' hn
     revert this
     decide
   | negSucc k =>
@@ -120,7 +120,7 @@ theorem repr_noNl (m : Int) : '\n' ∉ (Int.repr m).toList := by
     intro hn
     rcases List.mem_cons.1 hn with h | h
     · exact absurd h (by decide)
-    · have := FirewallJson.toDigits_digits (k + 1) '\n' h
+    · have := ZkServerJson.toDigits_digits (k + 1) '\n' h
       revert this
       decide
 
@@ -250,7 +250,7 @@ theorem circuitFile_eq : ∃ R : String, circuitFile = (headLine ++ "\n" ++ (("M
     RecDeploy.VStarNets.joinNl_cons]
   rfl
 
-theorem mask_lookup : (FirewallJson.norm metaJ).getObjValAs? Nat "mask_log" = .ok 14 := by kernel_rfl'
+theorem mask_lookup : (ZkServerJson.norm metaJ).getObjValAs? Nat "mask_log" = .ok 14 := by kernel_rfl'
 
 /-- **The META line's `mask_log` is `14`.** -/
 theorem maskLog_eq : Zk.maskLogOf circuitFile = 14 := by

@@ -2,8 +2,8 @@ module
 
 public import Flock.Canon
 public import Proofs.Core.QSort
-public import Proofs.Flock.Recursive.FirewallJson
-public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.ZkServerJson
+public import Proofs.Flock.Recursive.ZkServerObj
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 public import Proofs.Flock.Claims.CanonEq
 public import CoreProtocol.Protocol
@@ -19,7 +19,7 @@ The honest-session witness's canonical-JSON facts (`Verity.Sampled.Instance.Hone
 with no hypothesis: `Flock.canon` writes a plain value of ASCII strings as its `printJson` text (`canon_plain`), writes a
 plain value and its parsed form the same (`canon_norm`), and a canonical text of ASCII parses back to `norm` of its value
 (`canonicalJson_canon`). The first two are inductions over `Json` reusing landed printer/parser lemmas; the third parses
-`canon`'s escaped text back through a parallel of FirewallJson's `reads` whose string case is served by `esc_of`.
+`canon`'s escaped text back through a parallel of ZkServerJson's `reads` whose string case is served by `esc_of`.
 -/
 
 @[expose] public section
@@ -28,9 +28,9 @@ namespace Verity.Sampled.Instance.HonestSession.JsonCanon.Facts
 
 open Lean (Json JsonNumber)
 open Flock (V canon canonStr)
-open Flock.Firewall
-open FlockSoundness.Discharge.Recursion.FirewallJson
-open FlockSoundness.Discharge.Recursion.FirewallJson renaming norm → fnorm
+open Flock.ZkServer
+open FlockSoundness.Discharge.Recursion.ZkServerJson
+open FlockSoundness.Discharge.Recursion.ZkServerJson renaming norm → fnorm
 open FlockDeploy (jsonForm canon_jsonEquiv)
 open Std.DTreeMap.Internal (Impl)
 
@@ -185,7 +185,7 @@ theorem canon_cj : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true →
       rw [canon, cjChars]
       have hbridge : (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json).toArray.toList
           = t.toListModel.map (fun e => (e.1, e.2)) :=
-        FlockSoundness.Discharge.Recursion.FirewallObj.toArray_toList t
+        FlockSoundness.Discharge.Recursion.ZkServerObj.toArray_toList t
       have hmap := array_mapM_ok_map (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json).toArray.attach
         (f := fun p => (do pure (p.1.1, ← canon p.1.2) : Flock.V (String × String)))
         (g := fun p => ((p.1.1, cjChars p.1.2) : String × String)) (by
@@ -294,30 +294,30 @@ theorem mem_intercalate {α : Type} {sep : List α} {x : List α} {c : α} : ∀
     · exact List.mem_append_right _ (mem_intercalate (y :: L) hx' hc)
 
 /-- Printability of a value's text gives printability of each array element's text. -/
-theorem ascii_arr {a : List Json} (ha : ∀ c ∈ Flock.Firewall.jsonChars (.arr ⟨a⟩), c.toNat < 0x7f) :
-    ∀ e ∈ a, ∀ c ∈ Flock.Firewall.jsonChars e, c.toNat < 0x7f := by
+theorem ascii_arr {a : List Json} (ha : ∀ c ∈ Flock.ZkServer.jsonChars (.arr ⟨a⟩), c.toNat < 0x7f) :
+    ∀ e ∈ a, ∀ c ∈ Flock.ZkServer.jsonChars e, c.toNat < 0x7f := by
   intro e he c hc
   apply ha
-  rw [Flock.Firewall.jsonChars]
+  rw [Flock.ZkServer.jsonChars]
   refine List.mem_append_left _ (List.mem_cons_of_mem _ ?_)
   exact mem_intercalate _ (by rw [jsonCharsList_eq]; exact List.mem_map_of_mem he) hc
 
 /-- Printability of a value's text gives printability of each object member's key and value text. -/
 theorem ascii_obj {t : Impl String (fun _ => Json)}
-    (ha : ∀ c ∈ Flock.Firewall.jsonChars (.obj ⟨⟨t⟩⟩), c.toNat < 0x7f) :
-    ∀ e ∈ t.toListModel, (∀ c ∈ e.1.toList, c.toNat < 0x7f) ∧ (∀ c ∈ Flock.Firewall.jsonChars e.2, c.toNat < 0x7f) := by
+    (ha : ∀ c ∈ Flock.ZkServer.jsonChars (.obj ⟨⟨t⟩⟩), c.toNat < 0x7f) :
+    ∀ e ∈ t.toListModel, (∀ c ∈ e.1.toList, c.toNat < 0x7f) ∧ (∀ c ∈ Flock.ZkServer.jsonChars e.2, c.toNat < 0x7f) := by
   intro e he
-  have hmem : ∀ c ∈ (('"' :: e.1.toList ++ ['"', ':']) ++ Flock.Firewall.jsonChars e.2), c.toNat < 0x7f := by
+  have hmem : ∀ c ∈ (('"' :: e.1.toList ++ ['"', ':']) ++ Flock.ZkServer.jsonChars e.2), c.toNat < 0x7f := by
     intro c hc
     apply ha
-    rw [Flock.Firewall.jsonChars]
+    rw [Flock.ZkServer.jsonChars]
     refine List.mem_append_left _ (List.mem_cons_of_mem _ ?_)
     exact mem_intercalate _ (by rw [jsonCharsObj_eq]; exact List.mem_map_of_mem he) hc
   refine ⟨fun c hc => hmem c ?_, fun c hc => hmem c (List.mem_append_right _ hc)⟩
   exact List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_append_left _ hc))
 
 theorem cj_toList : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true →
-    (∀ c ∈ Flock.Firewall.jsonChars j, c.toNat < 0x7f) → (cjChars j).toList = Flock.Firewall.jsonChars j
+    (∀ c ∈ Flock.ZkServer.jsonChars j, c.toNat < 0x7f) → (cjChars j).toList = Flock.ZkServer.jsonChars j
   | 0, _, h, _, _ => absurd h (Nat.not_lt_zero _)
   | k + 1, j, hk, hp, ha => by
     match j with
@@ -326,19 +326,19 @@ theorem cj_toList : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true �
     | .bool false => rfl
     | .num ⟨m, e⟩ =>
       simp only [plain, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hp
-      rw [cjChars, Flock.Firewall.jsonChars, num_toList hp.2]
+      rw [cjChars, Flock.ZkServer.jsonChars, num_toList hp.2]
     | .str s =>
       simp only [plain] at hp
-      rw [cjChars, Flock.Firewall.jsonChars, canonStr_verbatim hp (by
+      rw [cjChars, Flock.ZkServer.jsonChars, canonStr_verbatim hp (by
         intro c hc
         apply ha
-        rw [Flock.Firewall.jsonChars]
+        rw [Flock.ZkServer.jsonChars]
         exact List.mem_cons_of_mem _ (List.mem_append_left _ hc))]
     | .arr ⟨a⟩ =>
       simp only [plain, plainList_iff] at hp
-      rw [cjChars, Flock.Firewall.jsonChars]
+      rw [cjChars, Flock.ZkServer.jsonChars]
       simp only [String.toList_append, String.toList_intercalate]
-      have hlist : (cjList a).map String.toList = Flock.Firewall.jsonCharsList a := by
+      have hlist : (cjList a).map String.toList = Flock.ZkServer.jsonCharsList a := by
         rw [cjList_eq, jsonCharsList_eq, List.map_map]
         apply List.map_congr_left
         intro e he
@@ -352,9 +352,9 @@ theorem cj_toList : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true �
       rfl
     | .obj ⟨⟨t⟩⟩ =>
       simp only [plain, Bool.and_eq_true] at hp
-      rw [cjChars, Flock.Firewall.jsonChars]
+      rw [cjChars, Flock.ZkServer.jsonChars]
       simp only [String.toList_append, String.toList_intercalate]
-      have hlist : (cjObj t).map String.toList = Flock.Firewall.jsonCharsObj t := by
+      have hlist : (cjObj t).map String.toList = Flock.ZkServer.jsonCharsObj t := by
         rw [cjObj_eq, jsonCharsObj_eq, List.map_map]
         apply List.map_congr_left
         intro e he
@@ -362,33 +362,33 @@ theorem cj_toList : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true �
         have hlt : sizeOf e.2 < k := by
           have hs : sizeOf e.2 < sizeOf (Json.obj (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json)) :=
             Flock.sizeOf_lt_of_mem_toArray (p := (e.1, e.2))
-              (by rw [← Array.mem_toList_iff, FlockSoundness.Discharge.Recursion.FirewallObj.toArray_toList]
+              (by rw [← Array.mem_toList_iff, FlockSoundness.Discharge.Recursion.ZkServerObj.toArray_toList]
                   exact List.mem_map_of_mem he)
           omega
         have hav := ascii_obj ha e he
         rw [String.toList_append, String.toList_append, canonStr_verbatim ((plainObj_iff t).1 hp.1 e he).1 hav.1,
           cj_toList k e.2 hlt ((plainObj_iff t).1 hp.1 e he).2 hav.2]
-        show '"' :: e.1.toList ++ ['"'] ++ [':'] ++ Flock.Firewall.jsonChars e.2
-          = ('"' :: e.1.toList ++ ['"', ':']) ++ Flock.Firewall.jsonChars e.2
+        show '"' :: e.1.toList ++ ['"'] ++ [':'] ++ Flock.ZkServer.jsonChars e.2
+          = ('"' :: e.1.toList ++ ['"', ':']) ++ Flock.ZkServer.jsonChars e.2
         simp
       rw [hlist]
       rfl
 
 /-- **`canon` of a plain, printable value is its `printJson` text.** -/
 theorem canon_plain {j : Json} (hp : plain j = true)
-    (ha : ∀ c ∈ (Flock.Firewall.printJson j).toList, c.toNat < 0x7f) :
-    Flock.canon j = .ok (Flock.Firewall.printJson j) := by
+    (ha : ∀ c ∈ (Flock.ZkServer.printJson j).toList, c.toNat < 0x7f) :
+    Flock.canon j = .ok (Flock.ZkServer.printJson j) := by
   rw [canon_cj (sizeOf j + 1) j (Nat.lt_succ_self _) hp]
   congr 1
   rw [← String.ofList_toList (s := cjChars j),
     cj_toList (sizeOf j + 1) j (Nat.lt_succ_self _) hp (by
-      rw [Flock.Firewall.printJson, String.toList_ofList] at ha; exact ha)]
+      rw [Flock.ZkServer.printJson, String.toList_ofList] at ha; exact ha)]
   rfl
 
 /-! ## `canonicalJson_canon`: a canonical text of ASCII parses back to `norm` of its value
 
 `cjc` is `jsonChars` with each string and key escaped as `canon` writes it (`cesc`). The parser `JsonParse.str` reads an
-escaped run back to its characters unconditionally (`esc_of`/`cesc_esc`), so `cjReads` mirrors FirewallJson's `reads`
+escaped run back to its characters unconditionally (`esc_of`/`cesc_esc`), so `cjReads` mirrors ZkServerJson's `reads`
 with the string case served by `esc_of` instead of `str_plain`. -/
 
 open Flock.JsonParse
@@ -470,7 +470,7 @@ theorem cjc_eq : ∀ (k : Nat) (j : Json), sizeOf j < k → plain j = true → (
         have hlt : sizeOf e.2 < k := by
           have hs : sizeOf e.2 < sizeOf (Json.obj (⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json)) :=
             Flock.sizeOf_lt_of_mem_toArray (p := (e.1, e.2))
-              (by rw [← Array.mem_toList_iff, FlockSoundness.Discharge.Recursion.FirewallObj.toArray_toList]
+              (by rw [← Array.mem_toList_iff, FlockSoundness.Discharge.Recursion.ZkServerObj.toArray_toList]
                   exact List.mem_map_of_mem he)
           omega
         rw [String.toList_append, String.toList_append, canonStr_toList,
