@@ -73,7 +73,9 @@ if [ ! -s "$OUT/tensor_kinds.jsonl" ]; then
   exit 3
 fi
 
-python3 "$SRC/tensor_kinds.py" "$OUT" >"$OUT/fit.log" 2>&1
+ROOT=$SRC/../../..
+PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 "$SRC/tensor_kinds.py" "$OUT" --record >"$OUT/fit.log" 2>&1
 rc=$?
 cat "$OUT/gpu.log" "$OUT/fit.log" >&2
 exit $rc

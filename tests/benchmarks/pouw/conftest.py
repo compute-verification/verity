@@ -116,3 +116,12 @@ def _outside_any_run(monkeypatch):
     run's own result.json, which a test's verdict must never replace."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
+
+@pytest.fixture
+def no_gpu(monkeypatch):
+    """A host whose harness-kit stamp names no card (``"none"``), whatever GPUs the test's host has."""
+    from verity_bench import kit
+
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    monkeypatch.setattr(kit.shutil, "which", lambda name: None)
+
