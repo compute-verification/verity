@@ -30,7 +30,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 
 ## Sidecars
 
-circuit-check names no circuit of the catalog it is handed (`tests/test_handed_names.py`): what it knows of one is in
+circuit-check names no circuit of the catalog it is handed (`tests/tools/verity/circuit_check/test_handed_names.py`): what it knows of one is in
 the sidecars of the module that defines it. Beside a module's binding file (`<module>.circuit-check.py`) and pins file
 (`.circuit-check.json`), its unkeyed file (`.circuit-check.unkeyed.json`) holds what the scheduler, the task list's guard
 and the report read and no check does, so no key holds it: the peak memory, in GiB, of each of its targets that grows
