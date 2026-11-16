@@ -1,0 +1,258 @@
+# The retired word "law" outside the proof system's paths, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/law_words_map.toml` renames. GLOSSARY.md: "law", "draw law", `law` identifiers, the Lean's `Law` -> the
+# sampling design. A name takes proofs' spelling (`law_lean_map.toml`): its law part becomes `SamplingDesign`,
+# `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design". The
+# adapter's test constants take the `DESIGN` its other tests already hold, so the adapter has one spelling.
+# It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
+# `window_laws`, the configuration's `default_law`, the adapter's `window_law` module, the served commit's `law_of`,
+# test constants `LAW`), the Lean names proofs' map renamed where Python cites them (`Law.toJson`),
+# and prose that names the sampling design by a possessive or a qualifier.
+# Outside proofs' Lean paths (the files its `law_lean_map.toml` lists as its own), the Lean names other lanes declare
+# take proofs' spelling (`serviceLaw` to `serviceSamplingDesign`, `law_ok` to `samplingDesign_ok`, `hLaw` to
+# `hSamplingDesign`), and prose naming the sampling design ("the calls' laws", "draw laws") takes "sampling design".
+# The bare `law` and `laws` in Python take `sampling_design(s)` in the files `[[words_in]]` lists: locals, parameters
+# and their keywords, PoUW credit's `law` (the Lean's `PouwCheck.Credit.samplingDesign`), and the fields of `Plan`
+# and of the configuration's `Component`.
+# Left by this map:
+# - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, proofs' Lean files, the lane's
+#   benchmarks, the files `law_prose_map.toml` names), and the names defined there (`Law`, `selection_law`, `Draw.law`,
+#   `V3C_LAW`, `FLOCK_DRAW_LAW`, `RecordCustodyZKJPLaw`, the binder `hlaw` its files share with ours);
+# - the fields `Binding.law` and the period `Window.law`, which proofs' files read (`mine.law`), PoUS's `Claim.law`,
+#   and every other attribute named `law`; the adapter's `served_tp --law`, which proofs' scripts pass;
+# - bytes a record, a wire format, a configuration file, a hash or a signature takes in: every string that holds the
+#   word (the record and configuration key `law`, `service.law`), reason codes (`R1-law`, `record-law`,
+#   `answer-public-law`), the claim id `accounting-ts-window-law`, and refusal messages, which Lean twins throw in the
+#   same words and tests match;
+# - Lean's "law" of a distribution (the uniform law, the keys' law, the session game's law) and the machine's laws;
+# - another sense: a probability law (`noise_law`, `_below_law`), a scaling, power or size law, a law of the courts;
+# - network-accounting's files (the certifier, its benchmarks), which that lane runs this map's spellings over;
+# - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
+
+[words]
+"test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_sampling_design"
+"test_a_bernoulli_law_is_the_single_unit_case" = "test_a_bernoulli_sampling_design_is_the_single_unit_case"
+"test_exhaustive_facts_travel_with_the_law" = "test_exhaustive_facts_travel_with_the_sampling_design"
+"test_json_carries_the_law_and_the_exhaustive_facts" = "test_json_carries_the_sampling_design_and_the_exhaustive_facts"
+"test_ill_formed_stratified_laws_are_refused" = "test_ill_formed_stratified_sampling_designs_are_refused"
+"test_stratified_json_is_the_profile_law" = "test_stratified_json_is_the_profile_sampling_design"
+"test_the_count_law_is_mains_stratified_rule" = "test_the_count_sampling_design_is_mains_stratified_rule"
+"test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor" = "test_the_work_sampling_design_sizes_tiles_by_work_and_the_rest_at_its_floor"
+"test_the_work_law_is_roots_rule" = "test_the_work_sampling_design_is_roots_rule"
+"test_the_default_work_law_draws_a_calls_share_of_the_windows_budget" = "test_the_default_work_sampling_design_draws_a_calls_share_of_the_windows_budget"
+"test_the_window_law_is_the_window_pin_s" = "test_the_window_sampling_design_is_the_window_pin_s"
+"test_the_eps_holds_at_the_work_laws_cap" = "test_the_eps_holds_at_the_work_sampling_designs_cap"
+"test_the_work_law_audits_pearl_c4" = "test_the_work_sampling_design_audits_pearl_c4"
+"test_verify_run_accepts_an_honest_pass_as_the_work_law_does" = "test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does"
+"the registration's law" = "the registration's sampling design"
+"the partition file's law" = "the partition file's sampling design"
+"The partition file's law" = "The partition file's sampling design"
+"proof system's law" = "proof system's sampling design"
+"the partition's law" = "the partition's sampling design"
+"the sample's law" = "the sample's sampling design"
+"one-stage audits' law" = "one-stage audits' sampling design"
+"one-stage's law object" = "one-stage's sampling design object"
+"`reusing`'s R's law" = "`reusing`'s R's sampling design"
+"A4 P6's law" = "A4 P6's sampling design"
+"serving rows' window law" = "serving rows' window sampling design"
+"under another law" = "under another sampling design"
+"by another law" = "by another sampling design"
+"any other law" = "any other sampling design"
+"any of its laws" = "any of its sampling designs"
+"`draw.py` laws" = "`draw.py` sampling designs"
+"``work`` law" = "``work`` sampling design"
+"every bernoulli law" = "every bernoulli sampling design"
+"first default law" = "first default sampling design"
+"draw-law seam" = "sampling-design seam"
+"work-law budget" = "work sampling design's budget"
+"window_laws" = "window_sampling_designs"
+"default_law" = "default_sampling_design"
+"law_name" = "sampling_design_name"
+"WorkLaw" = "WorkSamplingDesign"
+"CountLaw" = "CountSamplingDesign"
+"TileLaw" = "TileSamplingDesign"
+"a4_law" = "a4_sampling_design"
+"Law.toJson" = "SamplingDesign.toJson"
+"Flock.Draw.Law.bernoulli" = "Flock.Draw.SamplingDesign.bernoulli"
+"Law.subset_miss" = "SamplingDesign.subset_miss"
+
+[[words_in]]
+files = ["adapters/**"]
+[words_in.words]
+"window_law" = "window_sampling_design"
+
+[[words_in]]
+files = ["benchmarks/pouw/**", "**/served_zk/served_commit.py"]
+[words_in.words]
+"law_of" = "sampling_design_of"
+
+[[words_in]]
+files = ["**/served_table.py"]
+[words_in.words]
+"_law" = "_design"
+
+[[words_in]]
+files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
+         "verity/protocols/compose/**/test_composition_difftest.py"]
+[words_in.words]
+"REUSING_LAW" = "REUSING_SAMPLING_DESIGN"
+"LAW" = "SAMPLING_DESIGN"
+
+[[words_in]]
+files = ["adapters/**/test_tp_wires.py", "adapters/**/served_rope.py", "adapters/**/test_edge_history.py",
+         "adapters/**/served_experts.py", "adapters/**/test_serving_rows_bundle.py",
+         "adapters/**/test_serving_rows_boolean.py", "adapters/**/protocols/spot.py"]
+[words_in.words]
+"LAW" = "DESIGN"
+
+[[words_in]]
+files = ["*.lean"]
+[words_in.words]
+"serviceLaw" = "serviceSamplingDesign"
+"sessionLaw" = "sessionSamplingDesign"
+"law_lanes" = "samplingDesign_lanes"
+"lanesLaw" = "lanesSamplingDesign"
+"idleLaw" = "idleSamplingDesign"
+"law_ok" = "samplingDesign_ok"
+"getElem_lawOf" = "getElem_samplingDesignOf"
+"subsetLaw" = "subsetSamplingDesign"
+"lawName" = "samplingDesignName"
+
+[[words_in]]
+files = ["security/Proofs/Pouw/TS/*.lean"]
+[words_in.words]
+"hLaw" = "hSamplingDesign"
+
+[[words_in]]
+files = ["security/Definitions/Claims/SamplingTwo*.lean", "security/Proofs/WeightSecurity/TwoRegMonitoringPeriod.lean"]
+[words_in.words]
+"its draw law split by stage" = "its sampling design split by stage"
+"its draw laws" = "its sampling designs"
+"\"replay\": LAW" = "\"replay\": DESIGN"
+
+[[words_in]]
+files = ["security/Definitions/Claims/Recursion.lean"]
+[words_in.words]
+"another law)" = "another sampling design)"
+
+[[words_in]]
+files = ["security/Definitions/Pouw/Window.lean", "security/Definitions/Pouw/Guarantees/Window.lean"]
+[words_in.words]
+"the calls' laws" = "the calls' sampling designs"
+"The sessions' laws" = "The sessions' sampling designs"
+"its sessions' laws" = "its sessions' sampling designs"
+"its laws, sessions" = "its sampling designs, sessions"
+
+[[words_in]]
+files = ["security/Properties/Compose/Compose.lean"]
+[words_in.words]
+"`subset:K_d` law" = "`subset:K_d` sampling design"
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean"]
+[words_in.words]
+"`draw.py`'s laws" = "`draw.py`'s sampling designs"
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/verifier/lean/check/README.md"]
+[words_in.words]
+"(`law`; `committedK`" = "(`samplingDesign`; `committedK`"
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/prover/circuit/plan.py"]
+[words_in.words]
+"closureLaw_escape" = "closure_escape"
+
+[[words_in]]
+files = ["adapters/vllm/tests/pipeline/served_tp.py", "adapters/vllm/tests/pipeline/test_advice_windows.py",
+         "adapters/vllm/tests/pipeline/test_interior_indices.py", "adapters/vllm/tests/pipeline/test_interior_rows.py",
+         "adapters/vllm/tests/pipeline/test_interior_table.py", "adapters/vllm/tests/pipeline/test_interior_wires.py",
+         "adapters/vllm/tests/pipeline/test_row_tables.py", "adapters/vllm/tests/pipeline/test_row_tables_stream.py",
+         "adapters/vllm/tests/pipeline/test_serving_rows_s8.py", "adapters/vllm/tests/pipeline/test_tp_serving_rows.py",
+         "adapters/vllm/tests/protocols/test_credit_gate.py", "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
+         "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+         "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py", "benchmarks/pouw/h1_prove/served.py",
+         "benchmarks/pouw/tests/test_served_zk.py",
+         "tools/verity/cli/tests/step0.py", "tools/verity/cli/verity_cli/served_table.py",
+         "verity/commitments/periods/interface.py", "verity/commitments/periods/rows.py", "verity/config.py",
+         "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
+         "verity/protocols/accounting/pouw/prover/circuit/plan.py",
+         "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py",
+         "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py",
+         "verity/protocols/accounting/pouw/verifier/core_check.py", "verity/protocols/accounting/pouw/verifier/credit.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_plan.py",
+         "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit.py",
+         "verity/protocols/accounting/pouw/verifier/window.py",
+         "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py"]
+[words_in.words]
+"laws" = "sampling_designs"
+"law" = "sampling_design"
+
+[rewrite]
+exclude = ["tools/move/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "**/lean-audit.json", "**/lakefile.*", "**/lake-manifest.json",
+           "verity/protocols/proofs/**", "benchmarks/one_stage/**", "benchmarks/remote_session/**",
+           "benchmarks/commitments/**", "benchmarks/dsa_topk/**", "benchmarks/flock_kernels/**",
+           "benchmarks/flock_s8_block/**", "benchmarks/multi_unit/**", "benchmarks/private_circuit/**",
+           "benchmarks/proof_throughput/**", "benchmarks/replay_ladder/**", "benchmarks/route_capture/**",
+           "benchmarks/sampling_plan/**", "benchmarks/serve_tax/**", "benchmarks/spot_figures/**",
+           "benchmarks/spot_proved/**", "benchmarks/two_stage/**", "benchmarks/unit_walk/**",
+           "benchmarks/verifier_cost/**",
+           "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean",
+           "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
+           "benchmarks/certifier_term/**", "benchmarks/network_e2e/**", "benchmarks/network_sim/**",
+           "benchmarks/certifier_timing/**", "benchmarks/scan_cost/**", "benchmarks/datacenter/**",
+           "benchmarks/nci/**", "**/vectors/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py",
+           "tests/test_lean_vocabulary.py", "**/test_move_check.py",
+           "security/Proofs/Properties/Verity/SampledTwo/*.lean", "benchmarks/two_stage/*.lean",
+           "benchmarks/verifier_cost/*.lean", "security/Definitions/*/ReadUnit.lean",
+           "security/Definitions/Accounting/Served.lean", "security/Definitions/Assumptions/Flock.lean",
+           "security/Definitions/Core.lean", "security/Definitions/Core/*.lean", "security/Definitions/Flock.lean",
+           "security/Definitions/Flock/Accounting/*.lean", "security/Definitions/Flock/Arith.lean",
+           "security/Definitions/Flock/Audit/*.lean", "security/Definitions/Flock/Circuit.lean",
+           "security/Definitions/Flock/Compiled.lean", "security/Definitions/Flock/Defs.lean",
+           "security/Definitions/Flock/Extract.lean", "security/Definitions/Flock/Game.lean",
+           "security/Definitions/Flock/Game/*.lean", "security/Definitions/Flock/Guarantees.lean",
+           "security/Definitions/Flock/Guarantees/Claims.lean",
+           "security/Definitions/Flock/Guarantees/RecursionClaims.lean",
+           "security/Definitions/Flock/Guarantees/SamplingClaims.lean", "security/Definitions/Flock/Holo.lean",
+           "security/Definitions/Flock/HoloCompiled.lean", "security/Definitions/Flock/Ligerito.lean",
+           "security/Definitions/Flock/LigeritoPad.lean", "security/Definitions/Flock/Lowering.lean",
+           "security/Definitions/Flock/Merkle.lean", "security/Definitions/Flock/Piop.lean",
+           "security/Definitions/Flock/Recursive/*.lean", "security/Definitions/Flock/Rewinding.lean",
+           "security/Definitions/Flock/Session.lean", "security/Definitions/Flock/Sparse.lean",
+           "security/Definitions/Flock/Statement.lean", "security/Definitions/Flock/ZK/*.lean",
+           "security/Definitions/Hash.lean", "security/Definitions/Hash/*.lean", "security/Definitions/Spot.lean",
+           "security/Definitions/Spot/*.lean", "security/Proofs/*/ReadUnit.lean", "security/Proofs/*/ReadUnit/*.lean",
+           "security/Proofs/Accounting/Served.lean", "security/Proofs/Core.lean", "security/Proofs/Core/*.lean",
+           "security/Proofs/Flock.lean", "security/Proofs/Flock/*.lean", "security/Proofs/Hash.lean",
+           "security/Proofs/Hash/*.lean", "security/Proofs/Properties/Accounting/Served.lean",
+           "security/Proofs/Properties/Challenger.lean", "security/Proofs/Properties/Challenger/*.lean",
+           "security/Proofs/Properties/Composition.lean", "security/Proofs/Properties/Core/Period.lean",
+           "security/Proofs/Properties/Core/Site.lean", "security/Proofs/Properties/Flock/*.lean",
+           "security/Proofs/Properties/Hash/*.lean", "security/Proofs/Properties/Spot*.lean",
+           "security/Proofs/Properties/Spot.lean", "security/Proofs/Properties/Spot/*.lean",
+           "security/Proofs/Properties/Verity/Recursive.lean", "security/Proofs/Properties/Verity/Recursive/*.lean",
+           "security/Proofs/Properties/Verity/Sampled.lean", "security/Proofs/Properties/Verity/Sampled/*.lean",
+           "security/Proofs/Properties/Verity/SampledCoins.lean",
+           "security/Proofs/Properties/Verity/SampledDraw.lean", "security/Proofs/Properties/Verity/SampledLog.lean",
+           "security/Proofs/Properties/Verity/SampledRead.lean", "security/Proofs/Spot.lean",
+           "security/Proofs/Spot/*.lean", "security/Properties/Accounting/Served.lean",
+           "security/Properties/Annot.lean", "security/Properties/Challenger.lean",
+           "security/Properties/Composition.lean", "security/Properties/Core/Period.lean",
+           "security/Properties/Core/Site.lean", "security/Properties/Flock/Circuit.lean",
+           "security/Properties/Flock/Circuit/*.lean", "security/Properties/Flock/Nets.lean",
+           "security/Properties/Flock/ReadNet.lean", "security/Properties/Hash/*.lean",
+           "security/Properties/Spot*.lean", "security/Properties/Spot.lean", "security/Properties/Spot/*.lean",
+           "verity/commitments/lean/Commitments/Draw.lean"]
+
+[keep]
+patterns = ['(?<!"self", )"[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*"', "'[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*'", '--laws?\b', 'note:[\w./-]+', 'art:[0-9a-f]+',
+            'cursor/[\w./-]+', '(?<=\.)(?<![^\w.]c\.)(?<![^\w.]CR\.)(?<![^\w.]Cr\.)laws?\b',
+            '(?<=\n    )law(?=: (?:Mapping|dict)\[str, Any\]\n)']
+strings = ["the registration's law {", "the registration's law is not subset:K′",
+           "and ``law`` (the", "``templates``, ``law`` and ``scope``", "templates, law and scope",
+           "with the stratified law", "its program, query and law,", "[service]   law", "work law's draw (law work:K)",
+           "work law's draw \\(law work:K\\)", "all, not a work law", "a subset law's, not ", "law is missing",
+           "law: registered ", "the law is not subset:k over N", "and the law subset:K′ they fix"]

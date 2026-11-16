@@ -1,0 +1,26 @@
+# PoUB's and PoUS's files of the accounting split to memory-accounting's places: into `Accounting`, by
+# `tools/move/rename.py --map tools/move/accounting_split_memory_shared_map.toml`.
+#
+# The accounting split (`accounting_split_*_map.toml`) placed PoUB's and PoUS's files by lean's table. These three maps
+# give them memory-accounting's places, from its own map of the area, which it withdrew in favour of the split: where a
+# file is PoUB's or PoUS's own, its place is memory-accounting's; another protocol's or a shared file keeps the split's.
+# - `Poub`: the remote audit (`Remote*`, `RemoteHeld`, `Assumptions/RemoteOutside`), `Stacking`, `Carrier`, the bound
+#   receipts (`BoundReceipt`, `BoundSketch`), the block tags and sketches (`Tag`, `Guarantees/Sketch`) and PoUB's lemmas
+#   (`Lemmas/Bandwidth`, `Lemmas/RateAudit*`, `Lemmas/RemoteBinding`);
+# - `Pous/Accounting`: `Responder`, `Memory`, `Wipe`, `Capacity` and `Window`;
+# - `Accounting`: `ReadUnit`, the circuit's reads of a registered table, which is neither's.
+# Each unit is two words, its path below `security/` and its module, as in the split's maps; they run in this order:
+# `accounting_split_memory_poub_map.toml`, `accounting_split_memory_pous_map.toml`, `accounting_split_memory_shared_map.toml`.
+
+[words]
+"Definitions.Poub.ReadUnit" = "Definitions.Accounting.ReadUnit"
+"Definitions/Poub/ReadUnit" = "Definitions/Accounting/ReadUnit"
+"Proofs.Poub.ReadUnit" = "Proofs.Accounting.ReadUnit"
+"Proofs/Poub/ReadUnit" = "Proofs/Accounting/ReadUnit"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "tools/research/src/research/store/moves.json", "tools/research/tests/test_queue.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']

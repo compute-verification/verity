@@ -1,0 +1,30 @@
+description = "fp4c-dither-all with attention's dither where the adopted design has it: Q and P rounded, K and V dithered, key 0 in its own block (p_sink)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "grid"
+grid = "fp4c"
+act = "dither"
+weight = "dither"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "grid"
+grid = "fp4c"
+q = "round"
+k = "dither"
+p = "round"
+v = "dither"
+p_sink = true

@@ -1,0 +1,8 @@
+[Unit]
+Description=infra node 1 watch: one JSON line of node 1 state to /workspace/verity-guest/steward-watch.jsonl (read-only)
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=180
+ExecStart=/usr/local/bin/vy-steward-watch
