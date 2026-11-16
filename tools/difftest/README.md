@@ -15,5 +15,4 @@ uv run pytest tests/tools/difftest/test_example_port.py
 This builds the harness's own example port with `lake` and runs it against its Python mirror. It needs the Lean
 toolchain and takes about 15 seconds.
 
-[`DESIGN.md`](DESIGN.md) has the line protocol, the ports the package serves, the Python side's API, protocol mode, and
-a recipe for writing a port. Run the suite with `uv run tools/check/suites.py verity-difftest`.
+Run the suite with `uv run tools/check/suites.py verity-difftest`.

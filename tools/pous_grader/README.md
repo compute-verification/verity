@@ -134,6 +134,3 @@ sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Regist
   ../../security/Proofs/Pous/Accounting/Numbers.lean \
   $(find ../../security/Definitions/Pous ../../security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~
-
-[`DESIGN.md`](DESIGN.md) has the package's files and commands, the audit, how a submission is graded, and the 320-read
-certificate.
