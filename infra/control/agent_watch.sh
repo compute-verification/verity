@@ -1,7 +1,8 @@
 #!/bin/sh
 # The agent watch: free cloud agents whose run is held, from the control pod. Code: /data/infra/agent_watch.py (infra/ops's
-# verity_ops/agent_watch.py, standard library only). The key goes only into the environment: /data/agent-watch/cursor.env (root,
-# 0600, one CURSOR_API_KEY= line) is sourced. Until it exists the loop waits and says so once. Findings: /data/agent-watch/events.jsonl,
+# verity_ops/agent_watch.py: the standard library and `research`, which it imports from the watchers tree, so PYTHONPATH names
+# that tree's tools/research/src; a start that can't import it exits, and the loop starts the watch again 60 s later).
+# The key goes only into the environment: /data/agent-watch/cursor.env (root, 0600, one CURSOR_API_KEY= line) is sourced. Until it exists the loop waits and says so once. Findings: /data/agent-watch/events.jsonl,
 # which infra's relay posts (infra/control/agent_watch_relay.py). Log: /data/agent-watch/watch.log. Coordinators come from the
 # registry in fixtures_export.sh's checkout of origin/main (fetched every 5 min) and the inbox routes in the steward's notes clone
 # (synced every 2 min); their doorbells from the relay's doorbells.json. Each sweep's status.json also goes to Neon's
@@ -42,6 +43,7 @@ while :; do
        AGENT_WATCH_PG_URL=$(val STORE_INDEXER_DATABASE_URL $CONF/store-index.env)
        export AGENT_WATCH_PG_URL
      fi
+     export PYTHONPATH=/data/watchers/src/tools/research/src
      exec python3.12 /data/infra/agent_watch.py loop --log "$DIR/events.jsonl" \
       --registry /data/infra/fixtures-export-repo/.agents/skills/using-slack/registry.json \
       --routes $NOTES/routes.d --notes $NOTES --git-remote git@github.com:compute-verification/verity.git \
