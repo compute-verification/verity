@@ -41,7 +41,7 @@ how a port replaces a stub, the inference-only policy's case and its stated exce
 
 `uv run tools/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../../../../tools/difftest/python/verity_difftest`), holding every field of each outcome but its reason to
-`tests/reference.py`: the composition rule above, over the harness's framing of the core interface
+`tests/verity/protocols/compose/verifier/lean/reference.py`: the composition rule above, over the harness's framing of the core interface
 (`verity_difftest.protocol.answer`), and each subprotocol's own Python, which that subprotocol's own difftest holds its
 Lean to:
 
@@ -58,7 +58,7 @@ Lean to:
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
   the one-stage audit's own registered circuit and record (`policy_on`);
 - the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
-- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period_prover.audit`
+- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/verity/protocols/compose/verifier/lean/periods.py`: `pous.period_prover.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
   those verifiers (`../../../../../tests/verity/protocols/resource_accounting/memory/pous/verifier/check/test_run_protocol.py`, `../../../../../tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/test_p2_case.py`).
