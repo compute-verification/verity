@@ -189,8 +189,8 @@ import json, os, sys
 out, answer, run = sys.argv[1:4]
 a = json.load(open(answer)) if os.path.exists(answer) else {}
 row = {"verdict": "missing", "owner": "compute-accounting",
-       "why": "PoUW's verdict of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's "
-              f"alone (its verdict {a.get('verdict')}, development coins and parameters)"}
+       "why": "PoUW's row of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's alone "
+              f"(its verdict {a.get('verdict')}, development coins and parameters)"}
 doc = {"format": "verity-bench/compute-verdicts/v1", "development": True, "run": json.load(open(run)),
        "protocols": {"work": row}}
 open(out, "w").write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
