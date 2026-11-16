@@ -55,8 +55,9 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/slowdown` reads from the card: its
-`link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
+server of the location `h200-hgx`, defined in `benchmarks/slowdown/data/hardware.toml`, whose `links`
+`benchmarks/slowdown/slowdown/params.py`'s `carded` reads from the card: its `link.rate` times the location's hosts,
+and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
 
@@ -185,20 +186,22 @@ no file itself, so its caller hands it the ways out and the leaves, and it holds
 by name and in order, with a rate exactly where the file states one, and each leaf by name, tier and bytes. A rate's
 value is `ways_out`'s or `leaves`' reading.
 
-A way out's link is a boundary link that no certifier splits, at its rate in bits a second. That is what is so of a
-node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no certifier splits them
+A way out's link is a boundary link that no network attester splits, at its rate in bits a second. That is what is so
+of a node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no network attester splits them
 (`Link.unmediated`, from the way's kind): an interface that reads no line rate, whose link states no capacity ("no
 line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
 not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
-until a certifier splits it. Where a network attester stands in front of such a node without splitting its interface (a process on
-another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key, scheme))` registers it too:
-the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
-interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
-registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
-not in a certifier's links and no certifier is linked to the path: a certifier that did split the interface would
-leave the path's link, and the site would still not be mediated.
+until a network attester splits it. Where a network attester stands in front of such a node without splitting its
+interface (a process on another machine that reaches the server through a forward),
+`node_entry(..., certifier=(id, key, scheme))` registers it too: the network attester under the site (a location of
+kind `certifier`) and a certified
+way out, host to network attester and network attester to outside, each at the interfaces' rates summed. The ways' own
+links stay beside them, so `onsite` still refuses the node, and no registration says that every bit leaves through a
+network attester that does not hold the wire. The storage path's rate is not in a network attester's links and no
+network attester is linked to the path: one that did split the interface would leave the path's link, and the site
+would still not be mediated.
 
-An entry always registers a link out. An interface with no rate takes no certifier, so naming one on a node none of
+An entry always registers a link out. An interface with no rate takes no network attester, so naming one on a node none of
 whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
 how the node reaches the outside. Each message says what to read or state.
 
@@ -209,8 +212,9 @@ figure the host states and `Auditor.drift` holds it to. A number marked `premise
 that reads a drift the auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is
 refused. `auditor_host(host, key, scheme, load_card(sku))` is the host's location (kind `auditor-host`, at the site):
 it states the card's SKU as its time base and the figure as its drift, or no drift for a premise.
-`node_entry(..., certifier=..., certifier_host=that location)` registers the certifier in the host, so the clock the
-certifier reads is the host's (`Site.clock`, `Site.drift`); a certifier under the site reads none and times nothing.
+`node_entry(..., certifier=..., certifier_host=that location)` registers the network attester in the host, so the
+clock the network attester reads is the host's (`Site.clock`, `Site.drift`); a network attester under the site reads
+none and times nothing.
 `Auditor.of_files(..., timebases={host: card})` holds the host's time base and drift, and `ClockPremise.premised()` is
 the host's `Account.Premised` (host, drift, premise), the drift of every device of the auditor's in the host.
 
@@ -226,6 +230,6 @@ site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("
 ~~~
 
 `remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
-refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
-accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
+refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in network attester or without
+one, and accepts the H200 node, both of whose links say why no network attester splits them, once a memory challenger reaches its host
 (`../verity/tests/tests/test_nodes.py`).
