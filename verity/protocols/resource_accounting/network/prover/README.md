@@ -11,10 +11,10 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
 - **Python**: `verity.protocols.resource_accounting.network.prover`. Its importers, each with the modules it imports:
   - `adapters/vllm`: `ingress_scan`, `scan_zk`, `window_charge`, `workload`;
   - `benchmarks/network_traces`: `block_certifier`, `egress_zk`, `ingress_scan`, `leak_scan`, `lengths_row`, `n2_zk`,
-    `network_certifier_zk`, `proof_drivers`, `scan_period`, `scan_zk`, `stop_verdicts`, `window_chain`,
+    `network_attester_zk`, `proof_drivers`, `scan_period`, `scan_zk`, `stop_verdicts`, `window_chain`,
     `window_charge`;
   - `benchmarks/network_e2e`: `window_chain`, `window_charge`;
-  - `benchmarks/one_stage`: `leak_scan`, `n2_zk`, `network_certifier_zk`, `scan_zk`;
+  - `benchmarks/one_stage`: `leak_scan`, `n2_zk`, `network_attester_zk`, `scan_zk`;
   - `benchmarks/prove_path`: `leak_scan`, `n2_zk`;
   - `benchmarks/sampling_plan`: `response_tie`;
   - `tools/verity`: `ingress_scan`;

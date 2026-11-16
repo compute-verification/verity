@@ -20,11 +20,11 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_REQUEST_HEAD
-from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.certificate import Issuer
-from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
+from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, Shim, NetworkCertifier, NetworkCertifierParams, cells, read_cell
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
@@ -54,8 +54,8 @@ class _Side:
     """One end of an in-memory connection as the relay holds it: a reader fed what the peer sends, and a transport
     that keeps each write with the tick it was made in."""
 
-    def __init__(self, network_certifier: NetworkCertifier | None = None) -> None:
-        self.network_certifier, self.writes, self.closed, self.transport = network_certifier, [], False, self
+    def __init__(self, network_attester: NetworkCertifier | None = None) -> None:
+        self.network_attester, self.writes, self.closed, self.transport = network_attester, [], False, self
         self.reader, self.fed, self.eof = asyncio.StreamReader(), 0, False
 
     def feed(self, data: bytes, end: bool) -> None:
@@ -67,7 +67,7 @@ class _Side:
             self.eof = True
 
     def write(self, data: bytes) -> None:
-        self.writes.append((self.network_certifier.ticks if self.network_certifier else None, bytes(data)))
+        self.writes.append((self.network_attester.ticks if self.network_attester else None, bytes(data)))
 
     def is_closing(self) -> bool:
         return self.closed
@@ -103,7 +103,7 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
                cut: int | None = None) -> list[dict]:
     """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
     `served[k]`'s bytes and, when its flag says so, ending: a server that doesn't end withholds the rest. Published in
-    `out` as `network_certifier_serve`'s `serve` and `client` publish a run (`test_network_certifier_serve._run`, whose servers all end),
+    `out` as `network_attester_serve`'s `serve` and `client` publish a run (`test_network_attester_serve._run`, whose servers all end),
     with the relay's log (`warden.json`), each bucket ticked once the relay has read what its servers sent. Under
     `watermark` the relay also sends the watermark stream, whose bytes go to ``watermark.bin`` and whose end to the
     log as `serve` writes it; the servers of `refuse` take no connection, and the watermark's server closes the stream
@@ -136,31 +136,31 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
 
     async def main() -> tuple[list[_Side], NetworkCertifier]:
         clock = VirtualClock(-tau / 2)
-        network_certifier = NetworkCertifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        network_attester = NetworkCertifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=mark if watermark else None)
-        running = asyncio.create_task(network_certifier.run())
+        running = asyncio.create_task(network_attester.run())
         clients, tasks = [], []
         for request in requests:
-            side = _Side(network_certifier)
+            side = _Side(network_attester)
             side.feed(cells(request, B), True)
             clients.append(side)
-            tasks.append(asyncio.create_task(network_certifier.handle(side.reader, side)))
-        await network_certifier.until(lambda w: w.ordinals + w.refused == len(requests))
+            tasks.append(asyncio.create_task(network_attester.handle(side.reader, side)))
+        await network_attester.until(lambda w: w.ordinals + w.refused == len(requests))
         for t in range(params.window):
-            await network_certifier.until(settled)
+            await network_attester.until(settled)
             clock.advance(t * tau)
-            await network_certifier.until(lambda w, t=t: w.ticks > t)
+            await network_attester.until(lambda w, t=t: w.ticks > t)
         await running
         await asyncio.gather(*tasks)
-        return clients, network_certifier
+        return clients, network_attester
 
     try:
-        clients, network_certifier = asyncio.run(main())
+        clients, network_attester = asyncio.run(main())
     finally:
         publisher.close()
         signer.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=network_certifier.slack,
-                                      run_id=network_certifier.run_id, start=start, origin_raw=0.0)
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=network_attester.slack,
+                                      run_id=network_attester.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -176,11 +176,11 @@ def _relay_run(out: Path, key: Path, params: NetworkCertifierParams, requests: S
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
                                      params.payload if request.startswith(ID_REQUEST_HEAD) else None))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    marks = _watermark_log(network_certifier) if watermark else {}
-    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": network_certifier.log} | marks))
+    marks = _watermark_log(network_attester) if watermark else {}
+    (out / dv.RELAY_LOG).write_text(json.dumps({"connections": network_attester.log} | marks))
     if watermark:
         (out / "watermark.bin").write_bytes(b"".join(data for side in streams for _, data in side.writes))
-    return network_certifier.log
+    return network_attester.log
 
 
 def _bits(bits: list[int]):
