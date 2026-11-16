@@ -45,13 +45,13 @@ import Std.Tactic.BVDecide.Normalize.Bool
 # Checks of the period statements with each failure charged: the factor is met, and the weights must sum to one
 
 `MonitoringPeriodLeakFails`, `MonitoringPeriodLeakFailsAtMost` and `MonitoringPeriodLeakCharged` let the operator's moves and the registered values
-follow the network certifier's fail cells, and pay for it: a factor `failPatterns bound j` on the count, or a charge
+follow the network attester's fail cells, and pay for it: a factor `failPatterns bound j` on the count, or a charge
 under weights on the number of failures (`KraftWeights`). These checks are at the monitoring period of one placed
 window that `Proofs.Certifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
 record format `bitFmt` of one connection of one cell with no data, under the one schedule `oneSched`, with the secret
 whether the server's end is late for its bucket (`bitArr`). There the connection fails exactly when the bit is set
 (`bit_isSome`), the client reads the bit off the fail cell (`bit_dec`), and the window's record holds it (`bit_obs`).
-The operator's ingress is whether the connection failed: it follows the fail pattern, so the network certifier
+The operator's ingress is whether the connection failed: it follows the fail pattern, so the network attester
 registers the window at both secrets (`bit_registers`) and both meet the good event (`bit_good`).
 
 **The factor is met** (`MonitoringPeriodLeakFailsAtMost_factor_met`). Every premise of `MonitoringPeriodLeakFailsAtMost` holds there at
@@ -108,7 +108,7 @@ theorem failCount_unit_le (φ : Unit → Option ℕ) : failCount φ ≤ 1 := by
 theorem bit_failsBelow (z : Bool) : FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) :=
   failsBelow_of_cells_le oneSched (bitArr z) (fun _ => 1) fun _ => le_rfl
 
-/-- **The network certifier registers the window at the bit**, at the operator whose ingress is whether the connection
+/-- **The network attester registers the window at the bit**, at the operator whose ingress is whether the connection
 failed. -/
 theorem bit_registers (z : Bool) (i : Fin 1) :
     CertifierRegisters id posCm notLay 1 (fun _ _ => [(failCell oneSched (bitArr z) ()).isSome]) (posStmt z)
@@ -146,7 +146,7 @@ theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : 
 /-- **The failures' factor is met.** At `posL`, one window, the connection of `oneSched` under the host that runs
 `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the coins are a nonempty type
 and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning,
-`TrustedDevice`, the read-back under the one registered parameter and the channel all hold; the network certifier
+`TrustedDevice`, the read-back under the one registered parameter and the channel all hold; the network attester
 registers its observations at both secrets; the two secrets, each with at most one failure below the bound 1 and a
 window that meets its good event, are counted against `#Θ · executionPhasesCount = 1`, which fails; and the factor of
 `MonitoringPeriodLeakFailsAtMost` there is 2. -/
@@ -218,7 +218,7 @@ theorem MonitoringPeriodLeakCharged_nontrivial :
 under the host that runs `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the
 coins are a nonempty type and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement,
 its check's pinning, `TrustedDevice`, the read-back under the one registered parameter and the channel all hold; the
-network certifier registers its observations at both secrets; the weights `w_j = 1` sum to 2 over the failures of one
+network attester registers its observations at both secrets; the weights `w_j = 1` sum to 2 over the failures of one
 connection; and the two secrets, each charged at most `log2 1`, are counted against `T = 1`. -/
 theorem MonitoringPeriodLeakCharged_kraft_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
@@ -267,7 +267,7 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
 set_option synthInstance.maxSize 1024 in
 /-- **`MonitoringPeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
 `MonitoringPeriodLeakChecked`'s premises there (`MonitoringPeriodLeakAccepted_honest`), the channel over the one
-registered parameter as a finite set, the network certifier's registration at every window (`CertifierRegisters`, which the charged form takes
+registered parameter as a finite set, the network attester's registration at every window (`CertifierRegisters`, which the charged form takes
 as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
 most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The toy code
 parses no statement and its verifier rejects every run, so no run passes there, and the period has no window and no

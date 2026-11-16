@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Sampling.Code
 /-!
 # A compiled verifier whose statement has a partition and whose roots hold a bit
 
-The network certifier's lemmas at a monitoring period with a placed window (`NetTiming.Witness`'s) are stated over
+The network attester's lemmas at a monitoring period with a placed window (`NetTiming.Witness`'s) are stated over
 this toy code:
 
 * `posCm`: a commitment whose roots hold one bit (`rootBit`): an opening of position 0 passes at that bit and one of
@@ -45,7 +45,7 @@ def posStmt (b : Bool) : AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[
 /-- The statement's bytes at the bit `z`. -/
 def posX (z : Bool) : Msg := if z then [0] else []
 
-/-- The network certifier's openings at a statement: the input at the roots' bit and its negation. -/
+/-- The network attester's openings at a statement: the input at the roots' bit and its negation. -/
 def posTops (s : AuditStatement) : List (Opening Bool) := [⟨0, rootBit s.roots, []⟩, ⟨1, !rootBit s.roots, []⟩]
 
 /-- The compiled verifier that rejects every run, parses a statement's bytes as `posStmt` at whether there are any,

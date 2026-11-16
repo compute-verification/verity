@@ -19,11 +19,11 @@ A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename
 
 ~~~toml
 [paths]                                   # layout.py: a file, or a directory ending in "/"
-"verity/primitives/circuits/" = "verity/ml/circuits/"
+"verity/definitions/ops/" = "verity/circuits/ops/"
 
 [words]                                   # rename.py: applied in order, as a word or one part of an identifier
-"network warden" = "network certifier"
-"Warden" = "NetworkCertifier"
+"network certifier" = "network attester"
+"Network certifier" = "Network attester"
 
 [rewrite]
 exclude = ["archive/**", "**/CHANGELOG.md"]
@@ -40,8 +40,8 @@ A map lives only as long as its move. `move_check.py` reads the word maps in thi
 lands just before its move and is deleted once the move has landed; git keeps it in the commits that ran it. Each concept
 has one map: two maps here that rename one word must reach one name whichever of their moves runs first, and
 `tests/test_maps.py` fails the map that would give a word a second name, when that map's PR runs. The toy tests
-keep two past word maps as fixtures (`tests/fixtures/`). `layout_map.toml` stays while `tools/lean/setup.sh` maps old Lake
-package paths through it.
+keep two past word maps as fixtures (`tests/fixtures/`). `layout_map.toml` stays as `layout.py`'s default map, which
+`restack.py` reruns for a layout move whose move line names no other.
 
 ## Staging a move
 
@@ -69,14 +69,22 @@ alone, since no map adds a line. The PR's body says so first, and its reviewer c
 second.
 
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
-the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
-run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
+the move's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
+run names the identity of the checkout that will push the result, read from that checkout's own configuration where the
+command is typed and given ahead of the one command the node runs, never exported in a shell, and bundles the branch into
+its outputs; the lead pushes it from that checkout:
 
     git fetch origin main && git checkout --detach origin/main
-    research run --on auto --cwd clone -- bash -c 'export GIT_{AUTHOR,COMMITTER}_NAME=LEAD GIT_{AUTHOR,COMMITTER}_EMAIL=EMAIL;
-      python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
+    research run --on auto --cwd clone -- env \
+      GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" \
+      GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" \
+      bash -c 'python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
         --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
+
+An agent's push that adds a commit under any other name but the one `research queue cross` commits under is refused
+(`tools/agent-guard/pre_push.py`), so the run names no other. A carry on a node (`restack.py` in `stage.py`'s place) names
+the identity the same way.
 
 A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
 it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
@@ -137,8 +145,8 @@ hand, leaving the records to the candidate's records run. A word a crossed map r
 written, since there it may mean something else, and the result may not build: the crossing is `stale-words`, never
 `clean`, names each file, line and word, pushes nothing and exits 1, and the owner renames each that means the renamed
 name. Its
-first step merges each move's base into the branch, so
-a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
+first step merges each move's base into the branch, so a branch behind `main` merges `main` up to the first move's base
+before it crosses any move: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
 is what its script writes on its base, which takes as long as the script. With `--kept` a check that passed is kept in the
 check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
@@ -198,8 +206,8 @@ the branch's clean checkout:
     python3 tools/move/stale_names.py HEAD                # the branch's own lines and added files still in old names
 
 `resolve_renames.py` resolves a conflict only where it is a move's rename against the branch's edit, and prints the first
-line of each other hunk. It never merges a lock (`lean-audit.json`): take `main`'s and regenerate it with `check.py
---update`. In research's `moves.json` keep both sides' entries, `main`'s first. `stale_names.py` lists each line the merge
+line of each other hunk. It never merges a lock (`lean-audit.json`): take `main`'s and regenerate it with
+`tools/verity/lean/check.py --update`. In research's `moves.json` keep both sides' entries, `main`'s first. `stale_names.py` lists each line the merge
 left clean and wrong, with what the move's map would have written: rename each that means the renamed name. Neither sees
 a rename a commit made by hand, with no map: build the branch.
 

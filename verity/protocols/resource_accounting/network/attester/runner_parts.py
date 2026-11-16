@@ -19,7 +19,7 @@ from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import blob_files as bf, connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer
 from verity.protocols.resource_accounting.network.verifier.connection_rows_check import FILED, MISSED, NO_HEAD, ROWS, SALTS
-from verity.protocols.resource_accounting.network.verifier.network_attester import LENGTHS_FORMS, Released, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import LENGTHS_FORMS, Released, NetworkAttesterParams
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"
@@ -68,7 +68,7 @@ def head_flags(q: argparse.ArgumentParser) -> None:
                         "at most W ticks later, and never after; 0: a late line never leaves (no default)")
 
 
-def schedule(params: NetworkCertifierParams, args: argparse.Namespace) -> NetworkCertifierParams:
+def schedule(params: NetworkAttesterParams, args: argparse.Namespace) -> NetworkAttesterParams:
     """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
     content = getattr(args, "content", None)
     return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content),
@@ -76,7 +76,7 @@ def schedule(params: NetworkCertifierParams, args: argparse.Namespace) -> Networ
                    head_offset=getattr(args, "head_offset", None), head_wait=getattr(args, "head_wait", None))
 
 
-def flags_of(params: NetworkCertifierParams) -> list[str]:
+def flags_of(params: NetworkAttesterParams) -> list[str]:
     """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
     out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
     out += [] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)]
@@ -98,11 +98,11 @@ def hand(window: int, strides: Sequence[Sequence[Released]] | None) -> Iterator[
 class Keeper:
     """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
     its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
-    head. `keep` takes a whole hand, or None, as `NetworkCertifier(lengths=…)` gives it to a publisher in the network
+    head. `keep` takes a whole hand, or None, as `NetworkAttester(lengths=…)` gives it to a publisher in the network
     attester's own process. In a schedule with a head offset it writes no line: it hands each one to `back`
     (execution phase, line), which that schedule and no other has."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: NetworkCertifierParams, link: str, back=None) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: NetworkAttesterParams, link: str, back=None) -> None:
         if (back is None) != (params.head_offset is None):
             raise ValueError("in a schedule with a head offset, and in no other, the network certifier's tick writes "
                              "each execution phase's line, so the keeper hands the line back (`back`)")
@@ -165,7 +165,7 @@ class Lines:
     """The network attester's `leave` in a schedule with a head offset (`connection_rows_run`'s "The hand"): called
     by its tick with an execution phase, the tick and the line the publisher handed back, it appends the line to
     `rows.jsonl` as it was handed back; with None for the line, the note that the execution phase's line missed its
-    last tick. It writes nothing of the tick, which the device's own log alone holds (`NetworkCertifier.heads`). The file is
+    last tick. It writes nothing of the tick, which the device's own log alone holds (`NetworkAttester.heads`). The file is
     opened once, before the run."""
 
     def __init__(self, out: Path, link: str) -> None:

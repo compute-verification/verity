@@ -172,27 +172,27 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
-    "protocols/accounting/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
+    "protocols/resource_accounting/compute/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
                                             "by A5's uniform/python-secrets",
-    "protocols/accounting/pouw/prover/clear/clear_audit.py": "the reference prover's hm96 hiding key when its caller "
+    "protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py": "the reference prover's hm96 hiding key when its caller "
                                                              "gives none (`Prover.salt_key`), the committer's secret "
                                                              "and no coin",
     "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
-    "protocols/accounting/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
-    "protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
+    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
+    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
                                                                            "of the calls it measures (recorded as "
                                                                            "``call_draw``), which credits nothing",
-    "protocols/accounting/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
-    "protocols/accounting/pouw/prover/lowering/live.py": "the staged unit's hiding key, no coin",
-    "protocols/accounting/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
+    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
+    "protocols/resource_accounting/compute/pouw/prover/lowering/live.py": "the staged unit's hiding key, no coin",
+    "protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
                                                                "table key), no coin",
-    "protocols/accounting/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
-    "protocols/accounting/pouw/prover/serving/lead/feed.py": "`InProcessCertifier`'s bytes, a measurement whose coins "
+    "protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
+    "protocols/resource_accounting/compute/pouw/prover/serving/lead/feed.py": "`InProcessCertifier`'s bytes, a measurement whose coins "
                                                              "credit nothing",
-    "protocols/accounting/pouw/prover/serving/lead/rows.py": "the keyed rows' key and salt, the prover's secrets and no "
+    "protocols/resource_accounting/compute/pouw/prover/serving/lead/rows.py": "the keyed rows' key and salt, the prover's secrets and no "
                                                              "coin",
-    "protocols/accounting/pouw/prover/serving/pearl_c/__init__.py": "`new_salt_key`, the prover's hm96 salt key, no coin",
+    "protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "`new_salt_key`, the prover's hm96 salt key, no coin",
     "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
     "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
@@ -206,7 +206,7 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     the served path."""
     verity = Path(EC.__file__).resolve().parents[5]
     found = set()
-    for d in ("protocols/accounting/pouw/verifier", "protocols/proofs/spot", "protocols/accounting/pouw/prover"):
+    for d in ("protocols/resource_accounting/compute/pouw/verifier", "protocols/proofs/spot", "protocols/resource_accounting/compute/pouw/prover"):
         for path in (verity / d).rglob("*.py"):
             rel = path.relative_to(verity).as_posix()
             if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":

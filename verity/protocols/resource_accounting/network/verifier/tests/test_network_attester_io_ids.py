@@ -27,7 +27,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import id_req
 
 PL = (5, 60, 12, 100, 1)
 B, P = 512, 16
-PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
 #: request 2 trickles in so that its `END` shares bucket 4 with request 3's first two cells
 ARRIVALS, RATES = (0, 0, 2, 2, 7), (10 ** 6, 10 ** 6, 300, 10 ** 6, 10 ** 6)
 #: the buckets that hold prompt fields: request 0's and 1's first, 1's last, 2's and 3's first, 3's last, 4's

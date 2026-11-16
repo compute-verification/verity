@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import math
 import struct
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -669,7 +670,8 @@ class PearlKW:
         try:
             return Ops(self._side(a_rows, tile.rows, 0, noise.seed_a, noise.seed_b, k),
                        self._side(b_rows, tile.cols, 1, noise.seed_b, noise.seed_b, k))
-        except Reject:
+        except Reject as e:
+            print(f"pearl-kw: a tile's operands are outside the scheme's domain, so it encodes to none ({e})", file=sys.stderr)
             return None
 
     def _replay(self, ops: Ops) -> list[list[float]]:

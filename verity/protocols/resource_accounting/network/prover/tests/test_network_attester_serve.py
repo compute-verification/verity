@@ -660,7 +660,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
             await self.answered.wait()
 
     monkeypatch.setattr(ws, "PublisherProcess", Publisher)
-    monkeypatch.setattr(ws, "NetworkCertifier", Relay)
+    monkeypatch.setattr(ws, "NetworkAttester", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
     monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
     monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)

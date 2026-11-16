@@ -4728,6 +4728,11 @@
     },
     {
       "paths": {
+        "verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/": "verity/protocols/resource_accounting/",
         "verity/protocols/accounting/pouw/": "verity/protocols/resource_accounting/compute/pouw/",
         "verity/protocols/accounting/pous/": "verity/protocols/resource_accounting/memory/pous/",
@@ -4842,7 +4847,19 @@
     },
     {
       "paths": {
-        "verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py"
+        "security/Definitions/Accounting.lean": "security/Definitions/ResourceAccounting.lean",
+        "security/Definitions/Accounting/": "security/Definitions/ResourceAccounting/",
+        "security/Definitions/Accounting/Registration/Guarantees.lean": "security/Definitions/Registration/Guarantees.lean",
+        "security/Definitions/Accounting/Registration/Guarantees/Witnesses.lean": "security/Definitions/Registration/Guarantees/Witnesses.lean",
+        "security/Definitions/Accounting/Registration/View.lean": "security/Definitions/Registration/View.lean",
+        "security/Definitions/Assumptions/Accounting.lean": "security/Definitions/Assumptions/ResourceAccounting.lean",
+        "security/Proofs/Accounting.lean": "security/Proofs/ResourceAccounting.lean",
+        "security/Proofs/Accounting/": "security/Proofs/ResourceAccounting/",
+        "security/Proofs/Properties/Accounting/": "security/Proofs/Properties/ResourceAccounting/",
+        "security/Properties/Accounting/": "security/Properties/ResourceAccounting/",
+        "security/Properties/Accounting/Registration/Premises.lean": "security/Properties/Registration/Premises.lean",
+        "verity/protocols/resource_accounting/network/attester/program/lean/NetworkCertifier.lean": "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester.lean",
+        "verity/protocols/resource_accounting/network/attester/program/lean/NetworkCertifier/": "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/"
       }
     }
   ]

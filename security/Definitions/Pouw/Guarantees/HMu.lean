@@ -33,9 +33,9 @@ What the coins can't give, and so what stays a premise:
 
 @[expose] public section
 
-namespace Accounting.Guarantees.HMu
+namespace ResourceAccounting.Guarantees.HMu
 
-open Accounting.HMu Pouw.RelativeSecurity
+open ResourceAccounting.HMu Pouw.RelativeSecurity
 
 /-- **(H-μ) from fresh coins (Erdős's Littlewood–Offord bound).** On coins `Ω₀ × (J → Bool)`, uniform, a skipped
 value `a ω₀ + Σ_j [e_j]·v_j ω₀` whose `u = |J|` weights are nonzero integers takes any value `t` with probability at
@@ -73,4 +73,4 @@ def ReceiptLuckOfCoin : Prop :=
     prob (fun ω : Ω₀ × (J → Bool) => R.Inj Z ω.1 ∧ (∃ j, R.weight ω.1 j ≠ 0) ∧ R.lucky ω) ≤
       Z * (1 / 2) * prob (fun ω : Ω₀ × (J → Bool) => 0 < R.d ω.1)
 
-end Accounting.Guarantees.HMu
+end ResourceAccounting.Guarantees.HMu

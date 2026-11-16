@@ -21,6 +21,7 @@ import struct
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from array import array
 from collections.abc import Callable, Sequence
@@ -324,12 +325,25 @@ def tensor_of(family: str, layer: str, j: int) -> tuple[str, int]:
     raise ValueError(f"unknown family {family!r}")
 
 
+def _https_opener(headers: list[tuple[str, str]]) -> urllib.request.OpenerDirector:
+    """An opener of ``https:`` URLs alone, through the environment's proxy and following redirects, sending ``headers`` on
+    each request (a redirect's too): any other scheme (``file:``, ``http:``, ``ftp:``) raises ``URLError``."""
+    opener = urllib.request.OpenerDirector()
+    for h in (urllib.request.ProxyHandler(), urllib.request.HTTPSHandler(), urllib.request.HTTPRedirectHandler(),
+              urllib.request.HTTPDefaultErrorHandler(), urllib.request.HTTPErrorProcessor(), urllib.request.UnknownHandler()):
+        opener.add_handler(h)
+    opener.addheaders = headers
+    return opener
+
+
 class Safetensors:
     """Rows of BF16 ``[N, K]`` tensors of one safetensors file over HTTP range requests (``urllib`` only): the 8-byte
     little-endian header length, the JSON header with ``data_offsets`` relative to the byte after it, then raw data.
     Fetched rows are cached under ``cache`` as ``<tensor>/<row>.u16``."""
 
     def __init__(self, url: str = HF_URL, cache: Path | None = None, timeout: float = 60.0, retries: int = 6, workers: int = 16) -> None:
+        if urllib.parse.urlsplit(url).scheme != "https":
+            raise ValueError(f"{url!r}: the rows are read over https alone")
         self.url = url
         self.cache = cache
         self.timeout = timeout
@@ -347,8 +361,8 @@ class Safetensors:
         last: Exception | None = None
         for attempt in range(self.retries):
             try:
-                req = urllib.request.Request(self.url, headers={"Range": f"bytes={lo}-{hi - 1}", "User-Agent": "verity-bench-instances/1"})
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                headers = [("Range", f"bytes={lo}-{hi - 1}"), ("User-Agent", "verity-bench-instances/1")]
+                with _https_opener(headers).open(self.url, timeout=self.timeout) as r:
                     self.requests += 1
                     if r.status != 206:
                         raise OSError(f"expected 206 Partial Content, got {r.status}")
@@ -1101,13 +1115,13 @@ def ieee_fma_chain(x: Sequence[int], w: Sequence[int], acc: int = 0) -> int:
 @dataclass(frozen=True)
 class Mistake:
     """A plausible implementation mistake, as a function of a positive instance.  ``chain(x, w, ctx)`` returns the mistaken
-    accumulator words (``None`` where the mistaken model cannot be evaluated), ``word(acc, y, ctx)`` the mistaken output
-    word from the correct final accumulator for epilogue-level mistakes."""
+    accumulator words (raising ``InvalidArtifact`` where the mistaken model cannot be evaluated), ``word(acc, y, ctx)`` the
+    mistaken output word from the correct final accumulator for epilogue-level mistakes."""
 
     name: str
     description: str
     level: str  # "epilogue" (a function of the correct final word) or "chain" (a different accumulation)
-    chain: Callable[[Sequence[int], Sequence[int], dict], list[int] | None] | None = None
+    chain: Callable[[Sequence[int], Sequence[int], dict], list[int]] | None = None
     word: Callable[[int, int, dict], int | None] | None = None
 
 
@@ -1123,24 +1137,18 @@ def _ulp(delta: int) -> Callable[[int, int, dict], int | None]:
     return f
 
 
-def _pipeline_chain(pipeline: S.GroupSum) -> Callable[[Sequence[int], Sequence[int], dict], list[int] | None]:
-    def f(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
-        try:
-            return chain_accs(x, w, pipeline=pipeline)
-        except InvalidArtifact:
-            return None
+def _pipeline_chain(pipeline: S.GroupSum) -> Callable[[Sequence[int], Sequence[int], dict], list[int]]:
+    def f(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
+        return chain_accs(x, w, pipeline=pipeline)
 
     return f
 
 
-def _non_sticky_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
-    try:
-        return _chain(non_sticky_tc_dot, x, w)
-    except InvalidArtifact:
-        return None
+def _non_sticky_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
+    return _chain(non_sticky_tc_dot, x, w)
 
 
-def _ieee_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
+def _ieee_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
     out = []
     acc = 0
     for s in range(0, len(x), STEP):
@@ -1149,21 +1157,15 @@ def _ieee_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | No
     return out
 
 
-def _stale_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
+def _stale_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
     c0 = ctx.get("previous_final")
     if c0 is None or not is_finite_f32(c0):
-        return None
-    try:
-        return chain_accs(x, w, acc0=c0)
-    except InvalidArtifact:
-        return None
+        raise InvalidArtifact("no finite previous final accumulator to start the chain from")
+    return chain_accs(x, w, acc0=c0)
 
 
-def _reversed_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
-    try:
-        return chain_accs(list(x)[::-1], list(w)[::-1])
-    except InvalidArtifact:
-        return None
+def _reversed_chain(x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
+    return chain_accs(list(x)[::-1], list(w)[::-1])
 
 
 MISTAKES: tuple[Mistake, ...] = (
@@ -1188,7 +1190,8 @@ MISTAKE_BY_NAME = {m.name: m for m in MISTAKES}
 REJECT_CLASSES = ("nonfinite-operand", "sat-intermediate")
 
 
-def variant_chain(name: str, x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int] | None:
+def variant_chain(name: str, x: Sequence[int], w: Sequence[int], ctx: dict) -> list[int]:
+    """The mistake ``name``'s accumulator words; ``InvalidArtifact`` where its model cannot be evaluated."""
     m = MISTAKE_BY_NAME[name]
     if m.chain is None:
         raise ValueError(f"{name} is an epilogue-level mistake")
@@ -1196,18 +1199,20 @@ def variant_chain(name: str, x: Sequence[int], w: Sequence[int], ctx: dict) -> l
 
 
 def evaluate_mistakes(x: Sequence[int], w: Sequence[int], accs: Sequence[int], y: int, ctx: dict) -> dict[str, dict]:
-    """For every mistake: ``{"y": mistaken word or None, "acc_differs": bool | None}`` on one positive instance."""
+    """For every mistake: ``{"y": mistaken word or None, "acc_differs": bool | None}`` on one positive instance, both None
+    for a chain-level mistake whose model cannot be evaluated there."""
 
     out: dict[str, dict] = {}
     for m in MISTAKES:
         if m.level == "epilogue":
             out[m.name] = {"y": m.word(accs[-1], y, ctx), "acc_differs": None}
-        else:
+            continue
+        try:
             alt = m.chain(x, w, ctx)
-            if alt is None:
-                out[m.name] = {"y": None, "acc_differs": None}
-            else:
-                out[m.name] = {"y": epilogue(alt[-1]), "acc_differs": list(alt) != list(accs)}
+        except InvalidArtifact:
+            out[m.name] = {"y": None, "acc_differs": None}
+        else:
+            out[m.name] = {"y": epilogue(alt[-1]), "acc_differs": list(alt) != list(accs)}
     return out
 
 

@@ -26,6 +26,7 @@ from __future__ import annotations
 import calendar
 import json
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -60,16 +61,17 @@ def probe_hostname(pod_id: str | None, timeout: int = 30) -> str | None:
     """The container hostname of a RUNNING pod (best effort, read-only; None when unreachable)."""
     if not pod_id:
         return None
-    try:
-        from . import runpod
+    from . import runpod
 
+    try:
         pod = runpod.get(pod_id)
         tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
         if tgt is None:
             return None
         r = remote.ssh_run(remote.ssh_argv(*tgt), ["hostname"], timeout=timeout)
         return r.stdout.decode(errors="replace").strip() or None if r.returncode == 0 else None
-    except Exception:  # noqa: BLE001
+    except (runpod.PodError, OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"research pods: pod {pod_id}'s hostname unread ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 

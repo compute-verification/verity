@@ -13,10 +13,6 @@
    "modules": 21,
    "declarations": 89
   },
-  "Proofs/Accounting": {
-   "modules": 5,
-   "declarations": 56
-  },
   "Proofs/Certifier": {
    "modules": 4,
    "declarations": 34
@@ -34,8 +30,12 @@
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 47,
-   "declarations": 408
+   "modules": 42,
+   "declarations": 370
+  },
+  "Proofs/ResourceAccounting": {
+   "modules": 5,
+   "declarations": 56
   },
   "Proofs/Slowdown": {
    "modules": 1,

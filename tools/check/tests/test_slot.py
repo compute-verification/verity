@@ -277,6 +277,36 @@ def test_a_scoped_check_on_a_node_that_limits_login_sessions_gets_the_same_memor
     assert "--property=MemoryMax=600G" not in SLOT.scoped(["true"], "b", "r1")[0], "the last drop-in that sets it wins"
 
 
+def test_a_share_with_a_scope_of_its_own_takes_its_page_cache_back_past_its_share_and_a_whole_slot_has_no_such_limit(
+        tmp_path, monkeypatch):
+    """Two shards in the shares of one slot each reserve their share, and a shard's peak with its page cache is about twice
+    what it holds without: with no limit the cache of one fills the memory the other reserved. MemoryHigh reclaims and slows;
+    it never kills, so a shard that outgrows its share is slow, not red."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.Poll, "memory_gb", lambda self: 700.0)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "250")
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    for line, props in (("c 0 only=trains mem=300 share=150 scope=1", ["--property=MemoryHigh=150G"]),
+                        ("d 0 only=trains mem=300 share=150", None), ("e 0 only=trains mem=300 scope=1", [])):
+        (tmp_path / "slots").write_text(line + "\n")
+        with pytest.raises(Exec):
+            SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda _s: None)
+        name = line[0]
+        assert ran["argv"] == (["check.py"] if props is None else
+                               ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit=check-{name}-r1", *props,
+                                "--", "check.py"]), line
+
+
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
     """Fail open: a run with no user manager or bus would otherwise fail every train check the slot
     takes, which drive reads as the train failing."""
@@ -528,12 +558,72 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(argv)))
     with pytest.raises(Exec):
-        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW)
-    assert "slot: the run's timeout is now" in capsys.readouterr().err
-    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] >= 10800
+        SLOT.main(["--by", "infra", "--wait-max", "21600", "--run-max", "10800", "--", "true"], now=lambda: NOW,
+                  mono=lambda: 60.0)
+    assert "slot: the run's timeout is now 10860 s from its start" in capsys.readouterr().err
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10860.0
     for bad in (["--wait-max", "0"], ["--run-max", "soon"], ["--wait-max"]):
         with pytest.raises(SystemExit):
             SLOT.main([*bad, "--", "true"])
+
+
+def test_run_max_never_moves_the_run_s_end_later_than_its_stated_timeout(tmp_path):
+    """--run-max from the slot is the earlier of it and the run's own end: a run launched with --timeout 12000 s that takes its
+    slot 600 s in ends 11400 s from its start, and one that takes it 1800 s in keeps its 12000 s."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"started_mono": 1000.0, "timeout_s": 12000}))
+    assert SLOT.limit_run(10800, "d", str(run), mono=lambda: 1000.0 + 600) == \
+        "slot: the run's timeout is now 11400 s from its start: 10800 s from taking slot d"
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 11400.0
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    assert SLOT.limit_run(10800, "d", str(run), mono=lambda: 1000.0 + 1800) == \
+        "slot: the run's timeout stays 12000 s from its start, before 10800 s from taking slot d"
+    assert not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / SLOT.RUN_TIMEOUT).write_text("9000\n")                                # the control file's timeout is the run's now
+    assert SLOT.run_left(str(run), mono=lambda: 1000.0 + 1800) == 7200.0
+    assert SLOT.short_of(7200, str(run), mono=lambda: 1000.0 + 1800) is None
+    assert SLOT.short_of(7201, str(run), mono=lambda: 1000.0 + 1800) == (
+        "the run ends in 7200 s (its timeout 9000 s from its start), less than --run-max 7201 s, so CMD could not finish "
+        "before the run's end")
+    assert SLOT.run_left(None) is None and SLOT.short_of(60, None) is None
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / "status.json").write_text(json.dumps({"started_mono": 1000.0}))      # a run with no timeout: nothing binds it
+    assert SLOT.short_of(10**9, str(run), mono=lambda: 10**9) is None
+
+
+def test_a_waiter_whose_run_ends_before_its_run_max_is_not_started(tmp_path, monkeypatch, capsys):
+    """A point that took its slot 31 minutes into a 90-minute run with --run-max 90 minutes could not finish before the
+    run's end: it isn't started, on a free slot or after waiting in the line, and its run's timeout is left as it was. A twin
+    leaves before claiming its pair, so a twin whose run can finish still runs."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran though its run ends first"))
+    assert SLOT.main(["--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0) == SLOT.NOT_STARTED
+    assert ("slot: not started: the run ends in 3540 s (its timeout 5400 s from its start), less than --run-max 5400 s, so "
+            "CMD could not finish before the run's end; exit 75") in capsys.readouterr().err
+    assert not (run / SLOT.RUN_TIMEOUT).exists() and list((tmp_path / SLOT.LINE).iterdir()) == []
+    assert json.loads((run / SLOT.RUN_SLOT).read_text())["state"] == "left"
+    assert not SLOT.locked(tmp_path / "check-a.lock")                            # the slot it found free is free again
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400 + 2 * SLOT.POLL_S + 1}))
+    held = _hold(tmp_path / "check-a.lock")
+    t = [0.0]
+    rc = SLOT.main(["--run-max", "5400", "--", "true"], now=lambda: NOW + timedelta(seconds=t[0]), mono=lambda: t[0],
+                   sleep=lambda s: t.__setitem__(0, t[0] + s))
+    assert rc == SLOT.NOT_STARTED and t[0] == 3 * SLOT.POLL_S
+    assert "less than --run-max 5400 s, so CMD could not finish before the run's end (every check slot is taken (a: busy))" \
+        in capsys.readouterr().err
+    os.close(held)
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    assert SLOT.main(["--twin", "p4", "--run-max", "5400", "--", "true"], now=lambda: NOW, mono=lambda: 1860.0,
+                     sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+    assert not (tmp_path / SLOT.TWINS / "p4").exists()                           # its pair is left for a twin that can finish
 
 
 def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
@@ -1845,6 +1935,206 @@ def test_a_shards_ask_books_a_lowered_line_and_the_heavy_part_keeps_its_slots_bo
         SLOT.main(["--priority", "--by", "d", "--budget-gb", "300", "--", "check.py"], now=lambda: NOW,
                   sleep=lambda s: pytest.fail("waited"))
     assert ran["book"] is None
+
+
+def _shard(monkeypatch, tmp_path: Path, free: list[int]) -> dict:
+    """A machine with ``free[0]`` GiB free and nothing reserved, whose slots are ``tmp_path``'s: what a train shard that
+    takes a slot there ran with (its slot, SLOT_MEM_ENV and BOOK_ENV), filled in as `main` reaches the exec."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: free[0])
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"], mem=env[SLOT.SLOT_MEM_ENV], book=env.get(SLOT.BOOK_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    return ran
+
+
+def _check():
+    spec2 = importlib.util.spec_from_file_location("repo_check_shares", ROOT / "tools" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    return check
+
+
+def test_two_ordinary_shards_run_in_the_shares_of_one_slot_and_the_heavy_part_keeps_a_whole_one(tmp_path, monkeypatch, capsys):
+    """A check slot held 96 cores and booked each shard its ask, 130 to 340 GiB, while a running shard held a fraction of
+    either, so shards waited in line beside idle cores. Two lines with share=150 stand where one slot of mem=300 stood, on
+    its cores: each takes a shard whose ask the whole slot held and books 150 for it, which is all check.py then grants its
+    steps, so both run where one did and their bookings add up to the one slot's. The heavy parts, whose ask is over a
+    whole slot, and a check that names no ask take only the line without share=, and a share the heavy part can't take is
+    not counted as a place for it."""
+    check = _check()
+    heavy, flock, build = (check.shard_ask_gib(p, []) for p in (["pytest", "lean-audit:security/Proofs"],
+                                                               ["pytest", "lean-suites:verity-flock:1/6"], ["lean-build"]))
+    assert (heavy, flock, build) == (330, 290, 130)
+    (tmp_path / "slots").write_text("c 0-95 only=trains mem=300 share=150 scope=1\nc2 0-95 only=trains mem=300 share=150 scope=1\n"
+                                    "t 96-191 only=trains mem=300 book=200 scope=1\n")
+    ran = _shard(monkeypatch, tmp_path, [1000])
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda run=None: "no user manager in this test")
+    c, c2, t = SLOT.parse((tmp_path / "slots").read_text())
+    assert (c["mem"], c["share"], c["cpus"]) == (300, 150, c2["cpus"]) and "share" not in t
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, str(check.TRAIN_GB))
+    for gib, want in ((flock, {"slot": "c", "mem": "300", "book": "150"}), (build, {"slot": "c2", "mem": "300", "book": "150"}),
+                      (heavy, {"slot": "t", "mem": "330", "book": "330"})):
+        monkeypatch.setenv(SLOT.RUN_MEM_ENV, check.ask_gb(gib))
+        with pytest.raises(Exec):
+            SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+        assert ran == want, gib                                 # each keeps its slot's lock, as the exec'd check would
+        if want["book"] == "150":
+            monkeypatch.setenv(SLOT.SLOT_MEM_ENV, ran["mem"])
+            monkeypatch.setenv(SLOT.BOOK_ENV, ran["book"])
+            assert check.slot_mem_gb() == 150, "a shard in a share plans inside what the share books"
+    assert [json.loads((SLOT.RAMLOCK / f"check-{n}.json").read_text())["gb"] for n in ("c", "c2", "t")] == [161.1, 161.1, 354.3]
+    assert json.loads((tmp_path / "check-c.who").read_text())["reserves_gib"] == 150, "what a waiter it passed counts back"
+    capsys.readouterr()
+    text = (tmp_path / "slots").read_text()
+    for ask, asks in ((check.ask_gb(heavy), "asks 330 GB"), (None, "names no ask")):   # the heavy part, and a whole check
+        monkeypatch.setenv(SLOT.RUN_MEM_ENV, ask) if ask else monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+        assert [SLOT.takes(s) for s in SLOT.asking([c, c2, t])] == [False, False, True]
+        assert SLOT.booked(SLOT.asking([c])[0]) == 150 and SLOT.asking([c])[0]["mem"] == 300, "no ask raises a share"
+        tmp_path = tmp_path / "next"                            # a machine whose shares are both free
+        tmp_path.mkdir()
+        (tmp_path / "slots").write_text(text)
+        monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+        fd = _hold(tmp_path / "check-t.lock")
+        with pytest.raises(Exec):                                   # both shares free: it waits for the whole slot
+            SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: os.close(fd))
+        assert ran["slot"] == "t"
+        err = capsys.readouterr().err
+        assert "every check slot is taken (c: a share of a slot, for a run that asks at most 300 GB; c2: a share of a slot" in err
+        (tmp_path / "slots").write_text("c 0-95 only=trains mem=300 share=150\n")       # a machine of shares alone
+        assert SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+        assert (f"every slot of {tmp_path / 'slots'} this check could take is a share of a slot (c (300 GB, share 150)), which "
+                f"takes a run that asks at most its mem=, and this one {asks}. Run it on a machine with a whole slot"
+                ) in capsys.readouterr().err
+    tmp_path = tmp_path / "idle"
+    tmp_path.mkdir()
+    lines = SLOT.status([c, c2, t], tmp_path, NOW)
+    assert lines[0].startswith("c  cores 0-95  trains only  mem 300 GB (a share of it: reserves 150)  free")
+    docs = SLOT.slot_docs([c, c2, t], tmp_path, NOW)
+    assert [d.get("share") for d in docs] == [150, 150, None] and "share" not in docs[2]
+    doc = {"check": {"file": "slots", "slots": docs, "waiters": []}, "lean": {"pools": None}, "slice_gib": None}
+    assert check.placement(doc, True, check.TRAIN_GB, build)[2].startswith("check slots: c free, c2 free, t free")
+    assert check.placement(doc, True, check.TRAIN_GB, heavy)[2].startswith("check slots: t free"), "no share is the heavy part's"
+    with pytest.raises(ValueError, match=r"is a share of a slot \(share=\), for a run that asks at most its mem=, and this one "
+                                         r"asks 330 GiB: it takes a whole slot"):
+        check.placement({**doc, "check": {**doc["check"], "slots": docs[:2]}}, True, check.TRAIN_GB, heavy)
+
+
+def test_a_shard_that_fits_a_share_passes_the_heavy_waiters_ahead_and_leaves_them_their_slot_and_memory(tmp_path, monkeypatch):
+    """The line is first come, first served, so a heavy part waiting for its whole slot would hold every shard behind it out
+    of the free shares it can't take. A shard that takes a share passes the waiters ahead while every one of them is heavy
+    (asks more than a share line's mem=, or names no ask) and the memory free holds their asks beside its share: it never
+    takes the whole slot ahead of them, nor the memory they wait for, and it waits behind a waiter that could take a share."""
+    (tmp_path / "slots").write_text("c 0 only=trains mem=300 share=150\nc2 0 only=trains mem=300 share=150\nt 1 only=trains mem=300 book=200\n")
+    free = [1000]
+    ran = _shard(monkeypatch, tmp_path, free)
+    (tmp_path / SLOT.LINE).mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "365.072")                          # 340 GiB: circuit-check's ask
+    heavy, hfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "139.587")                          # 130 GiB: lean-build's
+    slots = SLOT.asking(SLOT.parse((tmp_path / "slots").read_text()))
+    me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    assert SLOT.ahead(me) == 1 and SLOT.asks_ahead(me, NOW) == [pytest.approx(340, abs=0.01)]
+    names = lambda got: [s["name"] for s in got]                             # noqa: E731
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"], "never t, which the heavy part waits for"
+    free[0] = 340 + 150 - 1
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == [], "its share would come out of the 340 the heavy part waits for"
+    free[0] = 340 + 150
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
+    os.close(mfd)
+    me.unlink()
+    with pytest.raises(Exec):                                   # t is free, and the heavy part ahead has not taken it yet
+        SLOT.main(["--priority", "--rank", "0", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+    assert ran == {"slot": "c", "mem": "300", "book": "150"}
+    whole, wfd = SLOT.join(tmp_path, priority=True, who={"pid": 1}, rank=0)  # a whole check, which names no ask: it books t's 200
+    me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    assert SLOT.asks_ahead(me, NOW) == [pytest.approx(340, abs=0.01), 0]
+    free[0] = 340 + 200 + 150 - 1
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == []
+    free[0] = 340 + 200 + 150
+    assert names(SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
+    os.close(mfd)
+    me.unlink()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "171.799")                          # 160 GiB: a shard that fits a share, ahead
+    other, ofd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    me, mfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    assert SLOT.passing(me, slots, slots, SLOT.Poll(), NOW, True) == [], "the shard ahead takes the next share: first come, first served"
+    assert names(SLOT.passing(other, slots, slots, SLOT.Poll(), NOW, True)) == ["c", "c2"]
+    whole_lines = [s for s in slots if not s.get("share")]
+    assert SLOT.passing(me, slots, whole_lines, SLOT.Poll(), NOW, True) == [], "a run that takes no share passes nobody"
+    for fd in (hfd, wfd, ofd, mfd):
+        os.close(fd)
+
+
+def test_a_shard_for_a_share_whose_run_ends_before_its_run_max_leaves_not_started_and_holds_nothing(tmp_path, monkeypatch, capsys):
+    """A share is one more slot to the rule that a CMD its run would end first is not started: a shard that finds a share
+    free, one that passed a heavy waiter into it, and one that waits for a held share each leave with NOT_STARTED once the
+    run can't hold --run-max, with no lock, no reservation, no ticket and no twin claim left, and the heavy waiter it passed
+    keeps its place in the line."""
+    (tmp_path / "slots").write_text("c 0 only=trains mem=300 share=150\nt 1 only=trains mem=300 book=200\n")
+    _shard(monkeypatch, tmp_path, [1000])
+    monkeypatch.setattr(SLOT, "RAMLOCK", tmp_path / "ramlock")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran though its run ends first"))
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400}))
+    (tmp_path / SLOT.LINE).mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "365.072")                          # 340 GiB: a heavy part, waiting for t
+    heavy, hfd = SLOT.join(tmp_path, priority=True, who=SLOT.asker(), rank=0)
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "139.587")                          # 130 GiB: a shard a share takes
+    argv = ["--priority", "--rank", "0", "--twin", "p7", "--run-max", "5400", "--", "check.py"]
+
+    def nothing_held():
+        assert [t.name for t in (tmp_path / SLOT.LINE).iterdir()] == [heavy.name], "its ticket is gone, the heavy one stays"
+        assert not SLOT.locked(tmp_path / "check-c.lock") and not SLOT.locked(tmp_path / "check-t.lock")
+        assert not (tmp_path / "ramlock" / "check-c.json").exists() and not (tmp_path / SLOT.TWINS / "p7").exists()
+        assert json.loads((run / SLOT.RUN_SLOT).read_text())["state"] == "left" and not (run / SLOT.RUN_TIMEOUT).exists()
+
+    rc = SLOT.main(argv, now=lambda: NOW, mono=lambda: 1860.0, sleep=lambda s: pytest.fail("waited"))
+    assert rc == SLOT.NOT_STARTED, "it passed the heavy waiter into the free share, and its run ends first"
+    assert "less than --run-max 5400 s, so CMD could not finish before the run's end; exit 75" in capsys.readouterr().err
+    nothing_held()
+
+    (run / "status.json").write_text(json.dumps({"started_mono": 0.0, "timeout_s": 5400 + 2 * SLOT.POLL_S + 1}))
+    held = _hold(tmp_path / "check-c.lock")                                  # the share is another shard's
+    t = [0.0]
+    rc = SLOT.main(argv, now=lambda: NOW + timedelta(seconds=t[0]), mono=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
+    assert rc == SLOT.NOT_STARTED and t[0] == 3 * SLOT.POLL_S
+    assert "so CMD could not finish before the run's end (1 check(s) ahead in line)" in capsys.readouterr().err
+    assert not SLOT.locked(tmp_path / "check-t.lock"), "it never took the whole slot the heavy part waits for"
+    os.close(held)
+    nothing_held()
+    os.close(hfd)
+
+
+def test_a_share_that_isnt_a_share_of_a_train_slot_stops_its_own_slot_and_an_older_slot_py_reads_it_whole(tmp_path, monkeypatch):
+    """share= is how much of a slot of mem= a train line reserves: one over mem=, without mem=, not a whole number from 1,
+    beside book= (two figures for one booking) or on a line a lane's run takes (which would reserve less than it asks) is
+    a mistyped line, which starts no check and says why with the fix. A line without the key is as it was, and so is every
+    line to a run with an ask where the key is unknown: mem= raised to the ask, and the ask booked."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    for line, why in (("c 0 only=trains mem=300 share=350", "which isn't a whole number of GB from 1 to its mem= (300)"),
+                      ("c 0 only=trains share=150", "which isn't a whole number of GB from 1 to its mem= (it has none)"),
+                      ("c 0 only=trains mem=300 share=0", "which isn't a whole number of GB from 1 to its mem= (300)"),
+                      ("c 0 only=trains mem=300 share=half", "which isn't a whole number of GB from 1 to its mem= (300)"),
+                      ("c 0 only=trains mem=300 book=200 share=150", "and book= beside it, so no check starts in it"),
+                      ("c 0 mem=300 share=150", "and no only=trains, so no check starts in it")):
+        (slot,) = SLOT.parse(line)
+        assert "share" not in slot and why in SLOT.blocked(slot, NOW) and f"slot c in {tmp_path / 'slots'}" in SLOT.blocked(slot, NOW)
+    assert SLOT.parse("c 0 only=trains mem=300 share=300")[0]["share"] == 300
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "311.385")                          # 290 GiB
+    (plain,) = SLOT.asking(SLOT.parse("c 0 only=trains mem=300 book=150"))
+    (share,) = SLOT.asking(SLOT.parse("c 0 only=trains mem=300 share=150"))
+    assert (SLOT.booked(plain), SLOT.takes(plain)) == (290, True) and (SLOT.booked(share), SLOT.takes(share)) == (150, True)
+    older = {k: v for k, v in share.items() if k != "share"}               # the line as a slot.py from before the key parses it
+    assert SLOT.booked(older) == 300 and SLOT.takes(older), "a whole slot of its mem=: more lines, each booked in full"
 
 
 def test_a_book_that_isnt_a_share_of_its_mem_stops_its_own_slot_and_nothing_else(tmp_path, monkeypatch, capsys):

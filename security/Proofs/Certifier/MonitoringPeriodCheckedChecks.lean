@@ -51,24 +51,24 @@ import Std.Tactic.BVDecide.Normalize.Bool
 
 `CheckedWitness` bounds a check's miss on the runs it is given. `SampledLeakChecked` reads it at the trace's run
 (`traceRun`): the circuit on the trace's committed values, an incorrect proof block's committed gates held at them,
-`false` where the trace opens nothing. `MonitoringPeriodLeakChecked` reads it at the run at the network certifier's rows
-(`certifierRun`), which holds those gates at the trace filled in with the network certifier's openings. The two differ
-at a gate the network certifier opens and the trace leaves unopened, and these checks show that the difference decides
+`false` where the trace opens nothing. `MonitoringPeriodLeakChecked` reads it at the run at the network attester's rows
+(`certifierRun`), which holds those gates at the trace filled in with the network attester's openings. The two differ
+at a gate the network attester opens and the trace leaves unopened, and these checks show that the difference decides
 the statement: held to the trace's run, `MonitoringPeriodLeakChecked`'s first part is false.
 
 **The toy** (`freeL`): one input gate and its exclusive or with itself, the egress presence gate, in one proof block
 sampled at rate `0`; the verifier accepts every run and has no session, so the extracted witness opens nothing; the
 commitment passes an opening of `true` and no other, so it binds. The compiled verifier meets the compiler's contract
 (`freeL_sessions`), so it is knowledge sound by the compiler's theorem (`freeL_ks`). The check is `r 1 = false`: no
-frame at the slot, which every run of the circuit that holds no gate meets. The network certifier's openings
+frame at the slot, which every run of the circuit that holds no gate meets. The network attester's openings
 (`certOps`) register a frame there (`selfXor_registers`).
 
 * `freeL_traceRun_checked`: the check's miss on the trace's run is `0`.
-* `freeL_noWit`: no witness is in `RLeakCertifierChecked` at the network certifier's openings.
+* `freeL_noWit`: no witness is in `RLeakCertifierChecked` at the network attester's openings.
 * `freeL_traceRun_insufficient`: so the first part's premises hold at the trace's run, and its bound fails.
 * `monitoringPeriodLeakChecked_traceRun_fails`: the first part of `MonitoringPeriodLeakChecked`, with `traceRun` in place of
   `certifierRun` and nothing else changed, is false.
-* `freeL_certifierRun_miss`: on the run at the network certifier's rows the check misses with probability `1` at the
+* `freeL_certifierRun_miss`: on the run at the network attester's rows the check misses with probability `1` at the
   toy, so the toy meets `MonitoringPeriodLeakChecked`'s premise at no miss below `1`, and does not refute it.
 
 **The statement's nontrivial lemma.** `MonitoringPeriodLeakChecked_nontrivial`: its acceptance conclusion fails at the accepting
@@ -277,12 +277,12 @@ theorem selfXor_traceVal (ref : ℕ → Option Bool) (href : ∀ g, ref g = none
     traceVal selfXorProg ref g = false := by
   rcases g with _ | _ | g <;> simp [traceVal, Prog.read, selfXorProg, href]
 
-/-- A trace that leaves gate `1` unopened, filled in with the network certifier's openings, holds `true` there. -/
+/-- A trace that leaves gate `1` unopened, filled in with the network attester's openings, holds `true` there. -/
 theorem selfXor_traceVal_fill (ref : ℕ → Option Bool) (href : ref 1 = none) :
     traceVal selfXorProg (fillTrace ref (certifierVal certOps)) 1 = true := by
   simp [traceVal, Prog.read, selfXorProg, fillTrace, href, certifierVal, certOps]
 
-/-- **The network certifier registers a frame at the slot**: at `selfXorStmt`, one step and the operator that sends
+/-- **The network attester registers a frame at the slot**: at `selfXorStmt`, one step and the operator that sends
 `true`, its openings `certOps` pass under `trueCm`, open both gates, and hold the record `obs1`, a frame at the slot. -/
 theorem selfXor_registers (H : Msg → Msg) :
     CertifierRegisters H trueCm notLay 1 (fun _ _ => [true]) selfXorStmt certOps [obs1] := by
@@ -392,7 +392,7 @@ theorem freeL_traceRun_checked (H : Msg → Msg) (x : Msg) :
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeakCertifierChecked`** at `freeL` with the check `r 1 = false`, at one step at `δ = 0`,
-whatever the inputs `As` admits and whichever proof blocks are incorrect: the network certifier's openings (`certOps`)
+whatever the inputs `As` admits and whichever proof blocks are incorrect: the network attester's openings (`certOps`)
 register a frame at the slot, and a run that the check passes holds none there. -/
 theorem freeL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
     (w : Claims.Sampling.Wit) :
@@ -434,9 +434,9 @@ theorem freeL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' 
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, freeL_bext, freeL_btap] at h
   linarith
 
-/-- **At `freeL` the check `r 1 = false` misses on the run at the network certifier's rows with probability `1`**, at
-the silent prover: the network certifier registers a frame (`selfXor_registers`), the trace opens nothing, so it
-disagrees with no opening, and that run holds gate `1` at the network certifier's opening, `true`. So the toy meets
+/-- **At `freeL` the check `r 1 = false` misses on the run at the network attester's rows with probability `1`**, at
+the silent prover: the network attester registers a frame (`selfXor_registers`), the trace opens nothing, so it
+disagrees with no opening, and that run holds gate `1` at the network attester's opening, `true`. So the toy meets
 `CheckedWitness` at `certifierRun` at no miss below `1`. -/
 theorem freeL_certifierRun_miss (H : Msg → Msg) :
     ¬ CheckedWitness H (freeL Coin)

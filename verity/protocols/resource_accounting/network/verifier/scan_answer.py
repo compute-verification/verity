@@ -9,7 +9,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, docket 
 
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
 #: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
-#: (`network_attester.NetworkCertifier(paced=…)`), yet the host's state after the server's writes for the next
+#: (`network_attester.NetworkAttester(paced=…)`), yet the host's state after the server's writes for the next
 #: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
 JITTER_BOUND = 2
 

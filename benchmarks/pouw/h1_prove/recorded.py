@@ -36,7 +36,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
    from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
    ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
-   registration (`Accounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
+   registration (`ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
 
 The negatives are on ``honest``'s units, the sampled proof blocks of the first sampled proof block's call.
 
