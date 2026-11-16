@@ -18,7 +18,7 @@ The slowdown lower bound's numbers come from [`benchmarks/slowdown`](../slowdown
 and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and free compute trains at MFU₀ (`tiers.evaluate`'s `free_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
-where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`free` 1) both are 1.
+where every proof block is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`free` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. These names look like older ones (`GLOSSARY.md`, Older names) and are not: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
