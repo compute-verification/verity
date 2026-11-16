@@ -2552,7 +2552,7 @@ provides-extras = ["bench"]
 [[package]]
 name = "verity-flock-tests"
 version = "0.0.0"
-source = { virtual = "verity/protocols/proofs/flock/prover/tests" }
+source = { virtual = "tests/verity/protocols/proofs/flock/prover" }
 dependencies = [
     { name = "verity-flock", extra = ["bench"] },
 ]

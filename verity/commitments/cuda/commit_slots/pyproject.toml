@@ -12,7 +12,7 @@ untraced = ["tests/test_cost.py", "tests/test_host_twin.py", "tests/test_scale.p
 # before the suite runs (git holds none of it).
 # The tests import `verity` by its dotted names: what they load of it outside this directory is listed after the fixtures
 # (test_slots.py's salt is PoUW's audit's `hm96_salt`, which loads its coins, protocol and salt and the SPOT challenger).
-inputs = ["verity/commitments/cuda/sha512_rows", "verity/commitments/tests/fixtures/layouts",
+inputs = ["verity/commitments/cuda/sha512_rows", "tests/verity/commitments/fixtures/layouts",
           "verity/__init__.py", "verity/errors.py", "verity/channel.py",
           "verity/commitments", "verity/circuits",
           "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py",
@@ -28,4 +28,4 @@ inputs = ["verity/commitments/cuda/sha512_rows", "verity/commitments/tests/fixtu
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_slots.py"]
-paths = ["verity/commitments/tests/fixtures/commit-slots-v1.json"]
+paths = ["tests/verity/commitments/fixtures/commit-slots-v1.json"]
