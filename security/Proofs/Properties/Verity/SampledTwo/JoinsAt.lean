@@ -50,10 +50,10 @@ STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form
 there: the cut reads no log where a session's record carries a break, and a family's coins follow one root only on a
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageSamples` is asked only of those
-plays. There each stage's one root is CUT's (`oneRoot_samples`, `oneRoot_second`, at `otherRoots`), so `StageSamples`
-  takes the families alone (`stageSamples_first`, `stageSamples_second`, `DrawRoots.lean`). What the pieces conclude comes
-back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So no `CutReads` and no coins'
-premise for either stage is a field.
+plays. There each stage's one root is CUT's (`oneRoot_samples`, `oneRoot_second`, at `otherRoots`), so
+`StageSamples` takes the families alone (`stageSamples_first`, `stageSamples_second`, `DrawRoots.lean`). What the
+pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So no
+`CutReads` and no coins' premise for either stage is a field.
 
 **What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
 cut's (STAGECOINS's `sessionMatches_of`, from the form's refusal of an interior record whose read-back digest is not
@@ -159,8 +159,8 @@ theorem sessionMatches_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h :
     SessionMatches (goodCase C G) :=
   fun o ha => h o (formAccepts_goodCase.1 ha).1
 
-/-- **A stage's sample at the kept case**: `StageSamples` asked of the accepted plays `G` holds of is `StageSamples` at the
-kept case's acceptance and sample. -/
+/-- **A stage's sample at the kept case**: `StageSamples` asked of the accepted plays `G` holds of is `StageSamples`
+at the kept case's acceptance and sample. -/
 theorem stageSamples_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} {f : Case → Option (String × ByteArray)}
     {ℓ : String} (h : CoinMap.StageSamples (fun o => FormAccepts C o ∧ G o) (fun o => (C o).bind f) ℓ) :
     CoinMap.StageSamples (FormAccepts (goodCase C G)) (fun o => (goodCase C G o).bind f) ℓ := by
