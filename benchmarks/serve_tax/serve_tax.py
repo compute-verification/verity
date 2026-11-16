@@ -105,7 +105,10 @@ The arms, each one engine configuration; each adds its change to the arm it name
   sampled pass of each beside ``prod`` and ``prod-record`` says which moves a figure, the share of draft tokens
   accepted among them: ``prod-seeded`` against ``prod`` is the seed, ``prod-record`` against ``prod-trace`` the
   canonical top-k, and ``prod-trace`` against ``prod-seeded`` the record and its ids. Neither is an arm a replay is
-  promised for.
+  promised for;
+- ``prod-record-bisect``: ``prod-record`` with its top-k bisecting every wrong fast selection by one program (the
+  plugin's ``canonical-bisect``) where ``prod-record``'s refines a split row's in parallel: against it, what the
+  refinement saves. The two write the same rows.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -325,6 +328,10 @@ ARMS = {
                        "what a seed moves in vLLM's sampling, read apart", published=True, seeds=True),
     "prod-trace": Arm("prod", "+ the step trace and each request's ids, prod-record with the canonical top-k off: what "
                       "the canonical top-k moves, read apart", plugin=("record", "ids"), published=True),
+    "prod-record-bisect": Arm("prod", "prod-record with the canonical top-k's every failed row bisected by one program "
+                              "(VERITY_DSA_TOPK=canonical-bisect): what its refinement saves, read apart",
+                              plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
+                              general=TOPK, published=True),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
@@ -340,7 +347,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "prefix caching off": lambda a: "--no-enable-prefix-caching" in a.args,
     "the two-stage boundary commitment": lambda a: "boundary_rows" in a.plugin,
     "the history tables": lambda a: bool(a.rows.get("tables")),
-    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK") == "canonical",
+    "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.certifier,
