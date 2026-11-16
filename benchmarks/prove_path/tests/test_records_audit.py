@@ -408,7 +408,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
 
 def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
     """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
-    one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
+    one whose every input is registered): it writes the circuit's record from its description (members stated at its limit,
     no run) or, ``--description``, the description, prints the length the docket charges with the count, and exits
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
     charge. Each count holds the pin to the window's root its advice registration records: where it records another root,

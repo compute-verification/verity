@@ -117,7 +117,7 @@ class Release:
 
 @dataclass(frozen=True)
 class Rekey:
-    """Blocks `old_first` … re-keyed at their lifetime cap: the old indices are released at `at`, and the same count
+    """Blocks `old_first` … re-keyed at their lifetime limit: the old indices are released at `at`, and the same count
     at `new_first` … counts from `resident_at`."""
 
     store: str

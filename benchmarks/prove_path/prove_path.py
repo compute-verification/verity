@@ -786,7 +786,7 @@ def opened_bytes(doc: Any) -> bytes:
 
 def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, Any], run_root: str,
                     commitment: str, data: bytes) -> dict[str, dict]:
-    """What `serve_check` refuses of a served window's published records: a docket whose compiler carries no cap (the inner
+    """What `serve_check` refuses of a served window's published records: a docket whose compiler carries no limit (the inner
     compiler's name and digest, as `verity-vllm advice` registers by default), one naming another window, the window's root
     published under vllm-v1 (32 bytes), and another Commit's root."""
     reg, pub = s.registration, s.commit

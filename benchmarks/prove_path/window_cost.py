@@ -75,7 +75,7 @@ BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
 EXACT_KEYS = 128
 #: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: the window's member cap
+#: a member's units: the window's member limit
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves

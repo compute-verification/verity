@@ -132,7 +132,7 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     multiply-adds reported by format beside it. A device's rate depends on the operand format, so each primitive's
     gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
     up; the roundings on the CUDA cores run beside them, so the block's busy share is the busiest
-    facet's, and the ledger credits and caps each facet."""
+    facet's, and the ledger credits and limits each facet."""
     row8 = Array(32, word(8))
     qk = bind(GemmCoordinateE4m3, K=32, **GEMM_SM120_E4M3)
     attend = program("Attend", {"x": VEC, "w1": MAT, "q": row8, "k": row8}, Tuple(VEC, word(16)),
