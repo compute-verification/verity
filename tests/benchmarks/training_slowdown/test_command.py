@@ -435,6 +435,25 @@ def test_a_dry_run_starts_and_labels_nothing(tree, reg_path, capsys):
     assert "would run: research run --queue" in capsys.readouterr().out
 
 
+def test_library_traces_the_config_alone_and_calls_no_store(tree, reg_path, tmp_path, monkeypatch):
+    """`--library` hands the config's one entry to the library's command, with the output `--root` or `$OUT` names,
+    and starts, labels and reads nothing on the store; it is no place to run jobs beside `--local` or `--on`."""
+    from training_slowdown import library
+
+    path = write_config(tree / "a.toml")
+    called = []
+    monkeypatch.setattr(library, "main", lambda argv: called.append(argv) or 0)
+    monkeypatch.setattr(cmd.SHARED, "OUT", None, raising=False)
+    r = Research()
+    assert command(r, "a", "--starts", str(reg_path), "--library") == 0
+    assert command(r, "a", "--starts", str(reg_path), "--library", "--root", str(tmp_path / "out")) == 0
+    assert called == [[str(path), "--starts", str(reg_path.resolve())],
+                      [str(path), "--starts", str(reg_path.resolve()), "--out", str(tmp_path / "out")]]
+    assert r.runs == [] and r.labels == [] and r.fetched == []
+    with pytest.raises(SystemExit):
+        cmd.parse(["a", "--library", "--local"])
+
+
 @pytest.mark.parametrize("name, jobs", [("s-t20-1.1x-shallow-strideshare", 8), ("s-t20-1.1x-ref-optim", 4)])
 def test_the_trees_configs_dry_run_against_the_registry(name, jobs, capsys):
     """Each config of `attacks/` loads against starts.toml, its honest config beside it, and a dry run names every

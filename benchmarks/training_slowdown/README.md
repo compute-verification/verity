@@ -67,7 +67,9 @@ string naming what the products term rests on states which: `formalism.RESTS_ON`
 ## The library of training algorithms
 
 ~~~text
-python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+uv sync --all-packages --extra torch-cpu
+uv run verity bench training_slowdown ENTRY --library [--root DIR]     # one entry, traced on this CPU
+uv run python benchmarks/training_slowdown/training_slowdown/library.py [ENTRY ...] [--starts starts.toml] [--out DIR]
 ~~~
 
 The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
@@ -122,7 +124,11 @@ over an execution phase, a week, a month and a year, and which parts are traced,
 `--out` writes all of it to `DIR/library.json`, and on a run of every entry at the registered starts also the least
 slowdown of the entries that have one into the run's result, under the metric `metrics.toml` declares (`library.write_metric`:
 partial where an entry has none). Run by its path from the repository's root, as that metric's command does, it is the
-same command. A row has no slowdown, and says why, where the capture
+same command. `verity bench training_slowdown ENTRY --library` is this command on one entry, run by the attack's
+runner (`run.py`), which then runs no job and reads no store: its slowdown is the bound on one traced step, at the
+entry's policy, and no entry was trained. With `--root DIR` (else `$OUT`) it writes `library.json` and that metric's
+point for the entry, partial, with the entry as its `member` and its start as its `model`, and prints the point as its
+last line. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 
@@ -183,8 +189,8 @@ back, and one whose record's fused attention rows `as_math` can't rewrite. `--ou
 ## Running an attack
 
 ~~~text
-verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
-    [--weights]
+verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME] \
+    | --library [--root DIR]] [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
     [--device cuda] [--threads 8] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
@@ -363,9 +369,10 @@ torch computes anything. What a job trains on a CPU is to be a function of that 
 on. The record states the count (`threads`), and a stopped job continues only at the count its kept record states:
 started at another, it is refused with the `--threads` that continues it.
 
-Run the `python -m` commands from this directory in the workspace's environment, `uv run --project ../.. python -m
-training_slowdown.MODULE` (a bare `uv run` here makes an environment of this directory's own, without the workspace's
-packages). A start and its data are read where `starts.toml` says a node holds them, and checked
+Run `verity bench` from the repository's root and the `python -m` commands from this directory, each in the
+workspace's environment, which `uv sync --all-packages --extra torch-cpu` at the root makes: `uv run verity bench ...`
+and `uv run --project ../.. python -m training_slowdown.MODULE` (a bare `uv run` here makes an environment of this
+directory's own, without the workspace's packages). A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
 start, and `--starts-root` points at it.
 
