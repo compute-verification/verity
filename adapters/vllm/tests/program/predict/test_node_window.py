@@ -31,19 +31,22 @@ ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_t
 LP, LAYERS = 32, 1
 
 
-def glm_request(LP: int, layers: int, rank: int = 0, moe: bool = False):
-    """Rank ``rank``'s request Program of one greedy request of ``LP`` prompt ids and 2 outputs (its prefill, then one
-    decode), GLM-5.3 at TP8 on H200 cut to its first ``layers`` decoder layers (with ``moe``, every one an MoE layer), class
-    G's engine, in the registered rank form."""
+def glm_request(LP: int, layers: int, rank: int = 0, moe: bool = False, chunk: int | None = None, topk: int | None = None):
+    """Rank ``rank``'s request Program of one greedy request of ``LP`` prompt ids and 2 outputs (its prefill, in steps of
+    ``chunk`` ids if given, then one decode), GLM-5.3 at TP8 on H200 cut to its first ``layers`` decoder layers (with
+    ``moe``, every one an MoE layer; with ``topk``, its indexer's ``index_topk``, so the indexer runs past that many keys
+    rather than 2,048), class G's engine, in the registered rank form."""
     hf = json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text())
     dense = 0 if moe else min(layers, hf["first_k_dense_replace"])
     hf = {**hf, "num_hidden_layers": layers, "first_k_dense_replace": dense, "indexer_types": hf["indexer_types"][:layers],
-          "mlp_layer_types": ["dense"] * dense + ["sparse"] * (layers - dense)}
+          "mlp_layer_types": ["dense"] * dense + ["sparse"] * (layers - dense), **({"index_topk": topk} if topk else {})}
     phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target=TARGET, execution="eager",
               tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     reg = Registered.of(phi, default_seed=DEFAULT_SEED)
+    C = chunk or LP
+    prefill = tuple(I1.StepAdvice((I1.Row(0, "prefill", s, min(C, LP - s)),)) for s in range(0, LP, C))
     advice = I1.Advice((I1.RequestAdvice("q0", LP, 2, "length"),),
-                       (I1.StepAdvice((I1.Row(0, "prefill", 0, LP),)), I1.StepAdvice((I1.Row(0, "decode", LP, 1),))), (0, 0))
+                       (*prefill, I1.StepAdvice((I1.Row(0, "decode", LP, 1),))), (0, 0))
     ingress = {"q0": {"prompt": [(7 * k + 1) % 256 for k in range(LP)], "model": "m", "user": "q0", "temperature": 0.0,
                       "max_tokens": 2, "ignore_eos": True}}
     unit = next(u for u in plan_steps(reg, advice, ingress).requests if u is not None)

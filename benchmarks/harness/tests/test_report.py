@@ -127,7 +127,9 @@ def test_each_command_prints_one_line_of_json_and_writes_it_and_its_result_only_
     assert result["run_id"] == BENCH
     measured = result["measurements"]
     assert [m["name"] for m in measured] == [m["name"] for m in outside["measurements"]] and measured
-    assert all((m["run"], m["mark"]) == (BENCH, MARK[name]) for m in measured)
+    # a made-up record's measurements (compute's fixture) are figures no run measured, whatever the command's mark
+    mark = kit.kit_report.MADE_UP_MARK if doc.get("made_up") else MARK[name]
+    assert all((m["run"], m["mark"]) == (BENCH, mark) for m in measured)
     assert all(m["host"] == STAMP for m in measured) or name == "inference_only"
     assert held(tmp_path / "cwd") == []
 

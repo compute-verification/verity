@@ -1,7 +1,6 @@
 """`h200_share.py`: the number of `accounting/h200-97-percent` is the honest arm A rate over the H200 card's e4m3
 ceiling at each reading of its tensor clock, times `compute-accounting/verified-compute-share`, held here to the same
-arithmetic in fractions on made-up duty points and `test_compute`'s fixture record (credit three quarters of the
-model's MACs). Only arm A on uniform operands at the default clocks is read; a record whose answer isn't an accept
+arithmetic in fractions on made-up duty points and `test_compute`'s fixture record (`CREDITED` of `TOTAL`). Only arm A on uniform operands at the default clocks is read; a record whose answer isn't an accept
 prints no number, and a duty run with no such point can't be read. Under a research run the metric is written once a
 reading, marked modeled, the default reading last."""
 from __future__ import annotations
@@ -48,18 +47,18 @@ def test_the_number_is_the_honest_rate_over_each_readings_ceiling_times_the_veri
     out, err = capsys.readouterr()
     doc = json.loads(out.splitlines()[-1])
     share = Fraction(CREDITED, TOTAL)
-    assert share == Fraction(3, 4) and err == ""
+    assert err == ""
     assert list(doc["readings"]) == ["clock.tensor", "clock.sm"]
     for name, r in doc["readings"].items():
         assert r["ceiling_macs_per_s"] == CEILING[name]
         assert r["value"] == pytest.approx(float(RATE / CEILING[name] * share), rel=1e-15)
     assert doc["value"] == doc["readings"]["clock.sm"]["value"]
-    assert (doc["honest_rate_macs_per_s"], doc["verified_compute_share"]) == (float(RATE), 0.75)
+    assert (doc["honest_rate_macs_per_s"], doc["verified_compute_share"]) == (float(RATE), CREDITED / TOTAL)
     assert (doc["run"], doc["duty_run"], doc["unit"], doc["mark"]) == (RUN, DUTY, H.UNIT, "modeled")
     text = out.splitlines()[:-1]
-    assert text[0] == ("h200 share: an honest Pearl+ prover is credited 56.05% of an H200's capacity at clock.sm's "
+    assert text[0] == ("h200 share: an honest Pearl+ prover is credited 71.49% of an H200's capacity at clock.sm's "
                        "ceiling (modeled)")
-    assert text[1] == ("  at clock.tensor (1830 MHz, 989.4 T e4m3 MACs/s): 60.64%, the honest rate being 80.85% of the "
+    assert text[1] == ("  at clock.tensor (1830 MHz, 989.4 T e4m3 MACs/s): 77.35%, the honest rate being 80.85% of the "
                        "ceiling")
 
 
@@ -99,6 +98,6 @@ def test_under_a_research_run_the_metric_is_written_once_a_reading_modeled_the_d
         (H.METRIC, "clock.tensor", "modeled"), (H.METRIC, "clock.sm", "modeled"),
         ("honest rate", None, "measured"), ("verified compute share", None, "measured")]
     assert H.METRIC == "compute-accounting/h200-capacity-credited-share"
-    assert [m["value"] for m in got] == [doc["readings"]["clock.tensor"]["value"], doc["value"], float(RATE), 0.75]
+    assert [m["value"] for m in got] == [doc["readings"]["clock.tensor"]["value"], doc["value"], float(RATE), CREDITED / TOTAL]
     assert [m["inputs"] for m in got] == [["modeled", DUTY, RUN]] * 2 + [["measured", DUTY], ["measured", RUN]]
     assert all((m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP) for m in got)
