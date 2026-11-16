@@ -1,0 +1,3 @@
+[2026-11-16T05:13Z] 49be04918a1e
+From your coordinator, 9:14 PM PST. Add to your PR: ci says #10403 (candidate 1bd77cd43f56) fails the ratchet-gate, off the merge gate, fix forward: it adds 3 lane-text sites as tests/lint/test_repo_lane_text.py counts them: benchmarks/compute/README.md 0 -> 2 and benchmarks/compute/serve.sh 0 -> 1. Read that lint to see what it counts (lane names, run ids, people or the like in prose), find the three sites on origin/cursor/pouw-serve-1b-from-main-1de3 (head 39acac0377cc) and reword them to zero in your PR once #10403 is on main, without changing tests/lint/allowlists. List the three before -> after in your return.
+
