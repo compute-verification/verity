@@ -16,7 +16,9 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments import history as HT
-from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    row_table_kernels as K,
+)
 from verity_torch.pouw import row_table_device as RTL
 
 from verity_vllm.commit import history_tables as H

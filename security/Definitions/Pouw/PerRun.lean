@@ -7,7 +7,7 @@ public import Definitions.Pouw.PearlC.Game
 /-!
 # Per-run audits, and what makes PoUW's cost model truncate (trusted)
 
-An audit's guarantee in PoUW's `EndToEnd` shape (`Accounting.Run.ComputeSound` and the two beside it) bounds the
+An audit's guarantee in PoUW's `EndToEnd` shape (`ResourceAccounting.Run.ComputeSound` and the two beside it) bounds the
 probability that it accepts with a sure bound below its certificate: the bound holds on every one of the audit's own
 coins. A device that does little charged work on a few coins and honest work on the rest has a large sure bound, so
 those guarantees say nothing about it, and nothing about the covert work its cheap runs leave room for. A per-run
@@ -18,7 +18,7 @@ other audits' coins. It implies the sure-bound form.
 PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but stops before its cost would exceed a
 budget `b` costs at most `b` on every coin, and commits `A`'s trace wherever `A` costs at most `b`. PoUW's cost
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`, a named hypothesis in
-`Definitions.Assumptions.Accounting`), not a theorem: a model whose cost reads what its programs cannot see (the oracle
+`Definitions.Assumptions.ResourceAccounting`), not a theorem: a model whose cost reads what its programs cannot see (the oracle
 at points they never query, say) has no aborting program.
 
 **Pricing.** The machine prices a PoUW run in two parts: its arithmetic, at W1's
@@ -37,7 +37,7 @@ priced sum.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -107,7 +107,7 @@ def ComputeSoundPerRun (p : Price) (W ε : ℝ) : Prop :=
   ∀ o : ΩQ × ΩS, Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W) ≤ ε
 
 /-- **The compute audit's per-run guarantee unless a break**: `ComputeSoundPerRun` with the event's compute coins
-restricted to those at which `brk` doesn't hold (`Accounting.Run.ComputeSoundUnless`'s per-run form). -/
+restricted to those at which `brk` doesn't hold (`ResourceAccounting.Run.ComputeSoundUnless`'s per-run form). -/
 def ComputeSoundPerRunUnless (p : Price) (W ε : ℝ) (brk : ΩW → ΩQ × ΩS → Prop) : Prop :=
   ∀ o : ΩQ × ΩS, Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W ∧ ¬ brk x o) ≤ ε
 
@@ -157,4 +157,4 @@ structure RealizesPearlCPriced {Q R S : Type} (CM : PearlC.CostModel Q R S) (P :
   calls_le : ∀ x o, (adv o).pre.calls x.1 + CM.calls (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
     (r.schedule (x, o)).ops (r.win .compute) (r.acct .compute) .oracle
 
-end Accounting
+end ResourceAccounting

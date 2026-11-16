@@ -395,7 +395,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
     out: dict[str, Any] = {}
     nonces, key = committer["nonces"], bytes(committer["key"])
@@ -432,7 +432,9 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
-    from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        registered_commit,
+    )
 
     param = bnk_param(label, K)
     if param not in committer["nonces"]:
@@ -453,7 +455,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     registration holds the shard's tables at its one width, and a table at any other is none of its."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-    from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
     nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
     out: dict[str, Any] = {}

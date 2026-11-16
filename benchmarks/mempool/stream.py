@@ -3,7 +3,7 @@ itself held to vLLM's `BlockPool`) after every pool call, over the encodings' tr
 agree (but for the memo's stamps, which the RAM pool doesn't have), and so do each call's results, every memoized hit's
 among them. The stream is cut into windows of about ``--window`` slots, the pool carried from one to the next, and each
 window passes its memory check (R = W, every read's t below its now). ``--vectors`` writes each trace's first windows
-that evict for the circuit's test (`test_network_certifier_cache_step_v3`). `run` with ``check`` off and ``every`` 0 is
+that evict for the circuit's test (`test_network_attester_cache_step_v3`). `run` with ``check`` off and ``every`` 0 is
 `cost.py`'s measurement of a load's stream slots.
 
     python3 stream.py [--traces DIR] [--seeds N] [--window SLOTS] [--vectors OUT] [--json OUT]

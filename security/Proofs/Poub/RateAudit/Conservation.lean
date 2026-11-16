@@ -25,7 +25,7 @@ queried, and `∑ₖ C(q, k) = 2^q` (`RelayDevice.pr_compress_any_le`).
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -198,18 +198,18 @@ theorem pr_relay_or_compress (A : RelayDevice N b h ρ S L q) (k m lam : ℕ) (h
 
 end RelayDevice
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (pr_le_of_card pr_mono pr_or_le)
 
 /-- **Conservation over tiers, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateConservationRO`). -/
-theorem RateConservationRO : Accounting.Guarantees.RateConservationRO := by
+(`ResourceAccounting.Guarantees.RateConservationRO`). -/
+theorem RateConservationRO : ResourceAccounting.Guarantees.RateConservationRO := by
   classical
   intro N b h ρ S L q k lam τ tier A hA
   rcases Nat.eq_zero_or_pos k with rfl | hk
@@ -223,8 +223,8 @@ theorem RateConservationRO : Accounting.Guarantees.RateConservationRO := by
   · have := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
     exact Or.inr ⟨hc.trans hq, by omega⟩
 
-/-- **Conservation over tiers, with any side sources** (`Accounting.Guarantees.RateConservation`). -/
-theorem RateConservation : Accounting.Guarantees.RateConservation := by
+/-- **Conservation over tiers, with any side sources** (`ResourceAccounting.Guarantees.RateConservation`). -/
+theorem RateConservation : ResourceAccounting.Guarantees.RateConservation := by
   classical
   intro N b h ρ S L q k m lam τ tier A
   rcases Nat.eq_zero_or_pos (k - m) with hkm | hk
@@ -248,8 +248,8 @@ theorem footprint_mul_lt_of_capped {N b h ρ S L q τ cEnc fl : ℕ} {tier : ℕ
     (Finset.sum_le_sum (fun t _ => hcap (A.state E) (A.world E R O) t))
 
 /-- **Correct receipts are bounded by the tiers' capacity, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateConservationCapRO`). -/
-theorem RateConservationCapRO : Accounting.Guarantees.RateConservationCapRO := by
+(`ResourceAccounting.Guarantees.RateConservationCapRO`). -/
+theorem RateConservationCapRO : ResourceAccounting.Guarantees.RateConservationCapRO := by
   classical
   intro N b h ρ S L q k F cTag cEnc lam τ tier cap A hA hcap hfl
   rcases Nat.eq_zero_or_pos k with rfl | hk
@@ -265,8 +265,8 @@ theorem RateConservationCapRO : Accounting.Guarantees.RateConservationCapRO := b
     rwa [InteractiveProver.toRelay_compute]
 
 /-- **Correct receipts are bounded by the tiers' capacity, with any side sources**
-(`Accounting.Guarantees.RateConservationCap`). -/
-theorem RateConservationCap : Accounting.Guarantees.RateConservationCap := by
+(`ResourceAccounting.Guarantees.RateConservationCap`). -/
+theorem RateConservationCap : ResourceAccounting.Guarantees.RateConservationCap := by
   classical
   intro N b h ρ S L q k m F cTag cEnc lam τ tier cap A hcap hfl
   rcases Nat.eq_zero_or_pos (k - m) with hkm | hk
@@ -281,8 +281,8 @@ theorem RateConservationCap : Accounting.Guarantees.RateConservationCap := by
       (footprint_mul_lt_of_capped A hcap hfl x.1 x.2.1 x.2.2)⟩
     rwa [InteractiveProver.toRelay_compute]
 
-/-- **Freed bandwidth is spent on another tier or rebuilt** (`Accounting.Guarantees.RateDisplacement`). -/
-theorem RateDisplacement : Accounting.Guarantees.RateDisplacement := by
+/-- **Freed bandwidth is spent on another tier or rebuilt** (`ResourceAccounting.Guarantees.RateDisplacement`). -/
+theorem RateDisplacement : ResourceAccounting.Guarantees.RateDisplacement := by
   intro N b h ρ S L q k D lam τ tier t₀ A hA
   refine (pr_mono (fun x hx => ?_)).trans (RateConservationRO N b h ρ S L q k lam τ tier A hA)
   obtain ⟨hc, h1, h2⟩ := hx
@@ -290,8 +290,8 @@ theorem RateDisplacement : Accounting.Guarantees.RateDisplacement := by
   exact ⟨hc, by omega⟩
 
 /-- **Correct receipts are paid for, at every count, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RatePaidRO`). -/
-theorem RatePaidRO : Accounting.Guarantees.RatePaidRO := by
+(`ResourceAccounting.Guarantees.RatePaidRO`). -/
+theorem RatePaidRO : ResourceAccounting.Guarantees.RatePaidRO := by
   classical
   intro N b h ρ S L q lam τ tier A hA
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
@@ -304,8 +304,8 @@ theorem RatePaidRO : Accounting.Guarantees.RatePaidRO := by
       Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
     refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card, by omega⟩, ?_, ?_, ?_⟩ <;> dsimp only <;> omega
 
-/-- **Correct receipts are paid for, at every count, with any side sources** (`Accounting.Guarantees.RatePaid`). -/
-theorem RatePaid : Accounting.Guarantees.RatePaid := by
+/-- **Correct receipts are paid for, at every count, with any side sources** (`ResourceAccounting.Guarantees.RatePaid`). -/
+theorem RatePaid : ResourceAccounting.Guarantees.RatePaid := by
   classical
   intro N b h ρ S L q m lam τ tier A
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
@@ -320,4 +320,4 @@ theorem RatePaid : Accounting.Guarantees.RatePaid := by
     have hmb := Nat.mul_le_mul_right b hcm.le
     refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card - m, by omega⟩, ?_, ?_, ?_⟩ <;> dsimp only <;> omega
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

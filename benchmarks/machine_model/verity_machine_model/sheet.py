@@ -1,4 +1,4 @@
-"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
+"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`ResourceAccounting.TS.Sheet`)
 reads, its value (or a `card` line, where the device's card file holds it), the document that states it and its grade,
 and each class of its DS vector's epoch with its tensor form or its pipe.
 
@@ -30,7 +30,7 @@ __all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet"
 
 ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
-ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
+ROWS = ("issue", "tensor", "pipe", "smem")   # ResourceAccounting.TS.SheetRow's order
 
 
 @dataclass(frozen=True)
@@ -372,7 +372,7 @@ def _simp(head: str, names: list[str]) -> list[str]:
     return _wrap(f"{head} [{', '.join(names)}]", "  ", "      ")
 
 
-#: what a sheet's proofs elaborate with beyond `Accounting.TS.Sheet`, which imports these privately: the `norm_num`
+#: what a sheet's proofs elaborate with beyond `ResourceAccounting.TS.Sheet`, which imports these privately: the `norm_num`
 #: extensions and instances its `decide` and `norm_num` steps find
 SHEET_IMPORTS = (
     "import Mathlib.Algebra.Order.Floor.Extended",
@@ -423,7 +423,7 @@ def lean(s: Sheet, data: Path) -> str:
     clock = {c: f"{c}MHz" for c in s.clocks}
     out = ["module", "", "public import Definitions.Pouw.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
            f"# The {s.name}'s data sheet (generated)", ""]
-    out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
+    out += _wrap(f"The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
                  f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
                  "tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the "
@@ -435,7 +435,7 @@ def lean(s: Sheet, data: Path) -> str:
                         "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from {cited(s)}, and "
                         "the machine model's tests hold it to that output.", "")
-    out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
+    out += ["-/", "", "@[expose] public section", "", f"namespace ResourceAccounting.TS.Sheets.{s.name}", "",
             "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
     # toolchain, so each instance lists the constructors.
@@ -589,5 +589,5 @@ def lean(s: Sheet, data: Path) -> str:
                 f"    ({literal(dense)} - {literal(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
                 f"      {lhs} ≤ ({literal(dense)} + {literal(tol)} : ℝ) * 10 ^ 12 := by",
                 f"  norm_num [{peak[ty]}, smCount, {clock[p.clock]}]", ""]
-    out += ["end", "", f"end Accounting.TS.Sheets.{s.name}", ""]
+    out += ["end", "", f"end ResourceAccounting.TS.Sheets.{s.name}", ""]
     return "\n".join(out)

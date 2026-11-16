@@ -23,18 +23,18 @@ import numpy as np
 import pytest
 from verity.commitments.crypto import lms
 from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.accounting.pouw.verifier.coins import Challenger as Coins
-from verity.protocols.accounting.pouw.verifier.coins import CoinOpening, coin_reason
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
+from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinOpening, coin_reason
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
@@ -166,7 +166,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.protocols.accounting.pouw.verifier.protocol import Tile
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
@@ -669,7 +669,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
         served, tmp_path, monkeypatch):
     """What a certified execution phase of salted units runs through after `salt.unit_reason`, which no served-zk execution phase passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
-    against the network certifier as the challenger reads it (`certified_salt.Certifier`).  The prover records its pass's weights, the
+    against the network attester as the challenger reads it (`certified_salt.Certifier`).  The prover records its pass's weights, the
     execution phase's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link)) and its prover id
     (`salt.prover_id`) with the certifier for PoUW execution phase 0 before its salt is
     sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the execution phase's
@@ -1093,8 +1093,8 @@ def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(ar
 
 
 def _stub_calls():
-    from verity.protocols.accounting.pouw.prover.kernels.served_zk import stage_tile as STG
-    from verity.protocols.accounting.pouw.prover.kernels.served_zk import statement as ST
+    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import statement as ST
     st = object.__new__(ST.Statement)
     record = OR.Record(lean=False)
     torch = "benchmarks/pouw/served_zk/statement_torch.py"
@@ -1290,7 +1290,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         src = "resalt.json" if case == "resalted" else "manifest.json"
         assert SC.main(["coin-variant", f"{t}/{src}", f"{t}/coins.json", f"{t}/opening.json", f"{t}/coin-{case}.json", case]) == 0
     lean = tmp_path / "lean"
-    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.accounting.pouw.verifier.core_check import stream_subset\n"
+    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.resource_accounting.compute.pouw.verifier.core_check import stream_subset\n"
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"

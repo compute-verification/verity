@@ -26,11 +26,11 @@ else:
 
 from torch import nn
 from verity.circuits.codec import canonical_json
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import weights as Wt
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
@@ -49,11 +49,11 @@ from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 K, ROWS, STEPS = 64, 32, 2
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -558,7 +558,7 @@ class _Named:
         return self.window(w), self.got[1]
 
 
-def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_draw_coin(tmp_path, monkeypatch):
+def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_sampling_coin(tmp_path, monkeypatch):
     """With ``commit_record`` the window names, in its tap's place, a registration of another Program that reuses its
     tables. The window's registration W is a v2 record of its served entries under its Program and open root, chained
     after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
@@ -604,7 +604,7 @@ def _fails(run):
     (_fails, "ValueError: window-commit refused the window"),
 ], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
         "hook-fails"])
-def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
+def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_sampling_coin(tmp_path, monkeypatch,
                                                                                                 named, why):
     """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
     fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its sampling coin stays
@@ -1028,7 +1028,7 @@ class _Gate:
 
     def __call__(self, session, root, withhold=False):
         host = self.hosts[session]
-        assert isinstance(host, int) == withhold, "a draw session is opened withheld, a window's session never"
+        assert isinstance(host, int) == withhold, "a sampling session is opened withheld, a window's session never"
         if withhold:
             host = self.hosts[session] = CH.Host(self.dir / session, Wd.draw_challenger(0, CH.entropy(host)), 1, session,
                                                  self.leaves, self.ledger, gated=True, withhold=True)

@@ -251,3 +251,57 @@ def test_bootstrap_leaves_a_cache_already_under_work(tmp_path: Path) -> None:
     c = _through_step2(tmp_path, before=("work_uv",))
     assert (c["work_uv"] / "entry").exists() and (c["work_uv"] / "filled").exists()
     assert not c["work_pip"].exists()
+
+
+def _headers_step(tmp_path: Path, wheels: bool) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """Run the script in gpu mode through step 2 with a toolkit holding only cuBLAS's headers and a venv whose NVIDIA wheels
+    hold cuSPARSE's and cuSOLVER's (or none); step 3 then fails, which ends a run the header step let through."""
+    work, fake, toolkit, purelib = tmp_path / "work", tmp_path / "fake", tmp_path / "cuda", tmp_path / "site-packages"
+    py = "#!/bin/sh\ncase \"$2\" in *sysconfig*) echo " + str(purelib) + " ;; esac\n" + FAKE_PY.split("\n", 1)[1]
+    for d, text in ((work / "venv312" / "bin" / "python", py), (fake / "uv", FAKE_UV)):
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(text)
+        d.chmod(0o755)
+    (toolkit / "include").mkdir(parents=True)
+    for header in ("cublas_v2.h", "cublasLt.h"):
+        (toolkit / "include" / header).touch()
+    for lib, header in (("cusparse", "cusparse.h"), ("cusolver", "cusolverDn.h")) if wheels else ():
+        (purelib / "nvidia" / lib / "include").mkdir(parents=True)
+        (purelib / "nvidia" / lib / "include" / header).touch()
+    r = subprocess.run([BASH, str(SCRIPT), "--gpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
+                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(tmp_path / "home"),
+                            "WORK": str(work), "CUDA_HOME": str(toolkit)})
+    return r, toolkit, purelib
+
+
+def test_the_header_step_names_the_wheels_directories_a_toolkit_lacks(tmp_path: Path) -> None:
+    """A toolkit without cuSPARSE's and cuSOLVER's headers (as a CUDA install of nvcc and the runtime is) builds the taps
+    with those headers from the venv's NVIDIA wheels: the bootstrap says so in one line, before any tap, and goes on."""
+    r, _, purelib = _headers_step(tmp_path, wheels=True)
+    assert "BOOTSTRAP_FAIL_CHECKPOINT" in r.stderr, f"the run did not reach step 3\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    said = [line for line in r.stdout.splitlines() if "cuda_headers:" in line]
+    assert len(said) == 1, r.stdout
+    assert sorted(said[0].split(":")[-1].split()) == sorted(str(purelib / "nvidia" / lib / "include") for lib in ("cusparse", "cusolver"))
+
+
+def test_a_header_in_neither_the_toolkit_nor_the_wheels_fails_before_any_build(tmp_path: Path) -> None:
+    r, toolkit, purelib = _headers_step(tmp_path, wheels=False)
+    line = f"BOOTSTRAP_FAIL_HEADERS: cuda_headers: cusparse.h is in neither {toolkit}/include nor the NVIDIA wheels at {purelib}/nvidia/*/include"
+    assert r.returncode == 3 and r.stderr.splitlines() == [line], f"stdout: {r.stdout}\nstderr: {r.stderr}"
+    assert (tmp_path / "out" / "bootstrap.fail").read_text().splitlines() == [line]
+
+
+def test_the_launcher_it_writes_lets_a_spawned_child_start(tmp_path: Path) -> None:
+    """serve-openai spawns its seal process, which imports the launcher again as `__mp_main__`: an unguarded `main()` there
+    ran the CLI a second time in the child, which exited before its ready and took the server down."""
+    _through_step2(tmp_path)
+    cli = tmp_path / "stub" / "verity_vllm" / "pipeline"
+    cli.mkdir(parents=True)
+    for d in (cli.parent, cli):
+        (d / "__init__.py").write_text("")
+    (cli / "cli.py").write_text("import multiprocessing\n\n\ndef _child():\n    pass\n\n\ndef main():\n"
+                                "    p = multiprocessing.get_context('spawn').Process(target=_child)\n"
+                                "    p.start()\n    p.join()\n    return p.exitcode\n")
+    r = subprocess.run([sys.executable, "-S", str(tmp_path / "work" / "venv312" / "bin" / "verity-vllm")], cwd=tmp_path,
+                       capture_output=True, text=True, env={"PYTHONPATH": str(tmp_path / "stub"), "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, f"the spawned child failed\n{r.stderr}"

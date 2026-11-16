@@ -12,7 +12,7 @@ memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by
 (slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
-    trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
+    `only=trains`, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
     there (`_need`: the larger of the slot's mem=, or its book=, and the job's ask, which no cgroup enforces) once the
     waiters ahead have taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`).
     Idle slots are places only as far as the free memory goes, since every run that starts reserves its own. The most

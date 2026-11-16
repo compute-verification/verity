@@ -51,7 +51,7 @@ machine that reaches the store, with no GPU and no node.
 * **A row's note**, which the planner's driver writes on a row from the row's own data (that no table's row priced
   its proving, or what its scale reaches over the unscaled row of its case), is printed beside the figure where the
   figure carries no label, from the row at the pinned budget nearest the one it is read at.
-* **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
+* **The network attester's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
   rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
   at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
@@ -64,26 +64,26 @@ machine that reaches the store, with no GPU and no node.
   what it is over, and says so where the rows hold no bound.
 * **Every figure carries the error summed over everything it covers**, and a figure whose error is 1 or more is
   printed as `NO_BOUND`, with that error and no amount. The compute audit's part fails with at most its rows' δ over
-  the monitoring period. The network certifier's fails with at most the ε of its row (`eps`): its scans' δ summed over
+  the monitoring period. The network attester's fails with at most the ε of its row (`eps`): its scans' δ summed over
   every link of the scope and every execution phase of the monitoring period, one ε a scope and monitoring period.
   The two together fail with at most the sum of both. The scans' δ is an input of the calculator, and the command
   gives it one: `--scan-delta`, or by default the δ at which the row printed that sums the most execution phases, the
-  world's year, carries `PERIOD_ERROR`, so that every row printed carries that or less. The network certifier's
+  world's year, carries `PERIOD_ERROR`, so that every row printed carries that or less. The network attester's
   result of record takes its δ so (`benchmarks/certifier_term/README.md`). No term depends on the scans' δ; only the
   errors move with it. The δ the command prints is the one the document states among its inputs (`scan_delta`).
 
-Both count the same requests: the sampling plan's, which the network certifier's calculator counts by default (its
+Both count the same requests: the sampling plan's, which the network attester's calculator counts by default (its
 `request_count`, read from the break-even planner in the tree). The command holds no count of its own. The two parts
 must cover the same GPU-seconds, the same requests (the count the rows of record are priced over) and the same
 weights, or the command refuses.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
-bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
-part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
+bits at δ). The first three are the network attester's part, the last term's second branch is the compute audit's
+part, and the command sums them per scope and monitoring period under each of the network attester's rows of
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`verity/protocols/accounting/certifier/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
@@ -93,7 +93,7 @@ part, and the command sums them per scope and monitoring period under each of th
   and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole
   schedule on some execution phase is called by `WHOLE`, not by `TOGETHER`: nothing holds its lengths there.
 * **The output count.** Until a served audit has sampled a stop block the server chooses a response's output count,
-  which the network certifier's row `OUTPUT_COUNT` charges as its schedules. The sums that take it at 0 are those
+  which the network attester's row `OUTPUT_COUNT` charges as its schedules. The sums that take it at 0 are those
   under the rows the answer names (`at_zero_in`: the rows of the document's `stop`, where the answer holds an
   execution phase; never the rows whose schedules read 0), on the execution phases it holds. The command prints
   the output count beside those sums and lists its 0 among the inputs, marked assumed. Where the answer holds no
@@ -115,7 +115,7 @@ A run of record that is superseded, or holds no rows of the case, is left out an
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
 has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
-the network certifier's, each over every monitoring period of the document it has a value over at the share (the
+the network attester's, each over every monitoring period of the document it has a value over at the share (the
 world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
 at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
 the fingerprint. What it prints is the same in a run as outside one.
@@ -263,16 +263,17 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
     document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
     of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
-    over its period (the compute audit's δ; the network certifier's ε at its scans' δ; the headline's, the compute
-    audit's part, its δ), then the runs of record it read. The network certifier's part is modeled, with the mark its
+    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the headline's, the compute
+    audit's part, its δ), then the runs of record it read. The network attester's part is modeled, with the mark its
     calculator gives the `scan` row where it gives one. A figure with no value over a period (a period no run of record
-    holds, or the network certifier's where its ε is 1 or more) is left out, but over the world's year, where it has
+    holds, or the network attester's where its ε is 1 or more) is left out, but over the world's year, where it has
     no value and says why: `NO_BOUND` with that ε."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
     share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
     scan = cert["legend"]["scan"].get("mark")
+    # a measurement's input as the run's result records it, held with the document's words until a format version
     term = (f"the network certifier's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
             f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
     out = []
@@ -339,7 +340,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         prog="verity bench exfiltration",
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
-                    "planner's rows of record in the evidence store, beside the network certifier's part, with every "
+                    "planner's rows of record in the evidence store, beside the network attester's part, with every "
                     "input labelled measured, modeled, simulated, assumed, missing or run, not proved. Every figure "
                     "carries the error summed over "
                     f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
@@ -356,10 +357,10 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
     ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
-                    help="the most ids a response holds in the network certifier's class (default "
+                    help="the most ids a response holds in the network attester's class (default "
                          f"{RESPONSE_IDS}, assumed: the class that holds the plan of record's longest output)")
     ap.add_argument("--scan-delta", type=Fraction, metavar="D",
-                    help="the δ of each execution phase's scan of the network certifier, which its rows' ε sum (default: "
+                    help="the δ of each execution phase's scan of the network attester, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
     ap.add_argument("--served-run", type=Path, metavar="FILE",

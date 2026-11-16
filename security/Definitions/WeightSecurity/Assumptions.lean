@@ -25,7 +25,7 @@ exposure is the named assumption `FaultedUseHard` (`Definitions.Assumptions.Weig
 Two premises tie a run's releases to the traces the audit extracts (`Definitions.WeightSecurity.Tied`), each the
 probability of its failure on every run, until the layers below discharge it:
 
-* `EgressTied`: a release is its trace's outputs, the network certifier's egress tie;
+* `EgressTied`: a release is its trace's outputs, the network attester's egress tie;
 * `AdviceCovered`: a trace holds the weights', the query's and the advice's inputs, so every input the prover chooses
   is advice, which is charged.
 -/
@@ -87,7 +87,7 @@ noncomputable def patternCount [Fintype F] (size : F → ℕ) (q M : ℕ) : ℕ 
 variable {O I V Tick Adv S Q : Type}
 
 open scoped ENNReal in
-/-- PREMISE, the network certifier's to discharge. **The releases are their traces' outputs**, except with probability
+/-- PREMISE, the network attester's to discharge. **The releases are their traces' outputs**, except with probability
 `η`: on every run `run θ r`, some accepted window that releases released something other than its extracted trace's
 values on the egress slots `eg` (`Served.Traced.Tied`) with probability at most `η`. The certifier's egress tie gives it
 at `η = 0`: the released bytes are the extracted trace's outputs. -/

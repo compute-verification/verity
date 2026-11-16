@@ -1,6 +1,6 @@
 # scan_cost
 
-What the network certifier's scan costs to prove and to verify, for each second of execution phase it covers. The
+What the network attester's scan costs to prove and to verify, for each second of execution phase it covers. The
 scan is `benchmarks/network_traces/scan_zk.sh`'s: the step-indexed scan of one link, composed in zero knowledge, on a
 CPU machine. This benchmark runs it once at a fixed identity, puts two numbers on its honest round with the stages
 they are made of, and refuses to write them unless the round's answer is the pinned one.
@@ -49,7 +49,7 @@ Two results compare only at one identity, and `result.py compare` refuses any ot
 | Field | The benchmark's | Why it is fixed |
 | --- | --- | --- |
 | `class` | `w63k4` | the Definitions' parameters, so every block's size |
-| `sample` | every unit | the honest round proves every block, with no sampling; read from the answers' public parts |
+| `sample` | every proof block | the honest round proves every block, with no sampling; read from the answers' public parts |
 | `ticks`, `tick_ms` | T = 32 ticks of 100 ms: an execution phase of 3.2 s | the class's T and the scan's tick, which the numbers divide by |
 | `source` | the synthetic run | the traffic the blocks hold |
 | `cores` | 21 | the job is pinned to its first 21 cores, the least a slot of the network pool gives, and its provers size their threads by that |
@@ -75,7 +75,7 @@ Definitions changes its template ids, and the pin with it.
 
 ## Running it
 
-`run.sh` is the command of a `research run`, from a clone, in one slot of the network pool, as a job of at most 180
+`run.sh` is the command of a `research run` (the team's job runner), from a clone, in one slot of the network pool, as a job of at most 180
 minutes. The slot must give at least 21 cores and 128 GB:
 
 ~~~sh
@@ -98,7 +98,7 @@ SHA-512: the verifier's command names its circuit and its program by digest. A c
 | --- | --- |
 | `SC_GROUP=G` | G execution phases, each a registration and an honest round of its own |
 | `SC_CORES=N` | the cores the job is pinned to; another identity, which compares with no result at 21 |
-| `SC_CLASS=test` | the certifier tests' class, to rehearse the runner in minutes; another identity |
+| `SC_CLASS=test` | the network attester's tests' class, to rehearse the runner in minutes; another identity |
 
 ~~~text
 result.py table DOC                      a result's round, a session a line and a stage a column

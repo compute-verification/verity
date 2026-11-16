@@ -4,12 +4,12 @@ exists (deploy.toml installs it on vy-nebius-cpu-1), stop every live `research r
 (`through_slot`).
 
 With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
-run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
+run's processes to N, so the candidates' checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
 reniced.
 
 With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
-vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/device/live_challenger/auditor.py).
+vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/verifier/live_challenger/auditor.py).
 
 A run outside slot.py lands beside the slots' checks without their lock or cores, and a few such runs take the slice to its
 memory limit beside a merge check. research.remote's launcher refuses such a run before it starts; this

@@ -388,7 +388,7 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time drive built it on `next`, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
     and again only after a read that worked: until it reads, a stalled main rings nobody."""
     try:

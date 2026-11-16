@@ -6,7 +6,7 @@ two it must pass over; the run of that case's plan over the world's year, its pl
 share; and a run whose rows hold their own plans, cut to two scopes): the figures a hand computation gave on those
 rows. The runs' case is row (i); here its rows stand for the command's row, the plan of record's, under that row's name
 (`as_row`), and row (i) is made up from them at `ASSUMED` times their bound (`as_assumed`), printed only under its
-label, with what prices each row's proving or that its rows don't record it. Then the network certifier's part beside
+label, with what prices each row's proving or that its rows don't record it. Then the network attester's part beside
 them at the requests its calculator counts by default, the sampling plan's; its figures of record at two release schedules, held to its own document; what rests on the set-time card printed
 only under the calculator's label; the output count beside the sums that take it at 0, which the stop verdicts'
 reader's answer names, and it names none while the reader asks the rule without a schedule; every figure's error, summed
@@ -57,7 +57,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 0 and out.startswith("# verity bench exfiltration: GLM-5.3's exfiltration capacity")
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
-    assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
+    assert "- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
     assert "\n\n## SPOT's resampling holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
     assert "\n- redrawn sample: " in out and "\n- re-committed execution phase: " in out and ": closed\n" not in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
@@ -70,7 +70,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     code, out, _ = run("--json", "--response-ids", "4096")
     assert code == 0 and json.loads(out)["periods"][-1]["together"]["scan"]["certifier_GB"] == pytest.approx(59_645_644, abs=0.5)
     # at the δ the calculator assumes by default, a scan's 2^-20, every row printed sums to 1 or more: no amount of the
-    # network certifier's, and its ε over the world's year
+    # network attester's, and its ε over the world's year
     code, out, _ = run("--json", "--scan-delta", "1/1048576")
     doc = json.loads(out)
     assert code == 0 and doc["value"] == pytest.approx(YEAR_GB) and doc["certifier"]["scan_delta"]["value"] == 2 ** -20
@@ -80,7 +80,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert {t[k] for p in doc["periods"] for t in p["together"].values() for k in ("certifier_GB", "GB")} == {None}
     code, out, _ = run("--scan-delta", "1/1048576")
     assert code == 0 and "- **the compute audit's part: 14,240 GB** (modeled)" in out
-    assert ("- **the network certifier's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
+    assert ("- **the network attester's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
             "response). Its ε over the world's year is 11,012,646, and at 1 or more it bounds nothing") in out
     assert "50,753,639" not in out and out.count("\n| world | year | ") == 2
     code, out, err = run("--scan-delta", "2")
@@ -103,12 +103,12 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
 
 def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):
     """Under a research run, `verity bench exfiltration` writes run.py's metrics into the run's result through the kit:
-    the headline figure, the compute audit's part and the network certifier's, each over every monitoring period of the
+    the headline figure, the compute audit's part and the network attester's, each over every monitoring period of the
     document it has a value over at the share in GB, with its `period` and `over`, the world's year last and as it was
     (so a reader keyed by name alone reads it), its mark heading its first input and its error over its period in the
     next, then the runs of record it read; the document as its evidence and what ran in the fingerprint. What it prints
     is the same in a run as outside one, where it writes nothing. A period with no value is left out, but the world's
-    year, where the network certifier's part at an ε of 1 or more has no value and says why."""
+    year, where the network attester's part at an ε of 1 or more has no value and says why."""
 
     s = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
@@ -197,7 +197,7 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
         assert head["inputs"][1:] == audit["inputs"][1:] == [
             f"its error: δ = {E._n(p['compute_audit']['delta'])} over the {span}, the compute audit's", *doc["runs"]]
 
-    # where every ε is 1 or more, the network certifier's part is written over the world's year alone, with no value
+    # where every ε is 1 or more, the network attester's part is written over the world's year alone, with no value
     second = tmp_path / "run-2"
     run("--scan-delta", "1/1048576", within=second)
     written = json.loads((second / "result.json").read_text())["measurements"]
@@ -212,8 +212,8 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
 
 
 def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, monkeypatch):
-    """A row of the network certifier's legend that carries a mark (the calculator's `scan` row's accept, run, not
-    proved) prints it beside the row's standing, as the mark, in that line alone; the network certifier's recorded
+    """A row of the network attester's legend that carries a mark (the calculator's `scan` row's accept, run, not
+    proved) prints it beside the row's standing, as the mark, in that line alone; the network attester's recorded
     figure carries it beside its own mark. A mark this command has no name for is refused by the row's name."""
 
     lb = term()
@@ -236,7 +236,7 @@ def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, 
     net = {(m["period"], m["over"]): m for m in E.measurements(doc, {"benchmarks/x": "network_certifier"})}["year", "world"]
     assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network certifier's ")
     monkeypatch.setattr(lb, "document", marked("proved"))
-    with pytest.raises(ValueError, match="^the network certifier's rows scan carry a mark this command doesn't print"):
+    with pytest.raises(ValueError, match="^the network attester's rows scan carry a mark this command doesn't print"):
         E.build(store=recorded(tmp_path / "refused").fresh(), root=REPO)
 
 

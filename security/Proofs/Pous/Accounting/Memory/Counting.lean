@@ -15,9 +15,9 @@ that is at most `2^(q − k)` of the `2^q` values (`counting`).
 
 @[expose] public section
 
-namespace Accounting.MemoryProofs
+namespace ResourceAccounting.MemoryProofs
 
-open Accounting.Memory
+open ResourceAccounting.Memory
 
 /-- **Markov over the fibres.** `T` times the number of values whose fibre exceeds `T` is at most `2^M`. -/
 theorem card_heavy_mul_le {M q : ℕ} (π : (Fin M → Bool) → Fin q → Bool) (T : ℕ) :
@@ -88,4 +88,4 @@ theorem countingAdvice (M a q k : ℕ) (π : (Fin M → Bool) → (Fin a → Boo
     2 ^ k * (Finset.univ.filter fun z => 2 ^ (M + a + k - q) < (fibreAdvice π z).card).card ≤ 2 ^ q :=
   two_pow_mul_le (card_heavy_advice_mul_le π _)
 
-end Accounting.MemoryProofs
+end ResourceAccounting.MemoryProofs
