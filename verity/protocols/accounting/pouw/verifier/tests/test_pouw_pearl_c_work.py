@@ -366,7 +366,7 @@ def test_audit_under_hashing_h3():
     epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes([10]) * 32)
     declared = CW.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     out = CW.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
-    assert not out.accepted and any(v.reason.startswith("A row 4's replayed inert_work") for v in out.verdicts)
+    assert not out.accepted and any(v.reason.startswith("A row 4's replayed debit") for v in out.verdicts)
     va, vb = CW.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [4]}, {})
     records = CW.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
@@ -453,7 +453,7 @@ def test_h3_bounds_each_credited_row_as_well_as_the_tile():
     assert CW.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
     out = CW.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
     assert not out.audit.accepted
-    assert out.audit.verdicts[0].reason.startswith("A row 0's replayed inert_work") and "the row cap" in out.audit.verdicts[0].reason
+    assert out.audit.verdicts[0].reason.startswith("A row 0's replayed debit") and "the row cap" in out.audit.verdicts[0].reason
     va, vb = CW.volunteer(h3, epoch, tr, records, {0: rows_a}, {1: rows_b})
     assert (va, vb) == ({0: [0]}, {})
     given = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
@@ -493,13 +493,13 @@ def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho():
     assert CW.check_opened(h3, rec, tile, a, b, ops) is None
     rec, tile, a, b, ops = _census_tile(h3, [85.0] + [None] * (m - 1), 256)
     reason = CW.check_opened(h3, rec, tile, a, b, ops)
-    assert reason.startswith("A row 0's replayed inert_work") and "(the row cap: 4ρ·its credited cells' credit)" in reason
+    assert reason.startswith("A row 0's replayed debit") and "(the row cap: 4ρ·its credited cells' credit)" in reason
     spikes = [50.0, 50.0, 50.0, 50.0, 30.0, 20.0, 20.0, 30.0, 30.0, None, 10.0, 20.0, 30.0, 20.0, None, 30.0]
     rec, tile, a, b, ops = _census_tile(h3, spikes, 256)
     rows = [CW._inert_work_and_bound(h3, rec, tile, ops, [i], [0, 1, 2, 3]) for i in range(m)]
     inert_work, cap = CW._inert_work_and_bound(h3, rec, tile, ops, list(range(m)), [0, 1, 2, 3])
     assert all(d <= 4 * c for d, c in rows) and inert_work > 2 * cap
-    assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed inert_work")
+    assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
 
 
 def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
@@ -516,7 +516,7 @@ def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
     d, c = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert c < d < 4 * c
     assert CW.check_opened(h3, rec, tile, a, b, ops) == (
-        f"A row 0's replayed inert_work {float(d):.0f} exceeds its cap {float(c):.0f} (the row cap: ρ·its credited cells' "
+        f"A row 0's replayed debit {float(d):.0f} exceeds its cap {float(c):.0f} (the row cap: ρ·its credited cells' "
         "credit)")
 
 

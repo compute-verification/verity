@@ -4,7 +4,7 @@
 #   POUW_CMD='bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
 # Everything but PIECE_DIR's files goes to SERVE_DIR/private/pearlplus, each step's log among it:
-#   1. benchmarks/harness/setup/pearl_c_sm90.sh builds pearl_c_sm90's cubin and its inert work cubin (inert_work/debit_sm90.cubin)
+#   1. benchmarks/harness/setup/pearl_c_sm90.sh builds pearl_c_sm90's cubin and its debit cubin (debit/debit_sm90.cubin)
 #      from this tree, with the SASS gates build.sh enforces; the cubin line also names the harness's .FTZ and FP32 MUFU
 #      gate's verdict (harness_gate.json), which build.sh records and doesn't enforce, its pins being sm_120a's;
 #   2. under `gpu-lease 1` (PEARLPLUS_LEASE_MIN, default 30), `served_passes.py serve` serves PEARLPLUS_SPEC's Pearl-C arm
@@ -34,13 +34,13 @@
 #      (`cp -a`, their modes kept, the symlink replaced once the copy is whole) and the RAM copy removed, a stopped piece
 #      leaving them in RAM, its line naming where;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
-#      records, the rows over inert work cap (V-EX), which the serve's screen can't see, from every tile's words' counts
+#      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
 #      over the whole run, not a sample's, by default exactly while step 4's verdict rejects a run on a sampled row over
 #      its cap: its over-cap rule (PEARLPLUS_OVER_CAP, verify's --over-cap; default the verdict's own) is reject, which
 #      `served_passes.py volunteer-needed` says before anything is built or served, and under it a PEARLPLUS_VOLUNTEER
 #      set empty is refused (exit 2); under uncredited, where the verdict credits such a row nothing, the give-up runs
 #      only where PEARLPLUS_VOLUNTEER is set. With PEARLPLUS_VOLUNTEER=1 (the default where it runs) the counts are the
-#      card's, under a lease of its own: debit.py first checks step 1's inert work cubin against fast_tile on the leased
+#      card's, under a lease of its own: debit.py first checks step 1's debit cubin against fast_tile on the leased
 #      card, and only if it passed the volunteer takes them from it (`--device`), every PEARLPLUS_DEVICE_CHECK-th tile
 #      (default volunteer_pass.CROSS_CHECK) and each tile with a word the card marks non-finite replayed on the CPU too
 #      and held equal. With PEARLPLUS_VOLUNTEER=cpu it replays every tile on the CPU in PEARLPLUS_JOBS processes
@@ -128,7 +128,7 @@ RULE=${NEEDED#* } VOLUNTEER=${PEARLPLUS_VOLUNTEER-auto}
 case ${NEEDED%% *} in
   yes) [ "$VOLUNTEER" = auto ] && VOLUNTEER=1
     if [ -z "$VOLUNTEER" ]; then
-      say "volunteer: refused, so nothing is served: Pearl+'s verdict rejects a run on a drawn row over its inert work cap" \
+      say "volunteer: refused, so nothing is served: Pearl+'s verdict rejects a run on a drawn row over its debit cap" \
         "(over-cap rule $RULE), so the give-up before its coin can't be skipped (PEARLPLUS_VOLUNTEER is empty)"
       exit 2
     fi ;;
@@ -169,7 +169,7 @@ d = json.load(open(sys.argv[1]))
 print("pass" if d.get("ok") else "FAIL, " + str(d.get("error")).split(".cubin: ", 1)[-1][:160])' \
     "${PEARLC_CUBIN%/*}/harness_gate.json" 2>/dev/null) || harness="no harness_gate.json read"
   say "cubin: pearl_c_sm90.sh built it and the SASS gates build.sh enforces passed after $(took "$t") (cubin sha256" \
-    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), inert_work cubin $(sha256sum "${PEARLC_CUBIN%/*}/inert_work/debit_sm90.cubin" | cut -c1-16));" \
+    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), debit cubin $(sha256sum "${PEARLC_CUBIN%/*}/debit/debit_sm90.cubin" | cut -c1-16));" \
     "the harness's .FTZ and FP32 MUFU gate, recorded and not enforced on sm_90a: $harness"
 else
   say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
@@ -289,20 +289,20 @@ if [ -n "$GO" ] && [ -n "$VOLUNTEER" ]; then
     timeout "${VMIN}m" "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" \
       --out "$Q/volunteer.json" --jobs "$JOBS" > "$Q/volunteer.log" 2>&1
   else
-    how=--device INERT_WORK=$(dirname "${PEARLC_CUBIN:-.}")/inert_work/debit_sm90.cubin
+    how=--device DEBIT=$(dirname "${PEARLC_CUBIN:-.}")/debit/debit_sm90.cubin
     # shellcheck disable=SC2016
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-pearlplus} gpu-lease 1 --wait --max-min "$VMIN" -- bash -c '
-      "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/inert_work.json" > "$2/inert_work.log" 2>&1 || {
-        echo "debit.py refused the inert_work cubin on the leased card, so no row is given up: $(tail -1 "$2/inert_work.log")"
+      "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/debit.json" > "$2/debit.log" 2>&1 || {
+        echo "debit.py refused the debit cubin on the leased card, so no row is given up: $(tail -1 "$2/debit.log")"
         exit 3; }
       exec "$1/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$2/passes" \
         --out "$2/volunteer.json" --jobs "$4" --device "$3" ${5:+--device-check "$5"}' \
-      _ "$VENV" "$Q" "$INERT_WORK" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" > "$Q/volunteer.log" 2>&1
+      _ "$VENV" "$Q" "$DEBIT" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" > "$Q/volunteer.log" 2>&1
   fi
   rc=$?
   say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
 elif [ -n "$GO" ]; then
-  say "volunteer: not run: Pearl+'s verdict credits a drawn row over its inert work cap nothing (over-cap rule $RULE), so" \
+  say "volunteer: not run: Pearl+'s verdict credits a drawn row over its debit cap nothing (over-cap rule $RULE), so" \
     "no row is given up before the verifier's coin"
 fi
 if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then

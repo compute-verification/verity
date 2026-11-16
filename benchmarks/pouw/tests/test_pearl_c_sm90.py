@@ -242,8 +242,8 @@ def test_the_resident_inert_work_body_is_words_launches_with_nothing_copied(monk
     body()
     r.dev.log.clear()
     body()
-    assert len(put) == 2 and all(e[0].startswith("inert_work_") for e in r.dev.log)
-    want = [e for e in w.dev.log if e[0].startswith("inert_work_")]
+    assert len(put) == 2 and all(e[0].startswith("debit_") for e in r.dev.log)
+    want = [e for e in w.dev.log if e[0].startswith("debit_")]
 
     def named(d, e, a_at):
         by = {p: n for n, (p, _) in d.live.items()}

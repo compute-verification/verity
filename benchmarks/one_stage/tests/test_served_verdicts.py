@@ -1662,7 +1662,7 @@ def test_a_pearlplus_piece_names_its_provers_give_up_on_the_card_its_cross_check
     the tiles over a cap before and left after. Its replay term is its CPU seconds alone, the card's beside them."""
     _calls, args = live
     served, verified = _pearlplus_run()
-    device = {"cubin": "/s/inert_work/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 9,
+    device = {"cubin": "/s/debit/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 9,
               "bad_tiles": 1, "form_s": 50.0, "device_s": 30.0, "replay_s": 20.0}
     volunteered = {"s": 110.0, "jobs": 32, "ok": True, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
                    "device": device, "tiles": 8000, "over": 6, "left": 0, "voluntary_a": 4, "voluntary_b": 2}
@@ -1687,7 +1687,7 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     work = {**verified["answer"]["public"]["work"], "over_cap_draws": 2, "give_up": 335_544_320}
     verified = {**verified, "answer": {**verified["answer"], "public": {**verified["answer"]["public"], "work": work}}}
     counts = {"tiles": 800_081, "over": 60_631, "left": 7_013, "voluntary_a": 40_417, "voluntary_b": 20_219}
-    device = {"cubin": "/s/inert_work/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 90_917,
+    device = {"cubin": "/s/debit/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 90_917,
               "bad_tiles": 11_093, "form_s": 50.0, "device_s": 30.0, "replay_s": 20.0}
     volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
                    "device": device, **counts}

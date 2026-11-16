@@ -283,7 +283,7 @@ if rest[0] in ("serve", "volunteer", "verify"):
 print(rest[0], "ok")
 '''
 SETUP = '''echo '{"tool": "pearl_c_sm90.sh", "argv": []}' >> "$CALLS"
-mkdir -p "$RESEARCH_RUN_DIR/k/inert_work" && touch "$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin" "$RESEARCH_RUN_DIR/k/inert_work/debit_sm90.cubin"
+mkdir -p "$RESEARCH_RUN_DIR/k/debit" && touch "$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin" "$RESEARCH_RUN_DIR/k/debit/debit_sm90.cubin"
 echo '{"ok": true}' > "$RESEARCH_RUN_DIR/k/harness_gate.json"
 PEARLC_KERNEL=pearl_c_sm90 PEARLC_CUBIN=$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin
 '''

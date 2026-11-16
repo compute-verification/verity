@@ -297,12 +297,12 @@ def inert_bound_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops: C
         bound = 1 + Fraction(tol)
         inert_work, cap = _inert_work_and_bound(scheme, record, tile, ops, rows, cols)
         if inert_work > cap * bound:
-            return f"the replayed inert_work {float(inert_work):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
+            return f"the replayed debit {float(inert_work):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
         widen = row_inert_share_multiple(scheme, k)
         for i in rows if row_inert_bound(scheme) else ():
             inert_work, cap = _inert_work_and_bound(scheme, record, tile, ops, [i], cols)
             if inert_work > cap * widen * bound:
-                return (f"A row {i}'s replayed inert_work {float(inert_work):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
+                return (f"A row {i}'s replayed debit {float(inert_work):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
                         f"cap: {'' if widen == 1 else f'{widen}'}ρ·its credited cells' credit)")
     return None
 

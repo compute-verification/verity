@@ -18,11 +18,11 @@
 # layers for llama32_1b, 16, and one for glm53, whose in-domain linears aren't one layer's); TIMING=0 ends the lease after the
 # capture, timing nothing.  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
-# (VOLUNTEER=1) glm53_passes.py volunteer gives up prefill's and decode's rows over inert-work bound in their records on this
+# (VOLUNTEER=1) glm53_passes.py volunteer gives up prefill's and decode's rows over a debit cap in their records on this
 # machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
-# debit.py's check of the ship's inert work/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
+# debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
 # every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), by default exactly while the
-# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its inert-work bound (`served_passes.py volunteer-needed
+# verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
 # exit 2; otherwise to 0, none), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
@@ -62,7 +62,7 @@ case ${NEEDED%% *} in
 esac
 echo "volunteer-needed: $NEEDED; VOLUNTEER=$VOLUNTEER" > "$O/volunteer-needed.txt"
 if [ "${NEEDED%% *}" = yes ] && [ "$VOLUNTEER" != 1 ] && [ "$VOLUNTEER" != device ]; then
-  echo "volunteer refused rc 2: the verdict rejects a pass on a drawn row over its inert work cap (over-cap rule" \
+  echo "volunteer refused rc 2: the verdict rejects a pass on a drawn row over its debit cap (over-cap rule" \
     "${NEEDED#* }), so the give-up before its coin can't be skipped (VOLUNTEER=$VOLUNTEER)" | tee -a "$O/rc.txt"
   exit 2
 fi
@@ -70,7 +70,7 @@ tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha2
 echo "ship rc $?" >> "$O/rc.txt"
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/pearl_c_sm90.cubin" "$K/" && rm -rf "$K/check" && cp -r "$S/check" "$K/check"
-export INERT_WORK=$S/inert_work/debit_sm90.cubin
+export DEBIT=$S/debit/debit_sm90.cubin
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version > "$O/nvcc.txt" 2>&1
@@ -114,10 +114,10 @@ if [ "$VOLUNTEER" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 elif [ "$VOLUNTEER" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
   # shellcheck disable=SC2016
   gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
-    "$PY" "$D/inert_work.py" --cubin "$INERT_WORK" --out "$O/inert_work.json" > "$O/inert_work.log" 2>&1
-    rc=$?; echo "inert_work rc $rc" >> "$O/rc.txt"
+    "$PY" "$D/debit.py" --cubin "$DEBIT" --out "$O/debit.json" > "$O/debit.log" 2>&1
+    rc=$?; echo "debit rc $rc" >> "$O/rc.txt"
     [ "$rc" = 0 ] || exit "$rc"
-    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$INERT_WORK" \
+    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$DEBIT" \
       --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1'
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
@@ -131,6 +131,6 @@ if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 fi
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-tail -4 "$O/capture.log" "$O/inert_work.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
+tail -4 "$O/capture.log" "$O/debit.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" "$O/timing-h3.log" "$O/whole.log" 2>/dev/null | head -80
 ! grep -qv " rc 0$" "$O/rc.txt"

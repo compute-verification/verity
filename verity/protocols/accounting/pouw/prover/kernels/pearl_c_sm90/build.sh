@@ -9,9 +9,9 @@
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   harness_gate.json    verity/protocols/accounting/pouw/prover/sass_gate.py's verdict on the cubin (.FTZ and FP32 MUFU outside its pinned
 #                        IEEE sequences), recorded, not enforced here: its pins name sm_120a's ptxas arguments alone
-#   inert work/               debit_sm90.cubin: debit_sm90.cu (the words' inert work counts, debit.py's) with the same flags, refused
+#   debit/               debit_sm90.cubin: debit_sm90.cu (the words' debit counts, debit.py's) with the same flags, refused
 #                        unless ptxas reports no spill or stack frame and its every MMA is a QGMMA.64x32x32.F32.E4M3.E4M3
-#                        (inert_work_ptxas.txt, inert_work_mma.txt), in a directory of its own: one Kernel.load reads holds one cubin
+#                        (debit_ptxas.txt, debit_mma.txt), in a directory of its own: one Kernel.load reads holds one cubin
 #   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)
 # ship.sh adds the check and what the card runs it with.  Needs no uv.
 # Usage: bash verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/build.sh [OUT]   (default /tmp/pearl-c-sm90-ship; CUDA names the toolkit, default
@@ -30,11 +30,11 @@ python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm90.sass" "$OUT/sas
 rm "$OUT/pearl_c_sm90.sass"
 POUW_CUDA_BIN="$CUDA/bin" POUW_SASS_GATE_CACHE=none python3 "$ROOT/verity/protocols/accounting/pouw/prover/sass_gate.py" "$OUT/pearl_c_sm90.cubin" \
   --json "$OUT/harness_gate.json" && echo "harness gate: pass" || echo "harness gate: FAIL (recorded in harness_gate.json)"
-B=$OUT/inert_work; mkdir -p "$B"
-"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$B/debit_sm90.cubin" "$HERE/debit_sm90.cu" 2> "$B/inert_work_ptxas.txt" || { cat "$B/inert_work_ptxas.txt" >&2; exit 1; }
+B=$OUT/debit; mkdir -p "$B"
+"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$B/debit_sm90.cubin" "$HERE/debit_sm90.cu" 2> "$B/debit_ptxas.txt" || { cat "$B/debit_ptxas.txt" >&2; exit 1; }
 awk '/stack frame/ && !/ 0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads/ { bad = 1 } END { exit !bad }' \
-  "$B/inert_work_ptxas.txt" && { echo "debit_sm90: a stack frame or a spill" >&2; cat "$B/inert_work_ptxas.txt" >&2; exit 1; }
-"$CUDA/bin/cuobjdump" -sass "$B/debit_sm90.cubin" | grep -oE "[A-Z]*MMA[.A-Z0-9x]*" | sort | uniq -c > "$B/inert_work_mma.txt"
-awk '$2 != "QGMMA.64x32x32.F32.E4M3.E4M3" { bad = 1 } { n += $1 } END { exit bad || n < 36 }' "$B/inert_work_mma.txt" \
-  || { echo "debit_sm90: an MMA other than QGMMA.64x32x32.F32.E4M3.E4M3, or fewer than its 36 atoms:" >&2; cat "$B/inert_work_mma.txt" >&2; exit 1; }
+  "$B/debit_ptxas.txt" && { echo "debit_sm90: a stack frame or a spill" >&2; cat "$B/debit_ptxas.txt" >&2; exit 1; }
+"$CUDA/bin/cuobjdump" -sass "$B/debit_sm90.cubin" | grep -oE "[A-Z]*MMA[.A-Z0-9x]*" | sort | uniq -c > "$B/debit_mma.txt"
+awk '$2 != "QGMMA.64x32x32.F32.E4M3.E4M3" { bad = 1 } { n += $1 } END { exit bad || n < 36 }' "$B/debit_mma.txt" \
+  || { echo "debit_sm90: an MMA other than QGMMA.64x32x32.F32.E4M3.E4M3, or fewer than its 36 atoms:" >&2; cat "$B/debit_mma.txt" >&2; exit 1; }
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm90.cubin pearl_c_sm90.cu"; } > "$OUT/toolchain.txt"

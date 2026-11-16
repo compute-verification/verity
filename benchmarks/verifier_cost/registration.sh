@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # R3's cost against the window's ports: registration.py writes, per N, a valid v1 audit with N more ports (a MoE window's
-# shape; TPEVAL's w13 window at chunk limit 64 is 1,536 members, about 12k ports), and registration-time
+# shape; TPEVAL's w13 window at chunk cap 64 is 1,536 members, about 12k ports), and registration-time
 # (registration/Main.lean, built in a scratch Lake package against the checkout's verifier) times `Docket.check`
 # (the port index) and `Docket.checkRef` (R3 as first written) on it, refusing where their codes differ. `checkRef`
 # runs only up to REF_MAX ports (default 12288). Run from a clone (the build writes the verifier's .lake):

@@ -208,7 +208,7 @@ def test_a_salt_dead_element_over_the_row_inert_bound(exe, tmp_path, monkeypatch
     ``uncredited`` both accept it with that tile, and only it, over its bound; without the term the Python's finds no
     tile over."""
     path = T.proved_pass(tmp_path, H100, spike=300.0)[0]
-    why = "A row 9's replayed inert_work 64 exceeds its cap 41 (the row cap"
+    why = "A row 9's replayed debit 64 exceeds its cap 41 (the row cap"
     over = same(exe, [path], 16, over_cap=VR.REJECT)
     assert over["verdict"] == "reject" and why in over["reason"]
     took = same(exe, [path], 16)
@@ -226,8 +226,8 @@ def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_so
     its row inert-work bound, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
     four blocks, so every element of the row is inert and the tile's inert work is 672, 160 without the term.  The Lean's
     verdicts are the Python's on both, under each ``over_cap`` rule."""
-    cases = [((16, 16), 16, "A row 11's replayed inert_work 160 exceeds", "A row 11's replayed inert_work 160 exceeds"),
-             ((16, 1), 64, "the replayed inert_work 672 exceeds", "the replayed inert_work 160 exceeds")]
+    cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
+             ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
     paths = []
     for tile, draws, why, _ in cases:
         path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
@@ -251,11 +251,11 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
     for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 96, over_cap=rule)
-        assert any(v["tile"] == 14 and "the replayed inert_work 168 exceeds the cap 38" in (v["reason"] or "")
+        assert any(v["tile"] == 14 and "the replayed debit 168 exceeds the cap 38" in (v["reason"] or "")
                    for v in got["verdicts"]), (rule, got["verdicts"])
     monkeypatch.setattr(T.CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     out = VR.verify_passes([path], 96, 1, "test", T.published(path), SOURCE, test_instance=True)
-    assert any(v["tile"] == 14 and "the replayed inert_work 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
+    assert any(v["tile"] == 14 and "the replayed debit 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
 
 
 def test_openings_that_fail(exe, tmp_path):

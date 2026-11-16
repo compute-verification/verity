@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.out:
         with open(a.out, "w") as fh:
             fh.write(json.dumps(out, indent=1) + "\n")
-    print(f"inert_work check {'PASS' if out['ok'] else 'FAIL'}", flush=True)
+    print(f"inert work check {'PASS' if out['ok'] else 'FAIL'}", flush=True)
     return 0 if out["ok"] else 1
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pearl-C's sm_90a ship (the H100 and H200), built off the card: build.sh's tree (the cubin and inert work/, refused unless their
+# Pearl-C's sm_90a ship (the H100 and H200), built off the card: build.sh's tree (the cubin and debit/, refused unless their
 # gates pass), and
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, source.txt (the verity commit and the status of the trees the ship is built from), MANIFEST.sha256

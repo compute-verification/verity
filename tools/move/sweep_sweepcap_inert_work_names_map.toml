@@ -26,6 +26,8 @@ patterns = [
     '''(?<!\w)(?:PEARLPLUS_OVER_CAP|test_cap_is_the_largest_power_of_two_a_statement_holds|test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not|coinPasses_overCap|capCheck_of_check)(?!\w)''',
     '''(?m)^\| Pearl's "debit" and "cap".*$''',
     '''["']debit["']''',
+    '''replayed debit''',
+    '''["']debit_["']''',
     '''["']caps?["']''',
 ]
 
@@ -35,6 +37,7 @@ patterns = [
 
 [rewrite]
 exclude = [
+    "**/*.sh",
     "GLOSSARY.md",
     "tests/lint/test_repo_retired_terms.py",
     "tests/test_retired_terms.py",

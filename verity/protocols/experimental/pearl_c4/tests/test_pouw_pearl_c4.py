@@ -1142,7 +1142,7 @@ def test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows():
     tile = type(tile)((63, 64), range(2))
     ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
     reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 65, 1024, (), (), (63,)), tile, a_rows, b_rows, ops)
-    assert reason is not None and reason.startswith("the replayed inert_work") and "exceeds the cap" in reason
+    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
 
 
 def test_v_ex_past_its_count_inert_bound_fails_the_audit():
@@ -1191,7 +1191,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
     ctx = Context(epoch.salt, u, tr.activation_roots[0], epoch.weight_roots[9])
     ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
     assert CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops) == \
-        "the replayed inert_work 320 exceeds the cap 224 (ρ·the credited cells' credit)"
+        "the replayed debit 320 exceeds the cap 224 (ρ·the credited cells' credit)"
     assert CW.check_opened(s, declare(voluntary_a=va)[0], tile, rows_a[:16], rows_b, ops) == \
         "A row 15 is credited but its own inert work passes R1's bound (ρ·its cell credit)"
     assert CW.check_records(epoch, splits, declare(voluntary_a={3: [7, 15]})) == \

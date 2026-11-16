@@ -68,12 +68,12 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
 @pytest.mark.parametrize("scheme, k, at, voluntary, accepted, why", [
     (H3, 256, [], (), True, None),
     (H3, 256, [(2, 5, 1)], (), True, None),
-    (H3, 256, [(5, 3, 2), (5, 9, 4)], (), False, "A row 5's replayed inert_work 80 exceeds its cap 67 (the row cap: 4ρ"),
+    (H3, 256, [(5, 3, 2), (5, 9, 4)], (), False, "A row 5's replayed debit 80 exceeds its cap 67 (the row cap: 4ρ"),
     (H3, 256, [(5, 3, 2), (5, 9, 4)], (5,), True, None),
     (H3, 256, [(2, 5, 1), (3, 3, 2), (5, 9, 4)], (), True, None),
-    (H3, 256, [(i, 2 * i, i + 1) for i in range(4)], (), False, "the replayed inert_work 160 exceeds the cap 134"),
+    (H3, 256, [(i, 2 * i, i + 1) for i in range(4)], (), False, "the replayed debit 160 exceeds the cap 134"),
     (H3, 1024, [(2, 5, 1)], (), True, None),
-    (H3, 1024, [(5, 3, 2), (5, 9, 4)], (), False, "A row 5's replayed inert_work 80 exceeds its cap 56 (the row cap: ρ"),
+    (H3, 1024, [(5, 3, 2), (5, 9, 4)], (), False, "A row 5's replayed debit 80 exceeds its cap 56 (the row cap: ρ"),
     (H0, 1024, [(5, 3, 2), (5, 9, 4)], (), True, None),
 ], ids=["h3-256-none", "h3-256-one", "h3-256-two-over-4rho", "h3-256-two-voluntary", "h3-256-three-rows",
         "h3-256-tile-over-rho", "h3-1024-one", "h3-1024-two-over-rho", "h0-1024-two"])

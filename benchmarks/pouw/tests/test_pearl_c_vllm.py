@@ -1786,7 +1786,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
     k = 128 with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", spike=300.0)[0]
     p = VR.load(path, published(path))
-    assert _replay_every_tile(p) == {0: "A row 9's replayed inert_work 64 exceeds its cap 41 (the row cap: ρ·its credited "
+    assert _replay_every_tile(p) == {0: "A row 9's replayed debit 64 exceeds its cap 41 (the row cap: ρ·its credited "
                                         "cells' credit)"}
     monkeypatch.setattr(CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     assert _replay_every_tile(p) == {}
@@ -1802,7 +1802,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     coins, before = published(path), json.loads(path.read_text())
     p = VR.load(path, coins)
     failed = _replay_every_tile(p)
-    assert failed and all("replayed inert_work" in r and "the row cap" in r for r in failed.values()), failed
+    assert failed and all("replayed debit" in r and "the row cap" in r for r in failed.values()), failed
     out = VP.volunteer(path, coins, 1)
     after = json.loads(path.read_text())
     assert {x["tile_id"] for x in out["over"]} == set(failed)
@@ -1832,7 +1832,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     coins = published(path)
     p = VR.load(path, coins)
     over = _replay_every_tile(p)
-    assert over and all("replayed inert_work" in r for r in over.values()), over
+    assert over and all("replayed debit" in r for r in over.values()), over
     d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
     (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
     takes = {}
@@ -1847,10 +1847,10 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
                 drawn = {v["tile"] for v in doc["verdicts"]}
-                rejects = answer["verdict"] == "reject" and "replayed inert_work" in answer["reason"]
+                rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
             else:
                 r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
-                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed inert_work" in r["line"]
+                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "

@@ -4,7 +4,7 @@
 # v1 | j10r | v1-live | j10r-live (j10r: --j10r, J10-R's tile unit). A -live arm flips every window's coins from a live
 # gate session (--peer) and needs GATE (the forced-command ssh line to the challenger), CHALLENGER (the window's
 # 127.0.0.1:PORT) and PEER (this node's name in the challenger's /etc/vy/peers). It opens a period at its Commit window
-# (--period, PERIOD, default commit-<UTC>-<leg>: limit 2, the window's session and its sample session, its circuit, sample K,
+# (--period, PERIOD, default commit-<UTC>-<leg>: cap 2, the window's session and its sample session, its circuit, sample K,
 # T and --length, the --declare's fixed length
 # that core's credit holds the window to, and --circuit-files from CIRCUITS: a pouw_h1_circuits --live 32,4 directory
 # of the declared Program, sent with the run), closed once that window's session has ended; it refuses to start while the
