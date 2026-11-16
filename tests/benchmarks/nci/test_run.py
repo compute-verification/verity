@@ -7,10 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent / "benchmarks" / "nci")))
 
-import run  # noqa: E402
-import statement as S  # noqa: E402
-import tiers as T  # noqa: E402
-from verity_bench import kit  # noqa: E402
+import run
+import statement as S
+import tiers as T
+from verity_bench import kit
 
 
 def test_run_writes_the_statements_first_figure_under_its_metrics_id(tmp_path, monkeypatch, capsys):
