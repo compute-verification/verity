@@ -1,7 +1,7 @@
-# The network attester's last two programs under `benchmarks/network_traces/`, into the attester's `prover/` beside
+# The network attester's last two programs under `benchmarks/network_traces/`, into network attestation's `prover/` beside
 # `block_certifier.py` and `scan_period.py`: what `tools/move/layout.py --map tools/move/network_chain_wipe_map.toml`
 # moves and rewrites. `network_attester_chain.py` is the chain's reader of a network attester's run (its deployment
-# held to the auditor's record, its certificates, its certified I/O, N2's link and the rows audit's case), and
+# held to the auditor's record, its attestations, its attested I/O, N2's link and the rows audit's case), and
 # `wipe_egress.py` the count of what can leave a node over a memory wipe's session. Each one's test goes to the
 # prover's tests (`tests/verity/protocols/resource_accounting/network/prover/`). No root moves ([roots] old == new). No file is split or deleted. The format is
 # `layout_map.toml`'s.

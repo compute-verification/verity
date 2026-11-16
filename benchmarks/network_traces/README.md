@@ -31,7 +31,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   is handed the SHA-512 of the network attester's public key and its session (`check --key-sha512 HEX --session HEX`),
   holds the run's deployment record to them and, with `--registrations FILE` and no problem found, writes what it was
   checked under and then each registration it held, and `cost`, which measures a close); `prover/network_attester_chain.py`
-  is the chain's reads of a relay run, and network certification's `prover/network_attester_zk.py` reads the relay's bucket rows
+  is the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
 - **Proofs in zero knowledge.** Each driver, in network certification's `prover/` but for `compile_slice_zk.py` here, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
