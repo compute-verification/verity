@@ -409,8 +409,9 @@ list `tests/lint/allowlists/repo_retired_terms.json`. Identifiers and stored rec
 word map or its format's next version lands; each row below names the ones it covers.
 
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean
-the term beside them, and `tests/lint/test_repo_retired_terms.py` refuses a new use of each row's quoted names (and of the
-identifiers a clause saying "until renamed" lists) in any file it doesn't already allow:
+the term beside them, and `tests/lint/test_repo_retired_terms.py` warns on a new use of each row's quoted names (and of the
+identifiers a clause saying "until renamed" lists) in any file it doesn't already allow. It refuses none: the test is
+bookkeeping (`tests/conftest.py`), and the check's ratchet gate is off the merge gate.
 
 | Old name, where it stays | Term |
 |---|---|
