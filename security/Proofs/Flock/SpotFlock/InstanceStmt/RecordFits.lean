@@ -21,7 +21,8 @@ and from `tabX_coinTree`, and the record fits where its spec's text (`specText`)
 @[expose] public section
 open Flock RecDeploy.VStarNets
 open Properties.Flock.Nets (FixedNetsBuild)
-open FlockComplete (RecordFitsZkAt)
+open FlockComplete (RecordFitsZkAt jsz)
+open Lean (Json)
 
 set_option maxHeartbeats 200000000
 set_option maxRecDepth 200000
@@ -89,7 +90,7 @@ theorem specText_x_lt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     FlockComplete.ZkTables.specText (tabAt r).1 < 2 ^ 55 := by
   have hset := setup_tabAt hn hr
   have hctree : (tabAt r).1.coinTree = some (Zk.coinSpec (t0.tableNames 1)) := by kernel_rfl'
-  have hunit : (tabAt r).1.unitSample = some sampleJ := by kernel_rfl'
+  have hunit : jsz ((tabAt r).1.unitSample.getD Json.null) ≤ 100000 := by decide +kernel
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hset with ⟨-, st, hd, hspec, hsts⟩ | ⟨hc, -⟩
   · rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hidden_tzX] at hd
     have hsp := FlockSoundness.Discharge.Hidden.setupHidden_spec hd
@@ -109,13 +110,12 @@ theorem specText_x_lt (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     have c1 : jsz (Json.arr ((#[tz.table]).map Json.str)) ≤ 1000 := by decide +kernel
     have c2 : jsz ((Zk.coinSpec (t0.tableNames 1)).coins "") ≤ 1000000 := by decide +kernel
     have c3 : jsz (Zk.coinSpec (t0.tableNames 1)).toJson ≤ 1000000 := by decide +kernel
-    have c4 : jsz sampleJ ≤ 10000 := by decide +kernel
     have c5 : tz.table.utf8ByteSize ≤ 1000 := by decide +kernel
     have c6 := domain_size 0 (by decide)
     have c7 := domain_size 1 (by decide)
     rw [hspec] at hctree hunit ⊢
     unfold FlockComplete.ZkTables.specText FlockComplete.ZkTables.coinTreeText
-    rw [hctree, hunit, hG, hD, hD]
+    rw [hctree, hG, hD, hD]
     simp only [Option.getD_some]
     omega
   · exact absurd hc (Nat.lt_irrefl 1)
