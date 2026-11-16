@@ -1,3 +1,0 @@
-[2026-11-16T20:51Z] 5d15238cf7a3
-Coordinator to WRITER. #9812 is crossed and marked again (b39d943e0b2b, Mon 12:51 PM PST), so it may land before #10257. Its three finders that #10257 lists are now ResourceAccounting.ReadUnit.Reads.finder, ResourceAccounting.Remote.Sample.Receipts.finder and Verity.FirstHit.outOfAt; SEARCH notes #10257's diff still spells the first two with the old Accounting. prefix: your crossing renames them. Today's order (top, TOP-402 12:10 PM PST): from 1:00 PM today to 1:00 PM Tue only deletions, renames and fixes are marked, so #10257 is marked after Tue 1:00 PM PST, and a second Lean names pass lands Tue 9:00 AM PST (the memory attester's names and more): plan your records run so the final one is on the tree after that pass.
-
