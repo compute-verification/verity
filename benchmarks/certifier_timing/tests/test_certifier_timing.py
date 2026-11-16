@@ -37,7 +37,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
-from verity.protocols.resource_accounting.network.verifier.network_certifier import (
+from verity.protocols.resource_accounting.network.verifier.network_attester import (
     END, FAIL, NetworkCertifier as Certifier, NetworkCertifierParams as Parameters, cells, read_cell,
 )
 
@@ -736,7 +736,7 @@ async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[i
 
 
 @pytest.mark.parametrize("attack", ["write", "burst"])
-def test_the_network_certifier_releases_each_interval_in_its_own_whatever_the_bits(attack):
+def test_the_network_attester_releases_each_interval_in_its_own_whatever_the_bits(attack):
     certifier, seen, first, coins = asyncio.run(_certify(attack, 96))
     (log,) = certifier.log
     assert log["failed"] is None and log["admitted"] + bench.SCHEDULE["delay"] == first
@@ -749,7 +749,7 @@ def test_the_network_certifier_releases_each_interval_in_its_own_whatever_the_bi
     assert len(offsets) == 96 and channel.measure(offsets)["bits"] == 0.0
 
 
-def test_the_network_certifier_fails_a_delayed_interval_closed():
+def test_the_network_attester_fails_a_delayed_interval_closed():
     certifier, seen, first, coins = asyncio.run(_certify("delay", 96))
     late = min(t for t, bit in coins.items() if bit)
     (log,) = certifier.log

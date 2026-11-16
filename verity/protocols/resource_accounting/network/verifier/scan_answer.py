@@ -9,18 +9,18 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, docket 
 
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
 #: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
-#: (`network_certifier.NetworkCertifier(paced=…)`), yet the host's state after the server's writes for the next
+#: (`network_attester.NetworkCertifier(paced=…)`), yet the host's state after the server's writes for the next
 #: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
 JITTER_BOUND = 2
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network attester run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
+    """A network attester run's file: in the run's directory (`network_attester_serve.py serve --out`), else its ``witness/``
     (the gate's `warden-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
-    raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (network_certifier_serve.py serve writes it)")
+    raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (network_attester_serve.py serve writes it)")
 
 
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:

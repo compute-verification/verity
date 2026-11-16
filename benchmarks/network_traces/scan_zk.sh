@@ -9,8 +9,8 @@
 #      SC_CLASS=w63|w63k4|test|test2 (`prove --class`: test is the certifier tests' class, a CPU window; test2 its two
 #      execution phases)  SC_GROUP=G (`prove --group G`: execution phases 0 … G − 1, each a registration of its
 #      own, started from the record before it)
-#      SC_WARDEN_RUN=DIR (a network_certifier_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
-#      `network_certifier_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
+#      SC_WARDEN_RUN=DIR (a network_attester_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
+#      `network_attester_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the network attester's delay: a void run), SC_PROMPT_MAX and
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean sample --stratified K on
 #      the verifier's coins)
@@ -81,7 +81,7 @@ fi
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the network certifier at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" -m verity.protocols.resource_accounting.network.attester.network_certifier_serve rehearse --fake --ids --out "$W/warden" \
+  "$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
