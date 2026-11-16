@@ -1,0 +1,34 @@
+# SPOT's test of `prove_path.kept_scan` over a network certifier's kept run, to the certifier's traces benchmark: what
+# `tools/move/layout.py --map tools/move/kept_scan_test_map.toml` moves and rewrites.
+#
+# `verity/protocols/proofs/spot/prover/tests/test_kept_scan.py` builds its kept runs with the network certifier's own
+# code and passes its reader of the ingress rows to `kept_scan`. SPOT never imports the certifier, so the test goes where
+# both may be imported, beside the certifier front's other tests (`benchmarks/network_traces/tests/`). No root moves
+# ([roots] old == new). No file is split, added or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/proofs/spot/prover/tests/test_kept_scan.py" = "benchmarks/network_traces/tests/test_kept_scan.py"
+
+[retired]
+paths = ["verity/protocols/proofs/spot/prover/tests/test_kept_scan.py"]
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/check/tests/test_suites.py",
+           "tools/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[split]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`)
+"verity.protocols.proofs.spot.prover.tests.test_kept_scan" = "benchmarks.network_traces.tests.test_kept_scan"

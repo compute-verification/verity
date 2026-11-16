@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""`python3 slot_only.py [--runs DIR] [--marker FILE] [--log FILE] [--dry-run] [--renice N | --auditor]`: on a machine whose MARKER
+exists (deploy.toml installs it on vy-nebius-cpu-1), stop every live `research run` whose workload did not come through a check slot
+(`through_slot`).
+
+With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
+run's processes to N, so the candidates' checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
+reniced.
+
+With `--auditor` (an auditor device's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
+marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
+vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/compose/verifier/live_challenger/auditor.py).
+
+A run outside slot.py lands beside the slots' checks without their lock or cores, and a few such runs take the slice to its
+memory limit beside a merge check. research.remote's launcher refuses such a run before it starts; this
+stops one launched from a shipped tree that predates that refusal: SIGTERM to the workload's process group (status.json's pgid,
+when a member's environment names the run's RESEARCH_RUN_DIR), and to every other process of the run but its runner, which
+then records the run failed. Each stop is a line of LOG. vy-slot-only.timer runs it every minute. Stdlib only: deploy.toml
+installs this file alone.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import signal
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Callable
+
+MARKER = Path("/etc/vy/runs-via-slot")
+#: an auditor device's marker: each line but a comment is a command a `research run` there may be, as shlex splits it
+AUDITOR = Path("/etc/vy/auditor")
+RUNS = Path("/workspace/research/runs")
+LOG = Path("/workspace/monitoring/slot-only.jsonl")
+#: a machine's own copy of slot.py: `research deploy install` places it from `main` (deploy.toml), below one of CHECK_DIRS'
+#: slot.py paths, which is how every reader of a run's command knows slot.py. It stays where every machine has it, below
+#: tools/verity/check/, whatever the tree's own path: a launch names it, so a move of it would name a file no machine has
+#: until each is installed. A run that names a pool takes its slot by this copy where the machine has one (`node_copy`), so
+#: the waiters of a pool's line are held to one copy's rules, whatever tree each run ships
+NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+#: the check's directory in a shipped tree, either spelling, while trees of both are run: node_ops.py and run_records.py, which
+#: are installed or sent alone, hold copies (`check_file` is the match they spell out)
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
+#: slot.py as a run's command names it: a shipped tree's, or the machine's own
+TREE_SLOTS = tuple(d + "slot.py" for d in CHECK_DIRS)
+SLOT_PATHS = (*TREE_SLOTS, NODE_SLOT)
+#: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
+#: `proofs` pool), so a lane's runs never queue behind the merge checks
+POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
+LOCKS, POOL_NAME = "/workspace/research/locks", re.compile(r"[A-Za-z0-9_-]+")
+#: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills
+#: (cpu-1's /workspace/research/locks/research/slots: 8-53, cores no check slot holds), `proofs` is proofs' Lean pool,
+#: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one), `soundness` is soundness's
+#: Lean pool (cpu-4, s0-s11)
+POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots",
+         "network": "/workspace/research/locks/network/slots", "soundness": "/workspace/research/locks/soundness/slots"}
+#: how long a timed `research run --pool` waits in its pool's line for a slot by default (slot.py --wait-max; `--pool-wait`): an
+#: hour would lose a run its place in a saturated pool each hour
+POOL_WAIT_S = 14400
+
+
+def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
+            twin: str | None = None) -> list[str]:
+    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
+    LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
+    shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
+    (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
+    isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
+    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S). `twin` is slot.py's --twin: the
+    pair a run `--on auto` placed carries, so a late twin on another machine can take the run from this line (`late_twin`)."""
+    if not POOL_NAME.fullmatch(pool):
+        raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
+                         f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
+    limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
+    pair = ["--twin", twin] if twin else []
+    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *pair, "--", "nice", "-n", "19",
+            *command]
+
+
+def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:
+    """`in_pool`'s command for a run that carries a pair, as its late twin on another machine runs it: the pair names
+    ``home``, the first's machine (slot.py's `--twin PAIR@HOME`: the twin runs only if it claims the pair there first), and it
+    waits in its own line no longer than ``wait_s``. ValueError for a command with no pair."""
+    end = command.index("--") if "--" in command else 0
+    opts = command[:end]
+    if not through_slot(command) or "--twin" not in opts:
+        raise ValueError("the run carries no pair (slot.py's --twin), so no twin of it could take its place")
+    out = list(command)
+    at = opts.index("--twin") + 1
+    out[at] = f"{out[at].partition('@')[0]}@{home}"
+    if "--wait-max" in opts:
+        out[opts.index("--wait-max") + 1] = f"{max(wait_s, 1):g}"
+    else:
+        out[end:end] = ["--wait-max", f"{max(wait_s, 1):g}"]
+    return out
+
+
+def pool_slots(pool: str) -> str:
+    """The slots file of `pool` on a node: one of POOLS, else a pool that node keeps of its own under LOCKS (`POOL`'s form)."""
+    return POOLS.get(pool) or f"{LOCKS}/{pool}/slots"
+
+
+def node_copy(command: list[str]) -> list[str] | None:
+    """A command that names a pool and then the shipped tree's slot.py (`in_pool`'s words, however it was built), with the
+    machine's own copy (NODE_SLOT) in the tree's place; None for any other command. A recorded check (`check.py --record
+    --on`) names its pool in the run's environment and no pool in its command, so it keeps its tree's slot.py."""
+    if command[:1] == ["env"] and through_slot(command) and command[3] in TREE_SLOTS:
+        return [*command[:3], NODE_SLOT, *command[4:]]
+    return None
+
+
+def check_file(*names: str) -> re.Pattern[str]:
+    """A command's text naming one of the check's files ``names`` (`check.py`, `slot.py`) under either of CHECK_DIRS, as a whole
+    path, which a longer name (`slot.py.bak`, `tools/checks/slot.py`) is not."""
+    dirs, files = "|".join(map(re.escape, CHECK_DIRS)), "|".join(map(re.escape, names))
+    return re.compile(rf"(?<![\w.-])(?:{dirs})(?:{files})(?![\w.-])")
+
+
+def through_slot(command: object) -> bool:
+    """Whether a workload command is `[env CHECK_SLOTS=POOL] python3 SLOT [OPTS] -- CMD...`, SLOT one of SLOT_PATHS, the way
+    check.py's SLOT_WRAP, train.sh and `research queue ready --on` send a check: CMD then runs under a slot's lock and cores.
+    `slot.py --status` is not a run."""
+    if not (isinstance(command, list) and all(isinstance(c, str) for c in command)):
+        return False
+    if command[:1] == ["env"] and len(command) > 1 and POOL.fullmatch(command[1]):
+        command = command[2:]
+    if len(command) < 4 or command[0] != "python3" or command[1] not in SLOT_PATHS or "--" not in command[2:]:
+        return False
+    return command.index("--", 2) < len(command) - 1
+
+
+def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) -> str:
+    """Why the launcher refuses a run outside slot.py here, naming the `research run --pool` pools this machine has, so a run sent
+    without `--pool` learns the flag that sends it, rather than wrapping slot.py by hand."""
+    have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
+    send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
+            if have else "send it as `python3 tools/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+    return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
+
+
+def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:
+    """The commands an auditor device runs, one a line of its marker; none when the marker can't be read, so nothing runs."""
+    if not marker.exists():
+        return []
+    try:
+        lines = marker.read_text().splitlines()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"slot_only: {marker} unread, so no auditor command runs ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return []
+    return [shlex.split(ln) for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
+    """Whether a workload command is exactly one of the auditor device's commands: no wrapper, pool or extra argument."""
+    return isinstance(command, list) and command in auditor_commands(marker)
+
+
+def auditor_refusal(marker: Path = AUDITOR) -> str:
+    allowed = " or ".join(f"`{shlex.join(c)}`" for c in auditor_commands(marker)) or "nothing (its list is empty or unreadable)"
+    return (f"this machine is an auditor device ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
+            f"take other work to another machine")
+
+
+def _json(p: Path) -> dict:
+    if not p.exists():
+        return {}
+    try:
+        d = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        print(f"slot_only: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def _proc_env(pid: int, proc: Path) -> str | None:
+    try:
+        env = (proc / str(pid) / "environ").read_bytes()
+    except OSError as e:
+        if (proc / str(pid)).exists():
+            print(f"slot_only: pid {pid}'s environment unread, so it is no run's ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return None
+    for kv in env.split(b"\0"):
+        if kv.startswith(b"RESEARCH_RUN_DIR="):
+            return kv.split(b"=", 1)[1].decode(errors="replace")
+    return None
+
+
+def _pgid(pid: int, proc: Path) -> int | None:
+    try:
+        stat = (proc / str(pid) / "stat").read_text()
+    except OSError as e:
+        if (proc / str(pid)).exists():
+            print(f"slot_only: pid {pid}'s stat unread, so its group is unknown ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        return None
+    return int(stat[stat.rindex(")") + 2:].split()[2])
+
+
+def members(run_dir: Path, proc: Path = Path("/proc")) -> list[int]:
+    """Every pid whose environment names ``run_dir`` as its RESEARCH_RUN_DIR."""
+    want = str(run_dir.resolve())
+    return sorted(int(x) for x in os.listdir(proc) if x.isdigit() and _proc_env(int(x), proc) == want)
+
+
+def offenders(runs: Path, allowed=through_slot) -> list[dict]:
+    """Each live run under ``runs`` (status.json `running`) whose job.json command is not `allowed`."""
+    out = []
+    for st_path in sorted(runs.glob("*/status.json")):
+        d = st_path.parent
+        st = _json(st_path)
+        if st.get("state") != "running":
+            continue
+        command = (_json(d / "job.json").get("execution") or {}).get("command")
+        if command is None or allowed(command):
+            continue
+        out.append({"run": d.name, "dir": d, "pgid": st.get("pgid"), "command": command,
+                    "runner_pid": _json(d / "launch.json").get("runner_pid")})
+    return out
+
+
+def _sent(kill: Callable[[int, int], None], pid: int, sig: int) -> bool:
+    """Whether ``kill(pid, sig)`` reached the process: False once it is gone."""
+    try:
+        kill(pid, sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = False,
+         why: str = "not through a check slot (slot.py)") -> dict:
+    """SIGTERM the run's processes but its runner; the record of what was sent."""
+    pids = [p for p in members(o["dir"], proc) if p != o["runner_pid"]]
+    groups = {_pgid(p, proc) for p in pids}
+    sent = [p for p in pids if dry_run or _sent(kill, p, signal.SIGTERM)]
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+            "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
+
+
+def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = False) -> dict:
+    """Renice every process of the run to `nice` (its runner too); the record of the pids it moved."""
+    moved = []
+    for p in members(o["dir"], proc):
+        try:
+            if os.getpriority(os.PRIO_PROCESS, p) < nice:
+                if not dry_run:
+                    os.setpriority(os.PRIO_PROCESS, p, nice)
+                moved.append(p)
+        except (ProcessLookupError, PermissionError) as e:
+            print(f"slot_only: process {p} not reniced ({type(e).__name__})", file=sys.stderr, flush=True)
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+            "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="slot_only.py", description=__doc__.splitlines()[0])
+    ap.add_argument("--runs", type=Path, default=RUNS)
+    ap.add_argument("--marker", type=Path, default=MARKER)
+    ap.add_argument("--log", type=Path, default=LOG)
+    ap.add_argument("--dry-run", action="store_true", help="print what it would stop, signal nothing")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--renice", type=int, default=None, metavar="N", help="renice such runs to N instead of stopping them")
+    mode.add_argument("--auditor", action="store_true", help="stop every run whose command is not one of the marker's lines")
+    a = ap.parse_args(argv)
+    if not a.marker.exists():
+        return 0
+    allowed = (lambda c: auditor_allows(c, a.marker)) if a.auditor else through_slot
+    for o in offenders(a.runs, allowed):
+        if a.renice is not None:
+            rec = renice(o, a.renice, dry_run=a.dry_run)
+        elif a.auditor:
+            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor device's {a.marker}")
+        else:
+            rec = stop(o, dry_run=a.dry_run)
+        if not rec.get("sigterm" if a.renice is None else "reniced"):
+            continue
+        line = json.dumps(rec, sort_keys=True)
+        print(line, flush=True)
+        if not a.dry_run:
+            a.log.parent.mkdir(parents=True, exist_ok=True)
+            with a.log.open("a") as f:
+                f.write(line + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,78 @@
+{
+ "schema": "telemetry/job/v0.1",
+ "written_utc": "2026-09-21T14:57:35.946Z",
+ "writer_stream": "ee56316268c7:5999:1781353486",
+ "ownership": {
+  "project": "fixtures",
+  "task": null,
+  "job": "oom_own",
+  "attempt": 1,
+  "lane": "mprof",
+  "generation": 1
+ },
+ "computation": {
+  "tree_sha": null,
+  "tree_sha_reason": "not supplied",
+  "release_tag": null,
+  "workload_digest": null,
+  "workload_digest_reason": "not supplied",
+  "stage": "fx.oom",
+  "inputs": [],
+  "profile": {}
+ },
+ "environment": {
+  "pod_id": null,
+  "hostname": "ee56316268c7",
+  "boot_id": "fd076f05",
+  "kernel": "6.8.0-85-generic",
+  "machine": "x86_64",
+  "python": "3.11.10",
+  "cpu_count": 2,
+  "cpu_count_host": 192,
+  "host_memory_total_bytes": 810722201600,
+  "host_class": "cpu",
+  "gpu": {
+   "available": false,
+   "reason": "nvidia-smi not found",
+   "devices": []
+  },
+  "cgroup": {
+   "version": 2,
+   "memory_max_bytes": 3999997952,
+   "effective_memory_max_bytes": 3999997952
+  },
+  "limits_visibility": []
+ },
+ "execution": {
+  "command": [
+   "python3",
+   "hog.py",
+   "--step-mib",
+   "256"
+  ],
+  "command_redacted": [],
+  "declared_outputs": [],
+  "timeout_s": 300.0,
+  "reservation": {
+   "gpu": null,
+   "host_memory_bytes": null
+  },
+  "policy_version": "r17-rules-1",
+  "policy_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+ },
+ "telemetry": {
+  "schema": "telemetry/v0.1",
+  "collector_version": "0.1.1",
+  "classifier_version": "0.1.2",
+  "instruments": [
+   "cgroup",
+   "process"
+  ],
+  "instruments_unavailable": {
+   "gpu": "nvidia-smi not found"
+  },
+  "cadence_s": 1.0,
+  "pss_every_s": 5.0,
+  "level": 0
+ }
+}

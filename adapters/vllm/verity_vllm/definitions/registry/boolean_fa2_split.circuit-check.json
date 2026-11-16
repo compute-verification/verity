@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "Fa2SplitEnd_v2{D=16,INV=Fa2InvSum_v2,SCALE=0.25}": {
+   "and": 48677,
+   "type": "4d1fcddb7e9b9833d047e2f05cdeeba9912f168fb1742c380fa660dd0e564b00fea9515c6e1269632e6732db3ffe696dde4ec27529ae83cec3ff9c00d0895bda"
+  }
+ }
+}

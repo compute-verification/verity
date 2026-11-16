@@ -1,0 +1,16 @@
+# Commitments and sampling as executable Lean: frame-v3, the tree every committed value is opened from (`FV3`), and
+# the challenger's coins sampling the units with exact samplers. Lean core and the bytes and hashes below
+# (`core_base`). The declarations keep the namespace `Flock`.
+name = "core_commitments"
+defaultTargets = ["Commitments"]
+
+[leanOptions]
+autoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_base"
+path = "../../circuits/base"
+
+[[lean_lib]]
+name = "Commitments"

@@ -1,0 +1,7 @@
+{
+ "digests": {
+  "DsaTopKReadRowsCut_v1{N=12,TOPK=2,BLOCK=4,READ=EmbeddingRead_v1{V=16,H=1}}": {
+   "sha512": "24598b2dd44753cc48c8eedbffc031657da0a8244d6cbd9f779211b04dbeb2b6b5dcb734f30c5b6b3a2443790695dcf5ebc3aa41b229205c889c8f967c8c389a"
+  }
+ }
+}

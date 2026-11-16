@@ -1,0 +1,189 @@
+# core_protocol: the interface every core protocol implements
+
+This is a Lake package (`CoreProtocol`, namespace `Core`). Its modules import the base package (`core_base`) for
+canonical JSON, bytes and hashes, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib,
+no sample and nothing of Flock's verifier. Its lakefile still requires the commitments' package (`core_commitments`),
+which no module here imports. A protocol's port is its own package. It requires this one by path, defines one
+`Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
+
+## The interface (`CoreProtocol/Protocol.lean`)
+
+| field | type | what it is |
+| --- | --- | --- |
+| `id` | `String` | the protocol id and version, e.g. `verity/pouw/v1` |
+| `Params`, `params` | `Json → V Params` | the public parameters (k, Δ, the sampling design), read from canonical JSON |
+| `Commitment`, `commitment` | `ByteArray → V Commitment` | what the prover committed to before the challenge |
+| `digest` | `Commitment → ByteArray` | the digest that binds it, which a record or certificate cites |
+| `Evidence`, `evidence` | `ByteArray → V Evidence` | everything else the check reads: record, transcript, proofs, certificate |
+| `check` | `Params → Commitment → Evidence → Outcome Public Profile` | the protocol, one total function |
+| `Public`, `publicJson` | `Public → Json` | what acceptance makes public |
+| `Profile`, `profileJson` | `Profile → Json` | what acceptance established (`Core.Integrity` for protocols that sample) |
+
+An `Outcome` is `accept published profile`, `reject reason` or `undecided reason`. `undecided` means the evidence
+doesn't settle the question (no certificate yet). It doesn't reject the prover, and nothing is made public. Public
+outputs and the profile exist only in the `accept` case.
+
+`Protocol.answer P params commitment evidence` is the only entry point. It requires the parameters to be canonical
+JSON (`Core.canonicalJson`, the bytes `Flock.canon` writes), turns every decoding failure into a rejection prefixed
+`params: `, `commitment: ` or `evidence: `, and runs `check`. Every input gets a verdict. `canonicalJson` reads its
+text with the total parser (`Flock.JsonParse.parse`), so what it accepts is exactly the canonical texts of JSON values
+whose numbers are integers (`Verity.CanonicalJson.canonicalJson_accepts`, `security/Proofs/Core/CanonicalJson.lean`).
+`core-canonical-json-difftest` (`CoreProtocol/CanonicalJsonDifftest.lean`) serves its answer under that parser and
+under Lean core's, which `tests/tools/difftest/test_canonical_json_port.py` holds alike and to a Python mirror, value
+and refusal text; the difftest harness builds it by name. `Answer.canonical` writes the outcome's one canonical form:
+
+```json
+{"commitment":"<hex digest, or null when the commitment didn't decode>","profile":<JSON or null>,
+ "protocol":"<id>","public":<JSON or null>,"reason":"<string or null>","verdict":"accept|reject|undecided"}
+```
+
+Canonical JSON has integers only. Write probabilities and δ as `Core.Ratio` strings (`"n/d"` in lowest terms, or `"n"`,
+Python's `str(Fraction)`). `publicJson` never writes `null`.
+
+A protocol that consumes another's answer reads it with `Answer.ofJson` and its profile with `Integrity.ofJson`. Each
+accepts only what `toJson` writes (re-encoding must give the same canonical JSON) and only the shapes `answer` returns:
+an `accept` has no reason and both its public outputs and its profile, while a refusal has a reason and neither.
+
+`Protocol`, `Profile` and `Ratio` are the package's spec (`layers` in `lean-audit.json`): a property's statement may read
+them, and they import only Lean's JSON, the base package's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
+profile's types derive `DecidableEq`.
+
+## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
+
+- `<exe> id` prints the id.
+- `<exe> check PARAMS COMMITMENT EVIDENCE` reads three files, prints the outcome line, and exits 0, 1 or 2 for
+  accept, reject or undecided.
+- `<exe> serve` reads one case per stdin line, `{"commitment":"<hex>","evidence":"<hex>","params":<JSON>}` in canonical
+  JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
+- A usage error exits 64, and an outcome that can't be written canonically exits 70.
+
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: `canonicalJson`, which reads its whole text through it with the total parser (`Flock.JsonParse.parse`),
+refuses a canonical text of `2^32` characters or more, and `Flock.unhex` reads a prefix of one. `Canonical`'s readers
+are held to them by `#guard`s over texts at every edge of canonical JSON, a test and not a theorem.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
+
+## Blobs (`CoreProtocol/Blobs.lean`)
+
+A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
+records and proofs) is a `Core.BlobProtocol`: a `Protocol` with `checkBlobs`, which also takes `Core.Blobs`. The caller
+passes the bytes, and the verifier holds each under the SHA-512 it computes itself, so `Blobs.get digest` finds a blob
+only by the digest of its own bytes. The check names each file by a digest its parameters or evidence carry, and the
+lookup is the check that the file is the committed one. `BlobProtocol.answer` is `Protocol.answer` with `checkBlobs` on
+the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition of `Protocol`s takes it unchanged.
+`Protocol` and `Protocol.answer` don't change, and a protocol that reads no blobs needs none of this.
+
+`BlobProtocol.main`'s command line is `Protocol.main`'s, with `check PARAMS COMMITMENT EVIDENCE [BLOB ...]` (each blob a
+file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
+the toy protocol whose guards cover both.
+
+## Records (`CoreProtocol/Record.lean`)
+
+`Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
+coins or sample, a proof, a verdict), `{body, kind, prev, schema, seq, session, sig}`. `body` is the message, `kind` its
+kind under `schema` (the protocol's entry schema and version), `session` its session or `null`, and entry `i` has
+`seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
+SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
+sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
+signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/channel.py`'s `Record` is its Python.
+
+## The profile (`CoreProtocol/Profile.lean`)
+
+`Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
+`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
+protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
+own profile type and JSON.
+
+## The profile (`CoreProtocol/Profile.lean`)
+
+`Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
+`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
+protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
+own profile type and JSON.
+
+## The registration log
+
+The registration log's check (`Core.Registration`) is registration's, the accounting protocol that runs once
+before any challenge: [`../registration/README.md`](../registration/README.md). The example Site
+its example registers, which `Account`'s example reads too, is here (`CoreProtocol/SiteExample.lean`).
+
+## What a protocol accounts for (`CoreProtocol/Account.lean`)
+
+`Core.Account` is a value beside a `Core.Protocol`, not a field of it. For each amount the protocol publishes
+(`Account.Amount`) it states the part of the registered hardware the amount is about (`Account.Part`: the devices'
+compute, the memory of some tiers, the read rate of some tiers' memory, a link's egress) and the form it is published
+in: its key, in the public output or the profile (`Account.Key`), its unit, the side of the capacity it bounds (the
+verified amount from below, the free amount from above), a moment or the keys of its span, the key of its error and of
+the share the error leaves out, how a period's error forms from its answers' (`Account.Pool`), the key of the capacity
+an answer carries, what an answer holds when nothing is certified, and the terms the error names and does not price.
+`Account.witness` is the key under which an accepted answer names the key its check ran under, a key of one of the
+auditor's devices on the site; a protocol that needs no such device names none, and its answers are of the whole site.
+An answer names no location and no registration's head: which hardware it is about is what the device holding its key
+(`Site.holder`) reaches, a network attester's links to its host (`Site.hostLinks`) for egress and a memory attester's
+hosts (`Site.hostsOf`) for compute, memory and reads, and an answer whose key no device or more than one holds counts
+for nothing. `Account.rests` names the answers a protocol's own rest on, those its check read as given and did not
+verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted
+answer `rows` is given.
+
+Memory's accounts state more, which `rows` does not read yet:
+- the key of the step at which a moment amount held (`Amount.held`);
+- memory held throughout a span whose steps the answer names (`Amount.FormedHeld`);
+- the tiers an answer names, by its protocol's labels mapped to the Site's tiers (`Amount.tiers`, `Amount.labels`,
+  `Amount.TiersNamed`);
+- the figures an answer was computed at, each covering the registration's (`Amount.params`, `Amount.Covers`);
+- groups of metrics that are alternative forms of one bound, never added (`Account.alternatives`,
+  `Account.AlternativesFormed`);
+- an accepted answer that stands for a line of record a verifier gives outside `Core.Protocol` (`Account.OfLine`);
+- errors stated exactly, as ratio text (`Account.ErrorsExact`).
+
+`Account.rows` reads a Site, the auditor, the period, the answers and their accounts into the accounting rows
+(`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). Which registration the Site is, and
+which answers are the period's, is the composite's: it reads the head once, from each window's record. Each amount gets
+its rows for each device its answers were witnessed by, or for the whole site, and rows at one place under different
+keys are separate audits of the same hardware and are never added. A row's capacity is a function of the Site
+(`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer. A flow
+has one row for the period. Its answers' amounts add only over spans shown disjoint: an answer names the steps of its
+span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a verified
+amount is the largest total over answers of one series whose named spans share no step, or the largest amount of an
+answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted answer and
+one for the period. The period's error, of a flow and of a moment alike, is its answers' errors summed, or the one
+answer's where the amount's error is stated once for the period, which two answers cannot both do. An error of 1 or more
+prints "no bound at this period", and what no accepted answer covers is "not audited: charged at capacity", as is the
+memory of a device's sheet that none of its leaves holds.
+`Account.Example.account` is the example protocol's value; every other protocol's is written with that
+protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
+`Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
+
+## Properties
+
+A protocol's properties go in `security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
+actual parameters, every input covered and assumptions as named `Prop`s. They, not the
+port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
+`Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
+- It requires `security` (the spec, Definitions) and, by path, the code it states properties of. It never requires
+  `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
+- A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
+  `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. SPOT's `audit_profile`
+  (`Proofs/Flock/Soundness/Audit/OneStage.lean`) is one such result.
+- Each protocol adds its root and its `[[require]]` to that one lakefile.
+
+`CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
+round trips and refusals; `core-protocol-example` runs it.
+
+## Ticks, spans and monitoring periods (`CoreProtocol/Period.lean`)
+
+The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
+verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
+clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
+spans, and for each execution block the boundaries that cut its span again, into its `samplingSpans`; `valid` holds
+when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
+`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
+that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.protocol` mirrors it in
+Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
+harness, which builds it by name.

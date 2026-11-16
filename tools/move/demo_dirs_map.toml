@@ -1,0 +1,77 @@
+# The demo directories' last files: what `tools/move/layout.py --map tools/move/demo_dirs_map.toml` moves and rewrites.
+#
+# A demo is one file in `demos/`, the configuration `verity run` reads, and holds no code (ARCHITECTURE.md, section 6), so
+# nothing else stays in `demos/`:
+# - what drives vLLM for the served run (its launcher, placement, endpoint, load, Commit and the stored workload's sums)
+#   goes to the vLLM adapter, `adapters/vllm/tools/served_run/`, and its test to the adapter's `tests/tools/`;
+# - the onsite served window's table, which `verity run`'s `REGISTRY` loads, goes beside `run.py` in `verity_cli`;
+# - the two demo-minutes metrics, with their readers, settings and tests, go to one benchmark, `benchmarks/demo_minutes/`
+#   (the onsite reader is `onsite_minutes.py` there, beside the remote one it runs);
+# - the lifecycle workload, which is not a demo, goes beside `verity run`'s tests, `tools/verity/cli/tests/lifecycle/`;
+# - each demo's `demo.toml` (the doneness `demos/README.md`'s table now gives), the lifecycle's `run.py` (the
+#   `verity demo` runner that is gone) and the two pyprojects whose content folds into their new suites' are deleted.
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+[paths]
+"demos/onsite_served/served_table.py" = "tools/verity/cli/verity_cli/served_table.py"
+"demos/onsite_served/minutes.py" = "benchmarks/demo_minutes/onsite_minutes.py"
+"demos/onsite_served/tests/test_onsite_minutes.py" = "benchmarks/demo_minutes/tests/test_onsite_minutes.py"
+"demos/vllm/minutes.py" = "benchmarks/demo_minutes/minutes.py"
+"demos/vllm/settings.py" = "benchmarks/demo_minutes/settings.py"
+"demos/vllm/metrics.toml" = "benchmarks/demo_minutes/metrics.toml"
+"demos/vllm/pyproject.toml" = "benchmarks/demo_minutes/pyproject.toml"
+"demos/vllm/tests/test_minutes.py" = "benchmarks/demo_minutes/tests/test_minutes.py"
+"demos/vllm/README.md" = "adapters/vllm/tools/served_run/README.md"
+"demos/vllm/run.sh" = "adapters/vllm/tools/served_run/run.sh"
+"demos/vllm/placement.toml" = "adapters/vllm/tools/served_run/placement.toml"
+"demos/vllm/serve.sh" = "adapters/vllm/tools/served_run/serve.sh"
+"demos/vllm/serve_load.py" = "adapters/vllm/tools/served_run/serve_load.py"
+"demos/vllm/commit.sh" = "adapters/vllm/tools/served_run/commit.sh"
+"demos/vllm/published.sh" = "adapters/vllm/tools/served_run/published.sh"
+"demos/vllm/workloads/SHA256SUMS" = "adapters/vllm/tools/served_run/workloads/SHA256SUMS"
+"demos/vllm/tests/test_run.py" = "adapters/vllm/tests/tools/test_served_run.py"
+"demos/lifecycle/README.md" = "tools/verity/cli/tests/lifecycle/README.md"
+"demos/lifecycle/lifecycle.py" = "tools/verity/cli/tests/lifecycle/lifecycle.py"
+"demos/lifecycle/onsite.py" = "tools/verity/cli/tests/lifecycle/onsite.py"
+"demos/lifecycle/remote.py" = "tools/verity/cli/tests/lifecycle/remote.py"
+"demos/lifecycle/tests/test_lifecycle.py" = "tools/verity/cli/tests/lifecycle/test_lifecycle.py"
+[retired]
+paths = ["demos/lifecycle/", "demos/onsite_served/", "demos/vllm/"]
+[drop]
+paths = ["demos/lifecycle/demo.toml", "demos/lifecycle/pyproject.toml", "demos/lifecycle/run.py", "demos/onsite_served/README.md", "demos/onsite_served/demo.toml", "demos/onsite_served/metrics.toml", "demos/onsite_served/pyproject.toml", "demos/vllm/demo.toml"]
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "**/*.lean", "tests/tree.toml", "**/*.cu",
+           "**/*.cuh", "**/*.cpp", "**/*.h",
+           "**/*.c"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+[modules]
+"demos.lifecycle.lifecycle" = "tools.verity.cli.tests.lifecycle.lifecycle"
+"demos.lifecycle.onsite" = "tools.verity.cli.tests.lifecycle.onsite"
+"demos.lifecycle.remote" = "tools.verity.cli.tests.lifecycle.remote"
+"demos.lifecycle.tests.test_lifecycle" = "tools.verity.cli.tests.lifecycle.test_lifecycle"
+"demos.onsite_served.minutes" = "benchmarks.demo_minutes.onsite_minutes"
+"demos.onsite_served.served_table" = "verity_cli.served_table"
+"demos.onsite_served.tests.test_onsite_minutes" = "benchmarks.demo_minutes.tests.test_onsite_minutes"
+"demos.vllm.minutes" = "benchmarks.demo_minutes.minutes"
+"demos.vllm.serve_load" = "adapters.vllm.tools.served_run.serve_load"
+"demos.vllm.settings" = "benchmarks.demo_minutes.settings"
+"demos.vllm.tests.test_minutes" = "benchmarks.demo_minutes.tests.test_minutes"
+"demos.vllm.tests.test_run" = "adapters.vllm.tests.tools.test_served_run"

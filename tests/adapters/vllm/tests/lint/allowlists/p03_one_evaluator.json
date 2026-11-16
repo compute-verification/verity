@@ -1,0 +1,6 @@
+{
+  "rule": "P3 (one evaluator interface, one challenge derivation)",
+  "entries": [
+    {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "rng", "symbol": "admit", "detail": "numpy.random.default_rng"}
+  ]
+}

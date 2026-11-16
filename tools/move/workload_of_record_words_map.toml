@@ -1,0 +1,32 @@
+# "row of record" for a workload is retired outside `adapters/vllm/`: GLOSSARY.md's row of "row" keeps it there, in
+# vLLM's own files and its `manifests/records.json`, until vLLM's workloads move, and names it "a workload of record"
+# everywhere else. This map renames the workload sense in the files that read vLLM's workloads of record: the one-stage
+# audit's served compare, PoUW's fixed-length public item and its test, and the post-train neutrality check.
+#
+# Left, in another sense: the exfiltration planner's "rows of record" (`benchmarks/harness/`,
+# `benchmarks/exfiltration/`, `benchmarks/spot_figures/`), the JSON rows of runs labelled `run_of_record`; the torch
+# adapter's arrays with "no rows of records". Left by bytes: `tools/research/.../policy/RULES.template.md`, whose render `tele check-rules` compares
+# with a RULES.md kept outside this repository.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/one_stage/README.md", "benchmarks/one_stage/a10.py", "benchmarks/one_stage/a5_glm53_commit.sh",
+         "benchmarks/one_stage/served_compare.py", "benchmarks/one_stage/served_verdicts.sh",
+         "benchmarks/one_stage/tests/test_served_verdicts.py",
+         "verity/protocols/accounting/pouw/verifier/credit.py", "verity/protocols/accounting/pouw/verifier/window.py",
+         "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Public.lean",
+         "benchmarks/pouw/tests/test_served_zk.py", "tools/check/post_train.py", "tools/check/tool.py"]
+words = { "row of record" = "workload of record", "rows of record" = "workloads of record" }
+
+[[words_in]]
+files = ["benchmarks/pouw/tests/test_served_zk.py"]
+words = { "test_rows_of_record_serve_a_public_fixed_length" = "test_workloads_of_record_serve_a_public_fixed_length" }
+
+[rewrite]
+exclude = ["tools/move/**", "*.patch", "**/TRUSTED.sha256", "**/*.sha256", "uv.lock", "**/*.lock",
+           "GLOSSARY.md", "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**",
+           "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+           "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+           "adapters/vllm/verity_vllm/definitions/registry/b1.py"]

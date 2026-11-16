@@ -1,0 +1,8 @@
+[Unit]
+Description=order the OOM killer's picks by each live research run's memory use against its reservation (pods/nebius/oom_order.py)
+
+[Service]
+Type=oneshot
+TimeoutStartSec=1min
+OOMScoreAdjust=-900
+ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/oom_order.py
