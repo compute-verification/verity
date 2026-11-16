@@ -42,6 +42,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
 public import Proofs.Flock.Claims.Complete.ZkTables.Round1
 public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.Complete.ZkTables.Accepts
+public import Proofs.Flock.Claims.Complete.ZkTables.Sha512
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
@@ -112,7 +113,8 @@ mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` proves three o
 `Zk.Level0Verifier` the fourth, level 0's verifier premise (`Level0.Verifier`, at both statement versions), and
 `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification alone. `Accepts` states it so:
 `RepShapedZk` holds (`repShapedZk`), masked completeness holds (`complete_masked`), and so does an accepted run of the
-honest masked prover at a ready statement in scope (`accepts_masked`).
+honest masked prover at a ready statement in scope (`accepts_masked`); `Sha512` states both at SHA-512, where
+`Claims.Out64` holds (`complete_masked_sha512`, `accepts_masked_sha512`).
 For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,

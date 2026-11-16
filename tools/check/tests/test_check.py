@@ -2125,6 +2125,66 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
 
 
+#: a crashed twin launch whose exception was raised from another (`raise X from e`) or while handling one: one header per link
+_CHAINED = ("Traceback (most recent call last):\n  File \"r.py\", line 1, in <module>\nOSError: no route\n\n{join}\n\n"
+            "Traceback (most recent call last):\n  File \"r.py\", line 3, in <module>\nRunnerFailed: exit 1")
+
+
+@pytest.mark.parametrize("lost", ["research run --on vy-nebius-3: refused: the machine can start no run",
+                                  "research: run r20261009-050000-cccc refused on vy-nebius-3 (MemoryNotAvailable): busy",
+                                  "Traceback (most recent call last):",
+                                  _CHAINED.format(join="The above exception was the direct cause of the following exception:"),
+                                  _CHAINED.format(join="During handling of the above exception, another exception occurred:")])
+def test_train_sh_waits_past_a_refused_twin_for_every_other_twins_run_id(tmp_path, lost):
+    """A twin's launch refused on its machine, or crashed, before the other twins' runs launched, each a poll after the last:
+    train.sh waits on for their run ids, so RUN names every twin that launched. Stopping at the refusal left them out: the queue
+    never followed the one that ran, launched the shard again when the twins it knew exited 75, and left the unnamed twin running
+    when it dropped the candidate. A chained traceback counts as one lost twin: counted as two, it ended the wait with the last
+    twin's id unread."""
+    import os
+    import subprocess
+
+    git_env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def git(*a, cwd=tmp_path / "repo"):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, env={**os.environ, **git_env})
+
+    git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
+    git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "repo"), cwd=tmp_path)
+    git("commit", "-q", "--allow-empty", "-m", "c")
+    git("push", "-q", "origin", "HEAD:main")
+    bin_, slept, done = tmp_path / "bin", tmp_path / "slept", tmp_path / "launched"
+    bin_.mkdir()
+    logs = f"{tmp_path}/train-*.log"
+    # the launcher: the twins line and the lost twin at once, then each other twin's run once train.sh has slept past the last line
+    (bin_ / "uv").write_text(
+        "#!/bin/sh\n" + _POST_STUB.format(posted=tmp_path / "posted")
+        + "echo 'check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2, vy-nebius-3: the first to take a check "
+          "slot runs'\n"
+        + f"cat <<'EOT'\n{lost}\nEOT\nwhile [ ! -e {slept}.1 ]; do :; done\n"
+        + "echo 'research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r'\n"
+        + f"while [ ! -e {slept}.2 ]; do :; done\n"
+        + "echo 'research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r'\n"
+        + f"touch {done}\n")
+    # waits on the launch, not on a clock: a sleep returns once the launcher has printed its next line, so each poll reads one
+    marker = "Traceback" if lost.startswith("Traceback") else "refused"
+    (bin_ / "sleep").write_text(
+        f"#!/bin/sh\nif ! grep -qs '{marker}' {logs}; then while ! grep -qs '{marker}' {logs}; do :; done\n"
+        f"elif ! grep -qs 'aaaa launched' {logs}; then touch {slept}.1; while ! grep -qs 'aaaa launched' {logs}; do :; done\n"
+        f"else touch {slept}.2; while [ ! -e {done} ]; do :; done; fi\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
+           "R2_ENDPOINT": "dummy"}
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
+        env.pop(k, None)
+    p = subprocess.run(["bash", str(ROOT / "tools" / "check" / "train.sh"), "HEAD", "vy-nebius-1,vy-nebius-2,vy-nebius-3"],
+                       capture_output=True, text=True, cwd=tmp_path / "repo", env=env)
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa r20261009-050002-bbbb", (p.stdout, p.stderr)
+    assert "train: 3 twins, but only these launched" in p.stderr, p.stderr
+
+
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
 _POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; '
               'echo "$*" > {posted}.args; exit 0;; '
