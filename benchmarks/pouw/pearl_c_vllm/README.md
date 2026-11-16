@@ -1,15 +1,28 @@
-# pearl_c_vllm: Pearl-C on every linear of a served vLLM model
+# Pearl-C on every linear of a served vLLM model
 
-What Pearl-C costs when it serves: a vLLM model on one GPU with every linear call computed and committed on the device
-by the adapter's Pearl-C run, timed against stock vLLM's FP8 on the same card, rep by rep, and the reference replay of
-the passes that run retained. The cards are the RTX PRO 6000 (`../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/`'s kernels) and the H100 and H200
-(`../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/`'s).
+This directory measures what Pearl-C costs when it serves: a vLLM model on one GPU with every linear call computed and
+committed on the device by the adapter's Pearl-C run, timed against stock vLLM's FP8 on the same card, rep by rep, and
+the reference replay of the passes that run retained. The cards are the RTX PRO 6000 and the H100 and H200.
 
 `e2e.py` is the measurement. Before any timing it gates every distinct linear shape in the arm's own process: the
 served output against the float product, the commitment twice bit for bit, and a control with its tile leaves omitted
 that must differ. It then times prefill and decode with both engines resident, in the modes `fp8` (stock), `bf16`,
 `pearlc-nohash` and `pearlc`, and with `--retain` replays the timed prompts as retained passes over poisoned buffers.
 Its docstring has every mode and switch.
+
+A replay here opens rows and words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict,
+which is a zero-knowledge proof. Nothing here is read by a verifier.
+
+## Try it
+
+List the jobs:
+
+~~~sh
+bash benchmarks/pouw/pearl_c_vllm/run.sh
+~~~
+
+It prints the usage with every job's name and exits 2. Each job's script has its full `research run` command in its
+header.
 
 ## The runner, `run.sh`
 
@@ -34,26 +47,5 @@ before.
 `flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`, and by `benchmarks/vllm_encoded/stack.sh`;
 it is not a job.
 
-## The scripts with no job of their own
-
-| Script | What it does |
-| --- | --- |
-| `verify_run.py` | the reference replay of one retained pass: the execution phase restarted from its salt coin, the samples, every opened tile; prints ACCEPT or REJECT |
-| `fast_tile.py` | the batch forms of the tile check that `verify_run.py --fast` replays on |
-| `served_table.py` | the served table, per model, from `served_inputs`' measurements and the verify verdicts |
-| `forming_headroom.py` | whether the forming term the replayed inert work leaves out could change a measured tile's verdict |
-| `h3_screen.py` | the device path's calls against the reference: `capture` on one GPU, `check` on CPUs after |
-| `profile_decode.py` | an untimed profile of the arm, which `window` runs under `MODE=profile` |
-| `panel_rows.py` | a window's result and its verify verdicts as the kernel panel's benchmark results |
-| `volunteer_pass.py` | the honest remedy on a retained pass before its sampling coin: every tile's inert work replayed, the rows that leave a tile or a credited row over its inert-work bound given up, and the manifest's records rewritten |
-| `bench_arm.py` | Pearl-C as an arm of the `verity-bench` harness (`--arm-module pearl_c_vllm.bench_arm:PEARL_C`) |
-
-## Who reads it
-
-`../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/` and `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/` load this directory's Python by path, and `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/`'s jobs start
-`window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
-module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
-`benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under
-`benchmarks/harness/specs/`, its vLLM runner and its tests); the tests in `../../../tests/benchmarks/pouw/` run the arm on a stand-in driver.
-A replay here opens rows and words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict,
-which is a zero-knowledge proof. Nothing here is read by a verifier.
+[`DESIGN.md`](DESIGN.md) has the kernels each card runs, the scripts with no job of their own, and who reads the
+directory.
