@@ -1,6 +1,6 @@
 # certifier_timing
 
-How many bits an interval a server can move through **when** the network certifier releases its bytes. The certifier
+How many bits an interval a server can move through **when** the network attester releases its bytes. The certifier
 fixes which interval a cell leaves in, so what is left to a server is the release's time inside the interval: the
 jitter term, which the accounting charges as log₂ D_j a release interval and which is 0 only at D_j = 1. This
 benchmark puts one number on it, checks that the number sees a channel, and states the number a budget asks for.
@@ -11,8 +11,8 @@ A run has three parties, each a process (`parties.py`):
 
 - **The server** is the adversary. It picks a uniform bit for each interval and acts only through when and how it
   writes its own bytes for this interval and the next. The bytes are the same whatever the bit.
-- **The certifier** is the device under test: the network certifier of this checkout or of another (`--tree`), as
-  `verity.protocols.accounting.certifier.verifier` has it, writing each interval on its loop (`--paced-ms 0`) or through its
+- **The certifier** is the device under test: the network attester of this checkout or of another (`--tree`), as
+  `verity.protocols.resource_accounting.network.verifier` has it, writing each interval on its loop (`--paced-ms 0`) or through its
   pacer.
 - **The observer** is the client side. It timestamps the first byte of each interval twice: on its own clock once
   its read returns, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and with the stamp
@@ -26,7 +26,7 @@ The attacks (`parties.Plan`), over interval t's release time R_t:
 | `burst` | the next interval's bytes in `--burst` writes, from `--lead-ms` before R_t to an eighth of that after it | as `write` |
 | `delay` | the interval's own bytes half an interval late | the bytes at the boundary |
 
-The network certifier fails a delayed interval closed, so `delay` runs only against the guard's stand-in.
+The network attester fails a delayed interval closed, so `delay` runs only against the guard's stand-in.
 
 `channel.measure` fits a decoder on the even intervals, one threshold on the arrival's offset after R_t or on its
 `step` (the offset less its neighbours' trimmed mean, which drops a drift), and scores it on the odd ones. A decoder

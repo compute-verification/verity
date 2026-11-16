@@ -17,7 +17,7 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/vllm_encoded/stack.sh`, with `MODE` one of `paged`, `splits`, `window`, `rekey` and `serve` | The encoded stack on one GPU: `paged.cu` built at the stack's codec, then `MODE`'s job (`paged_gate.py`, `paged_splits.py`, `window_gate.py`, `rekey_gate.py`, or `serve.py`'s arms). It writes to `$RESEARCH_RUN_DIR/out`. |
 
 Nothing outside `benchmarks/` reads this directory by its path. `paged.cu`, the stack's paged-cache kernels, and
-`paged.py`, its launcher, are PoUB's prover's (`verity/protocols/accounting/poub/prover/word_codec/`); `stack.sh` and
+`paged.py`, its launcher, are PoUB's prover's (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/`); `stack.sh` and
 the harness's `setup/vllm_encoded.sh` build it there.
 
 Nothing in the tree builds `ve.cu`. `serve.py` loads a build of it from `--lib` for its `plain`, `enc`, `wide` and

@@ -28,7 +28,7 @@
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
 # --max-num-batched-tokens and --window-requests (a window's class slots, e.g. 4 for V3b's class of record).
-# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network certifier's id requests, for a
+# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network attester's id requests, for a
 # certifier in front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the certifier's
 # shim and probes) as vllm does.
 # Before it serves, `verity-vllm predict row` writes the workload's Build of record from its declared inputs alone into PRED
@@ -314,7 +314,7 @@ print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "run
 EOF
 done
 
-if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the network certifier releases it
+if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the network attester releases it
   for i in $(seq 1 "${VARIED_RUNS:-3}"); do
     run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
     "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \

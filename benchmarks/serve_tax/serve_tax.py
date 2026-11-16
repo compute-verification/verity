@@ -49,7 +49,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network certifier's release order (`serve_admit.ReleaseOrder` in the engine
+- ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
   core, `servetax_plugin.ReleaseGate`), the client standing in for the certifier, which numbers them in send order;
 - ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.tick_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the certifier (`corpus.StandIn`);
@@ -79,7 +79,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
   and like every tick arm but the next the corpus's client serves it, standing in for the certifier.
-- ``tick-certifier``: ``tick`` with the network certifier itself in front, and vLLM's client behind it. The engine
+- ``tick-certifier``: ``tick`` with the network attester itself in front, and vLLM's client behind it. The engine
   admits on the certified tick from the certifier's own releases and watermark, and every request and every answer
   crosses the certifier's cells. It is served by two commands (``--side``, `certified`): the server's on the node,
   the engine and the id front before it (`certified_server`), and the client's where the certifier runs, a host of
@@ -248,7 +248,7 @@ class Arm:
     #: whether a sampled pass's client sends the arm each user's seed though the arm keeps no record (`sends_seed`): the
     #: client's part of a recording arm on a server that has none of our changes
     seeds: bool = False
-    #: whether its requests come through the network certifier, which runs on another host than the engine: the arm
+    #: whether its requests come through the network attester, which runs on another host than the engine: the arm
     #: is served by two commands, a side each (`certified`)
     certifier: bool = False
 
@@ -460,7 +460,7 @@ MODELS = {
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
     # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
     # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
-    # the network certifier in front.
+    # the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
                    ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
                    target_parts=(
@@ -1830,32 +1830,32 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     return rc
 
 
-# ------------------------------------------------------------------------------ an arm behind the network certifier
+# ------------------------------------------------------------------------------ an arm behind the network attester
 
-#: the two commands an arm behind the network certifier (`Arm.certifier`) is served by (``--side``): the server's on
+#: the two commands an arm behind the network attester (`Arm.certifier`) is served by (``--side``): the server's on
 #: the node, and the client's where the certifier runs, a host of the auditor's that reaches the node's id front
 SERVER, CLIENT = "server", "client"
 #: the loopback port the id front listens on, on the node, and where the client's side reaches it (a forward's end)
 FRONT_PORT = 18746
-#: the network certifier's schedule such an arm is served under, by the fields of its parameters; its lanes and its
+#: the network attester's schedule such an arm is served under, by the fields of its parameters; its lanes and its
 #: queue are by default the highest rung (`certifier_cells`). One cell, so one id, leaves a connection each slot of a
 #: bucket, the first ``delay`` buckets after the connection's admission; a request is at most ``ingress_cells`` cells,
 #: read within ``ingress_buckets`` buckets, and an answer at most the ids its last field, the response limit, allows
 CELLS = {"cell_bytes": 4096, "slots": 1, "bucket_ms": 250, "delay": 60, "window": 600, "ingress_cells": 4,
          "ingress_buckets": 16, "egress_cells": 4096, "max_tokens_cap": 2048}
-CERTIFIER = ROOT / "verity/protocols/accounting/certifier/device/network_certifier_serve.py"
+CERTIFIER = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
 SHIM = HERE / "cell_shim.py"
 #: the server's side's record in its directory, which holds no meta.json: no table and no cost reads it as an arm
 SERVER_RECORD = "server.json"
 #: how long each pass waits before its first request, the engine holding none: past `servetax_plugin.IDLE_RESET_S`,
 #: so that the engine empties its prefix cache for the pass
 IDLE_S = 6.0
-#: how long after its last window the network certifier has to sign its records and end
+#: how long after its last window the network attester has to sign its records and end
 CERTIFIER_END_S = 600.0
 
 
 def certified_loads(arm: str, text: str | None) -> dict[str, tuple[int, ...]]:
-    """``--loads`` for an arm behind the network certifier: loads of a pinned dataset file's own prompts alone
+    """``--loads`` for an arm behind the network attester: loads of a pinned dataset file's own prompts alone
     (`certifiable`). The shim to the certifier (`cell_shim`) carries completions of a text and nothing else, and
     vLLM's client fits a synthetic dataset's prompts to the server's ``/tokenize`` first, so such a load's prompts
     would not be the ones stock serves; a sessions load's are token ids, a client a user."""
@@ -1872,12 +1872,12 @@ def certified_loads(arm: str, text: str | None) -> dict[str, tuple[int, ...]]:
 
 
 def certifiable(load: Load) -> bool:
-    """Whether an arm behind the network certifier can be sent ``load`` (`certified_loads`)."""
+    """Whether an arm behind the network attester can be sent ``load`` (`certified_loads`)."""
     return load.file is not None and not load.sessions and not load.plan
 
 
 def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
-    """The network certifier's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
+    """The network attester's schedule for ``loads``: `CELLS` with ``--cells NAME=N,...`` over it, its lanes and its
     queue by default the loads' highest rung. Refused where it is no schedule of the certifier's in the id form
     (`certifier_schedule`), or where its queue is under a rung: vLLM's client opens a rung's connections at once,
     each waits in the queue for the next bucket, and the certifier refuses a connection past it and withholds the
@@ -1900,8 +1900,8 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
 
 
 def certifier_schedule(cells: dict[str, int]):
-    """The network certifier's own parameters for a schedule, in the id form; a ValueError where they are none."""
-    from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams as CertifierParams
+    """The network attester's own parameters for a schedule, in the id form; a ValueError where they are none."""
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams as CertifierParams
 
     return CertifierParams(**cells, egress="id")
 
@@ -1918,7 +1918,7 @@ def ceiling(cells: dict[str, int]) -> float:
 
 def tree_env() -> dict[str, str]:
     """The job's environment with this tree and the adapter on Python's path: what the id front, the network
-    certifier and the shim import."""
+    attester and the shim import."""
     return dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), str(ROOT / "adapters/vllm"), *SHARED.PYTHONPATH]))
 
 
@@ -1932,7 +1932,7 @@ def front_argv(port: int, front: int, payload: int, log: Path) -> list[str]:
 
 
 def certifier_argv(cells: dict[str, int], out: Path, front: int, key: Path, session: str, windows: int) -> list[str]:
-    """The network certifier's command (`CERTIFIER`'s ``serve``): before the id front on loopback port ``front``, on a
+    """The network attester's command (`CERTIFIER`'s ``serve``): before the id front on loopback port ``front``, on a
     port of its own choice, under the schedule ``cells`` in the id form for ``windows`` windows, with the watermark
     stream the certified tick admits by; its records in ``out``, its key in ``key``."""
     return [sys.executable, str(CERTIFIER), "serve", "--out", str(out), "--listen", "127.0.0.1:0", "--upstream",
@@ -1941,7 +1941,7 @@ def certifier_argv(cells: dict[str, int], out: Path, front: int, key: Path, sess
 
 
 def shim_argv(deployment: Path, checkpoint: Path, log: Path) -> list[str]:
-    """The shim's command (`cell_shim`): vLLM's client's completions to the network certifier ``deployment`` names,
+    """The shim's command (`cell_shim`): vLLM's client's completions to the network attester ``deployment`` names,
     each prompt encoded by the checkpoint's tokenizer; its record of each connection in ``log``."""
     return [sys.executable, str(SHIM), "--deployment", str(deployment), "--tokenizer", str(checkpoint), "--log",
             str(log), "--listen", "127.0.0.1:0"]
@@ -1956,7 +1956,7 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
 
 
 def runs_ended(feed: Path) -> int:
-    """The network certifier's runs whose watermark the tick's feed (`tick_plugin.TickFeed`) has seen end."""
+    """The network attester's runs whose watermark the tick's feed (`tick_plugin.TickFeed`) has seen end."""
     if not feed.exists():
         return 0
     return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
@@ -1964,7 +1964,7 @@ def runs_ended(feed: Path) -> int:
 
 def hold_ends(server: int | None, front: int | None, ended: int, left_s: float | None) -> tuple[str, bool] | None:
     """Whether the server's side stops holding its engine, with why and whether that is its work done: its server or
-    its id front exited (their return codes), which is not; the network certifier's run ended; or `STOP_S` or less is
+    its id front exited (their return codes), which is not; the network attester's run ended; or `STOP_S` or less is
     left to ``--stop-at``. None while it holds."""
     if server is not None:
         return f"the server exited with {server} (server/server.log)", False
@@ -1978,7 +1978,7 @@ def hold_ends(server: int | None, front: int | None, ended: int, left_s: float |
 
 
 def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
-    """What the network certifier's offline check (`CERTIFIER`'s ``check``: its check.json, None where it wrote
+    """What the network attester's offline check (`CERTIFIER`'s ``check``: its check.json, None where it wrote
     none) found of a run, with the shim's record of each connection (``lines``, `cell_shim.HttpShim`): whether the
     run is accepted and the first of its problems; the completions the shim sent and those it did not (``unsent``: a
     request it refused, or one it never read whole, its client having closed first); the connections that ended,
@@ -1999,7 +1999,7 @@ def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
 
 
 def certified(a: argparse.Namespace) -> int:
-    """Serve one side of an arm behind the network certifier (`Arm.certifier`): ``--side server`` on the node
+    """Serve one side of an arm behind the network attester (`Arm.certifier`): ``--side server`` on the node
     (`certified_server`) or ``--side client`` where the certifier runs (`certified_client`), both given the same
     ``--loads`` and ``--cells``. Such an arm has no other client than vLLM's behind the certifier's shim."""
     if a.client != BENCH:
@@ -2017,7 +2017,7 @@ def certified(a: argparse.Namespace) -> int:
 def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Popen] = subprocess.Popen,
                      sleep: Callable[[float], None] = time.sleep, now: Callable[[], float] = time.time,
                      clock: Callable[[], float] = time.monotonic) -> int:
-    """The server's side of an arm behind the network certifier, on the node: the arm's engine on the certified tick
+    """The server's side of an arm behind the network attester, on the node: the arm's engine on the certified tick
     (`server_argv`, `server_env`; the tick's bucket is the schedule's) and, once it answers, the id front before it on
     loopback port ``--front`` (`front_argv`), both held until the certifier's run has ended (`runs_ended`) or
     ``--stop-at`` (`hold_ends`). It sends nothing: the requests come from the client's side, through the certifier.
@@ -2113,9 +2113,9 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
                      popen: Callable[..., subprocess.Popen] = subprocess.Popen,
                      sleep: Callable[[float], None] = time.sleep, now: Callable[[], float] = time.time,
                      clock: Callable[[], float] = time.monotonic) -> int:
-    """The client's side of an arm behind the network certifier, where the certifier runs: a host of the auditor's
+    """The client's side of an arm behind the network attester, where the certifier runs: a host of the auditor's
     that reaches the node's id front on loopback port ``--front`` (a forward's end), never the node. It starts the
-    network certifier before that port for ``--certifier-windows`` windows (`certifier_argv`; its key made in a
+    network attester before that port for ``--certifier-windows`` windows (`certifier_argv`; its key made in a
     directory outside the run's and removed with it) and the shim to it (`shim_argv`), and sends each pass by vLLM's
     client at the shim (`drive_bench`) as `serve` sends an arm's: a warm-up, then each pass REPS times, the engine's
     counters read through the front around each. Each pass first waits `IDLE_S`, the engine holding nothing, so that
@@ -2273,7 +2273,7 @@ def busy_cycle(recs: list[dict]) -> dict:
 
 
 def tick_args(source: str | None, given_ms: str | None, load: str = "saturated", bucket_ms: int | None = None) -> dict:
-    """The certified tick's constants in µs: τ_b the corpus's bucket, or ``bucket_ms``, the network certifier's, where
+    """The certified tick's constants in µs: τ_b the corpus's bucket, or ``bucket_ms``, the network attester's, where
     one releases the requests (the tick admits by the release bucket); τ_sat and τ_free the corpus's multiples of the
     mean busy cycle of a ``record`` step trace (a file, or a ``record`` arm's dir: its trace over ``load``'s first rep),
     or given as ``SAT,FREE`` ms."""
@@ -3535,7 +3535,7 @@ def prefix_text(row: dict) -> list[str]:
 
 
 def certifier_text(arm: str, k: dict | None) -> list[str]:
-    """What the cost of an arm behind the network certifier is of, as text, from its record (`certified_client`,
+    """What the cost of an arm behind the network attester is of, as text, from its record (`certified_client`,
     `certifier_record`): the schedule's ceiling on its tokens a second, which makes its cost the schedule's and its
     engine's together, and what the certifier's offline check found of its run. Nothing for another arm."""
     if not k:

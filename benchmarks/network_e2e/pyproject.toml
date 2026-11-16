@@ -24,4 +24,4 @@ inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/vllm/verity_vllm/pipeline/window_advice.py",
-          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/certifier/verifier/__init__.py"]
+          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/network/__init__.py", "verity/protocols/resource_accounting/network/verifier/__init__.py"]

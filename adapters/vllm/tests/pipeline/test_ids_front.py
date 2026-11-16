@@ -1,5 +1,5 @@
 """`verity-vllm ids-front` (`pipeline.ids_front`) on CPU: before the server whose framing is vLLM's (`PlainProtocol`), an id
-request as the network certifier forwards it is answered byte for byte as ``--protocol ids`` answers it, and every other
+request as the network attester forwards it is answered byte for byte as ``--protocol ids`` answers it, and every other
 connection as the server answers it; before a server of scripted bytes, the ids come in order however the stream is
 framed, and a stream that doesn't reach ``[DONE]`` ends without the trailer or any of the server's text."""
 from __future__ import annotations
@@ -16,8 +16,8 @@ import threading
 from typing import Any
 
 import pytest
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import release as REL
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError
@@ -31,7 +31,7 @@ STREAM = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream; charset=utf-8\r\n
 
 
 def released(payload: int = P, n: int = 4, bucket: int = 9) -> bytes:
-    """An id request in cells of ``payload`` + 9 bytes as the network certifier forwards it: release `n` of run ``run``,
+    """An id request in cells of ``payload`` + 9 bytes as the network attester forwards it: release `n` of run ``run``,
     at `bucket`."""
     return REL.with_release(served.id_request(payload), n, b"run", bucket)
 
@@ -216,7 +216,7 @@ class Fronted:
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
     """`serve_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
-    certifier forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
+    attester forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
     for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
         assert proto.id_request_fields(request, P) == FIELDS
     assert proto.id_request_fields(released(), P + 1) is None and proto.id_request_fields(released()[:-1], P) is None
@@ -226,7 +226,7 @@ def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
     """`server_request`: a streamed POST of the id request's fields with ``return_token_ids``, no stop strings, on a
-    connection the server closes, under the release headers the network certifier put on it; none where it put none."""
+    connection the server closes, under the release headers the network attester put on it; none where it put none."""
     head = released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n"
     got_head, _, body = F.server_request(head, FIELDS, b"127.0.0.1:8000").partition(b"\r\n\r\n")
     assert json.loads(body) == FIELDS | {"stop": [], "stream": True, "return_token_ids": True}
@@ -241,7 +241,7 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
 @pytest.mark.parametrize("payload", [P, proto.ID_PAYLOAD])
 def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_it(tmp_path, payload):
     """The front before the server whose framing is vLLM's (`PlainProtocol`, its usage chunk forced): the network
-    certifier's id request comes back as ``--protocol ids`` sends it from the same engine, each sampled id one event of P
+    attester's id request comes back as ``--protocol ids`` sends it from the same engine, each sampled id one event of P
     bytes, then the trailer, with no HTTP head, no usage and no text. The record has the release, the counts and each
     write's time after the arrival, and no id."""
     with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, payload) as f:
@@ -279,7 +279,7 @@ def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
 def test_a_relayed_connection_streams_both_ways_until_both_sides_end():
     """A connection that isn't an id request's is a pipe: the client's bytes reach the server as they come, the
     server's come back as they come, and the client's end reaches the server, whose end closes the connection (the
-    watermark's stream, which the network certifier writes for a whole run)."""
+    watermark's stream, which the network attester writes for a whole run)."""
     echo = Echo()
     with Fronted(echo.address) as f, socket.create_connection(f.address) as c:
         sent = b"POST /verity/watermark HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n"
@@ -350,7 +350,7 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
 def test_once_the_certifiers_side_has_ended_the_front_ends_the_servers(answer, sent, half):
     """While the front waits on the server's stream of an id request (the server has sent nothing, its 200 head and no
     chunk, or a chunk and no more, as vLLM's own server does for a request the tick gate dropped), the network
-    certifier's side ends, closed or only its sending half. The front then closes its connection to the server, which
+    attester's side ends, closed or only its sending half. The front then closes its connection to the server, which
     is what tells that server to abort the request, and its own to the certifier, with the ids so far and no trailer;
     the record says why. Without it the server's thread, which waits for that close, never ends."""
     server = Silent(answer)
