@@ -1,8 +1,8 @@
 ---
 name: testing
 description: >
-  How Verity's tests are organized, run and cached, and the rules every test follows. Each package's tests live in its own
-  tests/ and run as one suite in their own process (`uv run tools/check/suites.py`), with passes cached by input and a guard
+  How Verity's tests are organized, run and cached, and the rules every test follows. Every test lives under the root
+  tests/, the tests of X in tests/X, and each package's run as one suite in their own process (`uv run tools/check/suites.py`), with passes cached by input and a guard
   that fails a suite reading files outside its declared inputs ([tool.verity.tests] inputs). Covers the `slow` mark and
   --quick, opt-in heavy checks, fixtures, determinism, and dummy credentials (GitGuardian). Use when writing, moving or running
   tests, adding a package or test directory, a suite fails with "read files outside its inputs", a test is slow or flaky, or
@@ -11,8 +11,9 @@ description: >
 
 # Testing
 
-A **suite** is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`, `testpaths = ["tests"]`):
-every workspace package, and the root's, which checks invariants of the whole tree. `tools/check/suites.py` runs
+A **suite** is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`): `tests/X`, which tests X
+and is named X (a package's `NAME-tests` virtual member is named NAME), and the root's, which checks invariants of the whole
+tree from the top of `tests/`. `tools/check/suites.py` runs
 each suite in its own process from its own directory, and `check` runs the same runner as its pytest step.
 
 ## Run tests
@@ -43,7 +44,8 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`cd verity/protocols/proofs/flock/prover && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
+`uv run pytest tests/verity/protocols/proofs/flock/prover/test_layouts.py -k round_trip`, from the root (pytest takes the
+suite's own configuration; `uv run` inside a suite's directory can find a workspace of its own). It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs (its directory, its workspace dependencies, the paths it declares,
@@ -60,8 +62,8 @@ reviewed change: the verified queue and the quick tier take that failure as not 
 
 ## Where a test goes
 
-- **In the tests/ of the package it tests**, mirroring its modules (`tests/verity/circuits/` tests
-  `verity.circuits`); never in another package's suite or the root `tests/`, which is only for whole-tree invariants.
+- **Under `tests/X` for the X it tests**, mirroring its modules (`tests/verity/circuits/` tests `verity.circuits`);
+  never in another package's suite, nor at the top of `tests/`, which is only for whole-tree invariants.
 - **A new package** joins the workspace (`[tool.uv.workspace] members` in the root pyproject) with its siblings' pytest
   table; a directory with tests but no importable package is a virtual member (`[tool.uv] package = false`), like
   `tools/check`. A test file no suite runs fails `tests/test_repository.py`.

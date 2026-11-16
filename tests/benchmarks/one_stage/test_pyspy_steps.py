@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SCRIPT = HERE.parent / "pyspy_steps.py"
+SCRIPT = HERE.parents[2] / "benchmarks" / "one_stage" / "pyspy_steps.py"
 T0 = 1_000.0
 S = 1_000_000
 

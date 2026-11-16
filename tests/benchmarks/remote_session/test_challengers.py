@@ -95,7 +95,7 @@ class Host:
         body = A.sessions_of(A.read_ledger(self.host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(self.host, session, body)
         argv[argv.index("--port") + 1] = "0"
-        argv = [sys.executable, str(LIVE / "tests" / "stub_serve.py"), *argv[2:], "--params", "4,4",
+        argv = [sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
         listening = threading.Event()
 
@@ -318,7 +318,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
         source = host.gate(tmp_path / "out")
     else:
         (tmp_path / "served").mkdir()
-        serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+        serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
                  str(LIVE / "serve.py"), "--keygen-workers", "1")
         source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
@@ -637,7 +637,7 @@ def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_
     and not refused as `coins`."""
     lean_stands_in.unwritten(monkeypatch)
     (tmp_path / "served").mkdir()
-    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
+    serve = (sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), "--coins-log", str(tmp_path / "coins.log"),
              str(LIVE / "serve.py"), "--keygen-workers", "1")
     source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,

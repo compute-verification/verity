@@ -2970,7 +2970,7 @@ PREFLIGHT_FILES = {
     "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tests/tools/research/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
-    "tests/adapters/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
+    "tests/adapters/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 5),
     "tools/check/suites.py": (Path(__file__).resolve().parents[3] / "tools" / "check" / "suites.py").read_text(),
     "tools/check/settings.py": (Path(__file__).resolve().parents[3] / "tools" / "check" / "settings.py").read_text(),
     "tools/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
@@ -3385,8 +3385,8 @@ PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
     "module string": ({"BROKEN_MODULE_STRING": ""}, "the invariant tests in . fail on the merged tree: FAILED "
                       "tests/test_module_strings.py::test_broken_module_string_absent"),
-    "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in tools/research fail on the merged tree: FAILED "
-                   "tests/test_pythonpath.py::test_broken_real_roots_absent"),
+    "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in . fail on the merged tree: FAILED "
+                   "tests/tools/research/test_pythonpath.py::test_broken_real_roots_absent"),
     # a report-genre name fails a candidate's preflight-lints
     "repository lint": ({"REPORT_GENRE_NAME": ""}, "the invariant tests in . fail on the merged tree: FAILED "
                         "tests/test_repository.py::test_report_genre_name_absent"),
