@@ -103,14 +103,14 @@ cases stay in the default run, and circuit-check's `word_view` checks each Boole
 merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
 
-import importlib
-import os
-import shutil
-import subprocess
+import importlib  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
 
-import pytest
-import verity_torch.pouw  # noqa: F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+import pytest  # noqa: E402
+import verity_torch.pouw  # noqa: E402,F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (  # noqa: E402
     use_int8_arm,
 )
 
