@@ -9,12 +9,12 @@ kinds:
   first, so a word the kernel failed to write, or wrote outside its output, shows;
 - sweeps over every operand word of the instructions an exact result rests on.
 
-A directory's README says which gates hold its kernels. Each directory is also a test suite, run on the CPU from the
+A directory's README says which gates hold its kernels. `p2_stage` is also a test suite, run on the CPU from the
 tree's root:
 
 ```bash
 uv sync --all-packages --extra torch-cpu
-uv run tools/check/suites.py benchmarks/torch_gpu/DIR
+uv run tools/check/suites.py benchmarks/torch_gpu/p2_stage
 ```
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
