@@ -31,13 +31,16 @@ sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size
 - `sampling`: the best keyless strategy, `naive`'s `g = N − dropped(N, k)` labels kept at the sessions' `k`, over many
   sessions at a small `k`: its acceptance rate against `(g/N)^k`, the bound's sampling term.
 
-For each it records the verdict (each side's), how the session ended, the prior content (its size, its share of the
-declared store, and whether `keep` returns it after the reads) and the read times. `main` writes `resume.json`.
+For each it records the verdict (each side's; under `--decide python` no Lean judges, so a session the Python accepts
+is `undecided`, never accepted, and what it expected is read from the Python's side, named by `expected_by`), how the
+session ended, the prior content (its size, its share of the declared store, and whether `keep` returns it after the
+reads) and the read times. `main` writes `resume.json`.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
@@ -206,6 +209,7 @@ class Untiered(Honest):
         return b"".join(bytes(self.outside[LABEL * i:LABEL * (i + 1)]) for i in idx)
 
 
+@functools.cache
 def _wipe_verdict():
     spec = importlib.util.spec_from_file_location("streamed_wipe_lean_verdict", WIPE_VERDICT)
     mod = importlib.util.module_from_spec(spec)
@@ -237,7 +241,8 @@ def session(name: str, make: Callable[[int, WC.WipeMemoryChallenger], Any], *, n
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,
-           "reads": len(signed.batches), "accepted": v.accepted, "reasons": list(v.reasons)[:3], "verdicts": sides,
+           "reads": len(signed.batches), "accepted": v.accepted, "outcome": _wipe_verdict().outcome(v),
+           "reasons": list(v.reasons)[:3], "verdicts": sides,
            "prior_bytes": len(prover.z), "prior_share": len(prover.z) / (n * LABEL),
            "kept": kept == prover.z, "prior_sha512_before": z_before,
            "prior_sha512_after": hashlib.sha512(kept).hexdigest(),
@@ -249,6 +254,15 @@ def session(name: str, make: Callable[[int, WC.WipeMemoryChallenger], Any], *, n
 
 
 EXPECT = {"honest": True, "naive": False, "resume": False, "resume-untimed": False, "key-leak": True, "untiered": True}
+
+
+def reading(rec: dict[str, Any]) -> tuple[bool, str]:
+    """Whether the check passed the session, and whose reading that is: the verdict's (`verdict`), or, where no Lean
+    judged it (`undecided`), the Python reference's (`python`), a figure of the attack, never the session's
+    verdict."""
+    if rec["outcome"] != "undecided":
+        return rec["accepted"], "verdict"
+    return rec["verdicts"]["python"]["accepted"], "python"
 
 
 def provers(clock: Callable[[], int], limit_ns: int, untimed_tries: int = UNTIMED_TRIES):
@@ -266,17 +280,20 @@ def provers(clock: Callable[[], int], limit_ns: int, untimed_tries: int = UNTIME
 
 def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, decide: str, clock,
              limit_ns: int) -> dict[str, Any]:
-    """`naive` as it is at `at_k` reads over `sessions` sessions at `k`: accepted count against `(g/N)^k`."""
-    accepted = 0
+    """`naive` as it is at `at_k` reads over `sessions` sessions at `k`: the count the check passed (`reading`) against
+    `(g/N)^k`, `accepted` where verdicts gave it and `python_accepts` where the Python reference did."""
+    passed, by = 0, set()
     for r in range(sessions):
         rec = session("sampling", lambda n, c: Naive(n, c, at_k), n=n, k=k, limit_ns=limit_ns, signer=signer, log=log,
                       judge=judge, decide=decide, clock=clock, tag=r.to_bytes(4, "big"))
-        accepted += rec["accepted"]
+        got, whose = reading(rec)
+        passed, by = passed + got, by | {whose}
     g = n - dropped(n, at_k)
     p = (g / n) ** k
     sd = math.sqrt(sessions * p * (1 - p))
-    return {"labels": n, "k": k, "at_k": at_k, "g": g, "sessions": sessions, "accepted": accepted,
-            "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
+    return {"labels": n, "k": k, "at_k": at_k, "g": g, "sessions": sessions,
+            ("accepted" if by == {"verdict"} else "python_accepts"): passed,
+            "expected": sessions * p, "p": p, "z_score": (passed - sessions * p) / sd if sd else None}
 
 
 def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
@@ -291,8 +308,9 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
     for name, make, lim in provers(clock, limit_ns, untimed_tries):
         rec = session(name, make, n=n, k=k, limit_ns=lim, signer=signer, log=log, judge=judge, decide=decide,
                       clock=clock, coin_secret=coin_secret)
+        got, rec["expected_by"] = reading(rec)
         rec["expect_accept"] = EXPECT[name]
-        rec["as_expected"] = rec["accepted"] == EXPECT[name]
+        rec["as_expected"] = got == EXPECT[name]
         out["sessions"].append(rec)
     g, cert = n - dropped(n, k), W.certify(params(n, k), 0)
     out["bound"] = {"labels": n, "memory_bits": cert["memory_bits"], "k": k, "r": cert["r"],
@@ -321,8 +339,8 @@ def main() -> None:
                   sample_sessions=args.sample_sessions)
     (args.out / "resume.json").write_text(json.dumps(res, indent=1) + "\n")
     for s in res["sessions"]:
-        print(f"{s['prover']:15} accepted={s['accepted']!s:5} ended={s['ended']:8} reads={s['reads']:5} "
-              f"prior={s['prior_share']:.2%} kept={s['kept']} expected={s['as_expected']}")
+        print(f"{s['prover']:15} outcome={s['outcome']:9} ended={s['ended']:8} reads={s['reads']:5} "
+              f"prior={s['prior_share']:.2%} kept={s['kept']} expected={s['as_expected']} (by {s['expected_by']})")
     if "sampling" in res:
         print("sampling", json.dumps(res["sampling"]))
     sys.exit(0 if res["as_expected"] else 1)

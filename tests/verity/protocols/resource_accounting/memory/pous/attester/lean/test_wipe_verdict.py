@@ -160,7 +160,8 @@ def controls() -> dict[str, tuple[W.Session, tuple[str, ...]]]:
 
 def test_negative_controls(server):
     """Each negative control by name, through `wipe_verdict.verdict`, `judge` under each mode and the difftest port: the
-    Lean's verdict is the Python's, reasons word for word, and each control is rejected for its own reason."""
+    Lean's verdict is the Python's, reasons word for word, and each control is rejected for its own reason. Under
+    `python` an accepted session is undecided (`NO_JUDGE`), never accepted on the Python's word."""
     port_ = port(st.none())
     for name, (s, reasons) in controls().items():
         kw = {"trusted": set(s.trusted), "schemes": M.ts.SCHEMES}
@@ -172,8 +173,10 @@ def test_negative_controls(server):
         assert s.commitment.params.covered == ("batch 2" not in name), name
         for decide in V.VERDICTS:
             v, sides = V.judge(s.signed, s.commitment, decide=decide, **kw)
-            assert v == python and set(sides) == {"lean": {"lean"}, "both": {"lean", "python"},
+            judged = sw.Verdict(False, (V.NO_JUDGE,)) if decide == "python" and python.accepted else python
+            assert v == judged and set(sides) == {"lean": {"lean"}, "both": {"lean", "python"},
                                                   "python": {"python"}}[decide], (name, decide, v, sides)
+            assert V.outcome(v) == ("reject" if reasons else "undecided" if decide == "python" else "accept"), name
             assert all(side == lean for side in sides.values()), (name, decide, sides)
         rec = record(s)
         assert port_.key(D.replay(port_, rec, server)) == port_.key(port_.python(rec)), name
