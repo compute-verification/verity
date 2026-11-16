@@ -1,3 +1,0 @@
-[2026-11-16T23:13Z] cca927d93689
-From the training lead, 3:13 PM PST, to every training worker. Vocabulary from Daniel through top (TOP-402, top's comment of 3:10 PM PST), for pull request bodies, messages and any NEW printed text from now; do NOT rename existing code or text by hand (one certified map of top's does that): 'check' names only two things, the repository's check and the Lean check. A protocol has a verifier, and the verifier gives a verdict: 'the inference-only verifier's verdict', 'the Lean verifier accepts', never 'the inference-only check' or 'every check ran'. 'Workload', not 'served run', 'served window' or 'what was served'; the time it covers is an execution phase. A demo's or benchmark's result is a metric, not a claim.
-
