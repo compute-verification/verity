@@ -7,8 +7,9 @@ committed them with, so the proof's committed rows have the b ‖ c the entry's 
 row.  The stager (`Stager.stage`: `class_statement.stage_unit`) writes circuit.txt, inst.bin and pub.bin under OUT; this
 writes pin.txt, stage.json and opening.json (the prover's: the entry, its salt and path to the window root, and each row's
 frame-v3 path to the entry's side root).  As `hidden_zk/stage.py`'s hiding tile, the PoUW word primitives lower through
-`hash_scratch`'s pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `HZ_STAGE`
-(``fast``, the default, or ``library``) as there.  A window committed before side rows carried their index is refused.
+`hash_scratch`'s pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `main`'s
+``staging`` (``fast``, the default, or ``library``) as `HZ_STAGE` there.  A window committed before side rows carried their
+index is refused.
 
 Flock's staging is `verity_flock`'s and `hidden_zk`'s, which verity does not import: `Stager.stage` raises here, and
 `benchmarks/pouw/hidden_zk/served_stage.py`, which runs this with its own `Stager`, supplies it.
@@ -49,11 +50,10 @@ class Stager:
                                   "served_stage.py's Stager supplies it")
 
 
-def main(argv: list[str] | None = None, *, stager: Stager | None = None) -> None:
+def main(argv: list[str] | None = None, *, stager: Stager | None = None, staging: str = "fast") -> None:
     t0 = time.time()
     argv = sys.argv[1:] if argv is None else argv
     src, params, unit, out = Path(argv[0]), json.loads(Path(argv[1]).read_text()), int(argv[2]), Path(argv[3])
-    stage = os.environ.get("HZ_STAGE", "fast")
     stager = Stager() if stager is None else stager
     out.mkdir(parents=True, exist_ok=True)
     advice = json.loads((src / "advice.json").read_text())
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None, *, stager: Stager | None = None) -> None
         at += r
     rows = {"a0": side["a"]["words"][i][None, :], "b0": side["b"]["words"][j][None, :]}
     salts = {"a0": [side["a"]["salts"][i]], "b0": [side["b"]["salts"][j]]}
-    got = stager.stage(d, "unit/pouw-pc8-hidden-served", in_rows, out_rows, rows, out, os.urandom(32), salts, stage)
+    got = stager.stage(d, "unit/pouw-pc8-hidden-served", in_rows, out_rows, rows, out, os.urandom(32), salts, staging)
     pin = got["circuit_sha512"]
     (out / "pin.txt").write_text(pin)
     body = (out / "pub.bin").read_bytes().split(b"\n", 1)[1]
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None, *, stager: Stager | None = None) -> None
         "the staged rows' b || c are not the committed rows'"
     (out / "opening.json").write_text(json.dumps(SC.opening(advice, priv, params, unit)))
     rec = {"definition": d.id, "k": k, "tile": list(TILE), "unit": unit, "entry": e, "kind": advice["entries"][e]["kind"],
-           "binding": "hash scratch", "staging": stage,
+           "binding": "hash scratch", "staging": staging,
            "ands": got["ands"], "k_log": got["meta"]["k_log"], "row_schemas": got["meta"]["row_schemas"],
            "circuit_bytes": got["circuit_bytes"], "circuit_sha512": pin,
            "class_sha512": got["class_sha512"], "tile_digest": L.digest_bytes(

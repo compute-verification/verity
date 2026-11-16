@@ -435,6 +435,10 @@ REGISTRY = EnvSettings(
             "which tests run, never what a commitment holds"),
     Setting("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and "
             "holds it to its pin (about 3.5 minutes, 9.5 GB): which tests run, never what a circuit computes"),
+    # ---- PoUW's window suite (verity.protocols.resource_accounting.compute.pouw.verifier.lean.window's)
+    Setting("VERITY_POUW_WINDOW_LOWERED_LANES", present, False, WHERE, "set, test_lanes.py lowers two lanes' circuit files "
+            "(about 2M ANDs each, 150 s at 16 × 16 and 460 s at the served leaf, 32 GB at most): which tests run, never what "
+            "a circuit computes"),
     schema=RECORD_SCHEMA)
 
 
