@@ -21,7 +21,7 @@ uv run tools/check/suites.py benchmarks/kernels/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`s8_linear`, and `benchmarks/torch_gpu/p2_stage`) source `ship.sh`, the one statement of a
+those builds (`s8_linear`) source `ship.sh`, the one statement of a
 ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
 heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
