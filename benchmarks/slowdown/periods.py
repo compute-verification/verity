@@ -342,7 +342,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                  else "; ".join(f"{g['where']}, {g['period']}" for g in group))
         out += [f"### {x['scenario']} ({where})", "",
                 (f"Set by **{p['setter']}** ({p.get('status')}; premises {p.get('premise') or '—'}), binding at "
-                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."
+                f"{fmt(p.get('binding_bits', math.nan))} fresh input bits a block."
                 + (f" The kinds are the per-block cuts' citations; the period statement, `{sc['period']['bound']}`, "
                    "is the \"not scaled\" line's." if sc["period"] else "")), "", "| kind | parts |", "|---|---|"]
         for kind, names in p["kinds"].items():

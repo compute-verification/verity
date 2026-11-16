@@ -326,7 +326,7 @@ directory, outside one where `OUT` names a directory, and otherwise nothing.
 **Exit code:** 0 with the number printed; 1 with none; 2 when the command line, the record or its policy can't be read,
 when the policy's load is not the benchmark's (`load.toml`), or when the split `--per-call` reads is not the answer's.
 
-## Ours: the evidence store and the metric rows
+## Ours: the evidence store and the metrics
 
 On our machines `--from` also takes a run id of our evidence store, read through research's store client with a key
 that reads the store; a withdrawal of part of a stored record is honored (a withdrawn required file refuses the record,

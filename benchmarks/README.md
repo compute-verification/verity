@@ -31,7 +31,7 @@ says. These are the directories that have one:
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
-| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
+| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a benchmark result, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
