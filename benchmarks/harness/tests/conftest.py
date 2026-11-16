@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.register_assert_rewrite("kit_standins", "overhead_standins")
+pytest.register_assert_rewrite("kit_standins", "overhead_standins", "steady_standins")
 
 from exfiltration_helpers import reader  # noqa: E402
 

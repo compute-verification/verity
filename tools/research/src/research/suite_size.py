@@ -18,7 +18,7 @@ on its jobs: its time is the list-scheduling bound, their times summed over the 
 UNDECLARED_S, since at SUITE_TIMEOUT_S each the tree's 79 would ask for a day. Neither drops below the kind's own (AUTO_*). Only
 what a suite declares is used, so named suites that declare neither keep the kind's size, as does a name that matches none or
 several (suites.py refuses it). Reads the checkout's tracked pyproject.toml files, and for `--changed` runs its suites.py
-`--list`; imports nothing from Verity.
+`--list` (not under a trusted launcher tree: `touched`); imports nothing from Verity.
 """
 from __future__ import annotations
 
@@ -89,7 +89,15 @@ def selection(command: list[str]) -> tuple[list[str], int | None, str | None] | 
 
 
 def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
-    """The suites (of `names`, or all) the change from `rev` touches, as the checkout's suites.py says; None where it can't say."""
+    """The suites (of `names`, or all) the change from `rev` touches, as the checkout's suites.py says; None where it can't say,
+    and under a trusted launcher tree (research.launcher), where the checkout's suites.py never runs and no other copy can
+    list its suites without importing its code: the run then takes the kind's size."""
+    from . import launcher
+
+    if launcher.tree(source):
+        print(f"suite_size: the suites a --changed run touches are not listed under ${launcher.ENV} (the source's suites.py "
+              "doesn't run here), so it takes the kind's size unless it gives --mem-gb and --timeout", file=sys.stderr, flush=True)
+        return None
     try:
         r = subprocess.run([sys.executable, SUITES_PY, *names, "--changed", rev, "--list"], cwd=source, capture_output=True, text=True,
                            timeout=120)
@@ -106,8 +114,10 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
 def declared(source: Path) -> list[dict]:
     """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it: `suite_layout.suite_name`)
     and what it declares."""
-    files = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"],
-                           capture_output=True, text=True).stdout.split("\0")
+    from . import launcher
+
+    files = subprocess.run(launcher.git("-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"),
+                           capture_output=True, text=True, env=launcher.git_env()).stdout.split("\0")
     read = {}
     for f in filter(None, files):
         try:

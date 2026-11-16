@@ -7,7 +7,8 @@
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's adapters/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
-# Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
+# Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2 ($WORK/cp/fa2), NT ($WORK/cp/norm_tap), RT ($WORK/cp/router_tap),
+# UV_CACHE_DIR ($WORK/.cache/uv), PIP_CACHE_DIR ($WORK/.cache/pip), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
 # ROW_TAPS (1: build the taps a workload runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips
 # them, and a workload on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
 #
@@ -33,7 +34,13 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
 [ -d "$CORE/verity/protocols/proofs/spot" ] || { echo "BOOTSTRAP_FAIL_TREE: no verity/protocols/proofs/spot beside $ROOT" >&2; exit 3; }
-WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
+export WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
+export FA2=${FA2:-$WORK/cp/fa2} NT=${NT:-$WORK/cp/norm_tap} RT=${RT:-$WORK/cp/router_tap}   # the taps' builds, which step 5 checks
+# The install's caches: under $WORK unless the caller names its own. Step 2 removes only those this run created: a cache
+# already at $WORK/.cache/{uv,pip} (another job's, on a shared WORK) is used and left.
+OWN_CACHES=()
+[ -n "${UV_CACHE_DIR:-}" ] || { export UV_CACHE_DIR=$WORK/.cache/uv; [ -e "$UV_CACHE_DIR" ] || OWN_CACHES+=("$UV_CACHE_DIR"); }
+[ -n "${PIP_CACHE_DIR:-}" ] || { export PIP_CACHE_DIR=$WORK/.cache/pip; [ -e "$PIP_CACHE_DIR" ] || OWN_CACHES+=("$PIP_CACHE_DIR"); }
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITY_TREE=$ROOT
@@ -89,9 +96,10 @@ uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCO
   || uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match "$TORCHCODEC" \
   >>"$OUT/pip.log" 2>&1 || fail PIP "$TORCHCODEC: $(tail -1 "$OUT/pip.log")"
 # the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
-printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
+# guarded as pip's are: a spawned child (serve-openai's seal process) imports it again as __mp_main__
+printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
-rm -rf /root/.cache/uv /root/.cache/pip 2>/dev/null
+[ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------
 # A checkpoint this run downloads and checks is staged: its staging event goes to the store (`verity-vllm records staged`) through
@@ -220,7 +228,7 @@ def distributions_from_tree():
 check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
-fa2 = "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so"
+fa2 = os.path.join(os.environ.get("FA2", "/workspace/cp/fa2"), "build/matReq/verity_fa2_matReq.so")
 def fa2_check():
     import torch
     torch.ops.load_library(fa2); ns = torch.ops.verity_fa2_matReq
@@ -228,7 +236,7 @@ def fa2_check():
 if gpu:
     check("fa2_tap_so", fa2_check)
 if cc == "9.0":
-    fa3 = "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so"
+    fa3 = os.path.join(os.environ.get("FA2", "/workspace/cp/fa2"), "build/fa3_matReq/verity_fa3_matReq.so")
     check("fa3_tap_so", lambda: {"path": fa3, "sha256": sha(fa3)})
 def nvsmi(q):
     if not gpu:  # cpu mode: a pod without nvidia-smi records null, it does not fail the readiness record
@@ -266,7 +274,7 @@ def net(down_bytes=64 << 20, up_bytes=16 << 20):
     urllib.request.urlopen(urllib.request.Request("https://speed.cloudflare.com/__up", data=data, method="POST", headers=UA), timeout=90).read()
     up = up_bytes / (time.monotonic() - t) / 1e6
     return {"down_MBps": round(down, 1), "up_MBps": round(up, 1), "probe": "speed.cloudflare.com", "bytes": {"down": got, "up": up_bytes}}
-def disk(path="/workspace"):
+def disk(path=os.environ.get("WORK", "/workspace")):
     u = shutil.disk_usage(path)
     return {"path": path, "total_bytes": u.total, "free_bytes": u.free}
 def memory():
