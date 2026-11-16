@@ -181,3 +181,15 @@ def test_main_exits_2_with_the_refusal(case, tmp_path, capsys) -> None:
 
 def test_the_report_reads_what_assemble_wrote_by_record_REGISTERED() -> None:
     assert set(R.REGISTERED) == {"program", "circuit", "log"} and report.R is R
+
+
+def test_a_circuit_record_named_apart_is_the_one_held_to_R_and_registered(case, tmp_path) -> None:
+    names = tied(case, tmp_path, limits=True)
+    out = tmp_path / "out"
+    apart = tmp_path / "window" / "circuit.json"
+    apart.parent.mkdir()
+    (out / A.SERVED["circuit"]).rename(apart)
+    (out / R.REGISTERED["circuit"]).unlink()
+    _assemble(case, tmp_path, names, named={"circuit": apart})
+    assert (out / R.REGISTERED["circuit"]).read_bytes() == apart.read_bytes()
+    assert A.main(["--from", str(tmp_path), "--registration", str(names["registration"])]) == 2

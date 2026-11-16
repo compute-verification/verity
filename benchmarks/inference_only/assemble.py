@@ -2,11 +2,13 @@
 serve wrote, for `report.py --from`: the step between a serve under the Pearl+ tie and the record check.
 
     python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...] [--registration R] [--pins WREG]
-        [--day YYYY-MM-DD]
+        [--day YYYY-MM-DD] [--circuit FILE] [--phi FILE] [--window FILE]
 
 ``DIR`` is the serve's run directory or its `out/`, holding what the tied serve writes (`SERVED`): the class circuit
 record (`record/circuit-record.json`), the serve's φ as stated before it served (`record/serve-phi.json`), Pearl+'s
-window record W (`record/window-record.json`) and the inference-only policy. It writes (`record.REGISTERED`, `OUT_FILES`):
+window record W (`record/window-record.json`) and the inference-only policy. ``--circuit``, ``--phi`` and ``--window``
+name the first three where a serve keeps them elsewhere: with ``--registration``, the circuit record is the one R
+commits, the `circuit.json` window-commit writes beside it. It writes (`record.REGISTERED`, `OUT_FILES`):
 
 * **The Program** (`registered/program.json`), which the tied serve writes none of: rebuilt from φ, the policy's class
   and its Pearl+ scheme by the call the serve's circuit record was written by (`program_of`), and refused unless its
@@ -126,15 +128,18 @@ def chained(log: Sequence[Mapping[str, Any]]) -> None:
 
 
 def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None = None, pins: Path | None = None,
-             day: str | None = None, build: Callable[[Mapping[str, Any], tuple[int, int, int], str], str] = program_of,
+             day: str | None = None, named: Mapping[str, Path] | None = None,
+             build: Callable[[Mapping[str, Any], tuple[int, int, int], str], str] = program_of,
              counted: Callable[..., None] = count) -> list[str]:
-    """The tied serve's files under ``served`` assembled (module docstring); what was written, a line each."""
+    """The tied serve's files under ``served`` assembled (module docstring), each of `SERVED` at its place there
+    unless ``named`` names it apart; what was written, a line each."""
     out = served / "out" if (served / "out").is_dir() and not (served / SERVED["policy"]).exists() else served
-    for what, rel in SERVED.items():
-        if not (out / rel).is_file():
-            raise Refused(f"the serve wrote no {what} ({out / rel}): this assembles a serve under the Pearl+ tie")
-    policy_bytes = (out / SERVED["policy"]).read_bytes()
-    policy, body = json.loads(policy_bytes), (out / SERVED["circuit"]).read_bytes()
+    files = {what: Path((named or {}).get(what) or out / rel) for what, rel in SERVED.items()}
+    for what, path in files.items():
+        if not path.is_file():
+            raise Refused(f"the serve wrote no {what} ({path}): this assembles a serve under the Pearl+ tie")
+    policy_bytes = files["policy"].read_bytes()
+    policy, body = json.loads(policy_bytes), files["circuit"].read_bytes()
     try:
         cls = tuple(int(policy["class"][x]) for x in ("slots", "prompt", "outputs"))
         scheme = policy["pearl_tables"]
@@ -143,7 +148,7 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
     if not isinstance(scheme, str) or not scheme:
         raise Refused(f"{SERVED['policy']}: pearl_tables names no Pearl+ scheme, so the class isn't cut at its linears")
     want = json.loads(body).get("program")
-    w = _json(out / SERVED["window"])
+    w = _json(files["window"])
     log = [*(_json(p) for p in first), w]
     if registration is not None:
         reg = _json(registration)
@@ -153,21 +158,21 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
             raise Refused("R's window.circuit is not the SHA-512 of the serve's circuit record")
         log.append(reg)
     chained(log)
-    text = build(_json(out / SERVED["phi"]), cls, scheme)
+    text = build(_json(files["phi"]), cls, scheme)
     if (got := program_digest(text)) != want:
         raise Refused(f"the Program rebuilt from the serve's φ, class {','.join(map(str, cls))} and {scheme} has digest "
                       f"{got[:16]}..., not the {str(want)[:16]}... the circuit record names")
     reg_dir = out / "registered"
     held = out / R.REGISTERED["circuit"]
     if held.exists() and held.read_bytes() != body:
-        raise Refused(f"{held} is not the serve's circuit record ({SERVED['circuit']}) byte for byte")
+        raise Refused(f"{held} is not the serve's circuit record ({files['circuit']}) byte for byte")
     reg_dir.mkdir(exist_ok=True)
     said = []
     (out / R.REGISTERED["program"]).write_text(text)
     said.append(f"registered/program.json: the Program rebuilt, digest {got[:16]}..., the circuit record's"
                 + (" and R's" if registration is not None else ""))
     if not held.exists():
-        shutil.copyfile(out / SERVED["circuit"], held)
+        shutil.copyfile(files["circuit"], held)
     said.append(f"registered/circuit.json: the serve's circuit record, SHA-512 {hashlib.sha512(body).hexdigest()[:16]}...")
     (out / R.REGISTERED["log"]).write_text("".join(json.dumps(r, separators=(",", ":"), sort_keys=True) + "\n"
                                                   for r in log))
@@ -181,7 +186,7 @@ def assemble(served: Path, first: Sequence[Path] = (), registration: Path | None
     run_dir = out.parent if out.name == "out" else out
     private = run_dir / "private"
     private.mkdir(mode=0o700, exist_ok=True)
-    counted(held, registration, pins, out / SERVED["policy"], day or str(policy.get("written_utc", ""))[:10],
+    counted(held, registration, pins, files["policy"], day or str(policy.get("written_utc", ""))[:10],
             out / f"block-counts-{tag}.json", private / f"block-counts-{tag}.json")
     said.append(f"block-counts-{tag}.json: the class circuit record's blocks judged against the policy's c, k and n"
                 + ("" if pins is not None else ", every read free (no --pins)"))
@@ -197,9 +202,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--registration", type=Path, metavar="R", help="the window's registration, chained right after W")
     ap.add_argument("--pins", type=Path, metavar="WREG", help="the verifier's pins: the committer's weights registration")
     ap.add_argument("--day", help="the UTC day served, YYYY-MM-DD (default the policy's written_utc day)")
+    for what in ("circuit", "phi", "window"):
+        ap.add_argument(f"--{what}", type=Path, metavar="FILE",
+                        help=f"the serve's {what} where it isn't at DIR's {SERVED[what]}")
     a = ap.parse_args(argv)
     try:
-        said = assemble(a.served, a.first, a.registration, a.pins, a.day)
+        said = assemble(a.served, a.first, a.registration, a.pins, a.day,
+                        {x: getattr(a, x) for x in ("circuit", "phi", "window") if getattr(a, x) is not None})
     except (Refused, R.Refused) as e:
         print(f"assemble: refused: {e}", file=sys.stderr)
         return 2

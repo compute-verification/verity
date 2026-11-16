@@ -229,8 +229,13 @@ A serve under the Pearl+ tie writes no Program, no limits and no count. `assembl
 serve from what it did write, before `--from DIR` reads it:
 
 ~~~sh
-uv run python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...] [--registration R] [--pins WREG]
+uv run python benchmarks/inference_only/assemble.py --from DIR [--first FILE ...] [--registration R] [--pins WREG] \
+    [--circuit FILE] [--phi FILE] [--window FILE]
 ~~~
+
+`--circuit`, `--phi` and `--window` name the serve's circuit record, φ and W where it keeps them elsewhere than its
+`out/record/`. With `--registration`, the circuit record is the one R commits: the `circuit.json` that window-commit
+writes beside it.
 
 - **The Program** (`registered/program.json`) is rebuilt from the serve's `record/serve-phi.json`, the policy's class
   and its `pearl_tables` scheme. The call is the one the serve's circuit record was written by
