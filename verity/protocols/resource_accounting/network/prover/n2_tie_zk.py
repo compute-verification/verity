@@ -76,7 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class
-PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 T = PARAMS.window
 LINK = "requests"
 SESSION = hashlib.sha512(b"n2-tie-zk").digest()
@@ -109,7 +109,7 @@ WINDOWS = 2
 #: window, honest and forged
 CLASSES = {
     "test": {"B": B, "params": PARAMS, "windows": WINDOWS, "expect": EXPECT},
-    "served": {"B": 4096, "params": W.NetworkCertifierParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
+    "served": {"B": 4096, "params": W.NetworkAttesterParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
                "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
     "warden": None,
 }
@@ -182,7 +182,7 @@ def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
     from verity.protocols.resource_accounting.network.verifier import blob_files as bf, record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())
-    params = W.NetworkCertifierParams(**dep["params"])
+    params = W.NetworkAttesterParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -217,7 +217,7 @@ def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
 
-def _released(params: W.NetworkCertifierParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
+def _released(params: W.NetworkAttesterParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
     """The windows' release read off their cells' headers, each connection's first bucket and its request cells a
     bucket to its `END`, its first bucket the network attester's wiring's; and each request's prompt length, its bytes'
     ``prompt``. Refused where a connection's ingress runs past the windows or the ordinals aren't 1, 2, …"""

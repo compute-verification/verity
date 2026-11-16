@@ -21,7 +21,7 @@ reuse (`Slowdown.Threading.bound`, which is `Slowdown.Slowdown.Lambda`). `Thread
 
 open Slowdown
 
-namespace Accounting.Guarantees.Actual
+namespace ResourceAccounting.Guarantees.Actual
 
 open Verity InferenceOnly Finset Slowdown.Slowdown
 
@@ -67,4 +67,4 @@ def SlowdownServerBlocksCapSlots : Prop :=
     Mr + Md ≤ T.M.card →
       b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
 
-end Accounting.Guarantees.Actual
+end ResourceAccounting.Guarantees.Actual

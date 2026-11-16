@@ -34,7 +34,7 @@ from verity.protocols.resource_accounting.network.verifier import class_charge a
 from verity.protocols.resource_accounting.network.verifier import connection_rows as C  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"
@@ -46,12 +46,12 @@ def listed(monkeypatch):
     monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in FORMATS.items()})
 
 
-def schedule() -> NetworkCertifierParams:
+def schedule() -> NetworkAttesterParams:
     """The lengths rows' cost runner's own schedule, with its content classes."""
     return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
-def tied() -> NetworkCertifierParams:
+def tied() -> NetworkAttesterParams:
     """The cost runner's schedule made one that can be tied (`content_rows.can_be_tied`): its largest O for every
     class, and that O its response limit."""
     own = schedule()

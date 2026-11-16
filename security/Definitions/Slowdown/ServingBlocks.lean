@@ -13,7 +13,7 @@ bounds the weight of the operations computed wholly inside any block of at most 
 between two consecutive wipes. Each counted operation is assigned to the serving block holding its representative gate.
 The serving blocks are the units `S` of a partition (`Verity.Partition`), its other units the dark remainder, and the
 inference blocks are a `(c, k)`-partition (`Verity.Partition.IsCK`) refining it (`Verity.Partition.Refines`). The
-serving-block bound (`Accounting.Guarantees.ServingBlocks`) is Theorem 3 (counting) applied to each serving block and
+serving-block bound (`ResourceAccounting.Guarantees.ServingBlocks`) is Theorem 3 (counting) applied to each serving block and
 summed.
 
 For a circuit `C` and counted operations `J` (`Counted`):
@@ -36,7 +36,7 @@ block reads, an unregistered input of the block, so at most `ω_max μ k_S` of `
 
 @[expose] public section
 
-namespace Accounting.ServingBlocks
+namespace ResourceAccounting.ServingBlocks
 
 open Verity Finset
 
@@ -111,4 +111,4 @@ def ServingSizes (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (S : Fi
 def WeightsAtMost {C : Circuit} (J : Counted C) (ωmax : ℝ) : Prop :=
   ∀ v ∈ J.V, J.ω v ≤ ωmax
 
-end Accounting.ServingBlocks
+end ResourceAccounting.ServingBlocks

@@ -142,7 +142,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
+  assumption H-μ⁺ (`ResourceAccounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
   party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
   (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
@@ -302,7 +302,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
   or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `InferenceOnly`,
-  `Pouw`, `Pous`, `Certifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
+  `Pouw`, `Pous`, `Certifier`, `Flock`, `ResourceAccounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
