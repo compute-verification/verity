@@ -1,5 +1,19 @@
 # Flock interactive soundness in Lean: what is proved
 
+The audits' proofs are Flock sessions. This directory proves Flock's interactive mode sound at the oracle layer,
+compiled, and as knowledge soundness, proves zero knowledge for a model of the session's views, and holds the audit
+layer on top (`Audit/`).
+
+## Try it
+
+~~~sh
+bash tools/verity/lean/setup.sh security/Proofs
+(cd security/Proofs && lake build Proofs.Flock.Soundness)
+~~~
+
+The first line installs the toolchain and the packages the proofs require and restores `main`'s build from the Lean
+cache; the second builds and checks every proof here, the audit layer's included.
+
 For the expert reviewer and for Table 1. This file is the list of what is proved. `ASSUMPTIONS.md`, beside it, states
 what the theorems assume: every named assumption and hypothesis, in full, with the detail behind each in `assumption-notes/`.
 The audit layer's theorems are in `Audit/README.md`. `DESIGN.md` holds the derivations: the hash-width
