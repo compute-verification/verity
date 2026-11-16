@@ -2,6 +2,17 @@
 # enforces it.
 
 [[metric]]
+id = "vllm/served-sampled-proofs-accepted"
+title = "Served run proofs accepted"
+owner = "vllm"
+unit = "percent of units"
+axis = "Percent of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine."
+better = "higher"
+command = "research run --cwd source -- python3 benchmarks/demo_minutes/sampled_accepted.py SERVED_RUN VERDICT_RUN"
+every = "7d"
+goal = "vllm/served-run-sampled-proofs-accepted"
+
+[[metric]]
 id = "vllm/remote-demo-minutes"
 title = "Remote demo run time"
 owner = "vllm"

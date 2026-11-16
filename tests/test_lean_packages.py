@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 217, "security/Properties": 176, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 192, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -195,8 +195,10 @@ def test_every_fetching_package_has_a_pinned_bundle():
     assert not missing, f"Lake packages whose dependencies {audit.PIN} pins no bundle for: {missing}"
 
 
-#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's
-REPIN = ("research run --on auto --mem-gb 32 --project verity --source . --cwd clone -- bash -c 'python3 "
+#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's;
+#: the run asks what PKG's audit asks
+REPIN = ("research run --on auto --mem-gb \"$(python3 tools/verity/lean/check.py --ask --build PKG)\" --project verity "
+         "--source . --cwd clone -- bash -c 'python3 "
          "tools/verity/lean/lean_audit.py --out \"$OUT/audit\" --export \"$OUT/lean-deps\" --package PKG', then "
          "`python3 tools/verity/lean/lean_audit.py --pin RUN` where the store's remote is configured")
 
@@ -313,7 +315,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
+INLINE = {"security": 841, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():

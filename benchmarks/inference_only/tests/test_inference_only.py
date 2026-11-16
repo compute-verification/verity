@@ -161,18 +161,21 @@ def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) ->
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
-    bound's and is labelled as resting on the Python count."""
-    doc = report.main(["--class", ",".join(map(str, CLASS)), "--out", str(tmp_path)], check=reference, circuit=small(),
-                      commit=lambda: "0" * 40)
+    bound's and is labelled as resting on the Python count. With no record read it is outside the benchmarks'
+    interface: the kit is called as before it, so the JSON holds no ran_with, audit or no_number, and the exit is 0."""
+    code, doc = report.run(["--class", ",".join(map(str, CLASS)), "--out", str(tmp_path)], check=reference,
+                           circuit=small(), commit=lambda: "0" * 40)
     out = capsys.readouterr().out
     lines = out.splitlines()
-    assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
+    assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text()) and code == 0
+    assert not {"ran_with", "audit", "no_number"} & set(doc) and "ran with:" not in out and "not an audit" not in out
     result = json.loads((tmp_path / "result.json").read_text())
     assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
         (report.METRIC, doc["value"], doc["unit"], "modeled")]
     # the goal's target, which a value of 1 misses
     assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
-    assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
+    assert lines[1] == report.STATED and lines[3] == "AS SERVED: 1" and "outside the circuit" in lines[5]
+    assert "Not checked here" in lines[7]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
     assert f"{' '.join(B.EXECUTABLE)} ({B.RULE}): complies: false, k failed" in out
@@ -181,7 +184,7 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     served, built = doc["policies"]
     assert served["units"] == built["units"] == P.UNITS and f"{served['c']:,} Boolean gates a block" in out
     assert (doc["value"], doc["check"], doc["rests_on"]) == (served["value"], served["check"], served["rests_on"])
-    assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and "run" not in doc and doc["commit"] == "0" * 40
+    assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and doc["run"] is None and doc["commit"] == "0" * 40
     assert "nothing on this tree builds or checks" in doc["rests_on"]
     assert (built["label"], built["check"]["verdict"], built["check"]["failed"]) == ("built", "refused", "k")
     assert built["rests_on"].startswith("the Python count of what a block reads") and "does not establish" in built["rests_on"]
@@ -208,14 +211,14 @@ def test_stated_only_builds_nothing_and_another_division_is_the_built_number(cap
     def never(*_a, **_k):
         raise AssertionError("built")
 
-    doc = report.main(["--stated-only"], check=never, commit=lambda: None)
+    _, doc = report.run(["--stated-only"], check=never, commit=lambda: None)
     assert len(doc["policies"]) == 1 and doc["divisions"] == [] and "NOT SERVED" not in capsys.readouterr().out
     (tmp_path / "stated.toml").write_text(P.SERVED.read_text())
-    doc = report.main(["--stated-only", "--policy", str(tmp_path / "stated.toml"), "--out", str(tmp_path)], check=never,
+    _, doc = report.run(["--stated-only", "--policy", str(tmp_path / "stated.toml"), "--out", str(tmp_path)], check=never,
                       commit=lambda: None)
     assert doc["policies"][0]["label"] == "stated" and (tmp_path / "inference_only.json").is_file()
     assert not (tmp_path / "result.json").exists()
-    doc = report.main(["--class", ",".join(map(str, CLASS)), "--division", "proof block"], check=reference,
+    _, doc = report.run(["--class", ",".join(map(str, CLASS)), "--division", "proof block"], check=reference,
                       circuit=small(), commit=lambda: None)
     assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"
     assert doc["policies"][1]["n"] == 9 * doc["divisions"][0]["n"]
@@ -231,7 +234,7 @@ def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, 
     monkeypatch.setattr(window_circuit, "class_circuit", refuse)
     monkeypatch.setattr(B, "registered", lambda _model: None)
     with pytest.raises(SystemExit) as e:
-        report.main(["--class", "2,8,2"], check=reference, commit=lambda: None)
+        report.run(["--class", "2,8,2"], check=reference, commit=lambda: None)
     out, err = capsys.readouterr()
     assert e.value.code == 2 and "AS SERVED: 1" in out and "NOT SERVED" not in out
     assert "the integration lowers no circuit of class 2,8,2" in err and "a template the composer wouldn't prove" in err
@@ -272,9 +275,9 @@ def test_the_tied_file_is_the_served_class_reading_its_scan_state_row_and_a_salt
 def test_with_no_share_no_figure_of_the_tied_policy_prints(capsys) -> None:
     """`--uncredited-share` has no default: without it the command prints the served policy as before and says why the
     tied policy's figures are absent, and its number is nowhere in the print or the JSON."""
-    doc = report.main(["--stated-only"], commit=lambda: None)
+    _, doc = report.run(["--stated-only"], commit=lambda: None)
     out = capsys.readouterr().out
-    assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[2] == "AS SERVED: 1"
+    assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[1:4] == [report.STATED, "", "AS SERVED: 1"]
     assert "no figure printed" in out and "--uncredited-share S" in out and "has no default" in out
     assert report.TIED_LABEL not in out and "limit at s" not in out and "37,653" not in out
     assert P.WORK_IS in out and doc["work_is"] == P.WORK_IS and "embedding table outside the registered weights" in out
@@ -284,7 +287,7 @@ def test_the_tied_policy_is_never_priced_as_a_stated_policy(capsys) -> None:
     """`--policy tied.toml` would print the tied policy's number as a headline with no share beside it: refused,
     with what to type instead."""
     with pytest.raises(SystemExit) as e:
-        report.main(["--policy", str(P.TIED), "--stated-only"], commit=lambda: None)
+        report.run(["--policy", str(P.TIED), "--stated-only"], commit=lambda: None)
     out, err = capsys.readouterr()
     assert e.value.code == 2 and "--uncredited-share S" in err and "never printed alone" in err and "37,653" not in out
 
@@ -293,7 +296,7 @@ def test_the_tied_policy_is_never_priced_as_a_stated_policy(capsys) -> None:
 def test_a_share_is_a_number_from_zero_to_one_or_a_percentage(text, capsys) -> None:
     assert report._share("0.2315%") == pytest.approx(report._share("0.002315")) and report._share("0") == 0
     with pytest.raises(SystemExit) as e:
-        report.main(["--stated-only", "--uncredited-share", text], commit=lambda: None)
+        report.run(["--stated-only", "--uncredited-share", text], commit=lambda: None)
     assert e.value.code == 2 and "a share of a block's work" in capsys.readouterr().err
 
 
@@ -305,10 +308,10 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     (`min_cut.capped`) and the pooled total in gates at that limit. No number of the tied policy is printed without
     its limit. The fourth reading counts the uncredited words as fresh input, so it is never above the first."""
     s = 0.002315
-    doc = report.main(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
+    _, doc = report.run(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
     out = capsys.readouterr().out
     lines = out.splitlines()
-    assert json.loads(lines[-1]) == doc and doc["value"] == 1 and lines[2] == "AS SERVED: 1"
+    assert json.loads(lines[-1]) == doc and doc["value"] == 1 and lines[3] == "AS SERVED: 1"
     assert out.index("AS SERVED: 1") < out.index("Over a monitoring period") < out.index(report.TIED_LABEL)
     assert "RESTS ON NO PoUW VERDICT" in report.TIED_LABEL and "NOT SERVED" in report.TIED_LABEL
     assert "s = 0.2315% of a block's work was typed on the command line (--uncredited-share)" in out

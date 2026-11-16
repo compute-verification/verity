@@ -1,8 +1,9 @@
 """`verity bench memory` (`run.py`): the number is the γ at the specification's rate that an accepted session's
 verifier recorded, printed as text and as one line of JSON; a session that wasn't accepted, or a run with no verifier's
 record, prints no number and exits 1. The number is printed with its error, the ledger's declared one, and a session
-whose error is 1 or more prints "no bound at this period" with it and no number. The three ways in share that printer: a recorded run, the loopback (which says
-it certifies nothing) and the node run (a gate run of one honest session, read from its fire run). The two references
+whose error is 1 or more prints "no bound at this period" with it and no number. The four ways in share that printer: a recorded run, the loopback (which says
+it certifies nothing), the node run (a gate run of one honest session, read from its fire run) and `--local` (a served
+session on this machine, which says it is a measurement and not an audit). The two references
 are read from their runs, and one that can't be read never takes the number down. Under a research run an accepted
 session's amounts are also written through the harness kit's writer, and what is printed stays the same to the byte.
 
@@ -118,8 +119,9 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; no `research run` around
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
-    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
-                 "HOST_GIB", "LEAF_CTAS", *WINDOWED):
+    for name in ("RESEARCH_RUN_DIR", "OUT", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
+                 "HOST_GIB", "LEAF_CTAS", "PLAN", "LOCAL_WORK", "LOCAL_ROW", "VLLM_PY", "GPU", "GPU_LEASE_DIR",
+                 *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))
     s = FakeStore(tmp_path / "store")
@@ -299,6 +301,45 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     assert text[1] == f"  {M.LOOPBACK}" and doc["loopback"] is True
     assert text[2] == f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier"
     assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
+
+
+def test_a_recorded_local_session_is_printed_as_one_and_writes_no_node_result(store, capsys, monkeypatch, tmp_path):
+    """A run `--local` left holds its document, which says so: read back with `--from`, inside another research run,
+    it is still a `--local` measurement, in the text and in the JSON, and writes nothing under the node's row."""
+    held = a_run(monkeypatch, tmp_path)
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())), "node.json": {},
+                    "out/memory.json": {"value": 0.25, "run": RUN, "loopback": False, "local": M.LOCAL}})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[1] == f"  {M.LOCAL}" and (doc["local"], doc["loopback"]) == (M.LOCAL, False)
+    assert results(held) == []
+
+
+def test_a_local_run_that_left_no_document_is_not_printed_as_a_node_session(store, capsys):
+    store.add(RUN, {"out/verifier.json": a_record(a_session()), "node.json": {}})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"{RUN} holds --local's node.json but no out/memory.json saying what it was" in err
+
+
+@pytest.mark.parametrize("marks", [{}, {"loopback": "no"}, {"loopback": False, "local": 1},
+                                   {"loopback": False, "local": ""}, {"loopback": True, "local": "local: x"}])
+def test_a_run_whose_document_does_not_say_what_it_was_is_not_printed(store, capsys, marks):
+    store.add(RUN, {"out/verifier.json": a_record(a_session()), "out/memory.json": {"value": 0.25, "run": RUN, **marks}})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"{RUN}'s out/memory.json doesn't say what its session was" in err
+
+
+def test_a_run_that_ran_local_keeps_its_document_when_it_prints_another_session(store, capsys, monkeypatch, tmp_path):
+    held = a_run(monkeypatch, tmp_path)
+    (held / "out").mkdir(parents=True)
+    mine = {"value": 0.25, "run": BENCH, "loopback": False, "local": M.LOCAL}
+    (held / "out" / "memory.json").write_text(json.dumps(mine))
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
+    assert bench(store, "--from", RUN) == 0
+    assert json.loads((held / "out" / "memory.json").read_text()) == mine
+    assert "this run ran --local, and its out/memory.json stays --local's document" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("body", ["{", "[1]", "7"])
@@ -631,11 +672,13 @@ def test_a_dry_node_run_passes_the_flag_on_prints_no_number_and_exits_as_the_gat
     assert out == "" and "there is no number" in err and store.asked == []
 
 
-@pytest.mark.parametrize("argv", [[], ["p", "--loopback"], ["--from", RUN, "--loopback"], ["p", "--from", RUN]])
+@pytest.mark.parametrize("argv", [[], ["p", "--loopback"], ["--from", RUN, "--loopback"], ["p", "--from", RUN],
+                                  ["--local", "--loopback"], ["p", "--local"]])
 def test_the_command_takes_exactly_one_way_in(store, capsys, argv):
     with pytest.raises(SystemExit) as e:
         bench(store, *argv)
-    assert e.value.code == 2 and "one of PERIOD (the node run), --from RUN or --loopback" in capsys.readouterr().err
+    assert e.value.code == 2 and ("one of PERIOD (the node run), --from RUN, --loopback or --local"
+                                  in capsys.readouterr().err)
 
 
 def a_run(monkeypatch, tmp_path: Path) -> Path:
@@ -676,7 +719,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     doc = json.loads(line)
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
-    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "host_run", "no_bound", "session", "verdict",
+    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "host_run", "no_bound", "session",
+                         "verdict",
                          "error", "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "beside"]
     got = written(held)
     assert list(got) == WRITTEN
@@ -917,3 +961,155 @@ def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds
 
     assert verdict(2.0 ** -100, 2.0 ** -31) == "within target"
     assert verdict(2.0 ** -31, 2.0 ** -120) == "within target; its error is above 2^-100"
+
+
+class Machine:
+    """This machine as `--local` asks it, one stand-in for every process it starts: nvidia-smi answers `card` (or fails
+    with `smi_rc`), the bootstrap ends `boot_rc`, and `run.sh` writes `record` as its verifier's and ends `rc`."""
+
+    def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, boot_rc: int = 0, rc: int = 0,
+                 record: dict | None = None) -> None:
+        self.card, self.smi_rc, self.boot_rc, self.rc = card, smi_rc, boot_rc, rc
+        self.record = a_record(a_session(gamma=0.199)) if record is None else record
+        self.started: list[tuple[list[str], dict]] = []
+
+    def __call__(self, argv, **kw):
+        self.started.append((argv, dict(kw.get("env") or {})))
+        if argv[0] == "nvidia-smi":
+            return SimpleNamespace(returncode=self.smi_rc, stdout=self.card + "\n" if not self.smi_rc else "",
+                                   stderr="" if not self.smi_rc else "NVIDIA-SMI has failed")
+        if argv[0] == "git":
+            return SimpleNamespace(returncode=0, stdout=COMMIT + "\n" if argv[1] == "rev-parse" else "")
+        if argv[1] == str(M.BOOTSTRAP):
+            return SimpleNamespace(returncode=self.boot_rc)
+        out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "verifier.json").write_text(json.dumps(self.record))
+        return SimpleNamespace(returncode=self.rc)
+
+    def runs(self) -> list[tuple[list[str], dict]]:
+        """The `run.sh` processes started."""
+        return [(a, e) for a, e in self.started if a[:2] == ["bash", str(M.RS / "run.sh")]]
+
+
+@pytest.fixture
+def work(tmp_path, monkeypatch) -> Path:
+    """LOCAL_WORK in the test's directory, and no `gpu-lease` installed."""
+    monkeypatch.setenv("LOCAL_WORK", str(tmp_path / "work"))
+    monkeypatch.setattr(M.shutil, "which", lambda name: None)
+    return tmp_path / "work"
+
+
+def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_it_is_no_audit(store, capsys, work):
+    """`--local` bootstraps the vLLM environment and the checkpoint in LOCAL_WORK, then runs `run.sh` with ROLE=both
+    and SERVE=row on the Llama 3.2 1B row for this card, the tree's own lease keeping its locks in LOCAL_WORK; its
+    number is its verifier's, and the text's first lines and the JSON say the verifier and the coins ran on the machine
+    measured. It reads no evidence store, so the references are left out with that reason."""
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    boot = [(a, e) for a, e in machine.started if a[1:2] == [str(M.BOOTSTRAP)]]
+    assert [a for a, _ in boot] == [["bash", str(M.BOOTSTRAP), "--cases", M.LOCAL_CASE, "--out", str(work / "bootstrap")]]
+    assert (boot[0][1]["WORK"], boot[0][1]["HF_HOME"]) == (str(work), str(work / "hf"))
+    ((argv, env),) = machine.runs()
+    assert (env["ROLE"], env["SERVE"], env["ROW"], env["PLAN"]) == ("both", "row", M.LOCAL_ROWS["9.0"], "serve")
+    assert (env["VLLM_PY"], env["NODE_WORKSPACE"], env["HF_HOME"]) == (str(work / "venv312/bin/python"), str(work),
+                                                                       str(work / "hf"))
+    assert env["GPU_LEASE_DIR"] == str(work / "gpu-lease")
+    assert Path(env["RESEARCH_RUN_DIR"]).parent == work / "runs", "outside a research run its records are kept"
+    assert (Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json").is_file()
+    text, doc, err = printed(capsys)
+    assert text[0].startswith("memory: 0.199 of the node's memory read rate is left uncertified by this session")
+    assert text[1] == f"  {M.LOCAL}" and "not an audit" in text[1] and doc["local"] == M.LOCAL
+    assert text[2] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
+    assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
+    assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
+    assert M.LOCAL_ROWS["9.0"] in err
+
+
+def test_a_local_session_under_a_research_run_writes_no_result(store, capsys, work, tmp_path, monkeypatch):
+    """It is a measurement, not an audit: its document is the run's `out/memory.json`, and no result reaches the
+    Metrics tab."""
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    machine = Machine(record=a_record(with_amounts(a_session(gamma=0.199))))
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["RESEARCH_RUN_DIR"] == str(tmp_path / "rundir")
+    _, doc, _ = printed(capsys)
+    assert doc["run"] == RUN and doc["local"] == M.LOCAL
+    assert json.loads((tmp_path / "rundir" / "out" / "memory.json").read_text()) == doc
+    assert not (tmp_path / "rundir" / "result.json").exists()
+
+
+def test_a_local_session_with_out_writes_its_document_there_and_no_measurement(store, capsys, work, tmp_path,
+                                                                               monkeypatch):
+    """Outside a research run, OUT names where the document is written, the file the README names; a --local
+    session is no audit, so its result holds no measurement."""
+    monkeypatch.setenv("OUT", str(tmp_path / "mine"))
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, _ = printed(capsys)
+    assert json.loads((tmp_path / "mine" / "memory.json").read_text()) == doc and doc["local"] == M.LOCAL
+    result = tmp_path / "mine" / "result.json"
+    assert not result.exists() or json.loads(result.read_text()).get("measurements", []) == []
+
+
+@pytest.mark.parametrize("card, row", [("NVIDIA H100 80GB HBM3, 9.0", M.LOCAL_ROWS["9.0"]),
+                                       ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", M.LOCAL_ROWS["12.0"])])
+def test_local_takes_the_row_of_the_cards_compute_capability(store, capsys, work, card, row):
+    machine = Machine(card=card)
+    assert bench(store, "--local", run=machine) == 0
+    ((_, env),) = machine.runs()
+    assert env["ROW"] == row
+
+
+def test_local_row_vllm_py_and_gpu_are_the_persons_to_set(store, capsys, work, monkeypatch, tmp_path):
+    """LOCAL_ROW names the row, GPU the card nvidia-smi is asked about, and VLLM_PY an environment of their own, so
+    no bootstrap runs; an installed `gpu-lease` keeps its own locks."""
+    monkeypatch.setenv("LOCAL_ROW", "my-row")
+    monkeypatch.setenv("VLLM_PY", str(tmp_path / "py"))
+    monkeypatch.setattr(M.shutil, "which", lambda name: "/usr/local/bin/gpu-lease")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    assert not [a for a, _ in machine.started if a[0] == "nvidia-smi" or a[1:2] == [str(M.BOOTSTRAP)]]
+    ((_, env),) = machine.runs()
+    assert (env["ROW"], env["VLLM_PY"]) == ("my-row", str(tmp_path / "py")) and "GPU_LEASE_DIR" not in env
+    monkeypatch.delenv("LOCAL_ROW")
+    monkeypatch.setenv("GPU", "3")
+    machine = Machine()
+    assert bench(store, "--local", run=machine) == 0
+    assert machine.started[0][0][-2:] == ["-i", "3"]
+
+
+@pytest.mark.parametrize("machine, why", [
+    (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)"),
+    (Machine(card="NVIDIA L40S, 8.9"), "NVIDIA L40S is compute capability 8.9, and the tree has a Llama 3.2 1B row only "
+                                       "for 9.0 and 12.0"),
+    (Machine(boot_rc=3), "the bootstrap failed (pod_bootstrap.sh exited 3"),
+    (Machine(rc=6), "the served session failed (run.sh exited 6)"),
+    (Machine(record=a_record(a_session(accepted=False, failure="window 2: a receipt doesn't open"))),
+     "session 0 was not accepted (window 2: a receipt doesn't open)"),
+], ids=["no-gpu", "no-row", "bootstrap", "run-sh", "rejected"])
+def test_a_local_session_that_cannot_run_or_is_not_accepted_prints_no_number_and_exits_1(store, capsys, work, machine,
+                                                                                       why):
+    assert bench(store, "--local", run=machine) == 1
+    out, err = capsys.readouterr()
+    assert out == "" and f"memory: no number: {why}" in err
+
+
+def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, capsys, work, monkeypatch):
+    """PLAN is the session's plan under both one-machine ways in: a cheat's is run, and the verifier's refusal is the
+    command's, with no number and exit 1."""
+    monkeypatch.setenv("PLAN", "skip:0.0625")
+    rejected = a_record(a_session(accepted=False, failure="window 0: 4 of 16 openings missing"))
+    loop = Machine(record=rejected)
+    assert bench(store, "--loopback", run=loop) == 1
+    ((_, env),) = loop.runs()
+    assert env["PLAN"] == "skip:0.0625"
+    monkeypatch.setenv("PLAN", "servedrop:1")
+    served = Machine(record=rejected)
+    assert bench(store, "--local", run=served) == 1
+    ((_, env),) = served.runs()
+    assert env["PLAN"] == "servedrop:1"
+    out, err = capsys.readouterr()
+    assert out == "" and err.count("memory: no number: session 0 was not accepted") == 2

@@ -89,6 +89,45 @@ def test_a_suite_moved_whole_passes(repo: Path) -> None:
     assert gone(repo, WHOLE)["count"] == 0
 
 
+def test_a_suite_mirrored_under_the_roots_tests_with_its_pyproject_beside_them_passes(repo: Path) -> None:
+    """Every test under the root's `tests/`, mirrored by path: `old/pkg/tests/` to `tests/old/pkg/` and the pyproject beside
+    it, whose `testpaths` the map rewrites from `tests` to `.`: each test keeps its place in its test path, and an input `X`
+    covers its mirror `tests/X`. Without the rewrite, every test is parted from its suite."""
+    rows = ROOTS + ('[paths]\n"old/pkg/tests/" = "tests/old/pkg/"\n"old/pkg/pyproject.toml" = "tests/old/pkg/pyproject.toml"\n\n'
+                    '[pyproject."tests/old/pkg/pyproject.toml"]\n')
+    r = suites(repo, rows + 'testpaths_replace = { "tests" = "." }\n')
+    assert (r["orphans"], r["parted"], r["inputs"]) == ([], [], [])
+    assert len(suites(repo, rows)["parted"]) == 4
+
+
+def test_a_mirrored_suite_reads_the_code_its_old_directory_held_through_the_maps_add_inputs(repo: Path) -> None:
+    """A suite whose directory held code its tests import (`old/pkg/helper.py`) covers it, once its pyproject is beside its
+    tests under `tests/`, only through the input the map's `[pyproject]` `add_inputs` gives it."""
+    (repo / "old/pkg/helper.py").write_text("")
+    (repo / "old/pkg/tests/test_c.py").write_text("from old.pkg import helper\n\n\ndef test_c():\n    assert helper\n")
+    for args in (["add", "-A"], ["commit", "-q", "-m", "helper"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, env={**os.environ, **ENV})
+    rows = ROOTS + ('[paths]\n"old/pkg/tests/" = "tests/old/pkg/"\n"old/pkg/pyproject.toml" = "tests/old/pkg/pyproject.toml"\n\n'
+                    '[pyproject."tests/old/pkg/pyproject.toml"]\ntestpaths_replace = { "tests" = "." }\n')
+    assert [x["module"] for x in suites(repo, rows)["inputs"]] == ["old/pkg/helper.py"]
+    assert suites(repo, rows + 'add_inputs = ["old/pkg"]\n')["inputs"] == []
+
+
+def test_an_input_naming_a_suites_directory_still_names_its_code_once_its_pyproject_is_mirrored(repo: Path) -> None:
+    """`old/lib` becomes a suite, and both suites are mirrored: `old/pkg`'s input `old/lib` names the code that stays, not
+    where `old/lib`'s pyproject lands (as it would for a package moved whole)."""
+    (repo / "old/lib/pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (repo / "old/lib/tests/test_l.py").parent.mkdir()
+    (repo / "old/lib/tests/test_l.py").write_text("def test_l():\n    pass\n")
+    for args in (["add", "-A"], ["commit", "-q", "-m", "lib"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, env={**os.environ, **ENV})
+    rows = ROOTS + "[paths]\n" + "".join(f'"old/{x}/tests/" = "tests/old/{x}/"\n"old/{x}/pyproject.toml" = "tests/old/{x}/pyproject.toml"\n'
+                                       for x in ("pkg", "lib"))
+    rows += "".join(f'\n[pyproject."tests/old/{x}/pyproject.toml"]\ntestpaths_replace = {{ "tests" = "." }}\n' for x in ("pkg", "lib"))
+    r = suites(repo, rows)
+    assert (r["orphans"], r["parted"], r["inputs"]) == ([], [], [])
+
+
 def test_the_tree_as_it_is_passes(repo: Path) -> None:
     r = suites(repo)
     assert (r["orphans"], r["parted"], r["inputs"]) == ([], [], [])

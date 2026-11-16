@@ -20,6 +20,10 @@ that finds it held does nothing and says so. Then:
                 that is no `research run` is run under one;
               - its `research run` options are all in ALLOWED, each with a value of its form: no option names a path of the
                 pod (`--send`, `--source DIR`), so a row can't ship one of the pod's files to a machine;
+              - it asks no more than the default job (DEFAULT_JOB, `research run`'s own): no `--pool`, and `--mem-gb` and
+                `--timeout` each at or under the default's GiB and seconds, read as `research run` reads them (a value it
+                can't read is over; a row may carry no `--cpus`, so it takes the default's CPUs); any other row is rerun
+                by its owner, whether or not the plan lists a machine for it;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
               - none of its numbers has a launch of this loop's still in flight, or one that ran and ended less than that
                 number's `every` ago, whatever the door says (the record);
@@ -32,7 +36,7 @@ that finds it held does nothing and says so. Then:
               - it has a machine. A command that asks for GPUs (`--gpus`) or names any machine but `auto` (`--on NODE`,
                 `--on vy-...`) runs only on a machine the plan (`--plan`) lists for one of its numbers now, the machine it
                 names when it names one, and that none of this loop's launches is in flight on. Any other runs on `--on`,
-                in its row's `--pool`, else in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
+                in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
               - this pass has launched fewer than `--max`;
               - the stop file (`--stop`) is absent, read again just before each launch: it stops every launch (a dry run
                 judges all the same).
@@ -70,6 +74,7 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -81,17 +86,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from research.jobs import dispatch
+from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
+from research.jobs import dispatch, runline
+from research.metrics import REGISTRY_ROOTS
+from research.remote import timeout_seconds
 from research.runs import ENDED
 
 SCHEMA = "verity/metrics-rerun/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 NAME = "metrics.toml"
-TREES = ("benchmarks", "demos", "infra", "tools")      # where a metrics.toml may sit (tests/test_metrics_registry.py)
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
 LOOPS = "infra/control/"                                # a row whose command's script is here is a loop's, which sends it itself
 PARKED = "top/parked"                                   # a row whose goal is this is parked work, rerun only by hand
-SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
+#: the default job (`research run`'s own, in GiB and seconds): the loop launches a row only when its `research run` asks no more
+#: than this, and its owner reruns any other. None: any value is more, as a pool of the row's own is
+DEFAULT_JOB: dict[str, float | None] = {"--mem-gb": AUTO_MEM_GB, "--timeout": AUTO_MAX_MIN * 60, "--pool": None}
+SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(REGISTRY_ROOTS)})/\S+\.(?:sh|py))(?:\s|$)")
 EVERY = re.compile(r"^([1-9][0-9]*)([mhd])$")
 UNIT_S = {"m": 60, "h": 3600, "d": 86400}
 #: the machines whose disks are too small for a measurement's tree and outputs
@@ -108,8 +118,8 @@ ALLOWED: dict[str, re.Pattern | frozenset | None] = {
     "--cwd": frozenset({"source", "clone"}),
     "--pool": WORD,                  # the slot pool on the machine
     "--as": WORD,                    # the lane its slot names
-    "--mem-gb": NUMBER,              # memory reserved on the machine
-    "--timeout": NUMBER,             # the run's own bound
+    "--mem-gb": WORD,                # memory reserved on the machine, read as `research run` reads it (past_default)
+    "--timeout": WORD,               # the run's own bound, read as `research run` reads it (past_default)
     "--gpus": NUMBER,                # GPUs it waits for on the machine; the plan decides the machine
     "--store-read": None,            # a read-only store key for the workload, minted for the run and deleted after it
 }
@@ -195,9 +205,9 @@ def span(s: float) -> str:
 # ---- the declarations and their commands ----------------------------------------------------------------------------------------
 
 def declarations(tree: Path) -> tuple[list[Job], list[str]]:
-    """The jobs of every metrics.toml under TREES, and a line for each file that isn't TOML."""
+    """The jobs of every metrics.toml under REGISTRY_ROOTS, and a line for each file that isn't TOML."""
     jobs, broken = [], []
-    for top in TREES:
+    for top in REGISTRY_ROOTS:
         for d, dirs, files in os.walk(tree / top):
             dirs[:] = sorted(x for x in dirs if x not in SKIP)
             if NAME not in files:
@@ -215,6 +225,25 @@ def declarations(tree: Path) -> tuple[list[Job], list[str]]:
     return sorted(jobs, key=lambda j: (j.where, j.ids)), broken
 
 
+def past_default(opts: list[tuple[str, str | None]]) -> list[str]:
+    """What of a row's options asks more than DEFAULT_JOB, each as the skip line says it. A value is read as `research run`
+    reads it (`--timeout` by remote.timeout_seconds, `--mem-gb` as a float); one it can't read is past the default too."""
+    past = []
+    for name, value in opts:
+        if name not in DEFAULT_JOB:
+            continue
+        if (most := DEFAULT_JOB[name]) is None:
+            past.append(f"{name} {value}")
+            continue
+        try:
+            asked = timeout_seconds(value) if name == "--timeout" else float(value)
+        except ValueError:
+            asked = math.nan
+        if not asked <= most:
+            past.append(f"{name} {value} could not be read" if math.isnan(asked) else f"{name} {value} over {most:g}")
+    return past
+
+
 def options(command: str) -> tuple[list[tuple[str, str | None]], list[str], bool]:
     """A command as (its `research run` options, each checked against ALLOWED, the workload, whether it is a `research run`).
     Raises Refused for a line that doesn't split, an option outside ALLOWED, a value not of its option's form, or one given
@@ -228,30 +257,11 @@ def options(command: str) -> tuple[list[tuple[str, str | None]], list[str], bool
     if "--" not in tokens:
         raise Refused("its `research run` has no `--` before its workload")
     i = tokens.index("--")
-    raw, out, seen = tokens[2:i], [], set()
-    while raw:
-        tok = raw.pop(0)
-        name, eq, value = tok.partition("=")
-        if name not in ALLOWED:
-            raise Refused(f"its `research run` takes {name}, which a declared command may not carry (allowed: "
-                          f"{', '.join(ALLOWED)})")
-        if name in seen:
-            raise Refused(f"its `research run` gives {name} twice")
-        seen.add(name)
-        form = ALLOWED[name]
-        if form is None:
-            if eq:
-                raise Refused(f"its `research run` gives the flag {name} a value")
-            out.append((name, None))
-            continue
-        if not eq:
-            if not raw:
-                raise Refused(f"its `research run` gives {name} no value")
-            value = raw.pop(0)
-        if not (value in form if isinstance(form, frozenset) else form.match(value)):
-            raise Refused(f"its `research run` gives {name} {value!r}, which isn't "
-                          + (" or ".join(sorted(form)) if isinstance(form, frozenset) else f"of the form {form.pattern}"))
-        out.append((name, value))
+    try:
+        out = runline.options(tokens[2:i], ALLOWED, unknown=lambda name: f"takes {name}, which a declared command may not "
+                                                                         f"carry (allowed: {', '.join(ALLOWED)})")
+    except runline.Refused as e:
+        raise Refused(f"its `research run` {e}") from None
     return out, tokens[i + 1:], True
 
 
@@ -272,7 +282,7 @@ def planned(opts: list[tuple[str, str | None]]) -> bool:
 def argv_for(opts: list[tuple[str, str | None]], work: list[str], wrapped: bool, machine: str, pool: str | None) -> tuple[str, ...]:
     rest = [x for n, v in opts if n != "--on" for x in ((n,) if v is None else (n, v))]
     head = ["research", "run", "--on", machine]
-    if pool and get(opts, "--pool") is None:
+    if pool:
         head += ["--pool", pool]
     if get(opts, "--project") is None:
         head += ["--project", "verity"]
@@ -417,6 +427,10 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         except Refused as x:
             skip(f"{why}; but {x}")
             continue
+        if past := past_default(opts):
+            skip(f"{why}; but its command asks for more than the default job ({', '.join(past)}): such a number is rerun "
+                 "by its owner")
+            continue
         if wrapped and get(opts, "--on") is None:
             skip(f"{why}; but its command is a local run (a `research run` without --on), which runs where it is launched, "
                  "and the loop runs no workload on the pod")
@@ -437,7 +451,6 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
             skip(f"{why}; but held: its command failed twice running ({mine[-2]['run']}, {mine[-1]['run']}) under this "
                  f"declaration, and is launched again once its rows in {job.where} change")
             continue
-        pool = get(opts, "--pool")
         if planned(opts):
             named = get(opts, "--on")
             free = [p["machine"] for p in plan if p["from"] <= now < p["until"] and p["machine"] not in SMALL_DISK
@@ -447,9 +460,9 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
                 what = "asks for GPUs" if get(opts, "--gpus") else f"names its machine ({named})"
                 skip(f"{why}; but it {what}, and the plan ({cfg.plan}) lists no machine free for it now")
                 continue
-            machine = free[0]
+            machine, pool = free[0], None
         else:
-            machine, pool = cfg.on, pool or cfg.pool
+            machine, pool = cfg.on, cfg.pool
         if launched >= cfg.max:
             skip(f"{why}; but this pass has made its {cfg.max} launches (--max)")
             continue
@@ -673,7 +686,7 @@ def parse(argv: list[str] | None = None) -> tuple[Settings, argparse.Namespace]:
     ap.add_argument("--stop", required=True, type=Path, help="while this file exists, nothing is launched")
     ap.add_argument("--plan", required=True, type=Path, help="the week's GPU plan: [[free]] machine, from, until, metrics")
     ap.add_argument("--on", required=True, type=machine, metavar="MACHINE", help="a CPU command's machine")
-    ap.add_argument("--pool", required=True, help="a CPU command's pool on that machine, unless its row names one")
+    ap.add_argument("--pool", required=True, help="a CPU command's pool on that machine")
     ap.add_argument("--every", required=True, type=float, metavar="S", help="seconds between passes")
     ap.add_argument("--max", type=int, default=2, help="launches a pass at most")
     ap.add_argument("--url", default=URL, help="origin")
