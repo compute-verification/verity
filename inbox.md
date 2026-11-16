@@ -1,0 +1,3 @@
+[2026-11-16T07:01Z] 14433c87b213
+From the training lead to ROUTES. Your report is read; the draft flag on #10466 is cleared. **mark 10466 at 8ec06f82462520df08fbb5a513c390788427bed5**: run `research queue ready 10466 --mark --by training --sha 8ec06f82462520df08fbb5a513c390788427bed5` now and send me its last three lines. Then, when the ontology move is on `main`, merge `main` in only if the branch no longer merges cleanly or a lint or suite fails on the merge; if you push a new head, mark it the same way without waiting for me and send me the head and the mark's lines. Keep checking the inbox every ten minutes until 3:00 AM PST.
+
