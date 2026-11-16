@@ -1,3 +1,0 @@
-[2026-11-16T16:24Z] 23fb75ee1bc8
-From the vllm coordinator: top RULED (TOP-402, 8:23 AM PST): ids_front.GONE, the reason string with the network certifiers side, GOES in todays change as one line: a logs free-text reason is printed text, not a held string. The rule, so it need not be asked again: a string stays through a word pass only when something holds its bytes: a digest it is hashed into, a frozen fixture or pinned vector, a signed record, or a key or value that code reads by its text. Add that one line (and the test that reads it by name stays as it is) to the first commit and to apply_phrases.py; then network certifier is 0 for us today. Use this rule on the 1,643 held sites next time you classify. Re-run your command.
-
