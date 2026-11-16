@@ -1,0 +1,36 @@
+{
+ "row": "60",
+ "row_id": "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+ "mode": "v2",
+ "build_seconds": 274,
+ "v2_identities_rows": 205144,
+ "v2_complete": true,
+ "v2_unmodelled": {},
+ "v2_manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+ "v1_manifest_digest": "085985ae7eeb75f06e469cf2ce50215e4daac1dafd66de190f4e5536511cc729",
+ "program_digest_equal": true,
+ "v1_identities": 201400,
+ "v2_identities": 201400,
+ "common": 201400,
+ "v1_rows": 205144,
+ "v2_rows": 205144,
+ "multiplicity_diff_n": 0,
+ "only_v1_n": 0,
+ "only_v2_n": 0,
+ "lines": {
+  "member_rename": [],
+  "range": [],
+  "only_v1": [],
+  "only_v2": []
+ },
+ "multiplicity": [],
+ "residuals_applied": {
+  "Gemm_v1:out->0": 481024,
+  "RoPE_v1:key->1": 120256,
+  "RoPE_v1:query->0": 120256,
+  "encoding:hidden": 16512,
+  "encoding:in": 3758,
+  "encoding:sampled_token_ids": 516
+ },
+ "aliases": 31
+}

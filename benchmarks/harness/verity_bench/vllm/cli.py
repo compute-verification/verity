@@ -1,0 +1,96 @@
+"""Run the shared vLLM overhead benchmark.
+
+    verity-bench vllm --preset llama31-8b-fp8-1gpu \
+        --arms stock,stock-fp8 --sweep quick --reps 3 --out "$OUT"
+
+It writes the benchmark's document to `--out`/result.json. Under a research run it also writes each of the document's
+numbers into the run's result through the kit's writer (`result.record`).
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+from verity_config import sha256
+
+from verity_bench import kit, settings
+from verity_bench.vllm.arms import resolve_arms
+from verity_bench.vllm.presets import expand_sweep, load_spec, local_checkpoint, served
+from verity_bench.vllm.result import record, write
+from verity_bench.vllm.engine import ProcessEngineFactory
+from verity_bench.vllm.runner import run_benchmark
+from verity_bench.vllm.table import render
+
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--preset", required=True, help="a spec under benchmarks/harness/specs, by name")
+    parser.add_argument("--model-path", type=Path, default=None,
+                        help="machine-local checkpoint override; every file is hashed into the result identity")
+    parser.add_argument("--arms", default=None,
+                        help="comma-separated arm ids; include every arm's control (default: the spec's)")
+    parser.add_argument("--arm-module", action="append", default=None,
+                        help="experimental pkg.mod:NAME exposing install(target); repeatable (default: the spec's)")
+    parser.add_argument("--sweep", default=None, help="a sweep under benchmarks/harness/specs, by name (default: the spec's)")
+    parser.add_argument("--reps", type=int, default=None)
+    parser.add_argument("--warmups", type=int, default=None, help="exactly this many discarded runs of a point before an engine's first timed one")
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--eager", action="store_true",
+                        help="run eagerly instead of the preset's default CUDA graphs")
+
+
+def run(a: Any) -> int:
+    spec = load_spec(a.preset)
+    reps = spec.reps if a.reps is None else a.reps
+    warmups, max_warmups = (spec.warmups, spec.max_warmups) if a.warmups is None else (a.warmups, None)
+    sweep = spec.sweep if a.sweep is None else a.sweep
+    if reps < 1:
+        raise ValueError("--reps must be positive")
+    preset = spec.preset
+    if a.model_path is not None:
+        preset = local_checkpoint(preset, a.model_path)
+    preset, eager = served(preset, a.eager or spec.eager)
+    modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
+    names = spec.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
+    arms = resolve_arms(names, modules, {k: v for k, v in spec.arm_settings.items() if k in names})
+    points = expand_sweep(sweep)
+    a.out.mkdir(parents=True, exist_ok=True)
+    recorded = settings.is_set("RESEARCH_RUN_DIR")
+    kept = os.path.relpath(a.out.resolve() / "result.json", Path(settings.RESEARCH_RUN_DIR).resolve())
+    if recorded and kept == kit.RESULT:
+        raise ValueError(f"--out {a.out} is the research run's directory, whose result.json is the run's result: give its "
+                         "out/ instead")
+    doc = run_benchmark(
+        preset,
+        arms,
+        points,
+        sweep=sweep,
+        reps=reps,
+        warmups=warmups,
+        max_warmups=max_warmups,
+        factory=ProcessEngineFactory(eager=eager),
+        config_identity={"resolved_spec_sha256": sha256(replace(
+            spec,
+            arms=tuple(arm.id for arm in arms),
+            sweep=sweep,
+            reps=reps,
+            warmups=warmups,
+            max_warmups=max_warmups,
+            eager=eager,
+            preset=preset,
+            arm_modules=modules,
+        ), identity=True)},
+    )
+    write(doc, a.out / "result.json")
+    if recorded:
+        writer = kit.writer(a.out)
+        if not kept.startswith(".."):
+            writer.measurement_file(kept)
+        record(doc, writer, kept)
+    table = render(doc)
+    (a.out / "table.md").write_text(table)
+    print(table, end="")
+    return 0 if all(g["passed"] for g in doc["gates"]) else 3

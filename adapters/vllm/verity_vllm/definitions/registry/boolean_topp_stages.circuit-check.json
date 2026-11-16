@@ -1,0 +1,53 @@
+{
+ "definitions": {
+  "BitXor_v2": {
+   "and": 0,
+   "type": "8c002280674a2e1f6ba6cbaf7962238132d20dc10f8d29543244f05e45dd867b9426e2ac3e818463002ae082ab2600307b6a04b9f61f2a6cf4211d0894925d9f"
+  },
+  "SelectBit_v2": {
+   "and": 1,
+   "type": "84d2d0939f56fb301bd1f377c4407e6fae5d9af1d39a030314cab70fc8bf8a22f843f0803a6f08bd3671a23a46c25e9b3ed19fbd7c1fac956e4e3c4a07bc6609"
+  },
+  "TopPNumkeep_v2": {
+   "and": 418,
+   "type": "ec04e520c74a93a42b3068931176deb89e2e5db4f762bf07f75c2660d1e641028a4491538e076bcebc4706dbff479147bf2f8675706e9c4723c89e6a3390a37f"
+  },
+  "TopPStatsHead_v2{N=8,FIRST=False}": {
+   "and": 27276,
+   "type": "6c7a0c519c82a4e37b01f02df0b5815d90ea0ffce5cb60ba7a3ce53711d38c8e07bcad0faf77a63d89ac430cacd7817e8b86d8c0d2951d961cdc99bc0a3fc04e"
+  },
+  "U32Xor_v2": {
+   "and": 0,
+   "type": "aace412922b0b15d4cbd01f34f19d89a5152d293294c55e4bb3f019862c9c2f96bb0e9484f6d64f2785bda250599c994665a6775ef4649af239bd657977455a0"
+  }
+ },
+ "digests": {
+  "GumbelTopPSelect_v2{V=64,N=2,FIRST=False,LAST=False}": {
+   "sha512": "670b2d61f2775d52f5d7f89a964fea24c0e31450e96fdf6f35719eecdbb1ac0a0581857454220856088ebf2a09ac33a1bbf6695ede8c728c8a21f22be56d244d"
+  },
+  "GumbelTopPSelect_v2{V=64,N=2,FIRST=False,LAST=True}": {
+   "sha512": "a59d0fc7002067cffb36784f52fe26b0e88bc418fdb526388ce8eaa3ad7dcab5573fe20b94c443ee6bac094464c670b8a24f165c77cae9d31b38890a352660a8"
+  },
+  "TopPProbs_v2{V=64,S=4,N=16,HEAD=False}": {
+   "sha512": "7065f6e2ab1d3dd38cc353454017648b497e37e1b6994a5dd9bcb087e6c6cf0ecf35bc4a82eca61dbe92ba53a409e420794bc6beea47206dfd4826f9449c6ce0"
+  },
+  "TopPProbs_v2{V=64,S=4,N=16,HEAD=True}": {
+   "sha512": "658cf1423c953ac0605004a936d0bb4a565c7319c75c6be79ebc6eb4a0bc07bb7dffe73b192ca69fc65b02047eea5fe353989af480f51a2a333cedfac855b21b"
+  },
+  "TopPStatsExp_v2{N=8,SPT=4,AT=0,LAST=True,FIRST=False}": {
+   "sha512": "44f2b1286a8f8466c804809a6f2f908989146630e7974560e70ba7bd4ab9c9068c969f4f395ffb99c4c336be33875318256b9f33b910d7643c8a3a5eca0387bb"
+  },
+  "TopPStatsHead_v2{N=8,FIRST=False}": {
+   "sha512": "cd1cda40f140851d5f83a3f689fd33cf287e8b33c5c99fbc85d34754b6da8a388a7d00d344cf96dddf223834625fd0839b188a5fde7f88bc92ebe6e639cab459"
+  },
+  "TopPStep_v2{V=64,S=4,N=16,FIRST=False,COMBINE=-1}": {
+   "sha512": "48bdf13c0b1c5da5ee0f698208814f205321f375b482cf4c2f40b3687955f341d84a9b92e84d36e3c71d414a3840c03f1862649dc212c4f0ea960d5cd89536b6"
+  },
+  "TopPStep_v2{V=64,S=4,N=16,FIRST=True,COMBINE=0}": {
+   "sha512": "abc95ed8c8a928e431aa8b26b2759b89b2518f7f73170f27148bd88a3e9d4a72f8f15f846ff47f180dd9d5a30575366b703b60dc350be6a1c7e98466dbae915a"
+  },
+  "TopPStep_v2{V=64,S=4,N=16,FIRST=True,COMBINE=4}": {
+   "sha512": "29709a76861cea7103f460ee8032002866d5c5ef1b37c63b53c35618cb8fe96a2b78dc9196c69f89377a6ed1cba69295a2683203329ea5380cc70f53a81a20fa"
+  }
+ }
+}

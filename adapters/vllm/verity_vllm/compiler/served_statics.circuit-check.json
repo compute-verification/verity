@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "ServedStaticsStep_v1{R=2,L=4096,T=256}": {
+   "and": 44
+  },
+  "ServedStaticsTie_v1{R=2,G=1,IW=6,L=4096,T=256}": {
+   "and": 44
+  },
+  "ServedStaticsTie_v1{R=2,G=7,IW=6,L=4096,T=256}": {
+   "and": 320
+  },
+  "ServedStaticsTie_v1{R=8,G=16,IW=16,L=512,T=2048}": {
+   "and": 2942
+  }
+ }
+}

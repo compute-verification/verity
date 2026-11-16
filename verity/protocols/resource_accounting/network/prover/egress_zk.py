@@ -1,0 +1,462 @@
+"""egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
+computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
+attester's signed root
+(`network_attester_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
+by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), which name every port of the
+statement (`Flock.Registered.checkComplete`); each unit's one public output, its 16-bit ``o0`` (1 when the state
+renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
+holds these units yet (`verity.protocols.resource_accounting.network.prover.egress`).
+
+    python benchmarks/network_traces/zk_drivers.py egress_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
+
+* **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network attester's own egress
+  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network attester and its
+  head signed by a test-size LMS key (`network_attester_rows.attest`). The window read is the one with the most `DATA` cells; its
+  registration is read by the verifier (`network_attester_rows.check_registration`) before its port is built from the head it
+  names.
+* **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
+  of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
+  `egress_traffic.states`), row t of the member's committed states (`network_attester_zk.committed_value`: each bucket's state
+  under a salt of the prover's own, committed before staging, the root the registration names before any coin, where
+  the scan registers its view tree), and computes ``o0``, 1 when the state renders a row, and ``o1``, the row,
+  committed under the salt of the network attester's row t and registered as a read of it, so the proof opens the network attester's row
+  only when the row the state renders is it. Each ``o0`` row is committed under its public salt and read off the
+  verifier's own value of words 1 (`known_o0`, its rows and salts in the verifier's registered reads, from which Lean
+  recomputes the root), so a unit whose state renders no row fails its read.
+* **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
+  the proof block computes a row the network attester didn't sign, so its ``o1`` opens no registered row: refused by
+  Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
+  swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
+  is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved ``--zk``
+  behind the ZK server (``FC_ZK_SERVER=1``)
+  and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
+  its public salt.
+* **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
+  ``o0``'s (`a8.received`), less the pieces public anyway: the staged circuit, zero bytes, and the pad and `END`
+  cells of the window's ordinals (a piece of them is a small integer among zeros). The prover's instance file, which
+  holds them all, is the control; it lays the ``state`` table's 204-byte rows back to back, each followed by the next
+  rather than by zeros, so a state's zero-padded last chunk isn't held there (`leak_scan.public_pieces`' ``fields``).
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+from verity.protocols.resource_accounting.network.prover import proof_drivers, network_attester_zk as WZ
+from verity.circuits.defs import bind
+from verity.commitments.crypto import lms
+from verity.protocols.resource_accounting.network.prover import egress as EG
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer, LmsSigner
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+_TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "egress_traffic.py"
+_spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
+traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(traffic)
+
+PARAMS = W.NetworkCertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+NR, K = 4, 16
+SHAPE = traffic.shape(PARAMS, NR, K)
+LINK, SESSION = "responses", bytes(range(32))
+#: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` execution phases
+SEED, CONNECTIONS, LONGEST, WINDOWS = 6, 14, 15, 6
+#: each member's outcome: accepted, or refused by Lean's registered reads
+MEMBERS = {"honest": "accepted", "lying": "does not open", "moved": "reads position"}
+#: the name under which the verifier registers its own values on an execution phase (`known_o0`)
+VERIFIER = "egress-zk/verifier"
+#: a ``--registered`` port's known content (Lean's `Registered.KNOWN_KEY`)
+KNOWN_KEY = "known"
+
+
+def log(msg: str) -> None:
+    print(f"EZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+# --- the link ---------------------------------------------------------------------------------------------------------
+
+def _data(row: bytes) -> int:
+    return sum(row[s * SHAPE.B] == DATA for s in range(SHAPE.R))
+
+
+def link(out: Path) -> SimpleNamespace:
+    """The execution phase to prove: the network attester's opening and its signed registration, read back by the
+    verifier (the head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
+    served = traffic.busy(SEED, PARAMS, CONNECTIONS, LONGEST, WINDOWS)
+    T = PARAMS.window
+    states, rows = traffic.states(served, NR, K), traffic.rows(served)
+    w = max(range(len(served.records)), key=lambda w: sum(_data(r) for r in rows[w * T:w * T + T]))
+    out.mkdir(parents=True, exist_ok=True)
+    signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"egress-zk").digest()),
+                              out / "signer-state.json")
+    cells, cert = WR.attest(Issuer(signer, SESSION), served.records[w], PARAMS, Direction.EGRESS)
+    if cert is None:
+        raise SystemExit("the test signer refused the execution phase")
+    registration = WR.registration(cells.head, cert, PARAMS)
+    head, dom = WR.check_registration(registration, signer.public_key(), SESSION, PARAMS, LINK, Direction.EGRESS, w)
+    window = states[w * T:w * T + T]
+    if [EG.rendered(SHAPE, s) for s in window] != list(cells.rows):
+        raise SystemExit(f"window {w}: the states don't render the network certifier's rows")
+    ordinals = sorted({s.q for st in window for s in st.slots if s.live})
+    return SimpleNamespace(window=w, states=window, cells=cells, registration=registration, head=head, dom=dom,
+                           ordinals=ordinals)
+
+
+def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
+    """The first bucket with a `DATA` cell, its state with that cell's output id changed."""
+    for t, st in enumerate(at.states):
+        live = [EG.Request(s.q, s.admitted, s.n) if s.live else None for s in st.slots]
+        records, _ = EG.bucket_map(st.b, live, SHAPE.R, SHAPE.r, SHAPE.D)
+        for m in records:
+            if m.e < K:
+                ids = list(st.slots[m.j].ids)
+                ids[m.e] = (ids[m.e] + 1) % (1 << SHAPE.IB)
+                slots = list(st.slots)
+                slots[m.j] = slots[m.j]._replace(ids=tuple(ids))
+                return t, st._replace(slots=tuple(slots)), {"bucket": t, "slot": m.j, "output": m.e}
+    raise SystemExit("the window renders no DATA cell")
+
+
+def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
+    """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
+    ``o1`` rows are committed under, the header's `registered` entry (the network attester's positions and paths for the rows
+    it names), each unit's ``o0``, and the states the member commits before staging, in bucket order (``committed``:
+    unit t reads bucket ``order[t]``'s)."""
+    cells, T = at.cells, PARAMS.window
+    states, order, changed = list(at.states), list(range(T)), {}
+    if name == "lying":
+        t, states[t], changed = _changed_state(at)
+    if name == "moved":
+        t = next(t for t in range(T - 1) if cells.rows[t] != cells.rows[t + 1])
+        order[t], order[t + 1] = t + 1, t
+        changed = {"units": [t, t + 1]}
+    committed = [EG.state_words(SHAPE, s) for s in states]
+    states = [states[b] for b in order]
+    _words, salts, entry = cells.statement(order)
+    got = [EG.outputs(SHAPE, s) for s in states]
+    return SimpleNamespace(states=states, rows=[r for _o, r in got], words=[EG.state_words(SHAPE, s) for s in states],
+                           salts=salts, entry=entry, order=order, changed=changed, verdicts=[o for o, _r in got],
+                           committed=committed)
+
+
+def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | None:
+    """The host's read of a member's registered ``o1`` port against the verifier's own (`network_attester_rows.bucket_port`),
+    as Lean's registered reads make it (`network_attester_rows.refusal`): None when they accept, else why not."""
+    port = WR.bucket_port(at.head, PARAMS, reads_from)
+    return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
+
+
+def known_o0(program: str, head: WR.CellsHead, words: list[int]) -> G.Registered:
+    """Each unit's ``o0`` row, its one word, as the value the verifier registers at known content on `head`'s
+    execution phase: row t under its public salt (`registered.supplied_salts`), in a tree whose domain binds the statement's
+    Program (its SHA-512, `program`) and the network attester's root. The verifier's own is every word 1
+    (`EG.ACCEPT`); the prover commits its units' words the same way, so its rows open the verifier's root only where
+    each is 1."""
+    value = f"{head.value}/{VERIFIER}/o0"
+    return G.Registered.commit(program, value, [[int(w)] for w in words], G.supplied_salts(program, value, len(words)),
+                               G.WORD_BITS, WR.SCHEMA, window=head.root.hex())
+
+
+def known_port(v: G.Registered, reads_from: int = 0) -> dict:
+    """The verifier's own `--registered` port of a value it registers at known content (`known_o0`): its rows and
+    salts beside its root, from which Lean recomputes the root (`Registered.checkKnown`)."""
+    return WZ.value_port(v, reads_from) | {KNOWN_KEY: {"rows": [list(r) for r in v.rows],
+                                                       "salts": [s.hex() for s in v.salts]}}
+
+
+def registered_file(program: str, at: SimpleNamespace, state: G.Registered, reads_from: int) -> dict:
+    """The verifier's own `--registered` file, which names every port of the statement
+    (`Flock.Registered.checkComplete`): unit `reads_from + t`'s ``o1`` reads row t of the network attester's root
+    (`network_attester_rows.bucket_port`), its ``state`` row t of the member's committed states at the root the registration
+    names (`network_attester_zk.value_port`), and its ``o0`` row t of the verifier's own value of words 1 (`known_o0`)."""
+    o0 = known_o0(program, at.head, [EG.ACCEPT] * state.leaves)
+    return WR.reads_file({"o1": WR.bucket_port(at.head, PARAMS, reads_from), "state": WZ.value_port(state, reads_from),
+                          "o0": known_port(o0, reads_from)})
+
+
+# --- the statement ----------------------------------------------------------------------------------------------------
+
+def stager(M, n: int, out: Path) -> SimpleNamespace:
+    """The statement program and partition (one template, a proof block a bucket) and the proof block's stager: row
+    ``state`` in, rows ``o0`` and ``o1`` out."""
+    sh = SHAPE
+    defn = bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)
+    program = M.P.mixed_population_program([(defn, n)])
+    query = M.P.template_instances_query([defn])
+    part = M.P.partition(program, query)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
+    bound = {"partition": M.P.digest(part), "program": part["program"]}
+    t = time.time()
+    st = M.CS.UnitStager(defn, "unit/egress-bucket", [("state", M.V2, sh.state_bits, ["state"])],
+                         [(M.V2, (0,)), (M.V2, (1,))], circuit=out / "circuit.txt", bind=bound)
+    st.pin
+    (tid, base, cnt), = M.P.ranges(program, query)
+    assert tid == M.P.template_id(defn) and cnt == n
+    return SimpleNamespace(defn=defn, program=program, query=query, n=n, base=base, st=st, out=out,
+                           lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
+                           program_file=out / "program.json", program_sha512=part["program"])
+
+
+def opened(m: dict, units) -> list[int | None]:
+    """The verifier's side of each unit's verdict: the word the prover sends, opened under its public salt
+    (`known_o0`) against the ``o0`` commitment the public file holds; None where it doesn't open or the unit isn't
+    held."""
+    return [w if i in units and WR.bc(int(w).to_bytes(2, "little"), m["salts"]["o0"][i]) == verdict_bcs(m)[i] else None
+            for i, w in enumerate(m["verdicts"])]
+
+
+def verdict_bcs(m: dict) -> list[bytes]:
+    """Each proof block's ``o0`` b‖c from the public file: a shared-row file holds them port-major (each port's table
+    rows in turn, `shared_rows` counting them), and proof block i's ``o0`` row is its table row i."""
+    w = proof_drivers.drivers().circuit.BC_BYTES
+    head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
+    rows = json.loads(head)["shared_rows"]
+    at = sum(rows[p.name] for p in m["ports"][:[p.name for p in m["ports"]].index("o0")])
+    return [body[(at + i) * w:(at + i + 1) * w] for i in range(m["n"])]
+
+
+def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
+    """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
+    every port under the salts and paths of its registered entry: ``state`` the member's committed states'
+    (`network_attester_zk.committed_value`), ``o0`` its words' under their public salts (`known_o0`) and ``o1`` the network
+    attester's; and the verifier's own `--registered` file of every port (`registered_file`). The units' outputs are
+    the reference's."""
+    t0 = time.time()
+    st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
+    mr = member_rows(name, at)
+    words = M.np.asarray(mr.words, dtype=M.np.uint16)
+    set_name = f"{st.iset.name}-{name}"
+    state = WZ.committed_value(sg.program_sha512, at.head, "state", mr.committed)
+    (_s, state_salts, state_entry), (_o, o0_salts, o0_entry) = (
+        state.statement(mr.order), known_o0(sg.program_sha512, at.head, mr.verdicts).statement(range(n)))
+    got = st.stage({"state": words}, out, os.urandom(32), salts={"state": state_salts, "o0": o0_salts, "o1": mr.salts},
+                   indices=range(sg.base, sg.base + n), set_name=set_name, tables={"state": words},
+                   refs={"state": list(range(n))}, registered={"state": state_entry, "o0": o0_entry, "o1": mr.entry})
+    o0 = [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
+    if o0 != mr.verdicts:
+        raise SystemExit(f"{name}: the units' o0 {o0} are not the reference's {mr.verdicts}")
+    if [M.np.asarray(x, dtype="<u2").tobytes() for x in M.np.asarray(got["outs"]["o1"])] != mr.rows:
+        raise SystemExit(f"{name}: a unit's o1 row is not the reference's")
+    (out / "inst.bin").rename(out / f"inst-{n}.bin")
+    (out / "pub.bin").rename(out / f"pub-{n}.bin")
+    (out / "tables").mkdir(exist_ok=True)
+    os.link(sg.out / "circuit.txt", out / "circuit.txt")
+    reads = registered_file(sg.program_sha512, at, state, sg.base)
+    (out / "registered.json").write_text(WR.reads_text(reads))
+    m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
+         "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+         "salts": got["salts"], "ports": st.ports, "port": "o1", "committed": {"state": state}, "rows": mr.rows,
+         "words": mr.words, "verdicts": mr.verdicts, "partition_file": sg.partition_file,
+         "program_file": sg.program_file, "registered_file": out / "registered.json",
+         "predicted": refused(at, mr, sg.base), "changed": mr.changed, "order": mr.order,
+         "stage_s": round(time.time() - t0, 1), "header": WZ.public_header(out, n)}
+    if opened(m, range(n)) != mr.verdicts:
+        raise SystemExit(f"{name}: a unit's verdict doesn't open against its public o0 commitment")
+    return m
+
+
+# --- the audit (network_attester_zk's, on a bucket port) ------------------------------------------------------------------------
+
+def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
+    """Member m registered (its frame ports and its committed states' root, `network_attester_zk.committed_roots`), sampled by
+    the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own
+    registered reads; then each held unit's verdict opened. Writes what the verifier received under
+    ``out / "verifier"``."""
+    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
+    out.mkdir(parents=True, exist_ok=True)
+    n, name = m["n"], m["name"]
+    want, roots = WZ.committed_roots(m)
+    fv = m["header"]["frame_v3"]
+    for p_, w in a7.frame_ports(m["set"], m["meta"], n).items():
+        want[f"{name}/{p_}"] = w
+        roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
+                      "domain": fv["domain_ids"][p_]})
+    leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
+    law = M.D.parse_design(f"stratified:{n}")
+    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the network certifier's execution phase {at.window} "
+                                      "(egress_zk.py)",
+           "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
+           "link": f"registered: port o1 reads {at.head.value} at the network certifier's signed root, unit base + t row t; "
+                   "state the member's committed states at their registered root; o0 the verifier's words 1"}
+    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want,
+                                      leaf_layer=leaf_layer).to_json(),
+              f"statement/{name}": a7.statement_checks(m, rec, want), "registered": WZ.registered_roots(m, rec)}
+    receipt = R.receipt(rec, "one-stage-e2e verifier (egress_zk.py)")
+    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
+    if not all(v["ok"] for v in checks.values()):
+        return {**res, "checks": checks, "accepted": False, "verdicts": {}, "why": {}, "opened": []}
+    p = a0.run([a.lean, "draw", "--program", str(sg.program_file), "--partition", str(sg.partition_file),
+                "--stratified", str(n)], out / "draw.log")
+    lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
+    local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
+    sdir = out / "session"
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.zk_server(M, m))
+    draw_t = (record or {}).get("unit_draw") or {}
+    v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
+    verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                                        and (live or {}).get("roots") == fv["roots"] and v.ok,
+                                        "why": ((record or {}).get("verdict") or {}).get("why"),
+                                        "draw_check": v.to_json()}}
+    lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program "
+                                                     "--registered"}
+    proved = a0.proved_units(m["header"], live or {})
+    timing = {x: (live or {}).get(x) for x in WZ.TIMING}
+    statement = {name: {"session_s": proc["wall_s"], **{x: (live or {}).get(x) for x in ("circuit_sha512",
+                                                                                          "statement_digest",
+                                                                                          "sigma")},
+                        "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
+    sessions = [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+    result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), (live or {}).get("instances", 0),
+                            statement, verdicts, a.delta, sessions=sessions,
+                            served=sorted(m["base"] + u for u in draw_t.get("units", [])),
+                            session_roots={f"{name}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
+    (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
+    held = {u - m["base"] for u in proved} if result.get("accepted") else set()
+    words = opened(m, held)
+    sent = [{"unit": m["base"] + i, "verdict": w, "salt/o0": m["salts"]["o0"][i].hex()} for i, w in enumerate(words)
+            if i in held]
+    (out / "verdicts.json").write_text(json.dumps(sent, indent=1))
+    vdir = out / "verifier"
+    vdir.mkdir(exist_ok=True)
+    (out / "warden-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
+    for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
+              m["dir"] / f"pub-{n}.bin", m["registered_file"], sdir / "draw.json", out / "audit.json",
+              out / "warden-registration.json", out / "verdicts.json"):
+        os.link(f, vdir / f.name)
+    for f in sorted((sdir / "sessions").rglob("*")):
+        if f.is_file():
+            os.link(f, vdir / f"session-{f.parent.name}-{f.name}")
+    window_ok = bool(result.get("accepted")) and len(held) == n and all(w == EG.ACCEPT for w in words)
+    return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": words,
+            "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
+            "verdicts": {x: y.get("accepted") for x, y in verdicts.items()},
+            "why": {x: y.get("why") for x, y in verdicts.items()}, "registered": lv.get("registered"),
+            "timing": statement[name], "lean_verify_s": lv.get("verify_s")}
+
+
+def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
+    """The witness pieces the verifier must not receive: each proof block's state and row (its ``o1``) and every salt of
+    the statement but ``o0``'s, all of which the prover's instance file holds."""
+    blobs = {f"row {i}": r for i, r in enumerate(m["rows"])}
+    blobs.update({f"state {i}": b"".join(w.to_bytes(2, "little") for w in ws) for i, ws in enumerate(m["words"])})
+    blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() if p != "o0" for i, s in enumerate(ss)})
+    return blobs, set(blobs)
+
+
+def known(sg: SimpleNamespace, at: SimpleNamespace) -> bytes:
+    """What the scan leaves out (the module docstring's): the circuit, zeros, and the window's pads and ENDs."""
+    B = PARAMS.cell_bytes
+    cells = [IT.pad_cell(B, q) + IT.end_cell(q, B) for q in [0, *at.ordinals]]
+    return (sg.out / "circuit.txt").read_bytes() + bytes(WR.SALT_BYTES) + b"".join(cells)
+
+
+def expected(name: str, res: dict) -> bool:
+    """The honest member's window is accepted; the others are refused by Lean's registered reads, each by its
+    `MEMBERS` reason."""
+    lean = res["verdicts"].get(f"lean-verify/{name}")
+    if MEMBERS[name] == "accepted":
+        return res["window_accepted"] and lean is True
+    why = res["why"].get(f"lean-verify/{name}") or ""
+    return not res["accepted"] and lean is False and "registered reads" in why and MEMBERS[name] in why
+
+
+def predicted(name: str, m: dict) -> bool:
+    """The host's read of a member's statement before any proof: its registered ``o1`` port, and every proof block's
+    ``o0`` 1 (each member's states render rows)."""
+    if set(m["verdicts"]) != {EG.ACCEPT}:
+        return False
+    if MEMBERS[name] == "accepted":
+        return m["predicted"] is None
+    return MEMBERS[name] in (m["predicted"] or "")
+
+
+def prove(a) -> int:
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    at = link(out / "warden")
+    T, n = PARAMS.window, PARAMS.window
+    rows = list(at.cells.rows)
+    summary: dict = {"params": {"cell_bytes": PARAMS.cell_bytes, "slots": PARAMS.slots, "delay": PARAMS.delay,
+                                "lanes": PARAMS.lanes, "window": T, "R": SHAPE.R, "NR": NR, "K": K, "IB": SHAPE.IB,
+                                "state_bits": SHAPE.state_bits},
+                     "traffic": {"seed": SEED, "connections": CONNECTIONS, "longest": LONGEST, "windows": WINDOWS},
+                     "link_window": at.head.value, "window": at.window, "rows": T, "row_bytes": WR.row_bytes(PARAMS),
+                     "cells": {"data": sum(_data(r) for r in rows),
+                               "end": sum(r[s * SHAPE.B] == W.END for r in rows for s in range(SHAPE.R))},
+                     "ordinals": at.ordinals, "registration": at.registration}
+    log(f"{at.head.value}: {T} rows of {WR.row_bytes(PARAMS)} bytes, root {at.head.root.hex()[:16]}, cells "
+        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the network certifier's key")
+    M = WZ._one_stage()
+    sg = stager(M, n, out / "stager")
+    WZ.check_shape(M, sg)
+    summary["stager"] = {"unit": sg.defn.id, "lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"],
+                         "vus_per_block": sg.st.meta["vus_per_block"], "pin": sg.st.pin, "base": sg.base}
+    log(f"stager: {sg.defn.id}, {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
+    staged = {}
+    for name in MEMBERS:
+        m = staged[name] = stage(M, sg, at, name)
+        summary.setdefault("members", {})[name] = {"ands": m["ands"], "stage_s": m["stage_s"], "changed": m["changed"],
+                                                   "order": m["order"], "verdicts": m["verdicts"],
+                                                   "predicted": m["predicted"] or "accepted"}
+        log(f"staged {name}: {m['ands']} ANDs a unit, {m['changed'] or 'unchanged'}, o0 {m['verdicts']}; the "
+            f"host's read of the o1 port: {m['predicted'] or 'accepted'}")
+        if not predicted(name, m):
+            raise SystemExit(f"{name}: the host's read of its statement is not the member's ({MEMBERS[name]})")
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    if a.dry:
+        log("dry: done")
+        return 0
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+    ok = True
+    for j, (name, m) in enumerate(staged.items()):
+        res = audit_member(M, av, sg, m, at, out / name, a.port + j)
+        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at), fields=True)
+        res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
+                           "public_pieces": public}
+        good = expected(name, res) and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]
+        ok &= good
+        summary["members"][name].update(res)
+        log(f"member {name}: proofs {res['verdicts']}, audit {res.get('audit')}, opened verdicts {res['opened']}, "
+            f"window {'accepted' if res['window_accepted'] else 'refused'}, Lean: {res['why']}, verifier received "
+            f"{res['received']['verifier_bytes']} bytes, witness pieces found there: "
+            f"{res['received']['verifier_found'] or 'none'} (of {len(blobs)}; {len(public)} public, left out), control "
+            f"{res['received']['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    summary["ok"] = ok
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="egress_zk.py", description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("prove", help="an egress execution phase's EgressBucket proof blocks, the o1 port registered, "
+                                     "proved --zk")
+    p.add_argument("--bin")
+    p.add_argument("--lean")
+    p.add_argument("--out", required=True)
+    p.add_argument("--port", type=int, default=7791)
+    p.add_argument("--delta", type=float, default=2.0 ** -20)
+    p.add_argument("--dry", action="store_true", help="the statements and the host's read of them: nothing proved")
+    a = ap.parse_args(argv)
+    if not a.dry and not (a.bin and a.lean):
+        raise SystemExit("prove needs --bin and --lean, or --dry")
+    return prove(a)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

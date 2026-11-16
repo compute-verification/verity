@@ -1,0 +1,25 @@
+# The suite of the distribution `verity-machine-model`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-machine-model-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-machine-model"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The tests read this directory (the package and data/, with the SASS opcode tables `machine-model cover` holds a row
+# for each of), the perplexity arms the designs name, the README, which holds no table (`machine-model render` prints
+# them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
+# the Site's readers (`verity.device`, which imports the wire, `verity.channel`), which the workspace environment
+# brings.
+inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "security/Definitions/Registration/Sheets",
+          "verity/__init__.py", "verity/errors.py", "hardware/cards", "verity/device.py",
+          "verity/channel.py"]

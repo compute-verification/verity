@@ -1,0 +1,60 @@
+{
+ "definitions": {
+  "F16ToF32_v2": {
+   "and": 213,
+   "type": "298148c10099542221175c8f158b348ea85fcfd40b3f19943f9146967a32d11b3d56635aec0fb30b3e216412ec1816e0024d81b53054e5b91f3d37794bc2764f"
+  },
+  "F32OrderKey_v2": {
+   "and": 62,
+   "type": "910f23ccc6439d45bad72e83dbba7c4953ccd9c4bc46e41a92af2880cdeb3ed0631aeb420941be17c3bbafe581c943eba14c1f31cc9463b2ceee288f6dbeed3f"
+  },
+  "F32ToF16Rn_v2": {
+   "and": 609,
+   "type": "925c6f33fa666cf70d6e2250da16453b2252d7794a915316b6119ee33f2ffa29e4ad33fbcd34e38ee843a0ab84f0265f2854b283f4b1447e74c609a4dd33aaa2"
+  },
+  "F32ToI64Rz_v2": {
+   "and": 536,
+   "type": "13ed49ddbd68531382cf3efdf0b6c12e290a580dc12d7eb21d9c1d11a3ee75ae1190729a8563269ff5fea4f584d4c9d8b9472c5a72021eb6fb5db062120c55b6"
+  },
+  "I64Add_v2": {
+   "and": 63,
+   "type": "fab71c4a635241444d5b53ad7c28b962559a8478ecf3418998f45130823d941223591cb8d6e05de61a3acdfbe8e4dd81a971336abe90a46c295c960b776fa776"
+  },
+  "I64And_v2": {
+   "and": 64,
+   "type": "5cd0ac254004d9aa43b831dc1e1b55af363d6e0ff5082d5b4fcf14147615aaf06ec4574f228a8afdaab66baa37fba3ec834aeeb7e55ee3d945011a7c1175854c"
+  },
+  "I64Le_v2": {
+   "and": 64,
+   "type": "cacd357a87ad7cfa2210b1fb838355a596a86b4c22f01e5ac3cc6e71f44d17d0d0549709ed19fc2c25a7abcc3f8afd2b01b2ec707f3f938b957ed0f9b41937b6"
+  },
+  "I64Shl_v2": {
+   "and": 475,
+   "type": "c322b3693c43c9d87bdd30fefebf16a54379bd6f78db97136b567b39c5d9d9c8e7fa31def0da625eca2bd34b38728d3f2498faa2d2ec2e0f0cd4e7250166afb9"
+  },
+  "I64Shr_v2": {
+   "and": 472,
+   "type": "538093f18db7004cab28241e8b742012af5b305bf8f4f5d95b365c68d5f2afd7c30e02c5eaa637456a32c1fa381ba238be19f5a9a25ff1d4e7d4b2a5c2f0c358"
+  },
+  "I64ToF32Rn_v2": {
+   "and": 720,
+   "type": "27109dabc575b17e5b020a0fe80fdff175ce2052f457b5b4b34de29887611f127c369faca237321a621a2e93209d6fd4ef75f1de45f6ae098d58cc7b0c76ec14"
+  },
+  "I64ToU8_v2": {
+   "and": 0,
+   "type": "b9cf3d42baea865f51abf5d8392bafff1895dfa313ca15b00bd4e307d56a7373f4f6f6b5ed4ff01360c1d5da73ab8946a8654b5bb536212cdde9fc1b6d27eefb"
+  },
+  "OrderKeyF32_v2": {
+   "and": 0,
+   "type": "95be99c6de15c92a99381ca4f15a537e25acf2b29847b70034ccf24d4cb6a982d1beac90e5e3408ff5e94ea985906e37d285b4ab0ca768310be539bdcde1381b"
+  },
+  "SelectI64_v2": {
+   "and": 64,
+   "type": "9c8771d5285baacf2964b231673ecfe710a0364dfd41205997aa440460447395ef0258cb804007bd3b9ec0e4e58e030c6c4c21af9c7a55f96195e6087cd83524"
+  },
+  "U8ToI64_v2": {
+   "and": 0,
+   "type": "0dc9cf2c4e45f4d830e50cbae6f8af1caadcb81a4932a8355c4102d477fac62cfac14850c4087e4a74c1dabdb6a0464943d741d2da130d99747a818bca17a10c"
+  }
+ }
+}
