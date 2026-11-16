@@ -15,7 +15,7 @@ SCHEMA = "exfiltration/v3"
 #: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
-TERM_SCHEMA = "certifier-term/v2"
+TERM_SCHEMA = "certifier-term/v3"
 #: the network attester's scopes the command prints
 SCOPES = ("datacenter", "world")
 #: the error a monitoring period's figure is to carry at most. Given no δ for the network attester's scans, the

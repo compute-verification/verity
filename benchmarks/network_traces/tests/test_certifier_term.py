@@ -201,8 +201,8 @@ def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_he
 
 
 def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the_designs_otherwise():
-    """Until a stop block holds a response's output count to its ids, the server picks the count the lengths unit
-    holds a length to. So the row's schedules are the scan's, and its failed connections' pooled charge, its jitter
+    """Until a stop block holds a response's output count to its ids, the server picks the count the lengths proof
+    block holds a length to. So the row's schedules are the scan's, and its failed connections' pooled charge, its jitter
     and its entries are the design's: at every scope, monitoring period and jitter bound, with failures and without,
     on the hand-worked world, at the command's defaults and at a given count of a smaller class. It stands where
     the design stands, just before it."""
@@ -624,7 +624,7 @@ def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure
     carries, with the clause the figure rests on as its source. The document's figure at D_j = 1 carries that mark
     beside its label, whatever the command asks, and the term of record carries none: it rests on no card."""
     assert LB.MARKS == ("measured", "modeled", "assumed", "simulated") and LB.SIMULATED == "simulated"
-    clause = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the tick its "
+    clause = ("`trusted-device`, set-time card clause: the network attester's card releases each bucket at the tick its "
               "record names, whatever the host and the server send it. It holds only of a calibrated hardware card; no "
               "such card is deployed, and the software pacer that stands in for it does not meet it.")
     assert LB.SET_TIME_CLAUSE == clause and LB.SET_TIME == "with a simulated set-time card"
@@ -786,7 +786,7 @@ def test_a_scan_is_at_the_delta_at_which_the_worlds_year_carries_the_periods_err
 def test_the_document_names_its_value_unit_commit_and_run(capsys):
     doc = LB.document(small(), commit="c0ffee", run="r1", stop=HELD)
     assert (doc["unit"], doc["commit"], doc["run"], doc["model"]) == ("GB", "c0ffee", "r1", "GLM-5.3")
-    assert doc["schema"] == "certifier-term/v2"
+    assert doc["schema"] == "certifier-term/v3"
     assert doc["value"] == 171_477_000 / LB.GB and "world's year" in doc["name"]
     assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
     assert doc["with_set_time_card"] == {"value": 147_825_000 / LB.GB, "unit": "GB",

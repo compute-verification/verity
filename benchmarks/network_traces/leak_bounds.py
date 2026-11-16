@@ -65,9 +65,9 @@ rule, and never by requests what a check counts by capacity:
   either D_j, which rests on the simulated set-time card, so a row under this change carries the label at either
   D_j, in the document and in its printed name; and the entries charged through the compute audit, whose own bound
   then stands in their place and is not counted here;
-* the design, which no run has behind it: head checks, a lengths unit on the network attester's records, and a stop
-  block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
-  from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths unit holds a
+* the design, which no run has behind it: head checks, a lengths proof block on the network attester's records, and a
+  stop block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
+  from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths proof block holds a
   response's length to its Program's output count and the stop block holds that count to the ids, so the lengths
   are held and its term is the jitter, the pooled failures and the count (below). With no record read, or one
   verdict lacking, each connection is charged its schedule and the row is the one before it. The entries are the
@@ -201,7 +201,7 @@ CHANGES = {"lengths": "a response's length held to its Program's output count, a
                       "audit: the schedules are 0, and the connections that fail are charged pooled over the "
                       "period, which of them failed and where each one's stream ended",
            "timing": "the release times taken once, by the compute side's tick: the jitter is 0, which rests on a "
-                     "set-time card, a network card of the network certifier that releases at a set time; the card "
+                     f"set-time card, a network card of the {ATTESTER} that releases at a set time; the card "
                      "is simulated, and none is deployed",
            "entries": "the entries charged through the compute audit: the compute side's own bound stands in their "
                       "place, and is not counted here"}
@@ -523,7 +523,7 @@ SIMULATED = "simulated"
 #: tests hold this string to it; `stop_verdicts` owns it
 RUN_NOT_PROVED = SV.RUN_NOT_PROVED
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
-SET_TIME_CLAUSE = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the "
+SET_TIME_CLAUSE = (f"`trusted-device`, set-time card clause: the {ATTESTER}'s card releases each bucket at the "
                    "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
                    "hardware card; no such card is deployed, and the software pacer that stands in for it does not "
                    "meet it.")
@@ -595,7 +595,7 @@ SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's d
 #: all three, and the design, without its stop block and with it
 ROWS = {
     "scan": Kind("on main", (),
-                 "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
+                 f"the rows form on the {ATTESTER}'s own run, as the check charges it: a schedule and a fail "
                  "cell for each connection of the period's parameters, counted by request, and the jitter of each "
                  f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
     **{name: Kind("a change to the scan", (name,),
@@ -608,15 +608,15 @@ ROWS = {
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
-        "a served audit: the lengths unit holds a response's length to its Program's output count, but nothing "
+        "a served audit: the lengths proof block holds a response's length to its Program's output count, but nothing "
         "holds that count to the ids, so the server picks it and each connection is still charged its schedule, as "
         "the scan charges it; its failed connections' pooled charge, its jitter, its count and its entries are the "
         "design's",
         stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
-                   "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
-                   "served audit. Its stop class is charged as a served run's verdict records say, by the network "
-                   "certifier's rule: below its schedule only with a count above 0 and its four verdicts, each "
+                   f"head checks, a lengths proof block on the {ATTESTER}'s records, and a stop block sampled on a "
+                   f"served audit. Its stop class is charged as a served run's verdict records say, by the {ATTESTER}'s "
+                   "rule: below its schedule only with a count above 0 and its four verdicts, each "
                    "accepted, complete and on the signed head of its execution phase. Then the lengths are held, the stop block holding a "
                    "response's output count to its ids, and its term is the jitter, the failed connections' "
                    "pooled charge and the count, what the head of each link's execution phase states of the rows "
@@ -764,7 +764,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     out |= {
         "request_count": Input(counted, "", "assumed", COUNTS[counted]),
         "connections": Input(1, "connection/request", "assumed", "each request on its own connection"),
-        "links": Input(1, "link/machine", "assumed", "one network certifier on each machine's uplink"),
+        "links": Input(1, "link/machine", "assumed", f"one {ATTESTER} on each machine's uplink"),
         "response_ids": Input(response_ids, "id", "assumed",
                               f"no certified {MODEL} class: the most ids a response holds (--response-ids)"),
         "id_bits": Input(id_bits, "bit", "assumed",
@@ -773,7 +773,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "phase_buckets": Input(buckets, "bucket", "assumed",
                                f"no certified {MODEL} class: an execution phase's buckets (--phase-buckets)"),
         "bucket_s": Input(bucket_s, "s", "assumed",
-                          f"no certified {MODEL} class: a bucket's seconds, by default the network certifier's "
+                          f"no certified {MODEL} class: a bucket's seconds, by default the {ATTESTER}'s "
                           "(--bucket-s)"),
         "lanes": Input(lanes, "lane", "assumed",
                        "none given (--lanes): the entries are counted one a request, the least the check can charge, "
@@ -1040,8 +1040,8 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     held = count.bits * head["phases"]
     floor = held + design["schedules"]["bits"]
     at_cost = phase_releases(COST_LANES, COST_BUCKETS, DELAY, DELAY)
-    return {"schema": "certifier-term/v2",
-            "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
+    return {"schema": "certifier-term/v3",
+            "name": f"the {ATTESTER}'s term for {MODEL} over the world's year, as the scan's check charges "
                     f"it today at two release schedules (D_j = {OF_RECORD})",
             "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
             "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME,

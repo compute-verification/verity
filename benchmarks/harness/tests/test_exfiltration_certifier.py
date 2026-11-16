@@ -156,7 +156,7 @@ def test_the_network_attesters_figures_of_record_are_at_two_release_schedules(tm
     document = lb.document
     monkeypatch.setattr(lb, "document", lambda *a, **kw: document(*a, **kw) | {"schema": "certifier-term/v1"})
     with pytest.raises(ValueError, match="the network attester's document is `certifier-term/v1` and this command reads "
-                                         "`certifier-term/v2`"):
+                                         "`certifier-term/v3`"):
         E.build(store=recorded(tmp_path / "older").fresh(), root=REPO)
 
 

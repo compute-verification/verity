@@ -42,7 +42,7 @@ verity bench exfiltration --help          every parameter and its default
   the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
-  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
+  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v3`)
   and refuses another schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
