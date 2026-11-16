@@ -147,13 +147,12 @@ else is a theorem or a named gap.
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The registered information | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
-| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Slowdown.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | not in Lean | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Slowdown.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
-reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
-(`Slowdown.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
+reaches, inside that use's own upstream computation, the operand the use reads. The two learning rows are all the slowdown bound assumes
 about learning, and they are where its scientific content lies; the second, the floor, is the open part.
 
 ### 1. The proofs of the sampled proof blocks
@@ -373,15 +372,9 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
-  `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
-  floor `Slowdown.Guarantees.CapabilityFloor`: **proved**
-  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
-  structure and bound is surveyed in `security/Definitions/Slowdown/Capability/README.md`.
-- Their premises, `Slowdown.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
-  `Slowdown.Assumptions.MinEntropyHard`) and the wiring property `Slowdown.Capability.Consumers.Upstream`, are named assumptions in
-  the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
-  certificate is not checked on a named training circuit.
+- The floor `Slowdown.Guarantees.CapabilityFloor`: **proved** (`security/Proofs/Slowdown/Coverage.lean`) from its premise
+  `Slowdown.Assumptions.CoversEfficientMethods`, a named assumption in the lock, not tested yet. The local bounds are not in
+  Lean.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
@@ -435,9 +428,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
-  - The local bounds and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
-    `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
-    fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
+  - The floor is proved, and its witness is a toy: at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
     premises on a training circuit.
   - The displayed slowdown bound has no Lean statement.
 
@@ -445,16 +436,14 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 
 The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
 update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
-coverage tested directly. Each is in `security/Definitions/Slowdown/Capability/README.md` ("How to test each premise", "The
-frontier"); how the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
+coverage tested directly. How the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
 
 ## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`security/lean-audit.json`, and `security/Properties/lean-audit.json`
 for the `Properties.*` ones), one line in plain words, except `CoinsAfterCommitment` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
-`SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
-hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
+`SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads).
 
 SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -514,8 +503,6 @@ The slowdown, `SlowdownRemote`:
 
 The local bounds (part 6):
 
-- `Slowdown.Assumptions.DescriptionHard` (in the lock): every selection of an item
-  family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
 - `Slowdown.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
   way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
   count Ω_*, except with probability η. It is the open part, untested.

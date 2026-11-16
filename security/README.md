@@ -243,10 +243,7 @@ multiplications) is coverage for one structure: a candidate sufficient condition
 A block can **import** information, spending its k fresh bits, or **reconstruct** it, spending its c gates. A local
 bound has three ingredients, each with its own premises: **information** (which jointly selected values are expensive
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
-block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
-`Slowdown.Capability` (vocabulary), `InferenceOnly.Assumptions` (premises) and `InferenceOnly.Guarantees` (the repertoire), one module per role;
-`security/Definitions/Slowdown/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
-test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
+block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
 named as one.
 
 **Reconstruction, proved** (`Verity.Guarantees.BlockDescription`, Lemma 1). In a registration R with B inference blocks
@@ -256,18 +253,16 @@ $$ \mathrm{LDL}_{t,R}(y_I) \;\le\; k' := k + \lceil \log_2 B \rceil + a_{\mathrm
 
 #### Information: what a block can hold
 
-An **item family** X (`Slowdown.Capability.Items`) lists things a block may hold, each with eligible **cells** (the gates
+An **item family** X lists things a block may hold, each with eligible **cells** (the gates
 holding one version of its value) and a **price** p_i in bits. One premise schema covers every family:
 
 $$ \textbf{description hardness:}\quad \mathrm{LDL}_{t,R}(x_U) \;\ge\; \sum_{i \in U} p_i \;-\; \lambda
    \quad\text{for every selection } U \text{ of } X\text{'s items, one cell each} $$
 
-(`Slowdown.Assumptions.DescriptionHard`). It covers every selection a block can make, charges an item once however often it
-is reused, and is time-bounded: replaying training counts only within t. With Lemma 1 it gives the **held budget**
-(`Slowdown.Guarantees.HeldBudget`): every block holds a selection priced at most h = k' + λ, whether it loads, decompresses
-or computes it. A second measure makes a different claim: **min-entropy hardness**
-(`Slowdown.Assumptions.MinEntropyHard`) says the values are unpredictable under the run's randomness, not slow to compute;
-it gives the budget h = k + λ with no decoder or time budget (`Slowdown.Guarantees.StatHeldBudget`), is tested by retraining
+It covers every selection a block can make, charges an item once however often it
+is reused, and is time-bounded: replaying training counts only within t. With Lemma 1 it gives the **held budget**: every block holds a selection priced at most h = k' + λ, whether it loads, decompresses
+or computes it. A second measure makes a different claim: **min-entropy hardness** says the values are unpredictable under the run's randomness, not slow to compute;
+it gives the budget h = k + λ with no decoder or time budget, is tested by retraining
 with fresh randomness, and fails when training is a deterministic function of registered information. Either measure's
 meaning is its family's:
 
@@ -278,9 +273,9 @@ meaning is its family's:
 | both, priced together | joint hardness | the same bits describe both families; an additive budget is a hypothesis of its own |
 
 **Recovery** derives an information bound rather than assuming one. A source z of length ℓ_z with
-LDL_{τ,R}(z) ≥ ℓ_z − δ (`Slowdown.Assumptions.SourceHard`), recoverable from a block's program and a complement of at most
-ℓ_z − β_v·|𝒥_I| + amb bits (`Slowdown.Assumptions.Recovers`, amb the index among at most 2^amb candidates), gives the
-**recovered budget** (`Slowdown.Guarantees.RecoveredBudget`)
+LDL_{τ,R}(z) ≥ ℓ_z − δ, recoverable from a block's program and a complement of at most
+ℓ_z − β_v·|𝒥_I| + amb bits (amb the index among at most 2^amb candidates), gives the
+**recovered budget**
 
 $$ \beta_v\,|\mathcal J_I| \;\le\; k' + \delta + \mathrm{amb}; $$
 
@@ -296,17 +291,16 @@ information are different situations even when a codec gives them the same lengt
 
 #### Structure: how much the held values support
 
-**Dependency** (`Slowdown.Capability.Consumers`, `Slowdown.Capability.Consumers.Upstream`): a **consumer** is something a block
-finishes, such as a use j (`Consumers.ofUses`) or an output accumulating many products (a weight's gradient over tokens,
-`Consumers.ofOutputs`). It has an upstream region A_j holding no registered gate, and required gates G_j ⊆ A_j, at least
+**Dependency**: a **consumer** is something a block
+finishes, such as a use j or an output accumulating many products (a weight's gradient over tokens). It has an upstream region A_j holding no registered gate, and required gates G_j ⊆ A_j, at least
 g of them. The **upstream certificate**, checkable on a named circuit, says every required gate reaches, inside A_j, a
-gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0 (`Slowdown.Capability.Consumers.OverlapWeights`) sum to
+gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0 sum to
 at most 1 over the regions holding any one gate: disjoint regions take 1 each, overlapping ones less. Then:
 
-- **import or recompute** (`Slowdown.Guarantees.ImportOrRecompute`): each served use either spends an imported gate of its
+- **import or recompute**: each served use either spends an imported gate of its
   region or contains G_j, so the served weight is at most k plus the weight of the recomputed uses;
-- **recomputing costs gates** (`Slowdown.Guarantees.RecomputeByGates`): the recomputed weight is at most c/g;
-- **recomputing costs updated state** (`Slowdown.Guarantees.RecomputeByState`): if every G_j needs updated state priced above
+- **recomputing costs gates**: the recomputed weight is at most c/g;
+- **recomputing costs updated state**: if every G_j needs updated state priced above
   the held budget, nothing is recomputed.
 
 These hold for the counted uses with an upstream certificate: for those, the block must import the specified context or
@@ -451,9 +445,9 @@ None of these is assumed silently; each would restate the conclusion:
 | Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Slowdown.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| Information premises | `Slowdown.Assumptions.DescriptionHard`, `Slowdown.Assumptions.MinEntropyHard`, `Slowdown.Assumptions.SourceHard`, `Slowdown.Assumptions.Recovers`, `Slowdown.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
-| Structure | `Slowdown.Capability.Consumers`, `Slowdown.Capability.Consumers.Upstream`, `Slowdown.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Slowdown.Guarantees.HeldBudget`, `Slowdown.Guarantees.StatHeldBudget`, `Slowdown.Guarantees.RecoveredBudget`, `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates`, `Slowdown.Guarantees.RecomputeByState` | Proved (`Proofs/Slowdown/Capability/`), over premises not yet tested |
+| Information premises | not in Lean | Open |
+| Structure | not in Lean | Open |
+| The repertoire | not in Lean | Open |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Slowdown.Threading.Threaded`, `Slowdown.Assumptions.WeightsIncompressible`, `Slowdown.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `ResourceAccounting.Placed.ComputeRate`, `ResourceAccounting.Placed.Links`, `ResourceAccounting.Placed.Memory`, `ResourceAccounting.Placed.Causal`, `ResourceAccounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
