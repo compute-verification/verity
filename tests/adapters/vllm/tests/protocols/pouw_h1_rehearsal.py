@@ -19,7 +19,7 @@ window's served rows to, `credit.committed_length`; cap 2, the window's challeng
 window's challenge phase (``reserve --peer PEER --scheme S --families F``) and its sample's (``--families`` the sampling
 coin alone, `pouw_h1_challenger.sample_families`), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
---model MODEL --circuit DIGEST --challenger AT --session RESERVE --draw-session DRAW --gate GATE`` (the window's
+--model MODEL --circuit DIGEST --challenger AT --session RESERVE --sample-session DRAW --gate GATE`` (the window's
 b/<K> salted with the key the
 gate's ``model-key`` gives the lane's key), under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
@@ -271,7 +271,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     gate's reserve answers): served on the GPU (under ``gpu-lease`` with ``--gpu-lease``), which hands its window and
     its challenge phase's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
-    window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, DRAWN1): kept past the
+    window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, SAMPLED1): kept past the
     close in ``--prover-root``/SESSION, owner-only and outside the run's directory, recorded against retention by
     ``--keep-with``'s command when one is given."""
     import os
@@ -289,7 +289,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     holder = HO.Holder(scratch / "stream.sock")
     gpu = [sys.executable, "-m", "tests.protocols.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
     argv = [*gpu, *(["--served", "--model", MODEL, "--circuit", circuit] if a.served else []),
-            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--draw-session", json.dumps(draw),
+            "--challenger", a.at_addr, "--session", json.dumps(reserved), "--sample-session", json.dumps(draw),
             "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
             "--handoff", str(holder.path), "--handoff-state", str(prover / PV.STATE)]
     if a.gpu_lease:
@@ -384,7 +384,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
                                [str(p) for p in pins or ()], main,
-                               draw_directory=None if draw is None else str(draw / ("out" if window is not None else "")))
+                               sample_directory=None if draw is None else str(draw / ("out" if window is not None else "")))
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -433,11 +433,11 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     client.close()
     coins = client.commitment.to_json()
     fields = ("session", *PHW.RESERVE_FIELDS)
-    ds = PHW.SampleSession("forge", at, PHW.reserved_of({k: v for k, v in drawn.items() if k in fields}, "draw_session"),
+    ds = PHW.SampleSession("forge", at, PHW.reserved_of({k: v for k, v in drawn.items() if k in fields}, "sample_session"),
                          PHW.gate_of(gate))
     draw = ds.record(root)
     return ({**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
-             "session": PHC.carried(answer), "draw_session": ds.session,
+             "session": PHC.carried(answer), "sample_session": ds.session,
              "draw": {**honest["draw"], "root": root.hex(), "coin": draw.to_json()}},
             reserved["session"], drawn["session"])
 
@@ -458,7 +458,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"
     tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
-    draw = g / "fetch" / c["draw_session"]["session"]
+    draw = g / "fetch" / c["sample_session"]["session"]
     rt = out / "red_team"
     cases: dict[str, Any] = {}
 
@@ -513,7 +513,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             gate("wait", s)
             gate("wait", ds)
         cases["forged_period_close"] = gate("period-close", "--name", forged_period)
-        fe = evidence(gate, sid, rt / "forged_gate", c["draw_session"]["session"])
+        fe = evidence(gate, sid, rt / "forged_gate", c["sample_session"]["session"])
         cases["forged_gate"] = fe
         for name, (commits, s, ds) in forged.items():
             for fetched in (s, ds):
@@ -524,7 +524,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s,
                  pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / ds)
         case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"],
-             pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / c["draw_session"]["session"])
+             pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / c["sample_session"]["session"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
     must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "main_", "table_", "other_pin", "forged_b",
                                               "forged_o"))]
@@ -597,7 +597,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         return doc
     drawn = gate("reserve", "--peer", a.peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(),
                  "--minutes", str(a.minutes), "--withhold")
-    doc["draw_reserved"] = drawn
+    doc["sample_reserved"] = drawn
     if "refused" in drawn:
         doc["gate_log"] = gate.log
         return doc

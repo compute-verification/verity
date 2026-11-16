@@ -133,7 +133,7 @@ class _Session:
     def remote(self, **kw) -> dict:
         """`test_pouw_h1._remote`'s settings, the window reserving this challenge phase and its sample's (`DRAW_NAME`)
         and opening them through `open`."""
-        return T._remote(session={"session": self.name}, draw_session={"session": DRAW_NAME}, gate=self.open, **kw)
+        return T._remote(session={"session": self.name}, sample_session={"session": DRAW_NAME}, gate=self.open, **kw)
 
     def _reach(self, at, secret):
         if self.draw is not None and at == self.draw.at:
@@ -230,7 +230,7 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
         made["session"] = _Session(tmp_path, monkeypatch, name, gate.take(), seed, close=gate.take, reserved=True)
         made["session"].window = {"root": root}
         return {**made["reply"], "commitment": made["session"].commitment}
-    served = _serve(T._remote(session={"session": name}, draw_session={"session": draw}, gate=opened))
+    served = _serve(T._remote(session={"session": name}, sample_session={"session": draw}, gate=opened))
     session = made["session"]
     assert session.ended() is None and session.secrets == [bytes.fromhex(made["reply"]["secret"])]
     assert session.draw.ended() is None
@@ -761,12 +761,12 @@ def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_i
     sample = host.draw
     assert sample is not None
     assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
-    assert sample.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == DRAW_NAME
+    assert sample.window == {"root": honest["draw"]["root"]} and honest["sample_session"]["session"] == DRAW_NAME
     assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
     assert host.trusted(honest, withheld=False) == f"the window's sample session: {LC.WITHHELD}"
 
 
-def _draw_of(host, root: bytes) -> LC.LiveOpening:
+def _sample_of(host, root: bytes) -> LC.LiveOpening:
     """The sampling coin `host`'s sample session (`_Session.open` with ``withhold``) opens after `root`, its full opening once
     the session has closed."""
     host.open(DRAW_NAME, root.hex(), withhold=True)
@@ -950,7 +950,7 @@ def test_the_order_of_roots_and_coins_is_signed_by_the_challengers_close_and_a_r
     draw_root = RQ.sample_root(calls_root, RQ.NO_RECEIPTS, log)
     host.client.close()
     assert host.ended() is None
-    draw = _draw_of(host, draw_root)
+    draw = _sample_of(host, draw_root)
     c = host.challenger.commitment.to_json()
     commits = {"coins": c, "round_coins": c, "weights_root": weights.hex(), "requests_root": requests.hex(),
                "session": session, "salt_opening": salt.to_json(), "steps": 3,

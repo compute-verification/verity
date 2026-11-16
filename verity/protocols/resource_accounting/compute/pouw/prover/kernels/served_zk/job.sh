@@ -19,7 +19,7 @@
 #      its requests and replies in challenger/requests.jsonl, the coins it opened in challenger/openings.jsonl): its salt
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
-#      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
+#      beacon before epoch coins, as a recorded replay) and select (sample.json: the epoch's sampling coin opened after the
 #      registration, once, and the Lean verifier's sample --population N --k K' --stream over its key)
 #   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): hidden_zk/served_stage.py (stage_tile.py; Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
@@ -39,9 +39,9 @@
 #        receive-raised        the request's registration claiming the next grid level (more credit)           REFUSED
 #        receive-honest        the challenger receives the request's registration                              REGISTERED
 #        receive-open          a second registration while the first has no outcome                            REFUSED
-#        select                Lean's sample of K' units over the sampling coin's key, opened after the receipt    DRAWN
+#        select                Lean's sample of K' units over the sampling coin's key, opened after the receipt    SAMPLED
 #        select-again          a second select of the same registration: no retry resamples                     REFUSED
-#        receive-after-draw    the request's registration on a stream of its own, after the epoch's sampling coin  REFUSED
+#        receive-after-sample    the request's registration on a stream of its own, after the epoch's sampling coin  REFUSED
 #        open-u<t>             each sampled proof block's proof opens that unit's rows under the window root            ACCEPT
 #        lean-u<t>             the Lean verifier on each sampled proof block's --zk session, every check passed and
 #                              refused for the tile's want of a Program (no --program: NO_PROGRAM)             REFUSED
@@ -180,15 +180,15 @@ expect receive-honest REGISTERED "$REPLY"
 ask receive-open "$(req op register name open registration "$R" manifest "$MAN" recorded $REC)"
 expect receive-open REFUSED "$REPLY"
 [ -f "$OUT/receipt.json" ] || { log "receive FAILED: $(cat "$OUT/receive-honest.out")"; exit 3; }
-log "select: the draw coin, opened after the registration, and $LEAN draw over its key"
-ask select "$(req op select name honest out "$OUT/draw.json")"
-expect select DRAWN "$REPLY"
-ask select-again "$(req op select name honest out "$W/draw-again.json")"
+log "select: the sampling coin, opened after the registration, and $LEAN sample over its key"
+ask select "$(req op select name honest out "$OUT/sample.json")"
+expect select SAMPLED "$REPLY"
+ask select-again "$(req op select name honest out "$W/sample-again.json")"
 expect select-again REFUSED "$REPLY"
-ask receive-after-draw "$(req op register name after registration "$R" stream after manifest "$MAN" recorded $REC)"
-expect receive-after-draw REFUSED "$REPLY"
-[ -f "$OUT/draw.json" ] || { log "select FAILED: $(cat "$OUT/select.out")"; exit 3; }
-UNITS=$(jq_ "$OUT/draw.json" "' '.join(map(str, sorted(d['units'])))")
+ask receive-after-sample "$(req op register name after registration "$R" stream after manifest "$MAN" recorded $REC)"
+expect receive-after-sample REFUSED "$REPLY"
+[ -f "$OUT/sample.json" ] || { log "select FAILED: $(cat "$OUT/select.out")"; exit 3; }
+UNITS=$(jq_ "$OUT/sample.json" "' '.join(map(str, sorted(d['units'])))")
 FILL=$(jq_ "$OUT/request/advice.json" "[e for e in d['entries'] if e['kind'] == 'filler'][0]['lo']")
 REAL=$(jq_ "$OUT/request/advice.json" "d['real']")
 log "draw: units $UNITS of $(jq_ "$R" "d['population']") (real tiles $REAL, the filler from $FILL)"
@@ -232,7 +232,7 @@ stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, open
   log "stage $tag (unit $t): $(jq_ "$OUT/$tag/stage.json" "(d['kind'], d['entry'], d['ands'], d['k_log'], d['seconds'])")"
 }
 opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--unsampled]
-  local v; v=$("$PY" "$SC" check "$OUT/$3/params.json" "$OUT/$3/registration.json" "$OUT/draw.json" "$4" "$5" "$6" ${7:-} \
+  local v; v=$("$PY" "$SC" check "$OUT/$3/params.json" "$OUT/$3/registration.json" "$OUT/sample.json" "$4" "$5" "$6" ${7:-} \
     --out "$OUT/$1.json" | tee "$OUT/$1.out" | first)
   expect "$1" "$2" "${v:-ERROR}"
 }
@@ -251,7 +251,7 @@ unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (control
   vf=$OUT/$tag/verdicts.tsv                               # a separate assignment: set -u expands a single local's words before any take effect
   mkdir -p "$OUT/$tag"; : > "$vf"
   stage_unit "$tag" "$p" "$t" || { printf 'open-%s\tACCEPT\tERROR\nlean-%s\tREFUSED\tNONE\n' "$tag" "$tag" > "$vf"; return 0; }
-  v=$("$PY" "$SC" check "$OUT/$p/params.json" "$OUT/$p/registration.json" "$OUT/draw.json" "$t" "$OUT/$tag/pub.bin" "$OUT/$tag/opening.json" \
+  v=$("$PY" "$SC" check "$OUT/$p/params.json" "$OUT/$p/registration.json" "$OUT/sample.json" "$t" "$OUT/$tag/pub.bin" "$OUT/$tag/opening.json" \
     --out "$OUT/open-$tag.json" | tee "$OUT/open-$tag.out" | first)
   printf 'open-%s\tACCEPT\t%s\n' "$tag" "${v:-ERROR}" > "$vf"
   [ "$t" = "$FIRST" ] && controls "$W/$tag" "$OUT/$tag" hidden
@@ -270,7 +270,7 @@ JOBS=${SZ_JOBS:-$(( MEM_GB * 3 / 4 / ${SZ_MEM_PER_JOB:-13} ))}
 WT=$(( TH / JOBS )); [ "$WT" -lt 1 ] && WT=1
 FIRST=${UNITS%% *}                                        # the unit the controls run on; the resolved U0 (first that staged) below
 REAL_UNIT=; for t in $UNITS; do [ "$t" -lt "$FILL" ] && { REAL_UNIT=$t; break; }; done
-log "units: $(echo "$UNITS" | wc -w) drawn, $JOBS workers x $WT threads ($MEM_GB GB, $TH CPUs, ${SZ_MEM_PER_JOB:-13} GB each), controls on u$FIRST"
+log "units: $(echo "$UNITS" | wc -w) sampled, $JOBS workers x $WT threads ($MEM_GB GB, $TH CPUs, ${SZ_MEM_PER_JOB:-13} GB each), controls on u$FIRST"
 PIDS=()
 for t in $UNITS; do
   ( export RAYON_NUM_THREADS=$WT OMP_NUM_THREADS=$WT OPENBLAS_NUM_THREADS=$WT; unit_work "u$t" request "$t" ) &
@@ -293,9 +293,9 @@ fi
 
 BG=()
 if [ -z "$REAL_UNIT" ]; then stage_unit u0-real request 0 && prove_unit u0-real && REAL_UNIT=0-real; fi
-DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
-FU=${DRAWN_FILLER:-$FILL}
-if [ -z "$DRAWN_FILLER" ]; then
+SAMPLED_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | head -1)
+FU=${SAMPLED_FILLER:-$FILL}
+if [ -z "$SAMPLED_FILLER" ]; then
   stage_unit filler request "$FU" && prove_unit filler
   opencheck open-filler ACCEPT request "$FU" "$OUT/filler/pub.bin" "$OUT/filler/opening.json" --unsampled
   FT=filler

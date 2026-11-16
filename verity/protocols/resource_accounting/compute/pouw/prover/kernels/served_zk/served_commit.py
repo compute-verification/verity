@@ -1284,7 +1284,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
         if op == "select":
             d = ch.select(name)
             _put(cmd.get("out"), d.draw)
-            return "DRAWN", {**d.draw, "stream": ch._held(name)[0].digest}
+            return "SAMPLED", {**d.draw, "stream": ch._held(name)[0].digest}
         if op == "deliver":
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
@@ -1410,7 +1410,7 @@ def cmd_commit(a) -> int:
     advice["provenance"] = {"run": man.get("run"), "manifest_sha512": sha, "scheme": man["scheme"],
                             "transcript_root": man.get("transcript_root"), "commitment": man.get("commitment"),
                             "records_root": man.get("records_root"),
-                            "call_draw": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
+                            "call_sample": {"source": source.hex(), "among": [x["index"] for x in calls]} if not a.call else {"given": a.call}}
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "commitment.json").write_text(json.dumps(public, sort_keys=True))

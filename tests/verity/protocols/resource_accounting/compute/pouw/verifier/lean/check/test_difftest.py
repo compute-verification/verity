@@ -221,7 +221,7 @@ def pass_epoch(case: dict) -> dict:
 
 def sample(case: dict) -> dict | None:
     refused = CC.sample_twin(*passes.sample_args(case))
-    PASSED["sample " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
+    PASSED["draw " + (f"{refused[0]}: {_template(refused[1])}" if refused else "accept")] += 1
     return None if refused is None else {"refused": list(refused)}
 
 
@@ -398,15 +398,15 @@ def test_credit(pass_server):
     assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
-    for part in ("credit sample: the sample root over the manifest", "credit sample: the window's sample root is not",
-                 "credit sample: the challenger's session closed with no sampling coin", "credit credit: manifest row # has no",
+    for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
+                 "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
                  "credit coin: the draw's session is not trusted",
                  "credit coin: the session the auditor's ledger opens on the window does not withhold",
                  "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
-                 "sampled layout: linear ", "sampled layout: the A slot #", "sampled layout: the A blocks of K = #",
-                 "sampled layout: a call of lm_head", "sampled sample: the sampling coin is not", "sampled sample: the draw's stream",
+                 "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
+                 "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
                  "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
                  "so the period earns nothing: tile-k: the window's tile at K = #",
                  "pad its linears' A and B rows with zero codes to K = #",
@@ -421,8 +421,8 @@ def test_credit(pass_server):
                  "period period: period ", "period missing: session #", "period order: session #",
                  "period period: the sessions presented run past", "period period: session ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
-                 "sampled budget: the draw's K is not",
-                 "sampled budget: the window's # units are fewer than K", "period budget: period ",
+                 "drawn budget: the draw's K is not",
+                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "window layout: the window's circuit's units are not its record's tiles",
                  "window layout: the window's circuit is not an H# window",
@@ -466,7 +466,7 @@ def test_credit(pass_server):
                  "which the window registers twice: register",
                  "credit commit: the window's Commit record is not the bytes in lowercase hex",
                  "window commit: the window's Commit record is not the bytes in lowercase hex",
-                 "window sample: the window's draw root is not over its manifest (each call's credit bit among it), its "
+                 "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
                  "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
                  "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",

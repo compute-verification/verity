@@ -88,13 +88,13 @@ def _sample_state(sample: Any) -> dict[str, Any] | None:
         return _record(sample)
     if sample._asked:
         raise ValueError(f"{sample.entry}: a window hands off before its sample session opens")
-    return {"draw_session": {"entry": sample.entry, "at": sample.at, "reserved": sample.reserved}}
+    return {"sample_session": {"entry": sample.entry, "at": sample.at, "reserved": sample.reserved}}
 
 
 def _sample_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -> Any:
-    if state is None or "draw_session" not in state:
+    if state is None or "sample_session" not in state:
         return _live(state, client)
-    s = state["draw_session"]
+    s = state["sample_session"]
     return PHW.SampleSession(s["entry"], s["at"], s["reserved"], gate)
 
 

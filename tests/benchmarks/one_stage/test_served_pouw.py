@@ -19,7 +19,7 @@ RECORD = '''import json, os, sys
 from pathlib import Path
 with open(os.environ["CALLS"], "a") as f:
     f.write(json.dumps({"tool": Path(sys.argv[0]).name, "argv": sys.argv[1:], **{k: os.environ.get(k) for k in (
-        "RESEARCH_RUN_DIR", "H1_LIVE", "H1_KEEP", "H1_DRAWN_ONLY", "H1_DRAWN_CHECK", "H1_DRAWN_WORK")}}) + "\\n")
+        "RESEARCH_RUN_DIR", "H1_LIVE", "H1_KEEP", "H1_SAMPLED_ONLY", "H1_SAMPLED_CHECK", "H1_SAMPLED_WORK")}}) + "\\n")
 '''
 PIECE = "LEAN-ANSWERS 0 of 2 runs by key, 2 ran"
 PERIOD = "LEAN-ANSWERS 2 of 2 runs by key (2 from the challenger check), 0 ran"
@@ -83,7 +83,7 @@ def test_the_pouw_command_proves_then_writes_the_piece_and_the_period_case(tmp_p
     assert Path(str(calls) + ".mode").read_text() == "0o700"
     assert (got[0]["RESEARCH_RUN_DIR"], got[0]["H1_LIVE"], got[0]["H1_KEEP"]) == (
         str(q / "live"), str(d / "private" / "h1" / "w3" / "live"), str(q / "live" / "live-proofs"))
-    assert (got[1]["H1_DRAWN_ONLY"], got[1]["H1_DRAWN_CHECK"], got[1]["H1_DRAWN_WORK"]) == ("1", "0", str(q / "drawn-work"))
+    assert (got[1]["H1_SAMPLED_ONLY"], got[1]["H1_SAMPLED_CHECK"], got[1]["H1_SAMPLED_WORK"]) == ("1", "0", str(q / "drawn-work"))
     assert said[0].startswith("POUW live rounds: live.sh exit 0 after ") and said[0].endswith(", live evidence written")
     assert said[1].startswith("POUW drawn units: drawn.sh exit 0 after ") and said[1].endswith(", statements written")
     assert said[2] == "POUW-DEV {}" and said[3].startswith("POUW piece: served_verdicts.py pouw exit 0")

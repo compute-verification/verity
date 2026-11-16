@@ -234,13 +234,13 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
              "population": reg["population"], "units": d["units"]}
         got.append(("select", "draw", x, checks["select"]["verdict"]))
         other = load(out / "other/registration.json") if (out / "other/registration.json").is_file() else {"x": 1}
-        for name, edit in (("draw-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
+        for name, edit in (("sample-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
                                                                                     if u not in x["units"])})}),
-                           ("draw-coin", {"opening": {**opened, "coin": f"{int(opened['coin'][:2], 16) ^ 1:02x}" + opened["coin"][2:]}}),
+                           ("sample-coin", {"opening": {**opened, "coin": f"{int(opened['coin'][:2], 16) ^ 1:02x}" + opened["coin"][2:]}}),
                            ("draw-after", {"registration": hashlib.sha512(D.canonical(other).encode()).hexdigest()}),
-                           ("draw-stream", {"stream": "00" * 64}),
-                           ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),
-                           ("draw-fewer", {"units": x["units"][:-1]})):
+                           ("sample-stream", {"stream": "00" * 64}),
+                           ("sample-receipt", {"receipt": {**receipt, "received": "1"}}),
+                           ("sample-fewer", {"units": x["units"][:-1]})):
             got.append((name, "draw", {**x, **edit}, "CONTROL"))
     pass_path = passes.get(summary.get("served_run") or "")
     salt = out / "salt-opening.json"
@@ -266,7 +266,7 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
 def coin_judged(recorded: str, kind: str, out: Any) -> bool:
     """Whether the coin check's outcome `out` is the recorded verdict (a control's: refused)."""
     refused = out is not None and "refused" in out
-    if recorded in ("DRAWN", "REGISTERED"):
+    if recorded in ("SAMPLED", "REGISTERED"):
         return not refused and (kind == "draw" or out.get("how") is not None)
     return refused
 

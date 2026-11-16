@@ -1197,7 +1197,7 @@ def test_verify_run_counts_the_tiles_it_drew_where_no_tile_is_credited(honest_pa
     """A pass with no credited cell, as a no-write control whose rows are all excluded, samples no tile (`clear_work.sample`), so
     its line and counts name none sampled and every exclusion tile, not the samples asked for."""
     path, s, *_ = honest_pass
-    monkeypatch.setattr(VR.CW, "sample", lambda *_: [])
+    monkeypatch.setattr(VR.CW, "draw", lambda *_: [])
     got = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert got["accepted"] and (got["drawn"], got["exclusion_tiles"], len(got["tiles"])) == (0, 1, 1), got.get("line")
     assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (0 sampled, 1 for excluded rows)")
@@ -3184,11 +3184,11 @@ def test_served_inert_work_fresh_samples_measure_each_input_under_salts_of_its_o
     same source measures nothing again, and another source's trials are refused."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     out, src = tmp_path / "out", "ab" * 32
-    args = [str(path), "--per-input", "1", "--fresh-samples", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
+    args = [str(path), "--per-input", "1", "--fresh-draws", "4", "--fresh-source", src, "--jobs", "1", "--cross-check", "2",
             *coins_args(path)]
     assert SD.main([*args, "--out", str(out)]) == 0
     doc = json.loads((out / "inputs.json").read_text())
-    assert doc["fresh_source"] == src and doc["fresh_draws"] == 4 and doc["m"] == 2
+    assert doc["fresh_source"] == src and doc["fresh_samples"] == 4 and doc["m"] == 2
     lines = [json.loads(x) for x in (out / f"{path.parent.name}.fresh-tiles.jsonl").read_text().splitlines()]
     assert len(lines) == 8 and len({t["salt"] for t in lines}) == 8 and epoch.salt.hex() not in {t["salt"] for t in lines}
     fails = [t for t in lines if not t["ok"]]
@@ -3231,7 +3231,7 @@ def test_fresh_trials_sample_exactly_by_work_from_a_source_fixed_in_the_command(
     assert [d for _, _, d, _ in got] == list(range(50)) and len({s for *_, s in got}) == 50
     assert SD.fresh_trials(job | {"sha256": "cd" * 32}, row, 50, src) != got
     with pytest.raises(SystemExit):
-        SD.main(["m.json", "--per-input", "1", "--fresh-samples", "4", "--out", str(tmp_path)])
+        SD.main(["m.json", "--per-input", "1", "--fresh-draws", "4", "--out", str(tmp_path)])
 
 
 ST = load("pearl_c_vllm_served_table", POUW / "pearl_c_vllm" / "served_table.py")
@@ -3254,7 +3254,7 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     files = {}
     for name, obj in {"q": doc("rq", [64, 32]), "l": doc("rl", [48]), "v1": verify("rq", "decode", True),
                       "v2": verify("rq", "control", False), "bad": verify("rq", "control", True),
-                      "fresh": {"fresh_draws": 320, "fresh_source": "cd", "m": 2, "inputs": [trial(0, 0), trial(1, 1)]}}.items():
+                      "fresh": {"fresh_samples": 320, "fresh_source": "cd", "m": 2, "inputs": [trial(0, 0), trial(1, 1)]}}.items():
         files[name] = tmp_path / f"{name}.json"
         files[name].write_text(json.dumps(obj))
     out = tmp_path / "out"
@@ -3267,7 +3267,7 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
     assert l["epsilon"] == pytest.approx(math.log(100) / 48)
     assert q["fresh"]["epsilon"] == SD.clopper_pearson_upper(1, 320, 0.01) and q["fresh"]["trials"] == 640 and "fresh" not in l
     assert [v["accepted"] for v in q["verify"]] == [True, False] and "| qwen | `rq` | 2 |" in (out / "table.md").read_text()
-    assert q["tile_draws"] == 96 and "m = 5" in (out / "table.md").read_text()
+    assert q["tile_samples"] == 96 and "m = 5" in (out / "table.md").read_text()
     assert ST.main(["--model", "qwen", str(files["q"]), "--absent", "llama", "its pass is gone", "--out", str(out)]) == 0
     table = json.loads((out / "table.json").read_text())
     assert table["m"] == 2 and table["models"][0]["epsilon"] == pytest.approx(math.log(40) / 32)
@@ -3282,7 +3282,7 @@ def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cann
         ST.main(["--model", "qwen", str(files["q"]), "--pending", "qwen", "2", "rp", "--fresh", "qwen", str(files["fresh"]),
                  "--out", str(out)])
     with pytest.raises(ValueError, match="committed list"):
-        files["fresh"].write_text(json.dumps({"fresh_draws": 320, "fresh_source": "cd", "m": 1, "inputs": [trial(0, 0)]}))
+        files["fresh"].write_text(json.dumps({"fresh_samples": 320, "fresh_source": "cd", "m": 1, "inputs": [trial(0, 0)]}))
         ST.main(["--model", "qwen", str(files["q"]), "--fresh", "qwen", str(files["fresh"]), "--out", str(out)])
     with pytest.raises(ValueError, match="control"):
         ST.main(["--model", "qwen", str(files["q"]), str(files["bad"]), "--out", str(out)])

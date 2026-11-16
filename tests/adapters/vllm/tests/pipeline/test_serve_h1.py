@@ -128,7 +128,7 @@ def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no
     """Async scheduling's last call before the stop only returns the last outputs, so the Commit window it opens holds no
     step. On in-process coins that window's release pads none of its S steps and samples nothing (`serve_h1.UNSERVED`); it
     still goes through ``closer`` behind the windows before it, so the outcomes, and the window lines that wait for
-    them, stay in window order, and the draw-gated release neither waits on it nor counts it refused."""
+    them, stay in window order, and the sample-gated release neither waits on it nor counts it refused."""
     from verity_vllm.pipeline import serve_release as RL
 
     srv, closer = _Server(monkeypatch), Later()
@@ -216,7 +216,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
 
 def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_sample(tmp_path, monkeypatch):
     """A served call's file the writer couldn't write is its window's failure: the release waits for the window's files,
-    its outcome carries the error and its draw-gated release is refused by name; the next window is written whole."""
+    its outcome carries the error and its sample-gated release is refused by name; the next window is written whole."""
     from verity_vllm.pipeline import serve_release as SL
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 
@@ -227,7 +227,7 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
             raise OSError(28, "No space left on device")
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
-    monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
+    monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
     srv, draws = _Server(monkeypatch), SL.Draws((SH.DRAWER,))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
                        prover=tmp_path / "prover")
@@ -385,7 +385,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
             "port": 7811, "listen_polls": 0, "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
         assert auditor.gate._opens[draw["session"]]["withheld"] is True
         record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
-        given, drawn = record["commitment"]["session"], record["commitment"]["draw_session"]
+        given, drawn = record["commitment"]["session"], record["commitment"]["sample_session"]
         assert given["session"] == sid and drawn["session"] == draw["session"] and "secret" not in given | drawn
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
@@ -708,7 +708,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
         sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
-        monkeypatch.setattr(PHC, "sample_k", lambda layout: 1)
+        monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
         k = 1
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
@@ -785,7 +785,7 @@ def test_a_window_with_no_sample_refuses_its_release_by_name(tmp_path, monkeypat
     assert out["tied"] and "joined no period" in out["draw"]["refused"], out
     with pytest.raises(SL.Refused, match="joined no period"):
         draws.wait(window=0)
-    assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
+    assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the sample-gated release"
     srv.src.uninstall()
 
 

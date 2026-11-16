@@ -57,7 +57,7 @@ for p in $PLAN; do
     for arm in "${ARMS[@]:$r}" "${ARMS[@]:0:$r}"; do
       port=$(free_port)
       "$BIN" serve --zk --listen 127.0.0.1:$port --out "$D/sessions-$arm-$rep" --instances "$D/pub.bin" \
-        --circuit "$D/circuit.txt" --pin "$pin" --operator loopback --draw "subset:$N" > "$O/serve-$arm-$rep.log" 2>&1 &
+        --circuit "$D/circuit.txt" --pin "$pin" --operator loopback --sample "subset:$N" > "$O/serve-$arm-$rep.log" 2>&1 &
       srv=$!
       until grep -q '^SERVING ' "$O/serve-$arm-$rep.log" 2>/dev/null; do kill -0 $srv 2>/dev/null || break; sleep 1; done
       T=$O/fwt-$arm-$rep; mkdir -p "$T"

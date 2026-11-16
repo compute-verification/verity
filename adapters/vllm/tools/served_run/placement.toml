@@ -37,7 +37,7 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # as a development run (DEVELOPMENT), unless PP_CHALLENGER names the live challenger (`--env PP_CHALLENGER=gate:USER@HOST`
 # with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). ONSITE_PIECES gives the onsite product its private pieces (the
 # wipe's, PoUS's and the bandwidth audit's) and cases; KEEP_CMD keeps the serve dirs on the node for a week.
-# A run samples two of H1's proof blocks (H1_DRAW_K, the period's committed sample size): it shows the code works, and
+# A run samples two of H1's proof blocks (H1_SAMPLE_K, the period's committed sample size): it shows the code works, and
 # what the theorems give is reported apart, at stated operating points. A run without it gets `pouw_h1_challenger.sample_k`'s
 # sample size, set for epsilon 1/1000 at delta 2^-40.
 node = "vy-dc-h200"
@@ -46,7 +46,7 @@ research = ["--cwd", "clone", "--timeout", "6h"]
 [run.window.env]
 H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@${VY_CHALLENGER_1_HOST}"
 H1_PEER = "vy-dc-h200"
-H1_DRAW_K = "2"
+H1_SAMPLE_K = "2"
 DEVELOPMENT = "1"
 ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
 KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''

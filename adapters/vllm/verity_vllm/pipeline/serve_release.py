@@ -1,4 +1,4 @@
-"""serve-openai's draw-gated release (``--retain device --release-after P,Q``): a window's device-held values
+"""serve-openai's sample-gated release (``--retain device --release-after P,Q``): a window's device-held values
 (`commit.committer.device_pool`) are released only once every named subprotocol's sample of the window is in, keeping the union of
 the leaves the sampled blocks open.
 
@@ -94,7 +94,7 @@ class Draws:
 
     def __init__(self, protocols: Sequence[str], pool: Any = None) -> None:
         if not protocols:
-            raise ValueError("a draw-gated release needs at least one protocol whose draw it waits for")
+            raise ValueError("a sample-gated release needs at least one protocol whose draw it waits for")
         self.protocols = tuple(protocols)
         self._got: dict[int, dict[str, list[Read]]] = {}
         self._kept: dict[int, dict[int, frozenset[int]]] = {}
@@ -275,7 +275,7 @@ class RetentionOptions:
                                       "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
     retain: str = option("--retain", default="host", choices=("host", "device"),
                          help="rows-sha512: where a window's committed values wait for its samples. host (the default): the pinned host "
-                              "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's draw-gated "
+                              "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's sample-gated "
                               "release empties, keeping on host only the leaves some subprotocol drew; a full pool makes the step wait")
     retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
@@ -308,7 +308,7 @@ def retention_refusal(opts: Any) -> str | None:
             return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
                     "beside those awaiting their release")
         if not (getattr(opts, "seal", False) and getattr(r, "release_after", "")):
-            return ("--retain device: only a window's draw-gated release before its seal frees its device-held values, so it needs "
+            return ("--retain device: only a window's sample-gated release before its seal frees its device-held values, so it needs "
                     "--seal and the subprotocols whose samples the release waits for (--release-after)")
     if getattr(r, "release_after", ""):
         if r.retain != "device" or not getattr(opts, "seal", False):

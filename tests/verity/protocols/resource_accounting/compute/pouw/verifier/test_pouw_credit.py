@@ -52,14 +52,14 @@ CREDIT_EXPECT = {
     "no-z": ("credit", "call "), "index": ("manifest", "manifest row "), "row-form": ("manifest", "manifest row "),
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
     "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
-    "draw-form": ("draw", Cr.SAMPLE_FORM),
-    "no-draw": ("draw", Cr.NO_SAMPLE), "draw-coin": ("coin", "the draw coin: "),
+    "sample-form": ("draw", Cr.SAMPLE_FORM),
+    "no-sample": ("draw", Cr.NO_SAMPLE), "sample-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
     "forged-ledger": ("coin", "the draw's session is not trusted: "),
     "unpinned": ("coin", "the draw's session is not trusted: session "),
     "branch-pin": ("coin", "the draw's session is not trusted: session "),
-    "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_SAMPLE_SESSION),
-    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
+    "unwithheld": ("coin", Ch.WITHHELD), "sample-elsewhere": ("coin", NO_SAMPLE_SESSION),
+    "sample-session": ("coin", "the draw's session is not trusted: "), "sample-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
@@ -106,7 +106,7 @@ WINDOW_EXPECT = {
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
     "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
-    "credit-changed": ("coin", NO_SAMPLE_SESSION), "credit-no-draw": ("draw", Cr.NO_SAMPLE),
+    "credit-changed": ("coin", NO_SAMPLE_SESSION), "credit-no-sample": ("draw", Cr.NO_SAMPLE),
     "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
@@ -304,7 +304,7 @@ def test_credit_bit_changed_after_sample_is_refused(seed):
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
         assert got is None and refused == ("coin", NO_SAMPLE_SESSION)
-    _, (got, refused) = _credited("draw-after-other", seed)
+    _, (got, refused) = _credited("sample-after-other", seed)
     assert got is None and refused == ("draw", Cr.CHANGED)
     assert "Commit every call's credit bit in its manifest row, and the Commit record, before the draw root" in refused[1]
 

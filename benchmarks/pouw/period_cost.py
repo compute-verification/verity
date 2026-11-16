@@ -504,7 +504,7 @@ def report() -> dict:
         lanes_per_unit=lanes_per_unit(), statement_lanes={k: statement_lanes(v) for k, v in RATES.items()},
         node_gb=NODE_GB, configurations=[period(c) for c in configs], near_term=[period(c) for c in near_term()],
         levers=single_levers(), route_end=end.name,
-        draws_scan=scan(end, "draws", K_D_SCAN), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
+        samples_scan=scan(end, "draws", K_D_SCAN), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
         long_windows=[period(long_window(c)) for c in (configs[1], configs[3], end)],
         sensitivity=sensitivity(),
     )
@@ -519,7 +519,7 @@ def markdown(rep: dict) -> str:
             table(rep["near_term"]), "",
             "Each lever alone on today's configuration (work: 1 a parameter, 2 one module, 3 a new path, 4 a new form):",
             "", lever_table(rep["levers"]), ""]
-    for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
+    for key, field in (("samples_scan", "draws"), ("rounds_scan", "rounds")):
         out.append(f"At the route's end, by {field} a window: " + "; ".join(
             f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
     out += ["", "One window long enough on its own (no period), with the custody it holds until its sample:", ""]

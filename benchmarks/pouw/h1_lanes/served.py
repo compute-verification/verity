@@ -208,7 +208,7 @@ def extract(a: argparse.Namespace) -> None:
     with os.fdopen(fd, "w") as f:
         json.dump(out, f)
     pub = {**{x: out[x] for x in ("window", "program", "draw_root", "k", "unit", "served_rows", "other")},
-           "drawn": len(sampled["units"]), "drawn_at_k": [x["unit"] for x in mine],
+           "drawn": len(sampled["units"]), "sampled_at_k": [x["unit"] for x in mine],
            "entries": {p: v["entry"] for p, v in ports.items()},
            "reads": {p: v["opening"]["position"] for p, v in ports.items()}, "checks": checks,
            "seconds": round(time.time() - t0, 1)}

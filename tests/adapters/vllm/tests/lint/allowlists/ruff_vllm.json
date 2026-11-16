@@ -259,7 +259,7 @@
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "T201", "symbol": "GateSessions.open", "detail": "`print` found"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "T201", "symbol": "GateSessions.reserve", "detail": "`print` found"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "T201", "symbol": "GateSessions.reserve_draw", "detail": "`print` found"},
+    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "T201", "symbol": "GateSessions.reserve_sample", "detail": "`print` found"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_gate.py", "kind": "T201", "symbol": "GateSessions.take", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serve_learn.py", "kind": "T201", "symbol": "warm_up", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serve_loop.py", "kind": "SIM105", "symbol": "EngineLoop.run", "detail": "Use `contextlib.suppress(queue.Empty)` instead of `try`-`except`-`pass`"},

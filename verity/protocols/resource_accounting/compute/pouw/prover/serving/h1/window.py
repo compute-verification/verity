@@ -306,7 +306,7 @@ def reserve_sample(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[st
     answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(), "--withhold")
     if answer.get("withheld") is not True:
         raise CoinError(f"the gate reserved sample session {answer.get('session')} plain, not withheld")
-    reserved = reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+    reserved = reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "sample_session")
     assert reserved is not None
     return reserved
 
@@ -346,7 +346,7 @@ WITHHELD_OPEN = ("a sampling session is withheld: the gate's open answers `withh
                  "only at its close, after the prover's commitment (`reserve --withhold`)")
 #: why an H1 window's sampling coin has no session to come from (`SampleSession`)
 NO_SAMPLE_SESSION = ("the window's sampling coin comes from a sample session of its own, opened withheld on its sample root once "
-                   "the prover's commitment is in, and the pouw setting 'draw_session' reserves none")
+                   "the prover's commitment is in, and the pouw setting 'sample_session' reserves none")
 
 
 def in_process_sample(rounds: Any, coins: Any) -> LiveRecord | None:

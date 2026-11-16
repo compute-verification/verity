@@ -1064,7 +1064,7 @@ def _summary_row(gate, sessions, name, record, run):
     ends = {}
     if name in getattr(sessions, "held", {}):
         ends = {"session": GPU.session_end(gate, sessions.held[name]),
-                "draw_session": GPU.session_end(gate, sessions.draws[name])}
+                "sample_session": GPU.session_end(gate, sessions.draws[name])}
     return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **ends}
 
 
@@ -1097,9 +1097,9 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
         host, drawn = gate.hosts[sid], gate.hosts[dsid]
         assert c["coin_source"] == PH.CHALLENGER and run.details["challenger"] == {"closed": True}
         assert c["session"]["session"] == sid and c["coins"] == c["round_coins"] == host.challenger.commitment.to_json()
-        assert c["draw_session"]["session"] == dsid
+        assert c["sample_session"]["session"] == dsid
         assert row["session"]["ok"] and row["session"]["end"]["complete"]
-        assert row["draw_session"]["ok"] and row["draw_session"]["end"]["complete"]
+        assert row["sample_session"]["ok"] and row["sample_session"]["end"]["complete"]
         assert PHC.trusted_rounds_reason(c, host.directory, [gate.ledger.path], host.window, host.key,
                                          pins=[gate.ledger.pins_path], main=CH.MAIN,
                                          sample_directory=drawn.directory) is None

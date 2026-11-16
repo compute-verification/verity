@@ -8,7 +8,7 @@
 # --cwd clone: the Lean step builds pouw-pearlplus in the tree (`served_passes.py lean --exe build`) unless
 # PEARLPLUS_LEAN_EXE names a built one.  After window.sh's PEARLC_KERNEL=pearl_c_sm90 window,
 # WORK=/workspace/research/pearl-c-sm90 and VERITY_BENCH_VENV names the node's Python (window.sh's).
-# Each pass is verified against the epoch's coin commitment, $PASSES/coins.json, at DRAWS samples (default 3) on the node's
+# Each pass is verified against the epoch's coin commitment, $PASSES/coins.json, at SAMPLES samples (default 3) on the node's
 # own sample, its coin record $PASSES/<pass>/coin.json (a rerun takes the same sample: a retry never redraws).  A window
 # recorded before epoch coins has no coins.json and is refused: the Lean refuses its manifests.
 # FAST=1 replays the twin on fast_tile's batch forms (`--fast`), its first replayed tile and every CROSS-th after it in the
@@ -36,7 +36,7 @@ for pass in prefill decode control control-leaves; do
   [ "$pass" = control-leaves ] && [ ! -f "$D/manifest.json" ] && continue
   rm -f "$D/pearlplus-verify.json" "$D/pearlplus-lean-check.json"
   "$PY" "$SP" verify --passes "$PASSES" --manifest "$D/manifest.json" --coin-record "$D/coin.json" \
-    --out "$D/pearlplus-verify.json" --answer "$D/pearlplus-answer.json" --draws "${DRAWS:-3}" --jobs "$JOBS" \
+    --out "$D/pearlplus-verify.json" --answer "$D/pearlplus-answer.json" --draws "${SAMPLES:-3}" --jobs "$JOBS" \
     ${FAST:+--fast --cross-check ${CROSS:-256}} ${TEST_INSTANCE:+--test-instance} || true
   rc=0
   "$PY" "$SP" lean --passes "$PASSES" --manifest "$D/manifest.json" --verify "$D/pearlplus-verify.json" \

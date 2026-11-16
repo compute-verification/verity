@@ -93,7 +93,7 @@ serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor device's challenger's coins, the window's session and its sample's
-session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
+session (the record's ``sample_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
 log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
@@ -1232,7 +1232,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
             if not (gate and key):
                 raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
             com = json.loads(calls.read_text())["commitment"]
-            sid, dsid = com["session"]["session"], (com.get("draw_session") or {}).get("session")
+            sid, dsid = com["session"]["session"], (com.get("sample_session") or {}).get("session")
             tgz, tree = out / "session.tgz", out / "session"
             for s in (sid, dsid) if dsid else (sid,):
                 tgz.write_bytes(_gate_out(gate, "fetch", s))
@@ -1978,7 +1978,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
-                        "draw_session": drew.get("session"), "reference_work": ref,
+                        "sample_session": drew.get("session"), "reference_work": ref,
                         "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")}}}, None
 
 

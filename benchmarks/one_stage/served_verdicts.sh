@@ -252,7 +252,7 @@
 # [--lanes H1_LANES]` builds its circuit files (the live file, only the strata H1_STRATA lists, default none, and each K
 # of H1_LANES, default none, in credit's lanes form: lane<K> and combine<K>; a file already there under the same bind is
 # reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
-# digest, its sample K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's docket (default
+# digest, its sample K H1_SAMPLE_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's docket (default
 # none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 2`: one window and its sample session);
 # `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
@@ -1055,7 +1055,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     # shellcheck disable=SC2086
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
       --name "${H1_PERIOD:-served-${RESEARCH_RUN_ID:-local}}" --circuits "$H1_CIRCUITS" --slots "$SLOTS" \
-      --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
+      --max-tokens "$MAX_TOKENS" ${H1_SAMPLE_K:+--draw-k "$H1_SAMPLE_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
     [ -f "$D/period.json" ] && period=1
   fi
   # the policy is written before serve-openai's start, which the verdict reads as the serve's beginning

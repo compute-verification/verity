@@ -13,7 +13,7 @@
 #   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
 #      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
 #   4. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
-#      fixed load, a sample of DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
+#      fixed load, a sample of SAMPLES work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   5. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
 #      written only where it is the Python's;
 #   6. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
@@ -30,7 +30,7 @@
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
 # and the sample a withheld sample session's on the run's commitment, so the Lean verdict is taken of record. `in-process`:
-# the salt coin the in-process challenger's and the sample the node's own (`verify_run.node_draw`), the Lean's verdict
+# the salt coin the in-process challenger's and the sample the node's own (`verify_run.node_sample`), the Lean's verdict
 # a development one. Both are development parameters, which $OUT/compute-run.json and the COINS line say.
 # Writes under OUT, RUN_DIR/out: pieces/pouw/pearlplus-answer.json,
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
@@ -40,7 +40,7 @@
 # and salt key: in a directory under the run's own scratch under research run, else under SCRATCH or $TMPDIR, removed
 # on exit with the local gate's key; PASSES names a directory to keep them in instead.
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
-# RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
+# RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), SAMPLES (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30), LEAN_TIMEOUT (the seconds
 # the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer). The load is
 # benchmarks/compute/load.toml's, which run.py holds the record to. Before any step it exits 3 on a RUN_DIR already
@@ -54,7 +54,7 @@ cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
-COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
+COINS=${COINS:-local} GPU=${GPU-0} SAMPLES=${SAMPLES:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
 # the Lean verdict runs on every core it may: 1,917 s on 96, 3,451 s on 36, and more than 3,600 s on 20, so its limit grows
 # as the cores fall
 CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
@@ -146,11 +146,11 @@ fail() {  # NAME: a step serve.sh can't go on without failed; the run's statemen
   exit 1
 }
 coins() {  # the coins and parameters the run used, as a line and as compute-run.json
-  "$PY" - "$OUT/compute-run.json" "$COINS" "$CLASS" "$DRAWS" "$DELTA" "$SCHEME" "$REPO" "$REV" \
+  "$PY" - "$OUT/compute-run.json" "$COINS" "$CLASS" "$SAMPLES" "$DELTA" "$SCHEME" "$REPO" "$REV" \
     "$(git -C "$TREE" rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")" "$OUT/auditor-gate.json" \
     "$AUDITOR" "$PIECE/development.json" <<'EOF'
 import json, os, sys
-out, mode, cls, draws, delta, scheme, repo, rev, commit, gate, auditor, piece = sys.argv[1:13]
+out, mode, cls, samples, delta, scheme, repo, rev, commit, gate, auditor, piece = sys.argv[1:13]
 if mode == "local":
     g = json.load(open(gate)) if os.path.exists(gate) else {}
     w, h = g.get("params") or (None, None)
@@ -162,7 +162,7 @@ if mode == "local":
     line = f"local challenger (scratch auditor gate, serve.py on 127.0.0.1, LMS test key {w},{h}, Lean spot-verifier's coins)"
 else:
     held = {"challenger": "in-process", "salt_coin_from": "in-process challenger",
-            "sample_coin": "node draw (verify_run.node_draw)", "lean": "development (no --of-record)"}
+            "sample_coin": "node sample (verify_run.node_sample)", "lean": "development (no --of-record)"}
     line = "in-process challenger (salt) and the node itself (sample)"
 # the salt coin as the piece states it (development.json's coin_source), null until the piece is written
 held["salt_coin"] = json.load(open(piece)).get("coin_source") if os.path.exists(piece) else None
@@ -173,11 +173,11 @@ if os.path.exists(os.path.join(os.path.dirname(out), "steps.txt")):
         rc, _, sec = rest.partition(" ")
         if sec.split("s:")[0].isdigit():
             steps[name] = {"rc": int(rc), "seconds": int(sec.split("s:")[0])}
-doc = {"schema": "verity-bench/compute-run/v1", **held, "development": True, "draws": int(draws), "delta": delta,
+doc = {"schema": "verity-bench/compute-run/v1", **held, "development": True, "draws": int(samples), "delta": delta,
        "over_cap": "uncredited", "class": cls, "scheme": scheme, "model": repo, "revision": rev, "commit": commit,
        "steps": steps, "seconds": sum(v["seconds"] for v in steps.values())}
 open(out, "w").write(json.dumps(doc, indent=1) + "\n")
-print(f"COINS {line}; parameters: development (sample size {draws} at delta {delta}, tiles over the inert-work bound "
+print(f"COINS {line}; parameters: development (sample size {samples} at delta {delta}, tiles over the inert-work bound "
       f"uncredited, {scheme}, class "
       f"{cls}), {repo}@{rev[:10]}, commit {commit[:12]}")
 EOF
@@ -269,7 +269,7 @@ if [ "$failed" = 0 ]; then
   step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || fail retain
   cp "$WR" "$REC/window-record.json"
   step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
-    --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
+    --answer "$PIECE/pearlplus-answer.json" --draws "$SAMPLES" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "$LEAN_TIMEOUT" || failed=1
   if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1

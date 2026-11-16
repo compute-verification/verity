@@ -46,7 +46,7 @@ own Commit.
   served call's prover state is copied off the device and written by the server's `pouw_h1_prover.Writer`, whose ring
   holds a window's bytes at most, and the window's release waits for its files: one not written is the window's error,
   ``kept`` in its outcome otherwise.
-* **Its sample, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
+* **Its sample, for the sample-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
   window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.drawn`): the proof
   blocks core samples (`credit.sampled` over the window Program's layout, as `pouw_h1_challenger.sampled_of` samples them), each
   read as the Commit's values it opens (`sampled_reads`): its call's x_q and s_a rows of its row tile at the engine step its
@@ -113,7 +113,7 @@ SESSIONED = ("challenger", "session", "gate", "period")
 #: the challenger as the window reaches it: this machine's 127.0.0.1, its port the one the gate's open answers
 #: (`pouw_h1_window.at_port`; the gate's 7811..7899)
 AT = "127.0.0.1:7811"
-#: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
+#: the subprotocol H1's sample of each window is put under in serve-openai's sample-gated release (``--release-after``)
 DRAWER = "pouw"
 #: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
 #: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is sampled, as it
@@ -292,7 +292,7 @@ class H1Windows:
     (`pouw_h1_prover.Writer.wait`); ``receipts`` each window's `Served` registers each call's ``receipt@<c>``
     (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    ``draws`` is serve-openai's sample-gated release (`serve_release.Draws`), into which each window's release puts its
     sample under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
     each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
     so its release runs on ``closer``. ``clock`` times each part."""
@@ -416,7 +416,7 @@ class H1Windows:
                 "program_file": f"h1/{PROGRAM}",
                 "weights_root": self.weights.root().hex(), "weights_key": self.weights_key, **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
-                "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
+                "draw": f"put as {DRAWER} into the sample-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
                 "prover_ring": None if self.writer is None else self.writer.bound,
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts,
@@ -440,7 +440,7 @@ class H1Windows:
         t0, coins, held = self.clock(), {}, None
         if self.sessions is not None:
             reserved = self.sessions.take(window)
-            coins, held = {"challenger": AT, "session": reserved, "draw_session": self.sessions.draw_session(reserved["session"]),
+            coins, held = {"challenger": AT, "session": reserved, "sample_session": self.sessions.sample_session(reserved["session"]),
                            "gate": self.sessions.open}, self.sessions.held_of(reserved["session"])
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
@@ -502,7 +502,7 @@ class H1Windows:
         """Window ``window``'s H1 closed: on the loop its hooks and the tap come off the engine and the committer; then
         its release (`_release`), on ``closer`` when there is one, whose outcome this hands back as a `Future`, else here,
         and the outcome itself; here too when its hooks refused to come off, so nothing off the loop patches the engine.
-        None when no H1 window is open; then, if window ``window`` never opened one, its draw-gated release is refused."""
+        None when no H1 window is open; then, if window ``window`` never opened one, its sample-gated release is refused."""
         if self.comp is None:
             if self.draws is not None and window != self.window:
                 self.draws.refuse(window, f"{ENTRY}: window {window}'s H1 window never opened, so it has no draw")

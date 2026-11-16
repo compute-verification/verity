@@ -975,7 +975,7 @@ def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=No
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the
     ledger `ledger` (its own, `<name>.jsonl`, unless given) reserves (unless not `reserved`), and `_gate` opens it, the
     ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once); `DRAW_RESERVED` names
-    the window's sample session, which `_gate` opens withheld on its sample root (`challenger_host.Host.open_draw`)."""
+    the window's sample session, which `_gate` opens withheld on its sample root (`challenger_host.Host.open_sample`)."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed, session, leaves,
                    ledger, gated=gated, reserved=reserved)
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
@@ -993,9 +993,9 @@ _GATES: dict = {}
 
 def _gate(session, root, withhold=False):
     """The gate (`pouw_h1_window.Gate`) of the host `_host` made last: its window's session, or with `withhold` its
-    sample session (`challenger_host.Host.open_draw`)."""
+    sample session (`challenger_host.Host.open_sample`)."""
     host = _GATES["host"]
-    return host.open_draw(session, root) if withhold else host.open(session, root)
+    return host.open_sample(session, root) if withhold else host.open(session, root)
 
 
 def _serve_window(settings):
@@ -1026,20 +1026,20 @@ DRAW_RESERVED = {"session": CH.session_id(0xd)}
 
 def _remote(**kw):
     return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": RESERVED,
-                     "draw_session": DRAW_RESERVED, "gate": _gate, "admission": "per-round", **kw}}
+                     "sample_session": DRAW_RESERVED, "gate": _gate, "admission": "per-round", **kw}}
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
     """With the setting ``challenger`` the window's one challenge phase on the auditor device, reserved on the gate, is
     opened on the window's open root once round 0 is admitted (over the weights' root, round 0's request table and the
     challenge phase), its salt coin after that root and round s's coin after round s's root, and closes once the window
-    has finished; its sampling coin is its sample's challenge phase's (the setting ``draw_session``), which the gate opens
+    has finished; its sampling coin is its sample's challenge phase's (the setting ``sample_session``), which the gate opens
     withheld on the window's sample root; the verifier, reading the challenger's own directories under its key, trusts the
     window's coins (`trusted_rounds_reason`) only with the host's pins log and the sample's directory, and every request
-    entry and slot still opens under its round's root. Without ``draw_session`` the install is refused."""
+    entry and slot still opens under its round's root. Without ``sample_session`` the install is refused."""
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
-    no_draw = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}
+    no_draw = {k: v for k, v in _remote()["pouw"].items() if k != "sample_session"}
     refused = PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": no_draw}))
     assert len(refused) == 1 and refused[0].endswith(PHW.NO_SAMPLE_SESSION)
     commitment, run = _serve_window(_remote())
@@ -1065,7 +1065,7 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
                                      "commitment": coins.root.hex()}
     draw_root = commitment["draw"]["root"]
-    assert commitment["draw_session"]["session"] == DRAW_RESERVED["session"] == host.draw.session_id
+    assert commitment["sample_session"]["session"] == DRAW_RESERVED["session"] == host.draw.session_id
     assert host.draw.window == {"root": draw_root} and LC.withheld_on(host.ledger.lines, draw_root)
     assert R.released_roots(drawn / R.RELEASES, host.draw.challenger.commitment) == {Wd.SAMPLE: (bytes.fromhex(draw_root),)}
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
@@ -1123,7 +1123,7 @@ def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refus
 def _drawn(host, sid, root, withhold=True):
     """The sampling coin of `host`'s window from its sample session `sid`, which the gate opens (withheld unless not
     `withhold`) on the sample root `root`, opened once after it and the session closed and ended."""
-    host.open_draw(sid, root.hex(), withhold)
+    host.open_sample(sid, root.hex(), withhold)
     with host.draw.client as client:
         opened = client.open(Wd.SAMPLE, 0, root)
     assert host.draw.ended() is None

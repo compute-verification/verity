@@ -52,7 +52,7 @@ PRECISION = "bfloat16"
 CONFIG = ("device", "kernel", "cubin", "schedule")
 #: where each window's epoch goes under ``--out``: ``pearl/w<k>/``
 DIR = "pearl"
-#: the subprotocol whose sample serve-openai's draw-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
+#: the subprotocol whose sample serve-openai's sample-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
 DRAWER = "pouw"
 #: serve-openai's gate options a live salt session takes, all three or none (`refusal`, `live`)
 GATE = ("challenger_gate", "challenger_peer", "challenger_lane")
@@ -277,7 +277,7 @@ class PearlWindows:
         return out if error is None else {**out, "error": error[:500]}
 
     def drawing(self, draws: Any) -> None:
-        """Pearl+ puts no sample into serve-openai's draw-gated release (`refusal` refuses ``--release-after pouw``): its
+        """Pearl+ puts no sample into serve-openai's sample-gated release (`refusal` refuses ``--release-after pouw``): its
         verifier's coin is flipped after W."""
 
     def drain(self) -> None:

@@ -1,7 +1,7 @@
 """served.py: the units a served H1 window's own sampling coin selects (vllm's `pouw_h1` window, its z table one leaf a
 unit of its ``tile``), as PoUW's verifier samples them (core's `credit.sampled`).
 
-    python served.py --calls CALLS.json --session DIR --draw-session SAMPLE --ledger windows.jsonl [--ledger ...]
+    python served.py --calls CALLS.json --session DIR --sample-session SAMPLE --ledger windows.jsonl [--ledger ...]
                      --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out SAMPLED.json]
 
 CALLS.json is the window's ``pouw-h1-calls.json``; DIR the challenger session's directory as the auditor's gate fetched it
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--calls", required=True)
     ap.add_argument("--session", required=True)
-    ap.add_argument("--draw-session", required=True)
+    ap.add_argument("--sample-session", required=True)
     ap.add_argument("--ledger", action="append", required=True)
     ap.add_argument("--pin", required=True)
     ap.add_argument("--pins", required=True)
@@ -76,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         lines = ledger_head([remote.ledger_lines(p) for p in a.ledger], key, PHC.lms_verify)
         main = remote.main_lines(a.main)
         audited = pinned_session(lines, {"root": root}, key, pins, main, PHC.lms_verify)
-        sample_files = remote.session_files(a.draw_session)
+        sample_files = remote.session_files(a.sample_session)
     except CoinError as e:
         raise SystemExit(f"REFUSED: the challenger's session is not trusted: {e}") from e
     if (why := PHC.sample_session_reason(commits, key, lines, pins, main, sample_files, PHC.lms_verify)) is not None:

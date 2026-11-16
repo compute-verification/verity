@@ -748,8 +748,8 @@ def run(a: argparse.Namespace) -> dict:
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
                      draw_coin=sample.to_json(), draw_after=sample_after.hex(),
-                     draw_session=cs.sample_session and cs.sample_session.id, draw_commitment=cs.sample_commitment.to_json(),
-                     draw_reason=Wd.sample_epoch_reason(cs.sample_commitment)
+                     sample_session=cs.sample_session and cs.sample_session.id, sample_commitment=cs.sample_commitment.to_json(),
+                     sample_reason=Wd.sample_epoch_reason(cs.sample_commitment)
                      or Ch.live_reason(cs.sample_commitment, sample, Wd.SAMPLE, 0, sample_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
@@ -763,7 +763,7 @@ def run(a: argparse.Namespace) -> dict:
                           "opens; the step's 64-byte H1 salt is h1tile.live_salt = "
                           "window.round_key(commitment, coin_s, s, root_s).stream(0, 64), the tile's coin port; each "
                           "tile derives its own noise from it, its public position and its roots, inside the tile")
-        coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
+        coins["ok"] = bool(coins["rounds_reason"] is None and coins["sample_reason"] is None and coins["rounds_cover_steps"]
                            and all(recomputed))
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
                            "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "

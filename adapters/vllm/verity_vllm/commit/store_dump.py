@@ -203,7 +203,7 @@ def _refusal(com: Any) -> str | None:
     if missing:
         return f"steps {missing[:8]} are not packed step blocks: not dumped"
     if held := sorted(s for s, (b, _u) in com._gpu_blocks.items() if getattr(b, "on_device", False)):
-        return f"steps {held[:8]} are held on the device until their window's draw-gated release (--retain device): not dumped"
+        return f"steps {held[:8]} are held on the device until their window's sample-gated release (--retain device): not dumped"
     return None
 
 
@@ -367,7 +367,7 @@ class _Seg:
 
 class _Block:
     """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers.
-    ``dropped``: a step its window's draw-gated release kept only the sampled leaves of (`device_pool.SampledRanges`)."""
+    ``dropped``: a step its window's sample-gated release kept only the sampled leaves of (`device_pool.SampledRanges`)."""
 
     is_cuda = False
     dropped = False

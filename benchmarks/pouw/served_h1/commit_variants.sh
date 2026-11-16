@@ -9,7 +9,7 @@
 # that core's credit holds the window to, and --circuit-files from CIRCUITS: a pouw_h1_circuits --live 32,4 directory
 # of the declared Program, sent with the run), closed once that window's session has ended; it refuses to start while the
 # key's lane (GATE_LANE, default vllm) has a period open, and saves each live arm's Commit session tree and its sample
-# session's (GATE fetch, $OUT/<leg>/commit-session.tgz and commit-draw-session.tgz) for pouw_h1_gpu.py --check-challenger
+# session's (GATE fetch, $OUT/<leg>/commit-session.tgz and commit-sample-session.tgz) for pouw_h1_gpu.py --check-challenger
 # (its --draw-dir). The units kernel is built for the node's card
 # (arch.sh: ARCH, 120a or 90a); SUBPROTOCOL_ARGS are more pouw_h1_gpu.py flags for every arm (another int8 pin: --base-role
 # LLAMA32_1B --role LLAMA32_1B_INT8 --repo verity-int8/Llama-3.2-1B-INT8) and PY the node's Python (default
@@ -66,9 +66,9 @@ if [ -n "${GATE:-}" ]; then
       s=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["session"]["session"])' \
             "$OUT/$leg/pouw_h1_gpu.json") && $GATE fetch "$s" > "$OUT/$leg/commit-session.tgz"
       echo "[legs] leg $leg commit session ${s:-?} fetched rc $?" | tee -a "$OUT/legs.txt"
-      d=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["draw_session"]["session"])' \
-            "$OUT/$leg/pouw_h1_gpu.json") && $GATE fetch "$d" > "$OUT/$leg/commit-draw-session.tgz"
-      echo "[legs] leg $leg commit draw session ${d:-?} fetched rc $?" | tee -a "$OUT/legs.txt" ;;
+      d=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["sample_session"]["session"])' \
+            "$OUT/$leg/pouw_h1_gpu.json") && $GATE fetch "$d" > "$OUT/$leg/commit-sample-session.tgz"
+      echo "[legs] leg $leg commit sample session ${d:-?} fetched rc $?" | tee -a "$OUT/legs.txt" ;;
     esac
   done
 fi

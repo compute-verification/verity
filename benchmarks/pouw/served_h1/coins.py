@@ -300,8 +300,8 @@ class Coins:
     def record(self) -> dict:
         s, d = self.session, self.sample_session
         return {"source": self.source, "label": self.label, "challenger": s and s.address, "session": s and s.id,
-                "draw_session": d and d.id,
-                "draw_commitment": self.sample_commitment and self.sample_commitment.to_json()}
+                "sample_session": d and d.id,
+                "sample_commitment": self.sample_commitment and self.sample_commitment.to_json()}
 
 
 class RoundPipe:

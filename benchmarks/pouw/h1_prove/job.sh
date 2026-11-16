@@ -29,7 +29,7 @@
 #   5. recorded.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
 #      checks' Lean findings under the window's open root, which every per-window registered value binds
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
-#      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
+#      N weight rows; 0 all)  H1_SAMPLE (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
 #      H1_ZK_SERVER (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish, zk_worker_level0, zk_worker_inner and
 #      zk_worker_pads on honest's statement, under the ZK server, after the proofs, twenty ZK server sessions; a failure fails
 #      the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
@@ -52,7 +52,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk
 H=$SRC/benchmarks/pouw/h1_prove
-K=${H1_K:-4096} COLS=${H1_COLS:-0} DRAW=${H1_DRAW:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
+K=${H1_K:-4096} COLS=${H1_COLS:-0} SAMPLE=${H1_SAMPLE:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
 HUB=${H1_HUB:-/workspace/hf/hub}
 QUANT=(); [ "${H1_QUANT:-h1}" = vllm ] && QUANT=(--quant vllm --quant-k "$([ "$K" = 4096 ] && echo 0 || echo "$K")")
 if [ "$K" = 4096 ]; then CONTROLS=${H1_CONTROLS:-}; else CONTROLS=${H1_CONTROLS:-honest output_row_committed_false}; fi
@@ -64,7 +64,7 @@ build_layer_venv() { local D=$1; rm -rf "$D" && uv venv -q --python 3.12 "$D" &&
 # the stager needs only the venv: it builds the circuit while setup builds flock-circuit and the Lean verifier
 [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 PY=$HZ_PYTHON TIME="$HZ_PYTHON $J/timed.py"
-log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER quant=${H1_QUANT:-h1} controls: $CONTROLS"
+log "h1-prove: K=$K cols=${COLS:-all} sample=$SAMPLE tokens=$TOKENS layer=$LAYER quant=${H1_QUANT:-h1} controls: $CONTROLS"
 # detached (not a job of this shell), so setup's `wait` doesn't wait for it; recorded.py and the loop below watch its pid
 ( $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/stage.py $K $SW" > "$OUT/stage.out" 2> "$OUT/stage.err" &
   echo $! > "$W/stager.pid" )
@@ -89,7 +89,7 @@ fi
   && "$LPY" "$H/layer.py" "$MODEL" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" "${QUANT[@]}" \
     > "$OUT/layer2.json" 2> "$OUT/layer2.err" || { log "layer.py FAILED: $(tail -2 "$OUT"/layer*.err)"; kill $STAGER; exit 1; }
 log "window: $(cut -c1-400 "$OUT/layer1.json")"
-args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --sample "$DRAW" --stager-pid "$STAGER"
+args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --sample "$SAMPLE" --stager-pid "$STAGER"
       --name "h1-${RESEARCH_RUN_ID:-local}")
 [ "$K" != 4096 ] && args+=(--k "$K")
 [ "$COLS" != 0 ] && args+=(--cols "$COLS")

@@ -572,7 +572,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, samples: int, s
     label = label or path.parent.name
     job = load(path, light=bool(opts.get("resumed_only")), coins=opts.get("coins"))
     inputs = pick_inputs(job, per_linear, census_max, samples, seed)
-    fresh = opts.get("fresh_draws")
+    fresh = opts.get("fresh_samples")
     if fresh:
         for row in inputs:
             row["method"], row["drawn"] = "fresh", fresh_trials(job, row, fresh, opts["fresh_source"])
@@ -590,7 +590,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, samples: int, s
         fail = [t for t in seen if t["openings_ok"] and not t["ok"]]
         rows.append({k: v for k, v in row.items() if k not in ("area", "drawn")} | {
             "pass": label, "run": job["man"].get("run"), "manifest_sha256": job["sha256"], "drawn": len(seen),
-            "unmeasured_draws": len(row["drawn"]) - len(seen),
+            "unmeasured_samples": len(row["drawn"]) - len(seen),
             "openings_failed": sum(not t["openings_ok"] for t in seen), "failures": len(fail),
             "failures_weighted": sum(row["area"][t["tile"]] for t in (fail if fresh else {t["tile"]: t for t in fail}.values())),
             "share_max": max((t["share"] for t in seen if "share" in t), default=None),
@@ -654,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
                    help="replay every tile whose id is a multiple of N on the scalar reference too, and fail on any difference "
                         "(0: none)")
-    p.add_argument("--fresh-samples", type=int, default=0, metavar="N",
+    p.add_argument("--fresh-draws", type=int, default=0, metavar="N",
                    help="per-input mode: measure each input by N work-weighted samples, each under a fresh salt of its own "
                         "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or samples")
     p.add_argument("--fresh-source", default=None, metavar="HEX",
@@ -669,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = a.out or a.rebound.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         return write_inputs(doc["inputs"], doc["seed"], doc["census_max"], doc["draws"], out_dir,
-                            {k: doc[k] for k in ("fresh_draws", "fresh_source") if k in doc} or None)
+                            {k: doc[k] for k in ("fresh_samples", "fresh_source") if k in doc} or None)
     if not a.manifests:
         p.error("give one or more manifests")
     if (a.tiles is None) == (a.per_input is None):
@@ -691,8 +691,8 @@ def main(argv: list[str] | None = None) -> int:
         source = bytes.fromhex(a.fresh_source)
         if len(source) != 32:
             p.error("--fresh-source is 32 bytes")
-        fresh = {"fresh_draws": a.fresh_samples, "fresh_source": source.hex()}
-        opts |= {"fresh_draws": a.fresh_samples, "fresh_source": source}
+        fresh = {"fresh_samples": a.fresh_samples, "fresh_source": source.hex()}
+        opts |= {"fresh_samples": a.fresh_samples, "fresh_source": source}
         print(f"fresh samples: {a.fresh_samples} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:

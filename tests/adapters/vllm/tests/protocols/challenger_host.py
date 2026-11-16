@@ -403,7 +403,7 @@ class Ledger:
                                      "refused_hellos": len((directory / R.HELLOS).read_text().splitlines())})
 
 
-#: the port the gate's answer names for a window's sample session (`Host.open_draw`)
+#: the port the gate's answer names for a window's sample session (`Host.open_sample`)
 DRAW_PORT = 7812
 
 
@@ -415,7 +415,7 @@ class Host:
     the gate's open of the reserved session, for the window ``{root}`` the serving side names (an H1 window's open root,
     `pouw_h1_window.Window`), at the leaf held before the record's, since the ledger's check wants a record's leaf between
     its session's open's and end's. With `withhold` the session is withheld (`remote.open_session`), and the ledger's
-    open says so (``withheld: true``). `open_draw` opens the window's sample session, a `Host` of its own under the same
+    open says so (``withheld: true``). `open_sample` opens the window's sample session, a `Host` of its own under the same
     key, leaves and ledger, withheld on the window's sample root (`draw`)."""
 
     def __init__(self, directory: Path, challenger: LC.LiveChallenger, seed: int, session: str = session_id(1),
@@ -458,7 +458,7 @@ class Host:
                 **({"commitment": None, "withheld": True, "signed": True} if self.withhold else
                    {"commitment": self.challenger.commitment.root.hex()})}
 
-    def open_draw(self, session: str, root: str, withhold: bool = True) -> dict:
+    def open_sample(self, session: str, root: str, withhold: bool = True) -> dict:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
         `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
         (`window.sample_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""

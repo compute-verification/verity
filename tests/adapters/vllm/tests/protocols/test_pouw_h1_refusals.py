@@ -329,7 +329,7 @@ def test_h1s_settings_refuse_a_steps_count_and_round_coins_that_are_not_a_live_e
 
 
 def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
-    """``draw_session`` is the sample session of H1's window on its challenger, and ``period`` goes with a Pearl-C
+    """``sample_session`` is the sample session of H1's window on its challenger, and ``period`` goes with a Pearl-C
     install's ``challenger`` and ``session``: H1 without a challenger, and a scheme that is neither, are refused each by
     name."""
     def refused(entry, settings):
@@ -338,9 +338,9 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     period = {"period": "p1", "lane": "vllm"}
     for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
         assert refused(entry, settings) == ()
-        no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
+        no_window = (f"{entry}: the pouw setting 'sample_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
-        assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
+        assert refused(entry, {"pouw": {**settings["pouw"], "sample_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
         no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
                       "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
                       "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")

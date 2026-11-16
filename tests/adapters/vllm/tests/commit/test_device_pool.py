@@ -1,4 +1,4 @@
-"""--retain device (`commit.committer.device_pool`): a window's committed values wait in a bounded device pool for its draw-gated
+"""--retain device (`commit.committer.device_pool`): a window's committed values wait in a bounded device pool for its sample-gated
 release, which keeps exactly the sampled leaves, byte-equal to what --retain host keeps of them, and refuses any other leaf by name.
 The pool is a CPU tensor here; the windowed collector puts the same blocks on the GPU."""
 from __future__ import annotations
@@ -56,7 +56,7 @@ def test_the_release_keeps_exactly_the_sampled_leaves_byte_equal_to_host(tmp_pat
     C = dev.chunk
     sampled = {0: [1, 2], 2: [0, 5]}
     assert leaf_bytes(dev, 0, 3) == host_leaf(host, C, 0, 3)
-    with pytest.raises(ValueError, match="held on the device until their window's draw-gated release"):
+    with pytest.raises(ValueError, match="held on the device until their window's sample-gated release"):
         SD.dump(dev, rc, tmp_path / "early")
     rec = DP.release(dev, sampled)
     assert list(rec) == ["steps", "drawn_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "absorb_wait_s", "gather_s"]
@@ -81,14 +81,14 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(tmp_path):
     SD.dump(dev, rc, tmp_path)
     for com in (dev, SD.load(tmp_path)[0]):
         assert leaf_bytes(com, 0, 1) == host_leaf(host, dev.chunk, 0, 1)
-        with pytest.raises(RuntimeError, match="draw-gated release"):
+        with pytest.raises(RuntimeError, match="sample-gated release"):
             com.open_range(0, 0, 1)
-        with pytest.raises(RuntimeError, match="draw-gated release"):
+        with pytest.raises(RuntimeError, match="sample-gated release"):
             com.open_range(1, 0, 1)
     replay, _ = commit_steps(steps(R.ROW_BYTES // 256))
-    with pytest.raises(RuntimeError, match="draw-gated release"):
+    with pytest.raises(RuntimeError, match="sample-gated release"):
         dev.open([(0, 3)], values_from=replay)
-    with pytest.raises(KeyError, match="draw-gated release"):
+    with pytest.raises(KeyError, match="sample-gated release"):
         dev._gpu_blocks[0][0][0:dev.chunk]
 
 

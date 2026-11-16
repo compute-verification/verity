@@ -189,13 +189,13 @@ MUTATIONS = [
     ("answer-keys", "answer", "extra", 1), ("answer-protocol-type", "answer", "protocol", 3),
     ("answer-verdict", "answer", "verdict", "maybe"), ("answer-commitment-type", "answer", "commitment", 5),
     ("answer-shape", "answer", "reason", "why"), ("answer-profile", "answer", "profile.levels", {}),
-    ("answer-profile-delta", "answer", "profile.delta", "2/4"), ("answer-profile-draw", "answer", "profile.levels.0.draw", {"all": 1}),
+    ("answer-profile-delta", "answer", "profile.delta", "2/4"), ("answer-profile-sample", "answer", "profile.levels.0.draw", {"all": 1}),
     ("answer-public", "answer", "public", {"units": []}), ("answer-public-law", "answer", "public.draw.law", "bernoulli"),
     ("answer-protocol", "answer", "protocol", "verity/pous/v1"), ("answer-other", "answer", "commitment", None),
     ("answer-null", "answer", "commitment", _DROP), ("answer-reject", "answer", None, "reject"),
     ("answer-undecided", "answer", None, "undecided"), ("answer-programs", "answer", "profile.programs", None),
     ("answer-programs-two", "answer", "profile.programs", None), ("answer-level-query", "answer", "profile.levels.0.query", None),
-    ("answer-level-size", "answer", "profile.levels.0.size", None), ("answer-level-draw", "answer", "profile.levels.0.draw", None),
+    ("answer-level-size", "answer", "profile.levels.0.size", None), ("answer-level-sample", "answer", "profile.levels.0.draw", None),
     ("answer-level-bernoulli", "answer", "profile.levels.0.draw", {"bernoulli": "1/2"}),
     ("answer-level-stratified", "answer", "profile.levels.0.draw",
      {"law": "stratified", "strata": [{"k": 1, "name": "t", "size": 2}]}),
@@ -203,8 +203,8 @@ MUTATIONS = [
     ("answer-level-work", "answer", "profile.levels.0.draw",
      {"k": 3, "law": "work", "strata": [{"floor": 1, "k": 1, "name": "t", "size": 4, "work": 3}]}),
     ("answer-level-name", "answer", "profile.levels.0.name", "tile"), ("answer-levels-two", "answer", "profile.levels", None),
-    ("answer-delta", "answer", "profile.delta", "1/3"), ("answer-drawn", "answer", "profile.drawn", None),
-    ("answer-draw-k", "answer", "public.draw.k", None), ("answer-draw-population", "answer", "public.draw.population", None),
+    ("answer-delta", "answer", "profile.delta", "1/3"), ("answer-sampled", "answer", "profile.drawn", None),
+    ("answer-sample-k", "answer", "public.draw.k", None), ("answer-sample-population", "answer", "public.draw.population", None),
     ("answer-units-order", "answer", "public.draw.units", None), ("answer-units-range", "answer", "public.draw.units", None),
     ("answer-units-count", "answer", "public.draw.units", None), ("answer-unsorted-lists", "answer", "profile.covered", ["z", "a"]),
     ("answer-commitment-odd", "answer", "commitment", None), ("answer-commitment-upper", "answer", "commitment", None),
@@ -228,16 +228,16 @@ MUTATIONS = [
     ("answer-public-units-type", "answer", "public.draw.units", "all"),
     ("answer-public-unit-type", "answer", "public.draw.units", None),
     ("answer-public-population-type", "answer", "public.draw.population", "8"),
-    ("answer-drawn-extra", "answer", "profile.drawn.tile", 1), ("answer-drawn-type", "answer", "profile.drawn.unit", "3"),
+    ("answer-sampled-extra", "answer", "profile.drawn.tile", 1), ("answer-sampled-type", "answer", "profile.drawn.unit", "3"),
     ("answer-linked-type", "answer", "profile.linked", 1), ("answer-programs-type", "answer", "profile.programs", "p"),
     ("answer-program-type", "answer", "profile.programs", [1]),
     ("answer-level-keys", "answer", "profile.levels.0.extra", 1),
     ("answer-level-missing", "answer", "profile.levels.0.size", _DROP),
     ("answer-level-null-query", "answer", "profile.levels.0.query", None),
-    ("answer-level-null-draw", "answer", "profile.levels.0.draw", None),
+    ("answer-level-null-sample", "answer", "profile.levels.0.draw", None),
     ("answer-level-strata-keys", "answer", "profile.levels.0.draw",
      {"law": "stratified", "strata": [{"k": 1, "name": "t", "size": 2, "x": 0}]}),
-    ("answer-level-draw-two", "answer", "profile.levels.0.draw", {"bernoulli": "1/2", "subset": 3}),
+    ("answer-level-sample-two", "answer", "profile.levels.0.draw", {"bernoulli": "1/2", "subset": 3}),
     ("answer-level-bernoulli-lowest", "answer", "profile.levels.0.draw", {"bernoulli": "2/4"}),
     ("answer-delta-type", "answer", "profile.delta", 1), ("answer-level-renamed", "answer", "profile", None),
     ("case-commitment-upper", None, None, None), ("case-evidence-odd", None, None, None),
@@ -322,21 +322,21 @@ def _derived(name: str, case: dict, rng: random.Random):
         return _hex(rng)
     if name == "answer-level-size":
         return rec["population"] + 1
-    if name == "answer-level-draw":
+    if name == "answer-level-sample":
         return {"subset": rec["law"]["k"] + 1}
     if name == "answer-levels-two":
         return [{"draw": None, "name": "window", "query": None, "size": 1}, *ans["profile"]["levels"]]
-    if name == "answer-drawn":
+    if name == "answer-sampled":
         return {CC.LEVEL: rec["law"]["k"] + 1}
-    if name == "answer-draw-k":
+    if name == "answer-sample-k":
         return rec["law"]["k"] + 1
-    if name == "answer-draw-population":
+    if name == "answer-sample-population":
         return rec["population"] * 2
     if name == "answer-commitment-odd":
         return ans["commitment"][:-1]
     if name == "answer-commitment-upper":
         return ans["commitment"].upper()
-    if name in ("answer-public-null", "answer-level-null-query", "answer-level-null-draw", "live-null"):
+    if name in ("answer-public-null", "answer-level-null-query", "answer-level-null-sample", "live-null"):
         return None
     if name == "live-other-key":
         return Ch.ChallengerKey(RC.PARAMS.W, RC.PARAMS.H, lms.public_key(RC._key(1))).to_json()

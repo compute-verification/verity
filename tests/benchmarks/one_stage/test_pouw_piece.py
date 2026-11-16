@@ -247,7 +247,7 @@ def test_a_served_period_is_its_windows_session_then_its_samples(tmp_path):
         return str(e.value)
 
     assert "names no sample session" in say({"session": {"session": sid}}, [sid])
-    both = {"session": {"session": sid}, "draw_session": {"session": dsid}}
+    both = {"session": {"session": sid}, "sample_session": {"session": dsid}}
     assert f"lists the sessions ['{sid}'], and this piece is built for a period" in say(both, [sid])
     assert "no declared window Program" in say(both, [sid, dsid])
 

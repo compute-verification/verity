@@ -540,7 +540,7 @@ def test_a_window_received_after_the_epochs_sample_coin_is_refused(served, tmp_p
     reqs = [{"op": "salt", "after": _salt_after(params).hex()}, {"op": "register", "name": "honest", **reg},
             {"op": "select", "name": "honest"}, {"op": "register", "name": "after", "stream": "later", **reg}]
     replies = [SC.answer(old, json.dumps(r)) for r in reqs]
-    assert [x.split(" ", 1)[0] for x in replies] == ["OPENED", "REGISTERED", "DRAWN", "REFUSED"] and "repeated-call" in replies[3]
+    assert [x.split(" ", 1)[0] for x in replies] == ["OPENED", "REGISTERED", "SAMPLED", "REFUSED"] and "repeated-call" in replies[3]
     (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
                                                 for r, x in zip(reqs, replies)))
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
@@ -1206,7 +1206,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
               lambda ch: _held(ch, "honest", rec))
     disagrees("public", lambda m: m.setattr(SC.S, "check_public", lambda *a: SC.Verdict(False, ("keys",), {})),
               lambda ch: _held(ch, "honest", rec))
-    ch = disagrees("sample", lambda m: m.setattr(OR, "py_sample", lambda x: {"refused": ["draw", "forced"]}),
+    ch = disagrees("draw", lambda m: m.setattr(OR, "py_sample", lambda x: {"refused": ["draw", "forced"]}),
                    lambda ch: (_held(ch, "honest", rec), ch.select("honest")))
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
@@ -1334,7 +1334,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)], record=ORL.Record) == 0
     replies = capsys.readouterr().out.splitlines()
     assert [x.split(" ", 1)[0] for x in replies] == ["COINS", "OPENED", "REFUSED", *["REFUSED"] * len(SC.CASES), "REGISTERED",
-                                                     "DRAWN", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
+                                                     "SAMPLED", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
     assert all('"coin"' in r for r in replies[3:3 + len(SC.CASES)]) and "salt is not its coin's" in replies[2 + len(SC.CASES)]
     log = tmp_path / "log"
     assert json.loads((log / "coins.json").read_text()) == coins.commitment.to_json()

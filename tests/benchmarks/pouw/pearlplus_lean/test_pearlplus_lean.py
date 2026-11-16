@@ -467,7 +467,7 @@ def test_a_challenger_sample_that_is_not_the_runs_coin(exe, tmp_path):
         for of_record in (False, True):
             got = lean(exe, [path], 3, None, bad, test_instance=True, of_record=of_record)
             assert (got["verdict"], got["refused"][0], got["verdicts"]) == ("reject", "draw", []), why
-            assert got["refused"][1].startswith(why) and got["reason"] == f"sample: {got['refused'][1]}"
+            assert got["refused"][1].startswith(why) and got["reason"] == f"draw: {got['refused'][1]}"
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):

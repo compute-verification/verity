@@ -21,7 +21,7 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 * **Evidence**: the service's answer for that registration, read as `Core.Answer.ofJson` and `Core.Integrity.ofJson`
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's sample as one-stage's
-  `sample.py` writes it (any of its sampling designs; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
+  `draw.py` writes it (any of its sampling designs; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
   coin and the salt it gives (`window_salt`).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
   execution phase's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
@@ -540,7 +540,7 @@ def _num_den(p: str, ctx: str) -> str:
 
 
 def unit_sample(j: Any) -> dict:
-    """The public outputs ``{"draw": d}``, `d` one of one-stage's `sample.py` sampling designs with exactly its keys (`check_sample`'s),
+    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` sampling designs with exactly its keys (`check_sample`'s),
     and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")
@@ -664,7 +664,7 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["drawn"] != [(LEVEL, k)]:
         return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (sample["law"] == "subset" and sample["k"] == k) or sample["population"] != w.n:
-        return "reject", f"sample: {sampling_design_name(sample)} over {sample['population']}, not subset:{k} over {w.n}", None
+        return "reject", f"draw: {sampling_design_name(sample)} over {sample['population']}, not subset:{k} over {w.n}", None
     units = sample["units"]
     if len(units) != k or any(b <= a for a, b in zip(units, units[1:])) or (units and units[-1] >= w.n):
         return "reject", f"draw: its {len(units)} units are not {k} ascending distinct units below {w.n}", None

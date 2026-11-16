@@ -1,5 +1,5 @@
 """Device-held values (serve-openai's ``--retain device``): a Commit window's committed bytes stay in a bounded device buffer
-(`DevicePool`) until the window's draw-gated release, which keeps on host only the leaves some subprotocol drew (`gather`).
+(`DevicePool`) until the window's sample-gated release, which keeps on host only the leaves some subprotocol drew (`gather`).
 
 The windowed collector's hit steps copy each window of their stream into the pool instead of the pinned host pool, so the step's
 retained block (`host_retention._HostRanges` / `_HostWindows`, marked ``on_device``) holds device views, read like the host

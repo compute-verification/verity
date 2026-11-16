@@ -149,7 +149,7 @@ def head(tmp_path_factory):
 @pytest.fixture
 def fixed_sample(monkeypatch):
     tiles = T.PPD.scheme_of(SCHEME).tiles(T.Shape(M16, K, N))
-    monkeypatch.setattr(T.VR.CW, "sample", lambda scheme, records, key, samples: [(0, tiles[t]) for t in SAMPLED][:samples])
+    monkeypatch.setattr(T.VR.CW, "draw", lambda scheme, records, key, samples: [(0, tiles[t]) for t in SAMPLED][:samples])
 
 
 def verdict(path: Path, **kw) -> dict:

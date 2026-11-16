@@ -790,7 +790,7 @@ class H1Run:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
-            self.commits.update({"draw_session": s} if (s := getattr(self.sample, "session", None)) is not None else {})
+            self.commits.update({"sample_session": s} if (s := getattr(self.sample, "session", None)) is not None else {})
         if self.transcript_dir:
             (d := Path(self.transcript_dir)).mkdir(parents=True, exist_ok=True)
             (d / CALLS_FILE).write_text(json.dumps({"schema": RECORD, "entry": self.entry, "commitment": self.commits,

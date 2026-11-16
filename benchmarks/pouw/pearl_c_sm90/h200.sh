@@ -25,8 +25,8 @@
 # verdict glm53_passes.py verify takes rejects a pass on a sampled row over its cap (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
 # exit 2; otherwise to 0, none), and
-# (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
-# `served_passes.DRAWS`), and
+# (VERIFY=1, the default) glm53_passes.py verify replays SAMPLES tiles of each pass there (default 459, the verdict's
+# `served_passes.SAMPLES`), and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
 # leaf, every real row's served y): about 17 CPU-hours for glm53 (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it
 # to a run elsewhere on the published passes.
@@ -62,7 +62,7 @@ case ${NEEDED%% *} in
 esac
 echo "volunteer-needed: $NEEDED; VOLUNTEER=$VOLUNTEER" > "$O/volunteer-needed.txt"
 if [ "${NEEDED%% *}" = yes ] && [ "$VOLUNTEER" != 1 ] && [ "$VOLUNTEER" != device ]; then
-  echo "volunteer refused rc 2: the verdict rejects a pass on a drawn row over its debit cap (over-cap rule" \
+  echo "volunteer refused rc 2: the verdict rejects a pass on a sampled row over its debit cap (over-cap rule" \
     "${NEEDED#* }), so the give-up before its coin can't be skipped (VOLUNTEER=$VOLUNTEER)" | tee -a "$O/rc.txt"
   exit 2
 fi
@@ -122,7 +122,7 @@ elif [ "$VOLUNTEER" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
 if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then
-  "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
+  "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${SAMPLES:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
 fi
 if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then

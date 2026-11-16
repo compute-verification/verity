@@ -100,10 +100,10 @@ else
   for l in ${H1S_LEDGER:?}; do ledgers+=(--ledger "$l"); done
   PYTHONPATH=$HPP "${H1S_PY:?}" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "${H1S_CALLS:?}" --session "${H1S_SESSION:?}" \
     "${ledgers[@]}" --pin "${H1S_PIN:?}" --pins "${H1S_PINS:?}" --main "${H1S_MAIN:?}" --descriptor "${H1S_DESCRIPTOR:?}" \
-    --out "$OUT/drawn.json" > "$OUT/drawn.out" 2> "$OUT/drawn.err" \
-    || { log "draw FAILED: $(tail -3 "$OUT/drawn.err") $(tail -3 "$OUT/drawn.out")"; exit 1; }
-  log "drawn: $(head -c 1500 "$OUT/drawn.out")"
-  PYTHONPATH=$HPP $TIME "$OUT/extract.time" "$H1S_PY" "$H/served.py" extract --calls "$H1S_CALLS" --sampled "$OUT/drawn.json" \
+    --out "$OUT/sampled.json" > "$OUT/sampled.out" 2> "$OUT/sampled.err" \
+    || { log "sample FAILED: $(tail -3 "$OUT/sampled.err") $(tail -3 "$OUT/sampled.out")"; exit 1; }
+  log "sampled: $(head -c 1500 "$OUT/sampled.out")"
+  PYTHONPATH=$HPP $TIME "$OUT/extract.time" "$H1S_PY" "$H/served.py" extract --calls "$H1S_CALLS" --sampled "$OUT/sampled.json" \
     --descriptor "$H1S_DESCRIPTOR" --prover "${H1S_PROVER:?}" --k "$K" --out "$OP" --public "$OUT/extract.json" \
     > "$OUT/extract.out" 2> "$OUT/extract.err" || { log "extract FAILED: $(tail -3 "$OUT/extract.err")"; exit 1; }
   log "extract: $(tail -1 "$OUT/extract.out" | cut -c1-600) $(cat "$OUT/extract.time")"

@@ -180,9 +180,9 @@ def _with_receipts(commit, receipt=_v1_receipt):
     return with_receipts
 
 
-#: VERITY_VLLM_H1_DRAWN_J10R=1: the window served over J10-R's own tile unit (`served.unit_of` ``j10r``), so ``--recompose``
+#: VERITY_VLLM_H1_SAMPLED_J10R=1: the window served over J10-R's own tile unit (`served.unit_of` ``j10r``), so ``--recompose``
 #: holds its lowered outputs to the word reference sampled stages without composing (`drawn.unit_outputs`); run remotely
-REAL = os.environ.get("VERITY_VLLM_H1_DRAWN_J10R") == "1"
+REAL = os.environ.get("VERITY_VLLM_H1_SAMPLED_J10R") == "1"
 WKEY = bytes(range(32))
 FAKE = f"""#!{sys.executable}
 import hashlib, json, sys

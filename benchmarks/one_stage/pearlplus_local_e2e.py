@@ -344,7 +344,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
         r = S.piece_row("work", piece.parent, spot=audit, key_sha512=key_sha512, lane=LANE)
         return {k: r.get(k) for k in ("protocol", "verdict", "why", "commitment", "quantity")} | {
             "profile": {k: ((r.get("answer") or {}).get("profile") or {}).get(k)
-                        for k in ("lane", "period", "session", "draw_session", "source", "source_from")}}
+                        for k in ("lane", "period", "session", "sample_session", "source", "source_from")}}
 
     dev = json.loads((piece / S.DEVELOPMENT).read_text())
     report["piece"] = {k: dev.get(k) for k in ("verdict", "reasons", "coin_source")} | {

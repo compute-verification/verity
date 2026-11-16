@@ -45,7 +45,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
     bounds, worst = _cite(rows, m)
     out = {"model": name, "run": runs[0], "passes": sorted({r["pass"] for r in rows}),
            "manifests": sorted({f"{r['pass']}:{r['manifest_sha256']}" for r in rows}), "m_model": inputs["m"],
-           "delta_per_input": 0.05 / m, "tile_draws": sum(r["drawn"] for r in rows),
+           "delta_per_input": 0.05 / m, "tile_samples": sum(r["drawn"] for r in rows),
            "failures": sum(r["failures"] for r in rows), "inputs_with_failures": sum(r["failures"] > 0 for r in rows),
            "share_max": max((r["share_max"] for r in rows if r["share_max"] is not None), default=None),
            "epsilon": bounds[worst][0], "epsilon_method": bounds[worst][1],
@@ -68,7 +68,7 @@ def model_row(name: str, inputs: dict, verifies: list[dict], fresh: dict | None,
         if sorted((r["pass"], r["matmul"]) for r in fresh["inputs"]) != sorted((r["pass"], r["matmul"]) for r in rows):
             raise ValueError(f"{name}: the fresh trials are of other inputs than the committed list (served_inputs.sh)")
         fb, fw = _cite(fresh["inputs"], m)
-        out["fresh"] = {"draws": fresh["fresh_draws"], "source": fresh["fresh_source"], "m_model": fresh["m"],
+        out["fresh"] = {"draws": fresh["fresh_samples"], "source": fresh["fresh_source"], "m_model": fresh["m"],
                         "trials": sum(r["drawn"] for r in fresh["inputs"]), "failures": sum(r["failures"] for r in fresh["inputs"]),
                         "epsilon": fb[fw][0], "epsilon_input": {k: fresh["inputs"][fw][k] for k in ("pass", "matmul")}}
     return out
@@ -102,7 +102,7 @@ def markdown(table: dict) -> str:
         fresh = (f"{r['fresh']['epsilon']:.4f} ({r['fresh']['trials']} trials, {r['fresh']['failures']} failed)" if "fresh" in r
                  else f"pending (`{r['fresh_pending']['run']}`)" if "fresh_pending" in r else "—")
         verify = ", ".join(f"{v['pass']} {'ACCEPT' if v['accepted'] else 'REJECT'}" for v in r["verify"]) or "—"
-        lines.append(f"| {r['model']} | `{r['run']}` | {r['m_model']} | {r['tile_draws']} | {r['failures']} | "
+        lines.append(f"| {r['model']} | `{r['run']}` | {r['m_model']} | {r['tile_samples']} | {r['failures']} | "
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
     lines += ["", (f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "

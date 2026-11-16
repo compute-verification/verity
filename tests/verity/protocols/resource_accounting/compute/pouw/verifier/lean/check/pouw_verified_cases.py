@@ -49,7 +49,7 @@ PRE_NAMES = ["files-form", "statements-form", "call-past", "twice", "undrawn", "
              "unregistered", "layout"]
 RUN_NAMES = ["error", "refused", "rejected", "pub-other", "ok-other", "ok-none", "unit-other"]
 LANES_PRE = ["lanes-shape", "lanes-missing", "lanes-no-combine", "lanes-leaf-digest", "lanes-leaf-other",
-             "lanes-twice", "lanes-undrawn", "lanes-statement", "lanes-record", "lanes-unregistered", "lanes-draw",
+             "lanes-twice", "lanes-unsampled", "lanes-statement", "lanes-record", "lanes-unregistered", "lanes-sample",
              "lanes-form", "lanes-files"]
 LANES_RUN = ["lanes-partial", "lanes-known", "lanes-openings-none", "lanes-root", "lanes-rejected", "lanes-units",
              "lanes-error", "lanes-refused", "lanes-empty"]
@@ -306,7 +306,7 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
             files[Cr.LEAF_PROGRAMS][x] = hashlib.sha512(other).hexdigest()
         case "lanes-twice":
             statements.insert(rng.randrange(len(statements) + 1), {**s, "sessions": ["/w/again"]})
-        case "lanes-undrawn":
+        case "lanes-unsampled":
             idle = [u for u in range(sum(sizes)) if u not in leaves]
             statements.insert(rng.randrange(len(statements) + 1), {**s, "unit": rng.choice(idle) if idle else 0})
         case "lanes-statement":
@@ -325,7 +325,7 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
             v = place[rng.choice([LL.A, LL.B, LL.ZY, LL.RECEIPT])][0]
             case["entries"] = [e for e in entries if e["value"] != v] if rng.random() < 0.5 else [
                 *entries, {"value": v, "root": C._hex(rng)}]
-        case "lanes-draw":
+        case "lanes-sample":
             case["draw"] = rng.choice([None, {"coin": sample["coin"]}, {**sample, "root": sample["root"][:-2]},
                                        {**sample, "coin": {x: y for x, y in sample["coin"].items() if x != "path"}},
                                        {**sample, "coin": None}])

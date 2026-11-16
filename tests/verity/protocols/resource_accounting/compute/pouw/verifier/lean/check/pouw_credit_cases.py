@@ -462,9 +462,9 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     root = sample_after(s.rounds)
     dch = Wd.sample_challenger(ch.commitment.epoch, rng.randbytes)
     ds = rc.Session(rng, dch, [], salt=None, sid=rc.session_id(rng), leaf=sample_leaf,
-                    sample=None if name == "no-draw" else (lambda _: rng.randbytes(64)) if name == "draw-after-other"
+                    sample=None if name == "no-sample" else (lambda _: rng.randbytes(64)) if name == "sample-after-other"
                     else lambda _: root)
-    d["draw"]["coin"] = (dch.open(Wd.SAMPLE, 0, root) if name == "no-draw" else ds.sample[0]).to_json()
+    d["draw"]["coin"] = (dch.open(Wd.SAMPLE, 0, root) if name == "no-sample" else ds.sample[0]).to_json()
     d["draw"]["session"] = ds.files()
     s.sampled, ds.on = ds, root.hex()
     return {"key": s.key(), "pins": list(rc.PINS), "main": list(rc.MAIN), "window": window, "session": s.files(), **d}, s
@@ -548,12 +548,12 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             d["rounds"] = rng.choice([None, "x", d["rounds"][:k] + [5] + d["rounds"][k + 1:],
                                       d["rounds"][:k] + [{**d["rounds"][k], "root": "zz"}] + d["rounds"][k + 1:],
                                       d["rounds"][:k] + [{**d["rounds"][k], "coin": None}] + d["rounds"][k + 1:]])
-        case "draw-form":
+        case "sample-form":
             d["draw"] = rng.choice([None, {**d["draw"], "receipts": "zz"}, {k: v for k, v in d["draw"].items()
                                                                             if k != "receipts"}])
-        case "no-draw":
+        case "no-sample":
             pass
-        case "draw-coin":
+        case "sample-coin":
             coin = d["draw"]["coin"]
             other = Wd.sample_challenger(s.ch.commitment.epoch, rng.randbytes)
             d["draw"]["coin"] = rng.choice([{**coin, "salt": rc._flip(coin["salt"])}, None, {**coin, "index": 1},
@@ -565,21 +565,21 @@ def _mutate_credit(d: dict, s: rc.Session, name: str, rng: random.Random) -> Non
             d["ledger"] = rc.ledger_lines(rc.ledger_events(rng, d["window"], s), rc._key(1))
         case "unwithheld":
             s.sampled.withheld = False
-        case "draw-elsewhere":
+        case "sample-elsewhere":
             s.sampled.on = _hex(rng)
-        case "draw-session":
+        case "sample-session":
             files = d["draw"]["session"]
             d["draw"]["session"] = rng.choice([None, d["session"], {**files, "log": files["log"][:-1]}])
-        case "draw-after-other":
+        case "sample-after-other":
             pass
         case _:
             raise ValueError(name)
 
 
 CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "bit-form", "no-z", "index", "row-form",
-                "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "draw-form", "no-draw",
-                "draw-coin", "key-form", "forged-ledger", "unpinned", "branch-pin", "unwithheld", "draw-elsewhere",
-                "draw-session", "draw-after-other"]
+                "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "sample-form", "no-sample",
+                "sample-coin", "key-form", "forged-ledger", "unpinned", "branch-pin", "unwithheld", "sample-elsewhere",
+                "sample-session", "sample-after-other"]
 CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "draw")
 
 
@@ -1781,7 +1781,7 @@ REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-regis
                       "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-unregistered",
                       "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
-                "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
+                "credit-changed", "credit-no-sample", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
                 *AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, "commit-unbound", "credit-commit-form", *ROWS_NAMES, "t-other",
                 "t-form", *LIVE_NAMES, "j10r", *LENGTH_NAMES]

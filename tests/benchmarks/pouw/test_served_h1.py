@@ -550,7 +550,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert cs.record()["session"] == SID
     m = _serve_window(cs, SV, _calls(ROUNDS), ROOT)
     assert host.sample.ended() is None and host.ended() is None
-    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
+    assert m["coins"]["sample_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
     (tmp_path / "manifest.json").write_text(json.dumps(m))
     session, heads, key = host.directory.parent, [host.ledger], host.key
     early = tmp_path / "early.jsonl"
@@ -569,7 +569,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
         (tmp_path / "bad-record.json").write_text(json.dumps({**record, **bad}))
         with pytest.raises(CO.Ch.CoinError, match=why):
             CO.key_record(tmp_path / "bad-record.json")
-    e = {**SV.coins_expect(m), "draw_out": host.sample.directory.parent}
+    e = {**SV.coins_expect(m), "sample_out": host.sample.directory.parent}
     got = CO.check(session, m["coins"], heads, PINS, MAIN, **e, key=key, period=PERIOD, root=ROOT)
     assert got["ok"] and got["coins"] == f"off-node vy-challenger-1.{SID} (checked)"
     assert (got["rounds"], got["draws"], got["window"], got["root"]) == (ROUNDS, 1, WINDOW, ROOT.hex())

@@ -126,7 +126,7 @@ UNQUANTIZED = ("bfloat16", "float16", "float32")
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record")
+        "backend", "sample_session", "commit_record")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -211,7 +211,7 @@ class Settings:
     #: the lead's kernel (`lead.LeadBackend`: ``load``, ``call``, ``words``)
     backend: Any = None
     #: H1's sample session: the gate's reserve answer for the execution phase's sampling coin, opened withheld (`pouw_h1_window.DrawSession`)
-    draw_session: Mapping[str, Any] | None = None
+    sample_session: Mapping[str, Any] | None = None
     #: H1's Commit record named at the execution phase's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
     commit_record: Any = None
 
@@ -253,10 +253,10 @@ class Settings:
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in LEAD_BACKEND):
             raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
                              f"{', '.join(LEAD_BACKEND)}")
-        (rows, steps, runner, rounds, challenger, session, admission, gate, served, graphs, period, unit, ks, draw_session,
+        (rows, steps, runner, rounds, challenger, session, admission, gate, served, graphs, period, unit, ks, sample_session,
          commit_record) = PHS.of(raw)
         return cls(coins, retain, tdir, draws, tamper, device, kernel, cubin, schedule, start, rows, steps, runner, rounds,
-                   challenger, session, admission, gate, served, graphs, period, unit, ks, backend, draw_session, commit_record)
+                   challenger, session, admission, gate, served, graphs, period, unit, ks, backend, sample_session, commit_record)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -532,7 +532,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     setting ``challenger`` the salt and round coins are the auditor device's, from the one session infra's gate
     reserved for the execution phase (``session``, the gate's reserve answer) and ``gate`` opened on its execution phase-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the execution phase has
-    finished, and the sampling coin is ``draw_session``'s, opened withheld on the sample root (`pouw_h1_window.DrawSession`);
+    finished, and the sampling coin is ``sample_session``'s, opened withheld on the sample root (`pouw_h1_window.DrawSession`);
     without it the coins are this process's and the execution phase credits nothing (`pouw_h1.IN_PROCESS`). The
     execution phase's weights' root is its period's (`pouw_h1_served.Served.weights_root`), else `audit.weights_root`, which
     registers no ``b/<K>`` and so credits nothing. ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
@@ -552,7 +552,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)
     if settings.challenger is not None:
-        session = CoinWindow(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate, settings.draw_session)
+        session = CoinWindow(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate, settings.sample_session)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
             epoch_salt, *opened = session.open(requests_root)

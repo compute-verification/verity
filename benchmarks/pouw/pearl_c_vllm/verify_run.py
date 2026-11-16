@@ -474,7 +474,7 @@ def verify(path: Path, samples: int, jobs: int, commit: str, source: bytes | Non
             out["cross_checked"] = [t for _, t, _, _, _, same in verdicts if same is not None]
         at = CW.sample_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
-                   draw_wref=at.statement if at else "wref",
+                   sample_wref=at.statement if at else "wref",
                    drawn=len(sampled), exclusion_tiles=len(excluded),
                    verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, *_ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(sampled)} sampled, "

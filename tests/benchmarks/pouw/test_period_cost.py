@@ -158,7 +158,7 @@ def test_main_writes_the_report(tmp_path, capsys):
     out, md = tmp_path / "period.json", tmp_path / "period.md"
     assert PC.main(["--json", str(out), "--md", str(md)]) == 0
     rep = json.loads(out.read_text())
-    assert {"rates", "configurations", "near_term", "levers", "draws_scan", "rounds_scan", "long_windows",
+    assert {"rates", "configurations", "near_term", "levers", "samples_scan", "rounds_scan", "long_windows",
             "sensitivity"} <= set(rep)
     assert all(p["windows"] == 1 for p in rep["long_windows"])
     assert rep["configurations"][0]["windows"] == 46637

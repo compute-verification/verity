@@ -28,11 +28,11 @@ PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 [ -x "$PY" ] || { log "build FAILED"; tail -20 "$OUT"/build-*.log; exit 1; }
 export PYTHONPATH=$SRC:$SRC/adapters/vllm
 read -r SID DSID < <("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["commitment"]
-print(c["session"]["session"], (c.get("draw_session") or {}).get("session", "none"))' "$D/serve/pouw-h1-calls.json")
+print(c["session"]["session"], (c.get("sample_session") or {}).get("session", "none"))' "$D/serve/pouw-h1-calls.json")
 S=$D/gate/fetch/$SID/out DS=$D/gate/fetch/$DSID/out
 log "served sample: window run $D, session $S, sample session $DS"
-"$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" --draw-session "$DS" \
-  --ledger "$D/gate/windows.jsonl" --pin "$PIN" --pins "$PINS" --main "$MAIN" --descriptor "$DESC" --out "$OUT/drawn.json" \
+"$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" --sample-session "$DS" \
+  --ledger "$D/gate/windows.jsonl" --pin "$PIN" --pins "$PINS" --main "$MAIN" --descriptor "$DESC" --out "$OUT/sampled.json" \
   2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 [ "$rc" = 0 ] || exit "$rc"
@@ -45,13 +45,13 @@ json.dump(d, open(sys.argv[2], "w"))
 EOF
 neg() {
   local name=$1; shift
-  if "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --session "$S" --draw-session "$DS" --ledger "$D/gate/windows.jsonl" --pins "$PINS" \
+  if "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --session "$S" --sample-session "$DS" --ledger "$D/gate/windows.jsonl" --pins "$PINS" \
       --main "$MAIN" --descriptor "$DESC" "$@" > "$OUT/neg-$name.log" 2>&1; then log "FAIL: $name drew units"; return 1; fi
   grep -q '^REFUSED' "$OUT/neg-$name.log" || { log "FAIL: $name did not end in a refusal"; tail -3 "$OUT/neg-$name.log"; return 1; }
   log "negative $name: $(grep '^REFUSED' "$OUT/neg-$name.log" | head -1)"
 }
 ok=0
 neg other-pin --calls "$D/serve/pouw-h1-calls.json" --pin "$(printf '%0128d' 0)" || ok=1
-neg other-draw-root --calls "$W/forged-calls.json" --pin "$PIN" || ok=1
+neg other-sample-root --calls "$W/forged-calls.json" --pin "$PIN" || ok=1
 neg off-main --calls "$D/serve/pouw-h1-calls.json" --pin "$PIN" --main /dev/null || ok=1
 exit $ok

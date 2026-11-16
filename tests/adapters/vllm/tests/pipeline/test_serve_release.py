@@ -1,4 +1,4 @@
-"""serve-openai's draw-gated release (`pipeline.serve_release`): a window's device-held values are released only once
+"""serve-openai's sample-gated release (`pipeline.serve_release`): a window's device-held values are released only once
 every named subprotocol has sampled it; the union of the leaves the sampled blocks open is kept, inputs an unsampled block wrote
 included, and opens against the pre-coin root after the drop; a later sample, or a read of a dropped leaf, is refused by name."""
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
         for s, leaves in want.items():
             for i in leaves:
                 assert bytes(com.open_range(s, i, i + 1).value) == host_leaf(host, C, s, i)
-        with pytest.raises(RuntimeError, match="draw-gated release"):
+        with pytest.raises(RuntimeError, match="sample-gated release"):
             com.open_range(1, 0, 1)                 # no sample read step 1
 
 
@@ -94,12 +94,12 @@ def test_the_seal_reads_the_port_positions_of_a_step_no_sample_named(tmp_path):
     draws.put(0, "pouw", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
     draws.release(0, dev)
     assert committed_raw(dev, 1, PORT_NAMES[1]) == before
-    with pytest.raises(RuntimeError, match="draw-gated release"):
+    with pytest.raises(RuntimeError, match="sample-gated release"):
         dev.open_range(1, 0, 1)
     SD.dump(dev, rc, tmp_path)
     assert [s["ranges"] for s in json.loads((tmp_path / "store.json").read_text())["steps"]][:2] == [[], []]
     del dev.read_before_release
-    with pytest.raises(KeyError, match="draw-gated release"):
+    with pytest.raises(KeyError, match="sample-gated release"):
         committed_raw(dev, 1, PORT_NAMES[1])
 
 
@@ -141,7 +141,7 @@ def test_a_later_sample_or_a_read_of_a_dropped_leaf_is_refused_by_name():
     assert len(lost) == 1 and lost[0].startswith("runner.sampler [0, 4) at step 1") and DROPPED in lost[0]
     with pytest.raises(SL.Refused, match="was released"):
         draws.put(0, "spot", [(1, "runner.sampler", 0, 4)])
-    with pytest.raises(RuntimeError, match="draw-gated release"):
+    with pytest.raises(RuntimeError, match="sample-gated release"):
         OpenedReader(dev, rc)(1, "runner.sampler", 0, 4)
 
 
@@ -233,7 +233,7 @@ def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(
     t.join()
     assert got["v"][0].numel() == cap and dev.device_pool.held_by("next window") == cap
     assert dev.released["kept_bytes"] == 0 and dev.released["device_freed_bytes"] == held
-    with pytest.raises(RuntimeError, match="draw-gated release"):
+    with pytest.raises(RuntimeError, match="sample-gated release"):
         dev.open_range(0, 0, 1)
     with pytest.raises(SL.Refused, match="reached no release"):
         draws.put(0, "spot", [])
@@ -281,4 +281,4 @@ def test_serve_openai_gates_every_device_held_seal_on_named_samples(tmp_path):
     unsealed.seal = False
     assert "it needs --seal and the subprotocols" in SL.retention_refusal(unsealed)
     from verity_vllm.pipeline import serve_openai as so
-    assert so.RL is SL, "serve-openai reaches its draw-gated release under its own alias, which no other module shadows"
+    assert so.RL is SL, "serve-openai reaches its sample-gated release under its own alias, which no other module shadows"
