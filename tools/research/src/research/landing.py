@@ -5,12 +5,10 @@ STEPS`, detached by `detach`, its run ids read back by `launched`; shard K of N 
 (`run_states`, `evidence`: steps.jsonl, the suites' reports, what a failure names: `implicated`, `step_paths`, `killed`; each
 shard's steps: `shard_steps`, `shard_passed`; the runs read from their nodes at once, each once a tick and an ended one's files
 once: `Reads`, `read_run`), the steps `main` waits for (`gating`), and `Landing`: those launches and reads
-on the queue's machines, policy.toml's allowances of a failed step or graph/v2 task, the owners of a path and of a job, and
+on the queue's machines, policy.toml's allowances of a failed step, the owners of a path and of a job, and
 what follows a candidate's members reaching `main` (`Landing._on_main`).
 
     Landing(q, on=MACHINES).beside_args(sha, base)                  -> (a check's keywords, its skipped steps, its flags)
-    Landing(q, on=MACHINES)._task_allowed(sha, task, result, row)  -> policy.Coverage of a failed graph/v2 task
-    Landing(q, on=MACHINES)._task_units(sha, task, result)         -> {red record: its suite's report row}
     Landing(q, on=MACHINES)._path_owner(path), _step_owner(job, sha) -> the handle that owns it, or None
     Landing(q, on=MACHINES)._on_main(state, members, base, tip, "") -> stacked PRs told, landed PRs caught up, branches swept
 
@@ -34,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, settings, suite_layout
+from . import carry, policy, settings
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -77,29 +75,15 @@ AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
-#: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
-#: steps on the merge gate count as the executor's tasks on it do: lean-agreement unless that run skips it by name, not
-#: ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
+#: the steps of a candidate's check run unsharded, alone (`vqueue_slim.start`): lean-agreement on the merge gate unless that run
+#: skips it by name, not ratchet-gate (policy.toml's `off_gate`)
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
-#: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps, and the preflights no graph/v2 task
-#: runs; the steps they need (lean-build) are the executor's tasks' to judge
+#: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps and the preflights
 SLIM_JUDGED = (*SLIM_STEPS, *(s for s in CHECK_STEPS if s.startswith("preflight-")))
 #: how long a run may show no readable state (`unknown`) before it is taken as lost (`Landing._lost`)
 LOST_AFTER_S = 3 * 3600
 #: circuit-check's red record, whose failures an allowance covers by those its log names (`Landing._allowed`)
 CIRCUIT_RED = "step circuit-check"
-#: the ci.toml job a graph/v2 task's kind checks (`verity graph`'s families, tools/verity/graph/tasks.toml), by which
-#: policy.toml takes it off the merge gate (`off_gate`) and its red is named `step JOB` (a test-file task's `suite NAME`); a kind
-#: not listed is its own job
-JOB_OF_KIND = {"test-file": "pytest", "lean-module": "lean-audit", "lean-lock": "lean-audit", "circuit-binding": "circuit-check",
-               "circuit-coverage": "circuit-check", "circuit-catalog": "circuit-check"}
-#: the graph/v2 kind that runs check's lean-suites step on one of its suites, or a part of one (`verity_graph.runners.lean_suites`):
-#: its fail names each failed suite (`detail.failed`, suites.py's rows), which is named, allowed and blamed as that suite's own
-#: red, as it does a run's, a red unit any of a suite's parts fails
-SUITES_KIND = "lean-suites"
-#: the most new failures a circuit-binding result names (`verity_graph.runners.circuit_binding.NAMED`): a list that long may
-#: leave some out, so no allowance covers it
-CIRCUIT_NAMED = 100
 #: the step a candidate's records run runs (`train.sh SHA MACHINES --deferred lean-audit`, `vqueue_records.start`), which
 #: regenerates the lock records it finds stale
 LEAN_STEP = "lean-audit"
@@ -690,20 +674,6 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
         return {}
 
 
-@functools.lru_cache(maxsize=16)
-def member_dirs(repo: Path, commit: str) -> dict[str, str]:
-    """{directory: distribution} of the workspace's members at ``commit`` but the root (`suite_layout.member_dirs`)."""
-    return suite_layout.member_dirs(lambda d: suite_pyproject(repo, commit, d))
-
-
-def suite_name(repo: Path, commit: str, suite: str) -> str:
-    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`: `suite_layout.suite_name`)."""
-    path = suite.strip("/") or "."
-    if path == ".":
-        return suite_layout.ROOT_SUITE
-    return suite_layout.suite_name(path, suite_pyproject(repo, commit, path).get("project", {}), member_dirs(repo, commit))
-
-
 def lean_errors(log: str) -> set[str]:
     """The repository paths of the Lean files lean-audit's ``log`` reports errors in: each `error: FILE.lean:LINE`, each
     `orphan: FILE.lean` and the module of each `layers: MODULE imports ...` after an `AUDIT .../PKG: FAIL` line, FILE relative to
@@ -1094,51 +1064,6 @@ class Landing:
         shutil.rmtree(launch["dir"], ignore_errors=True)
         self.q.log(f"research queue drive: {what}: {' '.join(ids)}")
         return None
-
-    @staticmethod
-    def _job(task: dict) -> str:
-        """The ci.toml job graph/v2 ``task`` checks (`JOB_OF_KIND`)."""
-        return JOB_OF_KIND.get(task["kind"], task["kind"])
-
-    def _suite_name(self, tip: str, suite: str) -> str:
-        """`suite_name` of the suite in directory ``suite`` at ``tip``, read once per tick."""
-        cache = self.__dict__.setdefault("_suite_names", {})
-        if (tip, suite) not in cache:
-            cache[tip, suite] = suite_name(self.repo, tip, suite)
-        return cache[tip, suite]
-
-    def _task_unit(self, tip: str, task: dict) -> str:
-        """The red record a failed graph/v2 ``task`` of ``tip`` is named in, the one a run's failure would be: a test-file's
-        `suite NAME`, any other's `step JOB` (`_job`; circuit-check's is `CIRCUIT_RED`)."""
-        if task["kind"] == "test-file":
-            return f"suite {self._suite_name(tip, (task.get('vars') or {}).get('suite') or '.')}"
-        return f"step {self._job(task)}"
-
-    def _task_units(self, tip: str, task: dict, result: dict) -> dict[str, dict | None]:
-        """The red records failed graph/v2 ``task`` names, each with its suite's report row: a lean-suites task's, each failed
-        suite its `detail.failed` names, `suite NAME` with its row, as a run's lean-suites failures are named; else, and when it
-        names none (a timeout of the whole task), `_task_unit`'s alone."""
-        rows = (result.get("detail") or {}).get("failed") if task["kind"] == SUITES_KIND else None
-        named = {f"suite {r['name']}": r for r in rows or () if isinstance(r, dict) and isinstance(r.get("name"), str)}
-        return named or {self._task_unit(tip, task): None}
-
-    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None,
-                      at: str | None = None) -> policy.Coverage:
-        """Whether an allowance of ``tip``'s policy (``at``'s, given) covers failed graph/v2 ``task`` of ``tip`` by its
-        ``result``, with the expired ones that would have: a failed suite of a lean-suites task's by its report ``row``
-        (`Policy.suite`, as a run's); a test-file's as its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each
-        failed test, the latter only when pytest exited 1 with failed tests to name); a circuit-check task's by the new
-        failures it names (`Policy.circuit`), fewer than `CIRCUIT_NAMED`; no other kind's."""
-        pol, now, d = self._policy(at or tip), self.now(), result.get("detail") or {}
-        if row is not None:
-            return pol.suite(str(row["name"]), row, now)
-        if task["kind"] == "test-file":
-            tests = [str(x) for x in d.get("failed_tests") or ()]
-            row = {"failed_tests": tests, "beyond_tests": not (d.get("exit") == 1 and bool(tests))}
-            return pol.suite(self._task_unit(tip, task).split(" ", 1)[1], row, now)
-        if self._job(task) == "circuit-check" and len(names := [str(x) for x in d.get("failures") or ()]) < CIRCUIT_NAMED:
-            return pol.circuit("".join(f"FAIL {n}\n" for n in names), now)
-        return policy.Coverage(False)
 
     def _gating(self, commit: str) -> list[str]:
         """`gating` at ``commit``, read once."""

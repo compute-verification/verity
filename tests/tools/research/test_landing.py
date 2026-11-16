@@ -984,28 +984,6 @@ def test_the_evidence_of_an_attempt_is_fetched_once(world, monkeypatch):
     assert asked == [(h.q.workdir, ["r1", "r2"]), (h.q.workdir, ["r3"])]
 
 
-def test_a_failed_task_is_allowed_by_its_suites_row_or_by_each_circuit_failure_it_names_and_no_other_kind_is(world, monkeypatch):
-    """`Landing._task_allowed` under the tip's policy: a lean-suites task's failed suite by its report row (an expired allowance
-    covers nothing, and is named), a circuit-check task's when each failure it names, fewer than `CIRCUIT_NAMED`, has an
-    allowance, and nothing of any other kind."""
-    later, gone = "2030-06-01T00:00:00Z", "1970-01-01T00:00:01Z"
-    _move_main(world, {"tools/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
-                                                                 ("circuit-check fold/F01 Mul", "ci", later))})
-    h = Harness(world, monkeypatch)
-    h.q._clone()
-    h.q.fetch()
-    tip, d = _main(world), h.d
-    suites, row = {"kind": landing.SUITES_KIND, "id": "lean-suites:x"}, {"name": "pkg", "failed_tests": [], "beyond_tests": True}
-    assert d._task_allowed(tip, suites, {}, row).covered
-    old = d._task_allowed(tip, suites, {}, {**row, "name": "old"})
-    assert not old.covered and [a.id for a in old.expired] == ["suite old"]
-    circuit, mul = {"kind": "circuit-binding", "id": "circuit-binding:x"}, "fold/F01 Mul{n=3}"
-    assert d._task_allowed(tip, circuit, {"detail": {"failures": [mul]}}).covered
-    for failures in ([mul, "fold/F02 Add"], [mul] * landing.CIRCUIT_NAMED, []):
-        assert not d._task_allowed(tip, circuit, {"detail": {"failures": failures}}).covered, failures
-    assert not d._task_allowed(tip, {"kind": "lean-module", "id": "lean-module:x"}, {"detail": {"failures": [mul]}}).covered
-
-
 def test_a_paths_owner_is_its_longest_prefix_in_mains_registry_and_none_where_the_registry_cant_say(world, monkeypatch):
     """`Landing._path_owner`, whom the loop's blame tells: the handle whose `owns` in `main`'s registry is the path's longest
     prefix; none for a path nobody owns, or when the registry isn't JSON, holds no list of handles or a handle without a name."""
@@ -1377,36 +1355,3 @@ def test_a_progress_line_that_does_not_parse_is_skipped_and_said_but_no_progress
     (tmp_path / "steps.jsonl").write_text('{"step": "lint", "status": "failed"}\n{"step": "su')
     assert landing.failing(tmp_path) == "step lint"
     assert "landing: a line of steps.jsonl is not JSON, skipped" in capsys.readouterr().err
-
-
-#: a workspace as the root's `tests/` mirroring the tree leaves it: each member's tests at `tests/<its directory>` (a virtual
-#: member `NAME-tests` beside the member, or a suite with no distribution), the repository's own suite beside them
-MIRRORED = {
-    "pyproject.toml": '[project]\nname = "verity"\n\n[tool.uv.workspace]\nmembers = ["tools/research", "tests/tools/research", '
-                      '"adapters/vllm", "tests/adapters/vllm/tests"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
-    "tools/research/pyproject.toml": '[project]\nname = "research"\n',
-    "tools/research/src/research/q.py": "",
-    "tests/tools/research/pyproject.toml": ('[project]\nname = "research-tests"\ndependencies = ["research"]\n\n'
-                                            '[tool.pytest.ini_options]\ntestpaths = ["."]\n'),
-    "tests/tools/research/test_q.py": "",
-    "adapters/vllm/pyproject.toml": '[project]\nname = "verity_vllm"\ndependencies = ["research"]\n',
-    "adapters/vllm/x.py": "",
-    "tests/adapters/vllm/tests/pyproject.toml": ('[project]\nname = "verity-vllm-tests"\ndependencies = ["verity-vllm"]\n\n'
-                                                 '[tool.pytest.ini_options]\ntestpaths = ["."]\n\n[tool.verity.tests]\n'
-                                                 'inputs = ["hardware", "tools/config/x.py"]\n'),
-    "tests/adapters/vllm/tests/test_v.py": "",
-    "hardware/cards.toml": "", "tests/hardware/test_cards.py": "", "tools/config/x.py": "",
-    "tests/verity/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/verity/test_a.py": "",
-    "tests/test_root.py": "",
-    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
-}
-
-
-@pytest.mark.parametrize(("suite", "name"), [
-    ("tests/adapters/vllm/tests", "verity-vllm"), ("tests/tools/research", "research"), ("tests/verity", "verity"),
-    ("tests/verity/", "verity"), (".", "repository"), ("", "repository"), ("benchmarks/pouw", "pouw-bench"),
-])
-def test_a_suite_is_named_as_suites_py_names_it_where_its_tests_mirror_the_tree(world, suite, name):
-    """A reds row, an allowance and the graph name a suite by its directory at the commit, as `suites.discover` names it
-    (`suite_layout.suite_name`): the tests of a member at `tests/<its directory>` by the member's distribution."""
-    assert landing.suite_name(world.dev, world.change(MIRRORED), suite) == name
