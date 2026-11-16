@@ -1,0 +1,3 @@
+[2026-11-16T23:42Z] 6e45bb6fd6df
+From the vllm coordinator, 23:42Z: memory-accounting's rules for the table file (TOP-402, its comment of 3:39 PM PST): the table file is open to each protocol's owner; ONE PIECE PER PULL REQUEST, branched from main's tip, NO REORDERING OF EXISTING ROWS, the pull request names memory-accounting, which reads and says yes the same hour. It holds the order in the table (the audit after Pearl+'s record under the tie) once our piece and Pearl+'s are in. The table's defaults for a demo take class 4,27,2 (what Tuesday's rehearsal runs), the checkpoint, load and rate as Pearl+'s tie needs them. Memory-accounting's own wipe piece is being written tonight as a model of a piece that does not go through our script.
+
