@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.ProgramProof
 public import Proofs.Properties.Verity.Sampled.HonestSession.JsonCanonFacts
+import Proofs.Flock.Verifier.Hash
 import all Circuits.Program
 import all Flock.Firewall
 import all Proofs.Flock.Recursive.FirewallJson
@@ -555,5 +556,57 @@ theorem program_sha : program.sha512 = programSha := by
   unfold programSha
   rw [canon_programBare]
   rfl
+
+/-- A loop of `ByteArray.foldl` whose step appends two hex digits keeps its text hex and grows it by two a byte. -/
+theorem loop_hex (g : String → UInt8 → String)
+    (hg : ∀ s x, s.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true →
+      (g s x).toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true ∧ (g s x).length = s.length + 2)
+    (as : ByteArray) (stop : Nat) (h : stop ≤ as.size) :
+    ∀ (i j : Nat) (s : String), s.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true →
+      (ByteArray.foldlM.loop (m := Id) (fun b x => pure (g b x)) as stop h i j s).run.toList.all
+        (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true ∧
+      (ByteArray.foldlM.loop (m := Id) (fun b x => pure (g b x)) as stop h i j s).run.length =
+        s.length + 2 * min i (stop - j) := by
+  intro i
+  induction i with
+  | zero => intro j s hs; unfold ByteArray.foldlM.loop; split <;> simp [hs]
+  | succ i ih =>
+    intro j s hs
+    unfold ByteArray.foldlM.loop
+    split
+    · obtain ⟨h1, h2⟩ := hg s as[j] hs
+      obtain ⟨h3, h4⟩ := ih (j+1) _ h1
+      exact ⟨h3, h4.trans (by rw [h2]; omega)⟩
+    · simp [hs]; omega
+
+theorem foldl_hex (g : String → UInt8 → String) (hg1 : ∀ s x, (g s x).toList = s.toList ++ (g "" x).toList)
+    (hg2 : ∀ n, n < 256 → (g "" (UInt8.ofNat n)).toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true ∧
+      (g "" (UInt8.ofNat n)).toList.length = 2)
+    (b : ByteArray) (hb : b.size = 64) : Flock.HmRow.isSha512Hex (b.foldl g "") = true := by
+  have hg : ∀ s x, s.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true →
+      (g s x).toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true ∧ (g s x).length = s.length + 2 := by
+    intro s x hs
+    obtain ⟨a1, a2⟩ := hg2 x.toNat x.toNat_lt
+    rw [UInt8.ofNat_toNat] at a1 a2
+    rw [← String.length_toList, ← String.length_toList, hg1, List.all_append, hs, a1, List.length_append, a2]
+    exact ⟨rfl, rfl⟩
+  have key := loop_hex g hg b b.size (Nat.le_refl _) (b.size - 0) 0 "" rfl
+  unfold Flock.HmRow.isSha512Hex
+  rw [String.all_eq_all_toSlice, String.Slice.all_bool_eq, String.copy_toSlice]
+  unfold ByteArray.foldl ByteArray.foldlM
+  simp only [Nat.le_refl, ↓reduceDIte]
+  refine Bool.and_eq_true_iff.mpr ⟨?_, key.1⟩
+  rw [beq_iff_eq, key.2, hb]; rfl
+
+/-- **A 64-byte string's hex is a SHA-512 digest's**, as `HmRow.checkPartitionObject` reads its `program`. -/
+theorem hexOf_sha512Hex (b : ByteArray) (hb : b.size = 64) : Flock.HmRow.isSha512Hex (Flock.hexOf b) = true := by
+  unfold Flock.hexOf
+  refine foldl_hex _ ?_ ?_ b hb
+  · intro s x; simp [String.toList_push]
+  · decide +kernel
+
+/-- The registration's program digest in hex is one (`popMatches`' partition object names it). -/
+theorem programSha_hex : Flock.HmRow.isSha512Hex (Flock.hexOf programSha) = true :=
+  hexOf_sha512Hex _ (Flock.Sha512.hash_size _)
 
 end Verity.Sampled.Instance.HonestSession.ProgramParse
