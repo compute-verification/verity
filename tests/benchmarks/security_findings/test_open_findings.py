@@ -112,11 +112,11 @@ def test_tonights_list_closes_only_through_its_checks(O: ModuleType) -> None:
     assert [(s.open, s.basis) for s in unread] == [(True, "unread")] * 6
 
 
-def test_the_address_exceptions_are_these_nine(O: ModuleType) -> None:
+def test_the_address_exceptions_are_these_two(O: ModuleType) -> None:
     """Each exception drops a file's addresses from finding 6's count, so adding one changes this test in the same change."""
     six = next(f for f in O.load() if f["id"] == "machine-addresses-in-the-tree")
     allowed = O.excepted(six)
-    assert (len(allowed), sum(allowed.values())) == (9, 15)
+    assert (len(allowed), sum(allowed.values())) == (2, 2)
     assert {e["kind"] for e in six["except"]} == set(O.EXCEPT_KINDS)
 
 
@@ -145,13 +145,14 @@ def test_the_address_check_counts_every_tracked_file_the_list_doesnt_except(O: M
     _commit(root)
     assert O.no_public_address(root, none)[0] is False and O.no_public_address(root, none)[1].startswith("3 ")
 
-    def entry(path: str, count: int, kind: str = "example") -> dict:
+    def entry(path: str, count: int, kind: str = "version") -> dict:
         return {"path": path, "count": count, "kind": kind, "reason": "r"}
     some = {**none, "except": [entry("tests/d.py", 2), entry("e/tests/f.txt", 1)]}
     assert O.no_public_address(root, some)[1].startswith("2 ")
     every = {**none, "except": [entry("tests/d.py", 2), entry("e/tests/f.txt", 2), entry("g.md", 2)]}
     assert O.no_public_address(root, every)[0] is True
-    for bad in (entry("g.md", 2, "ours"), entry("g.md", 0), {"path": "g.md", "count": 2, "kind": "example"}):
+    for bad in (entry("g.md", 2, "ours"), entry("g.md", 2, "example"), entry("g.md", 0),
+                {"path": "g.md", "count": 2, "kind": "version"}):
         with pytest.raises(ValueError):
             O.no_public_address(root, {**none, "except": [bad]})
 

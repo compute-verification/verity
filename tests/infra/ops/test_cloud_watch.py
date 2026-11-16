@@ -250,7 +250,7 @@ def test_neon_reads_through_psql_with_the_url_only_in_the_environment(tmp_path, 
 
 
 def test_a_neon_failure_names_no_host_address_or_user(tmp_path, monkeypatch):
-    err = ('psql: error: connection to server at "ep-x.neon.example" (34.205.173.201), port 5432 failed: '
+    err = ('psql: error: connection to server at "ep-x.neon.example" (203.0.113.201), port 5432 failed: '
            "ERROR:  password authentication failed for user 'indexer'\n")
     monkeypatch.setattr(W.shutil, "which", lambda name, path=None: "/usr/bin/psql")
     url = "postgresql://indexer:" + "pw-dummy" + "@ep-x.neon.example/store?sslmode=require"
@@ -258,7 +258,7 @@ def test_a_neon_failure_names_no_host_address_or_user(tmp_path, monkeypatch):
         W.check_neon(ctx(config(tmp_path), {}, T0, {"STORE_INDEXER_DATABASE_URL": url}, run=lambda *a: (2, "", err)), W.Report())
     msg = str(e.value)
     assert "password authentication failed" in msg
-    assert not any(s in msg for s in ("ep-x.neon.example", "34.205", "indexer", "pw-dummy")), msg
+    assert not any(s in msg for s in ("ep-x.neon.example", "203.0.113", "indexer", "pw-dummy")), msg
 
 
 BUDGETS = """

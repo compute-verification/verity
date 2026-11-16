@@ -236,8 +236,8 @@ def test_stream_opt_out_and_the_push_url_carries_no_credential(repo, tmp_path, m
     monkeypatch.setenv(remote.SHIP_ENV, "stream")
     _, _, doc = remote.ship_source(LOCAL, str(tmp_path / "root"), repo)
     assert doc["transport"] == "stream" and not (tmp_path / "root" / remote.POD_GIT_REPO).exists()
-    url = remote.git_push_url(["ssh", "-i", "/k/my key", "-p", "2222", "root@1.2.3.4"], "/workspace/research/git/verity.git")
-    assert url == "ext::ssh -i /k/my% key -p 2222 root@1.2.3.4 git% receive-pack% /workspace/research/git/verity.git"
+    url = remote.git_push_url(["ssh", "-i", "/k/my key", "-p", "2222", "root@192.0.2.4"], "/workspace/research/git/verity.git")
+    assert url == "ext::ssh -i /k/my% key -p 2222 root@192.0.2.4 git% receive-pack% /workspace/research/git/verity.git"
 
 
 def _replica_repo(tmp_path: Path) -> Path:

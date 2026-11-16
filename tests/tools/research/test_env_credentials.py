@@ -57,7 +57,7 @@ def test_ssh_key_from_env_is_written_once_mode_600_and_the_laptop_file_wins(rp, 
     mtime = k.stat().st_mtime_ns
     assert runpod.ssh_key() == k and k.stat().st_mtime_ns == mtime
     assert runpod.public_key() == pub
-    argv = runpod.ssh_command("1.2.3.4", 2222)
+    argv = runpod.ssh_command("192.0.2.4", 2222)
     assert argv[argv.index("-i") + 1] == str(k)
     assert f"UserKnownHostsFile={k.parent / 'known_hosts'}" in argv
     assert base64.b64encode(priv).decode()[:40] not in " ".join(argv)
@@ -65,7 +65,7 @@ def test_ssh_key_from_env_is_written_once_mode_600_and_the_laptop_file_wins(rp, 
     runpod.SSH_KEY.parent.mkdir(parents=True)
     runpod.SSH_KEY.write_bytes(b"laptop key\n")
     runpod.SSH_KEY.with_suffix(".pub").write_text("ssh-ed25519 LAPTOP\n")
-    argv = runpod.ssh_command("1.2.3.4", 2222)
+    argv = runpod.ssh_command("192.0.2.4", 2222)
     assert argv[argv.index("-i") + 1] == str(runpod.SSH_KEY)
     assert f"UserKnownHostsFile={runpod.KNOWN_HOSTS}" in argv and runpod.public_key() == "ssh-ed25519 LAPTOP"
 

@@ -5,11 +5,13 @@ says it is fake (`example`, `fake`, `dummy`, or a one- or two-letter name).
 
 ``ALLOWED`` bounds what each file still holds.  A file over its count fails; one under it passes, so a change that removes a
 site needs no edit here and doesn't conflict with one in flight that removes another.  A count is raised only for the team's
-own configuration that holds the id (the first group), and lowered by whoever recounts.  The rule is `research.addresses`'s,
+own configuration that holds the id (the first group), and lowered by whoever recounts.  A public IPv4 address is held
+further, to the exceptions of the security findings' list (`FINDINGS`), whatever else a file may hold.  The rule is `research.addresses`'s,
 which leaves out ``uv.lock``, its dotted numbers being package versions, and this file, whose toy files name each form.
 """
 from __future__ import annotations
 
+import functools
 import tomllib
 
 import test_repository
@@ -34,9 +36,8 @@ ALLOWED: dict[str, int] = {
     "infra/control/deadman/api/deadman.py": 2,
     "infra/control/vm_stop.toml": 1,
     "infra/cursor/launch_coordinator.py": 1,
-    "tests/infra/ops/test_cloud_watch.py": 3,
+    "tests/infra/ops/test_cloud_watch.py": 2,
     "tests/infra/ops/test_deadman.py": 1,
-    "tests/infra/ops/test_watchers.py": 3,
     "infra/slack-events/README.md": 2,
     "infra/slack-events/service/slack_events/consumer.py": 1,
     "tests/infra/slack-events/conftest.py": 2,
@@ -48,11 +49,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/src/research/slack.py": 4,
     "tools/research/src/research/store/fetchset.py": 1,
     "tests/tools/research/test_bucket_index.py": 2,
-    "tests/tools/research/test_budgets.py": 1,
-    "tests/tools/research/test_env_credentials.py": 2,
     "tests/tools/research/test_nebius_wake.py": 2,
-    "tests/tools/research/test_pod_lease.py": 2,
-    "tests/tools/research/test_remote_ship_git.py": 2,
     "tests/tools/research/test_retention.py": 2,
     "tests/tools/research/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
@@ -63,8 +60,6 @@ ALLOWED: dict[str, int] = {
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r1-window10.json": 4,
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json": 8,
     "tests/verity/circuits/ops/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
-    # stand-ins that predate the documentation ranges
-    "tests/tools/check/test_verdicts.py": 2,
     # version numbers the scan reads as addresses
     "benchmarks/pouw/dc/dc.cuh": 1,
     "benchmarks/pouw/harness/README.md": 1,
@@ -82,16 +77,35 @@ REGISTER_MADE = {"infra/control/watchers_ssh_config", "tools/research/src/resear
                  "tools/research/src/research/pods/nebius/peers-challenger",
                  "tools/research/src/research/pods/nebius/verifier/verifier.json"}
 
+#: the security review's findings, whose address finding excepts the only public IPv4 addresses the tree may hold
+FINDINGS = "benchmarks/security_findings/findings.toml"
+
 FIX = ("Read the address or id at run time from the configuration or secret that holds it, never from a literal here; in a "
        "test, use a documentation address (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) or an id that says it is fake. "
        "ALLOWED in tests/test_literal_addresses.py is raised only for the team's own configuration that holds the id.")
 
 
+@functools.cache
+def _found() -> dict[str, list]:
+    return scan(_tracked(), reader(ROOT))
+
+
 def test_no_new_literal_addresses_or_service_ids():
-    found = scan(_tracked(), reader(ROOT))
-    over = [f"  {f}:{line}: {kind}" for f, hits in sorted(found.items()) if len(hits) > ALLOWED.get(f, 0)
+    over = [f"  {f}:{line}: {kind}" for f, hits in sorted(_found().items()) if len(hits) > ALLOWED.get(f, 0)
             for kind, line in hits]
     assert not over, "an address or a service id is written in the tree:\n" + "\n".join(over) + "\n" + FIX
+
+
+def test_a_public_address_only_where_the_security_findings_except_it():
+    """``ALLOWED`` counts every kind together, so a file allowed a service id could trade it for a machine's address. A public
+    IPv4 address is held to `FINDINGS`'s exceptions alone, the list `open_findings.py` counts the tree's addresses by."""
+    six = next(f for f in tomllib.loads(_read(FINDINGS))["finding"] if f["id"] == "machine-addresses-in-the-tree")
+    excepted = {e["path"]: e["count"] for e in six.get("except", [])}
+    over = [f"  {f}:{line}" for f, hits in sorted(_found().items())
+            if sum(kind == "ipv4" for kind, _ in hits) > excepted.get(f, 0) for kind, line in hits if kind == "ipv4"]
+    assert not over, (f"a public IPv4 address is written in the tree, where {FINDINGS} excepts none:\n" + "\n".join(over) +
+                      "\nIn a test or a fixture, use a documentation address (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) or "
+                      "a private one; anywhere else, read it at run time from the configuration that holds it.")
 
 
 def test_a_file_made_from_the_register_holds_no_address():

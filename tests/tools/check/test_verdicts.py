@@ -378,8 +378,8 @@ def test_a_pack_under_a_directory_the_machine_cant_read_is_found_in_the_runs_inp
 def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     check = _load("check")
     base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "VERITY_SLOW": "1"}
-    one = check._env_key({**base, "HOSTNAME": "a1b2", "RUNPOD_POD_ID": "abc", "RUNPOD_PUBLIC_IP": "1.2.3.4", "PUBLIC_KEY": "ssh-ed25519 A"})
-    other = check._env_key({**base, "HOSTNAME": "c3d4", "RUNPOD_POD_ID": "xyz", "RUNPOD_PUBLIC_IP": "5.6.7.8", "PUBLIC_KEY": "ssh-ed25519 B"})
+    one = check._env_key({**base, "HOSTNAME": "a1b2", "RUNPOD_POD_ID": "abc", "RUNPOD_PUBLIC_IP": "192.0.2.4", "PUBLIC_KEY": "ssh-ed25519 A"})
+    other = check._env_key({**base, "HOSTNAME": "c3d4", "RUNPOD_POD_ID": "xyz", "RUNPOD_PUBLIC_IP": "192.0.2.8", "PUBLIC_KEY": "ssh-ed25519 B"})
     assert one == other == {"VERITY_SLOW": "1"}
 
 

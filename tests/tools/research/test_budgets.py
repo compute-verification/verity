@@ -127,7 +127,7 @@ def test_the_gate_refuses_an_expired_or_spent_line_and_a_lease_past_its_max_age(
 
 def test_check_create_fails_closed_when_the_guards_state_cannot_be_read():
     def unreachable():
-        raise OSError("ssh: connect to host 1.2.3.4 port 22: Connection refused")
+        raise OSError("ssh: connect to host 192.0.2.4 port 22: Connection refused")
 
     why, line = B.check_create("vy-a-1", 1, reader=unreachable)
     assert "cannot read the budgets guard's state" in why and "nothing new starts unguarded" in why and line is None

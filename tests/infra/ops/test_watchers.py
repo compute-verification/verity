@@ -330,11 +330,11 @@ def test_the_deadline_and_lease_backstops_stop_only_a_running_vm():
 
 
 def test_an_entry_overrides_the_registry_and_the_checked_in_config_names_known_rules(tmp_path):
-    (tmp_path / "a.toml").write_text('host = "1.2.3.4"\nnebius_instance_id = "i-a"\ndeadline = "2026-10-23T21:00:00Z"\n')
+    (tmp_path / "a.toml").write_text('host = "192.0.2.4"\nnebius_instance_id = "i-a"\ndeadline = "2026-10-23T21:00:00Z"\n')
     got = V.vms({"vm": [{"name": "a", "rules": ["idle"]}, {"name": "a", "rules": ["deadline"], "id": "i-b",
                                                            "deadline": "2026-10-20T04:00:00Z"}]}, tmp_path)
-    assert [(g["id"], g["host"], V.iso(g["deadline"])) for g in got] == [("i-a", "1.2.3.4", "2026-10-23T21:00:00Z"),
-                                                                       ("i-b", "1.2.3.4", "2026-10-20T04:00:00Z")]
+    assert [(g["id"], g["host"], V.iso(g["deadline"])) for g in got] == [("i-a", "192.0.2.4", "2026-10-23T21:00:00Z"),
+                                                                       ("i-b", "192.0.2.4", "2026-10-20T04:00:00Z")]
     for e in tomllib.loads((CONTROL / "vm_stop.toml").read_text())["vm"]:
         assert set(e["rules"]) <= {"idle", "deadline", "lease"} and e["rules"], e["name"]
 

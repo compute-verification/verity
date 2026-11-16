@@ -63,8 +63,9 @@ STORE_COMMAND = "uv run python benchmarks/security_findings/open_findings.py --p
 #: where the store probe copies to, from a key under it that doesn't exist
 SCRATCH = "scratch/security-findings"
 clock = time.time
-#: why an address the rule counts is excepted from finding 6: nobody's machine of ours
-EXCEPT_KINDS = ("version", "example", "third party")
+#: why an address the rule counts is excepted from finding 6: a version number, nobody's machine; a test's stand-in host is a
+#: documentation address instead
+EXCEPT_KINDS = ("version",)
 #: what a [[finding]] may hold, and nothing else
 KEYS = {"id", "statement", "check", "reads", "how", "would_close", "except"}
 HOOKS = ".cursor/hooks.json"
