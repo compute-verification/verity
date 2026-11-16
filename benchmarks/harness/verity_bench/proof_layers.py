@@ -1,12 +1,12 @@
-"""`verity bench prove layers`: the proof system by layer, one table of four rows (Flock, Flock with zero knowledge, with
-sampling, with recursion), each read from what its own command wrote (benchmarks/prove/README.md, "The proof system by
-layer").
+"""`verity bench prove layers`: the proof benchmark by layer, one table of its four benchmark results (Flock, Flock
+with zero knowledge, with sampling, with recursion), each read from what its own command wrote
+(benchmarks/prove/README.md, "The proof system by layer").
 
     verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
 
 DIR is a run's ``out/`` (or the run directory that holds it), read with no store; RUN is a run id, whose records are
-fetched through the evidence store where `research` is installed. A layer not given is a row that says "not run". Which
-reader a directory takes is decided by what it holds (`detect`):
+fetched through the evidence store where `research` is installed. A layer not given is a benchmark result that says
+"not run". Which reader a directory takes is decided by what it holds (`detect`):
 
 - ``recursion_e2e.json``: `benchmarks/recursion_e2e`'s job (`read_recursion`);
 - an arm's ``audit.log`` with its ``PROVE-PATH`` line, or its ``RECORDS`` line under ``PP_RECORDS=1``:
@@ -14,8 +14,8 @@ reader a directory takes is decided by what it holds (`detect`):
 - ``summary.txt``, ``a5.log`` or the audit's ``summary.json``: `benchmarks/one_stage/a5_llama1b_h200.sh`, or `a5.sh`'s
   out (`read_a5`).
 
-A row prints its numbers only when the Lean verifier's verdict, as its output states it, is an accept; any other row
-prints none, with why. Its ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` line names only what its output
+A benchmark result prints its numbers only when the Lean verifier's verdict, as its output states it, is an accept;
+any other prints none, with why. Its ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` line names only what its output
 says outright (`COINS`, `PARAMETERS`, "not stated" for a half it doesn't say, ``ran with: not stated`` for both), and
 the JSON keeps the output's own words as ``detail``.
 """
@@ -35,19 +35,20 @@ from typing import Any
 from verity_bench import kit
 
 SCHEMA = "verity-bench/proof-layers/v1"
-#: each layer's flag and its row's title, in the table's order
+#: each layer's flag and its benchmark result's title, in the table's order
 LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with sampling", "recursion": "with recursion"}
 RECURSION, PROVE_PATH, A5, LAYERS_SH = "recursion_e2e", "prove_path", "a5", "layers.sh"
-#: the outputs a layer's row may be read from
+#: the outputs the benchmark result for a layer may be read from
 ACCEPTS = {"flock": (PROVE_PATH, A5, LAYERS_SH), "zk": (PROVE_PATH, A5, LAYERS_SH), "sampling": (A5, PROVE_PATH, LAYERS_SH),
            "recursion": (RECURSION,)}
 #: the directory of a run each layer's output is in, where the run's root holds none itself: a layers.sh run's
 #: (`benchmarks/one_stage/layers.sh all`), or a prove_path served-arm run's (``flock/out``, ``zk/out``)
 LAYERS_SH_DIRS = {"flock": "flock", "zk": "zk", "sampling": "sampled"}
-#: the words a layers.sh output states its values are stand-ins in, which its row's workload opens with
+#: the words a layers.sh output states its values are stand-ins in, which its benchmark result's workload opens
+#: with
 STAND_IN = "stand-in values, never served"
-#: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
-#: knowledge at the sampling plan
+#: the proof a benchmark result for the layer must state it ran, whichever command wrote it: the sampling layer is
+#: Flock with zero knowledge at the sampling plan
 PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
 #: the name the report writes its JSON under
 REPORT = "proof-layers"
@@ -64,14 +65,14 @@ FETCH = ("out/recursion_e2e.json", "out/*audit.log", "out/*summary.json", "out/s
          "*/out/a6/session-*/lean-verify.log", "*/gpu-lease-usage.jsonl", "*/out/machine.txt", "*/out/ran-with.txt",
          "*/out/*audit.log", "*/out/*summary.json", "*/out/*-forged/commit.log")
 NOT_STATED = "not stated"
-#: what a row's workload opens with where its output states neither stand-in nor served values
+#: what a benchmark result's workload opens with where its output states neither stand-in nor served values
 VALUES_NOT_STATED = "values not stated"
 #: what a run id that can't be fetched here takes instead
 FIX = "give the run's out/ as a directory instead (where the store's read key is: `research fetch RUN`, then ~/.research/runs/RUN)"
-#: the line a table prints unless every row ran on a deployed challenger's coins at deployed parameters, which this
+#: the line a table prints unless every benchmark result ran on a deployed challenger's coins at deployed parameters, which this
 #: command never takes as an audit: it checks no challenger's signature
 NOT_AN_AUDIT = "a measurement, not an audit"
-#: what a ``ran with:`` line may say a row's coins and parameters were, each only where its output says so outright
+#: what a ``ran with:`` line may say a benchmark result's coins and parameters were, each only where its output says so outright
 COINS = ("deployed challenger", "local challenger", "in-process")
 PARAMETERS = ("deployed", "development")
 #: a comma that ends a clause of recursion_e2e's ``inputs``, not one inside a Definition's braces
@@ -79,12 +80,12 @@ CLAUSE = re.compile(r",(?![^{]*\})")
 
 
 class Unreadable(Exception):
-    """A row's output can't be found or read."""
+    """A benchmark result's output can't be found or read."""
 
 
 @dataclass
 class Result:
-    """One layer's row: what was given, what its output states, and why it has no number where it has none."""
+    """One layer's benchmark result: what was given, what its output states, and why it has no number where it has none."""
 
     layer: str
     status: str = "not run"
@@ -112,7 +113,7 @@ class Result:
     #: the commit its output states it ran at, and which of its files states it
     commit: str | None = None
     commit_from: str | None = None
-    #: a layers.sh row's figures, one a statement (its name, units, Flock's and Lean's seconds, its proof's bytes)
+    #: a layers.sh benchmark result's figures, one a statement (its name, proof blocks, Flock's and Lean's seconds, its proof's bytes)
     statements: list[dict[str, Any]] = field(default_factory=list)
 
     def withhold(self, why: str) -> None:
@@ -121,7 +122,7 @@ class Result:
         self.why = self.why or why
 
     def said(self, coins: str | None, parameters: str | None, detail: str | None) -> None:
-        """The row's ``ran with:`` line from what its output states (`COINS`, `PARAMETERS`, None where it doesn't say),
+        """The benchmark result's ``ran with:`` line from what its output states (`COINS`, `PARAMETERS`, None where it doesn't say),
         and `detail`, the output's own words, beside it."""
 
         assert coins in (None, *COINS) and parameters in (None, *PARAMETERS)
@@ -137,7 +138,7 @@ def _challenger(source: Any, challenger: Any) -> str | None:
     return "local challenger" if source == "challenger" and challenger == "local" else None
 
 
-# ---- finding a row's output ----------------------------------------------------------------------------------------------
+# ---- finding a benchmark result's output --------------------------------------------------------------------------------
 
 
 def fetch(run: str) -> Path:
@@ -220,9 +221,9 @@ def _number(x: Any) -> float | None:
 
 
 def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
-    """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints: the
-    blocks drawn (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and one rep's proof's
-    bytes where every rep's are the same (a timed repeat of the one proof), else none."""
+    """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints:
+    the proof blocks sampled (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and one
+    rep's proof's bytes where every rep's are the same (a timed repeat of the one proof), else none."""
 
     out = {}
     for key, t in timing.items():
@@ -236,8 +237,8 @@ def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, 
 
 
 def _per_block(result: Result, units: Iterable[Mapping[str, Mapping[str, Any]]],
-               bytes_what: str = "one rep's proof over its drawn blocks") -> None:
-    """The row's prover and Lean seconds and proof bytes a block, over every drawn block of `units` (prove_path's
+               bytes_what: str = "one rep's proof over its sampled proof blocks") -> None:
+    """The benchmark result's prover and Lean seconds and proof bytes a proof block, over every sampled proof block of `units` (prove_path's
     ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks."""
 
     n, figures = 0, {"prove": 0.0, "lean": 0.0, "bytes": 0.0}
@@ -246,7 +247,7 @@ def _per_block(result: Result, units: Iterable[Mapping[str, Mapping[str, Any]]],
         for key, x in per.items():
             k = int(x.get("units") or 0)
             if not k:
-                result.notes.append(f"no per-block figure: member {key}'s timing has no drawn-block count (draw_counts)")
+                result.notes.append(f"no figure a proof block: member {key}'s timing has no count of sampled proof blocks (draw_counts)")
             n += k
             for name, v in (("prove", _number(x.get("prove_s_per_unit"))), ("lean", _number(x.get("lean_verify_s_per_unit")))):
                 missing |= {name} if v is None else set()
@@ -255,10 +256,10 @@ def _per_block(result: Result, units: Iterable[Mapping[str, Mapping[str, Any]]],
             missing |= {"bytes"} if b is None else set()
             figures["bytes"] += b or 0.0
     if not n:
-        result.notes.append("no drawn block holds a timing")
+        result.notes.append("no sampled proof block holds a timing")
         return
-    result.notes += [f"no per-block {name} figure: a drawn member's timing doesn't give one" for name in sorted(missing)]
-    result.prover_unit, result.per, result.per_block = "s a block", "a drawn block", True
+    result.notes += [f"no {name} figure a proof block: a sampled member's timing doesn't give one" for name in sorted(missing)]
+    result.prover_unit, result.per, result.per_block = "s a proof block", "a sampled proof block", True
     result.prover_s = None if "prove" in missing else figures["prove"] / n
     result.prover_what = f"Flock's prove_total_s, the mean over {n}"
     result.lean_s = None if "lean" in missing else figures["lean"] / n
@@ -279,18 +280,18 @@ def _device(timings: Iterable[Mapping[str, Any]]) -> str:
     return NOT_STATED
 
 
-def _wrong_units(w: Any) -> str | None:
-    """The audit's ``wrong_units`` bound as the row's ε at δ, where it states its bound, population and δ."""
+def _incorrect(w: Any) -> str | None:
+    """The audit's ``wrong_units`` bound as the benchmark result's ε at δ, where it states its bound, population and δ."""
 
     w = w if isinstance(w, dict) else {}
     if not all(_number(w.get(x)) is not None for x in ("bound", "of", "delta")):
         return None
-    return f"at most {w['bound']:,} of {w['of']:,} units wrong except with probability {_delta(w['delta'])}"
+    return f"at most {w['bound']:,} of {w['of']:,} incorrect proof blocks except with probability {_delta(w['delta'])}"
 
 
 def _epsilon(e: Any) -> str | None:
-    """An a5 summary's ``epsilon`` table as the row's ε at δ: its first pair (the audit's δ) and its last (the smallest
-    δ), each the wrong units it allows of the population."""
+    """An a5 summary's ``epsilon`` table as the benchmark result's ε at δ: its first pair (the audit's δ) and its last (the smallest
+    δ), each the incorrect proof blocks it allows of the population."""
 
     e = e if isinstance(e, dict) else {}
     pairs = [x for x in e.get("table") or [] if isinstance(x, dict) and _number(x.get("wrong_units")) is not None
@@ -298,7 +299,7 @@ def _epsilon(e: Any) -> str | None:
     if not pairs or _number(e.get("population")) is None:
         return None
     first, last = pairs[0], pairs[-1]
-    out = f"at most {first['wrong_units']:,} of {e['population']:,} units wrong except with probability {_delta(first['delta'])}"
+    out = f"at most {first['wrong_units']:,} of {e['population']:,} incorrect proof blocks except with probability {_delta(first['delta'])}"
     if len(pairs) == 1:
         return out + " (summary.json epsilon)"
     return (out + f"; at most {last['wrong_units']:,} except with probability {_delta(last['delta'])}"
@@ -309,9 +310,9 @@ def _eps_delta(delta: Any) -> str:
     return f"ε {NOT_STATED} at δ {delta}" if _number(delta) is not None else NOT_STATED
 
 
-def _drawn(counts: Mapping[str, Any], population: Any, ranks: int = 1) -> str:
-    drawn = ", ".join(f"{t} x {n}" for t, n in sorted(counts.items())) or "no block"
-    return f"{drawn} drawn of {population if population is not None else '?'} units" + (f" over {ranks} ranks" if ranks > 1 else "")
+def _sampled(counts: Mapping[str, Any], population: Any, ranks: int = 1) -> str:
+    sampled = ", ".join(f"{t} x {n}" for t, n in sorted(counts.items())) or "no proof block"
+    return f"{sampled} sampled of {population if population is not None else '?'} proof blocks" + (f" over {ranks} ranks" if ranks > 1 else "")
 
 
 def _lean_verdicts(a5_lines: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
@@ -436,7 +437,7 @@ def read_prove_path(d: Path, result: Result) -> None:
     result.workload = ((f"the output disagrees on its values: ran-with.txt says served ({place}), the audit's source field "
                      f"says {', '.join(sorted(source))}: " if served and source - {"served"} else
                      f"served per ran-with.txt ({place}): " if served else "")
-                    + f"arm {arm.name}: " + _drawn(counts, population, n_ranks))
+                    + f"arm {arm.name}: " + _sampled(counts, population, n_ranks))
     for forged in sorted(arm.parent.glob(f"{arm.name}-forged")):
         if not (forged / "audit.log").is_file():
             err = next((x for x in reversed(_text(forged / "commit.log").splitlines()) if re.match(r"\w+(Error|Exception): ", x)),
@@ -448,11 +449,11 @@ def read_prove_path(d: Path, result: Result) -> None:
         reps = sorted({len(pb) for x in timed for t in x["timing"].values()
                        if isinstance(pb := ((t or {}).get("timing") or {}).get("proof_bytes"), list)})
         _per_block(result, [per_unit(x["timing"], x.get("draw_counts") or {}) for x in timed],
-                   f"one rep's proof over its drawn blocks, of {' or '.join(map(str, reps)) or '?'} reps in summary.json's "
+                   f"one rep's proof over its sampled proof blocks, of {' or '.join(map(str, reps)) or '?'} reps in summary.json's "
                    "timing; prove_path's per_unit sums them")
     elif pp is not None:
         _per_block(result, [r.get("per_unit") or {} for r in (pp.get("ranks") or {}).values()],
-                   "every rep's proof files over its drawn blocks, as prove_path's per_unit sums them: no summary.json "
+                   "every rep's proof files over its sampled proof blocks, as prove_path's per_unit sums them: no summary.json "
                    "states its reps")
     m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", ran_with[0] if ran_with else "")
     if m and m.group(1) in COINS and m.group(2) in PARAMETERS:
@@ -464,7 +465,7 @@ def read_prove_path(d: Path, result: Result) -> None:
             [f"summary.json coins.challenger {challenger}"] if challenger else [])
         result.said(_challenger(coins, challenger), None, "; ".join(said))
     result.device = _device(t for x in summaries for t in (x.get("timing") or {}).values())
-    result.eps_delta = (_wrong_units((audits[0].get("audit") or {}).get("wrong_units")) if len(audits) == 1 else None) or (
+    result.eps_delta = (_incorrect((audits[0].get("audit") or {}).get("wrong_units")) if len(audits) == 1 else None) or (
         _eps_delta((pp or {}).get("delta")))
 
 
@@ -513,16 +514,16 @@ def read_a5(d: Path, result: Result) -> None:
     stand_in = summary.get("source") == "stand-in" and "kind=served" not in window
     result.workload = (("served values: " if served else "stand-in values (summary.json source stand-in): " if stand_in else
                      f"{VALUES_NOT_STATED}: ")
-                    + (f"row {Path(machine[len('row dir '):]).name}: " if machine else
+                    + (f"workload {Path(machine[len('row dir '):]).name}: " if machine else
                        f"source {summary['source']}: " if summary.get("source") else "")
-                    + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
+                    + _sampled(counts, summary.get("population")) + (f" ({window})" if window else ""))
     if summary.get("timing"):
         _per_block(result, [per_unit(summary["timing"], counts)])
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
     said = (f"summary.json coins.challenger {coins['challenger']}" if coins.get("challenger") else
-            f"A5 line's verdicts {', '.join(challengers)}, a challenger per drawn member" if challengers else "")
+            f"A5 line's verdicts {', '.join(challengers)}, a challenger per sampled member" if challengers else "")
     drew = next((x[len("COINS "):] for x in text if x.startswith("COINS ")), None)
     if drew and drew.startswith("draw: one local challenger session"):
         clauses = drew.split("; ")
@@ -533,8 +534,8 @@ def read_a5(d: Path, result: Result) -> None:
     result.commit, result.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
     result.proof = "plain" if summary.get("plain") else "zk" if summary else None
     result.device = _device((summary.get("timing") or {}).values())
-    result.eps_delta = (_epsilon(summary.get("epsilon")) or _wrong_units((summary.get("audit") or {}).get("wrong_units"))
-                     or _wrong_units(((a5 or {}).get("audit") or {}).get("wrong_units")) or _eps_delta(summary.get("delta")))
+    result.eps_delta = (_epsilon(summary.get("epsilon")) or _incorrect((summary.get("audit") or {}).get("wrong_units"))
+                     or _incorrect(((a5 or {}).get("audit") or {}).get("wrong_units")) or _eps_delta(summary.get("delta")))
     if summary.get("arm"):
         result.notes.append(f"arm {summary['arm']}")
 
@@ -567,7 +568,7 @@ def read_layers_sh(d: Path, result: Result) -> None:
         n = sum(x["accepted"] for x in stmts)
         result.lean = (f"accepted: Lean's verify true on every statement ({n} of {len(stmts)})" if result.accepted else
                     f"not accepted: {n} of {len(stmts)} statements accepted, summary accepted {s.get('accepted')}")
-        drawn = ""
+        sampled = ""
     else:
         audit, negs = s.get("audit") or {}, s.get("negatives") or {}
         stmts = [{"name": x.get("name"), "template": x.get("template"), "units": (s.get("draw_counts") or {}).get(x.get("name")),
@@ -583,11 +584,11 @@ def read_layers_sh(d: Path, result: Result) -> None:
         result.lean = (f"accepted: every Lean verdict true ({', '.join(sorted({k.split('/')[0] for k in verdicts}))} on each "
                     f"of {len(stmts)} statements), {len(negs)} of {len(negs)} negative cases refused" if result.accepted else
                     "not accepted: " + ("; ".join(held) or f"audit accepted {audit.get('accepted')}"))
-        drawn = f", {s.get('k')} of them drawn" if s.get("k") != s.get("population") else ", every unit drawn"
-        result.eps_delta = _wrong_units(audit.get("wrong_units")) or NOT_STATED
+        sampled = f", {s.get('k')} of them sampled" if s.get("k") != s.get("population") else ", every proof block sampled"
+        result.eps_delta = _incorrect(audit.get("wrong_units")) or NOT_STATED
     population = s.get("population") or sum(int(x.get("units") or 0) for x in stmts)
     result.workload = ((f"{STAND_IN}: " if any(STAND_IN in x for x in said) else f"{VALUES_NOT_STATED}: ")
-                    + f"{len(stmts)} statements of {population:,} units{drawn}: "
+                    + f"{len(stmts)} statements of {population:,} proof blocks{sampled}: "
                     + "; ".join(f"{x['name']}, {x['units']:,} units" + (f" of {x['template']}" if x.get("template") else "")
                                 for x in stmts))
     result.commit, result.commit_from = _commit(d / "job.log", after="source "), "job.log's source"
@@ -612,7 +613,7 @@ READERS: dict[str, Callable[[Path, Result], None]] = {RECURSION: read_recursion,
 
 
 def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) -> Result:
-    """`layer`'s row from the output `given` names (None: not run)."""
+    """The benchmark result for `layer` from the output `given` names (None: not run)."""
 
     result = Result(layer)
     if given is None:
@@ -635,7 +636,7 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
         result.withhold(f"unreadable: {e}")
         return result
     if layer in PROOF and result.proof != PROOF[layer]:
-        result.withhold(f"--{layer} is the {PROOF[layer]} proof's row, and this output "
+        result.withhold(f"--{layer} is the {PROOF[layer]} proof's benchmark result, and this output "
                      + (f"says its proof is {result.proof}" if result.proof else "states no proof"))
     if not result.accepted:
         result.withhold(f"the Lean verdict is not an accept ({result.lean})")
@@ -646,7 +647,7 @@ def read(layer: str, given: str | None, fetcher: Callable[[str], Path] = fetch) 
 
 
 def _cell(x: float | None, unit: str, per: str, what: str) -> str:
-    """A figure with its unit as its first words (seconds a drawn block, or a whole run's wall seconds), then how it was
+    """A figure with its unit as its first words (seconds a sampled proof block, or a whole run's wall seconds), then how it was
     read."""
 
     if x is None:
@@ -657,9 +658,9 @@ def _cell(x: float | None, unit: str, per: str, what: str) -> str:
 
 
 def _statements(r: Result, key: str, what: str) -> str:
-    """A layers.sh row's cell: each statement's figure, its unit first and a statement's, never a proof block's."""
+    """A layers.sh benchmark result's cell: each statement's figure, its unit first and a statement's, never a proof block's."""
 
-    cells = [(f"{x[key]:,.0f} bytes" if key == "proof_bytes" else f"{x[key]:.3g} s") + f" a statement of {x['units']:,} units"
+    cells = [(f"{x[key]:,.0f} bytes" if key == "proof_bytes" else f"{x[key]:.3g} s") + f" a statement of {x['units']:,} proof blocks"
              for x in r.statements if x.get(key) is not None]
     return "; ".join(cells) + f" ({what})" if cells else "—"
 
@@ -670,19 +671,20 @@ def has_number(results: Sequence[Result]) -> bool:
 
 
 def render(results: Sequence[Result]) -> str:
-    """The table as text: its title; `NOT_AN_AUDIT` unless every row ran on a deployed challenger's coins at deployed
-    parameters (and the JSON's ``audit`` is false regardless); each row's ``ran with:`` line; the table; then why each
-    row without a number has none. With no number in any row its first line says so (`run` exits 1)."""
+    """The table as text: its title; `NOT_AN_AUDIT` unless every benchmark result ran on a deployed challenger's coins at deployed
+    parameters (and the JSON's ``audit`` is false regardless); each benchmark result's ``ran with:`` line; the table; then why each
+    benchmark result without a number has none. With no number in any benchmark result its first line says so (`run` exits 1)."""
 
     lines = [] if has_number(results) else ["prove layers: no number: " + "; ".join(f"{r.layer}: {r.why}" for r in results)]
-    lines += ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`)."]
+    lines += ["The proof benchmark by layer: the benchmark result for each layer, read from its own run's output "
+              "(`verity bench prove layers`)."]
     if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in results):
         lines.append(NOT_AN_AUDIT)
     lines += [f"- {LAYERS[r.layer]}: {r.ran_with}" for r in results]
     lines.append("- commits: " + "; ".join(f"{LAYERS[r.layer]} " + (f"{r.commit[:11]} ({r.commit_from})" if r.commit else
                                                                      NOT_STATED if r.status == "read" else "—")
                                            for r in results)
-                 + "; a row reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
+                 + "; a benchmark result reruns from main only where its commit is on main (`git merge-base --is-ancestor COMMIT origin/main`)")
     lines += ["", "| layer | workload | proof | device | ε at δ | prover | Lean verifier | Lean | proof bytes |",
               "|---|---|---|---|---|---|---|---|---|"]
     for r in results:
@@ -708,7 +710,7 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
     in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
-    None, with why. Recursion's row is no member: its seconds are a whole recursive run's."""
+    None, with why. Recursion's benchmark result is no member: its seconds are a whole recursive run's."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
@@ -720,7 +722,7 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
             value = getattr(r, figure) if r.accepted and r.per_block else None
             why = None if value is not None else r.why or (
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
-                f"its output gives no {figure} a proof block" if r.per_block else "its output gives no per-block figure")
+                f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
             out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
@@ -731,7 +733,8 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     for layer, title in LAYERS.items():
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
-                            help=f"the {title} row's output: a run's out/ directory, or a run id fetched through the store")
+                            help=f"the output the benchmark result for {title} is read from: a run's out/ directory, or a run id fetched "
+                                 "through the store")
 
 
 def run(args: argparse.Namespace) -> int:
