@@ -1,6 +1,7 @@
 module
 
 public import Properties.NetworkScan.Assumptions
+public import Properties.NetworkScan.Members
 public import NetworkCheck.Period
 public import Definitions.Certifier.SampledAudit
 import Mathlib.Algebra.Order.Floor.Extended
