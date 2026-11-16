@@ -72,7 +72,7 @@ variable {O V Tick Adv Q Θ : Type}
 
 /-- **The releases are faulted runs**: each accepted window that releases released the faulted function `Cf`'s answer
 at the weights `θ` to the outsider's query, served with the window's advice, at some fault pattern of size at most the
-window's incorrect proof blocks. It is what the layers below the composition give: the network certifier ties the
+window's incorrect proof blocks. It is what the layers below the composition give: the network attester ties the
 release to the trace's outputs, and a checked population's trace is the run with its incorrect proof blocks' writes
 fixed (`Population.Dataflow.RunOf`). -/
 def Faithful (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ)

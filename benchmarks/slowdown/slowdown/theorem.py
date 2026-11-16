@@ -12,7 +12,7 @@ its free compute `U` by route, and an argument of the bound's minimum:
 `q_U(U) = ω_max U / s_×` is the elementary free-compute yield, `u U` with `u` the most weight a gate can hold (`ω_max /
 s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each server block contributes the least
 of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
-(`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
+(`ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
 remote regime):
 
     Σ_v ω_v ≤ Σ_S min{q(c_S, k_S) + ω_max μ k_S, n_S q(c, k) + q_U(S)} + q_U(unregistered)

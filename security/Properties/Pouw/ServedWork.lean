@@ -13,7 +13,7 @@ refusal. `ServedWork` turns those words into work: the prover's machines, wherev
 credited word of that, less the luck allowance, except with that probability plus `n·κ_deg(B)`.
 
 It is the remote form. The prover's machines are its whole inventory, one machine of the accelerator model 𝓜
-(`Pouw.Dither.Accel`) with its device premises (G1, G2, P1, P2) as hypotheses; no network certifier, wipe or latency
+(`Pouw.Dither.Accel`) with its device premises (G1, G2, P1, P2) as hypotheses; no network attester, wipe or latency
 check enters, and no outside machine is priced: every program of the inventory exchanges no bits with machines outside
 it (`G.ext = 0`), which is what "the inventory" means. The claim is about the work, not where it ran.
 
@@ -54,7 +54,7 @@ The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its h
 
 namespace Properties.Pouw.Served
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open Properties.Pouw.MonitoringPeriodJ10R
 
 /-- **Window `w`'s salt coin**: its round-0 coin, which `SaltIsLiveCoin` makes its salt and `j10rAtCoin`'s noise reads. -/

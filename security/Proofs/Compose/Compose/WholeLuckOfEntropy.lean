@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Compose.Guarantees.Compose
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # A whole-tile luck per query from its tiles' entropy: proof
 
-`Accounting.Guarantees.Compose.WholeLuckOfEntropy`. Per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
+`ResourceAccounting.Guarantees.Compose.WholeLuckOfEntropy`. Per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
 `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the round's whole tiles
 are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`). `Wh q` doesn't read `q`'s
 answer, so on `resample a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v` (`moment_le`)
@@ -18,9 +18,9 @@ each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to `|B|·
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.Whole
+namespace ResourceAccounting.SecurityProofs.Compose.Whole
 
-open Accounting.Compose Accounting.Assumptions.Compose
+open ResourceAccounting.Compose ResourceAccounting.Assumptions.Compose
 
 /-- One tile's term of the gain's exponential: `e^{x·((1 + κ)·[v ∈ L] − κ)} = [v ∈ L]·(e^x − e^{−κx}) + e^{−κx}`. -/
 theorem exp_term {V : Type} [DecidableEq V] (L : Finset V) (v : V) (x κ : ℝ) :
@@ -93,7 +93,7 @@ theorem moment_le {B V : Type} [Fintype B] [DecidableEq V] (W : Finset V) (L : B
     _ = Fintype.card B := mul_one _
 
 open Classical in
-theorem wholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy := by
+theorem wholeLuckOfEntropy : ResourceAccounting.Guarantees.Compose.WholeLuckOfEntropy := by
   intro B V _ _ Tq M rd R w h κ0 θ sq δb hκ hw hθ hfac hE r
   obtain ⟨Wh, Lk, Br, hinv, hrd, hent, hB, hmem⟩ := hE r
   refine ⟨fun q a => ∑ v ∈ Wh q a, w v * ((1 + κ0) * (if v ∈ Lk q a then 1 else 0) - κ0), Br,
@@ -127,4 +127,4 @@ theorem wholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy :=
         split_ifs <;> norm_num
     nlinarith
 
-end Accounting.SecurityProofs.Compose.Whole
+end ResourceAccounting.SecurityProofs.Compose.Whole

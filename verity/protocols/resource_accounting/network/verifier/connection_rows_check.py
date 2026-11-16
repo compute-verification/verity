@@ -12,7 +12,7 @@ from verity.protocols.resource_accounting.network.verifier import (blob_files as
     record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import LmsKey
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: in a schedule with content rows, the releases each execution phase's hand filed in each class, a line each
@@ -28,7 +28,7 @@ UNHANDED = ("the registrations' file is written only by a check that is handed t
             "certifier's public key and its session")
 
 
-def read(run: Path, params: NetworkCertifierParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
+def read(run: Path, params: NetworkAttesterParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
     """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
     head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
     are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
@@ -130,7 +130,7 @@ def keep_registrations(path: Path | None, held: Sequence[Mapping], problems: Seq
     whole.replace(path)
 
 
-def check(run: Path, dep: Mapping, params: NetworkCertifierParams, ingress: Sequence[BlockGrid],
+def check(run: Path, dep: Mapping, params: NetworkAttesterParams, ingress: Sequence[BlockGrid],
           egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str, registrations: Path | None = None,
           found: Sequence[str] = (), under: tuple[bytes, bytes] | None = None) -> tuple[dict | None, list[str]]:
     """`connection_rows_run`'s check of a run's connection rows under its deployment record `dep`: the summary (the

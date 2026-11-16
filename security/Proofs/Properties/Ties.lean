@@ -86,7 +86,7 @@ theorem certifiedKeys_take_mono (D : Digests) (c : Composite) (log : Registratio
   rintro lk ⟨k, hk', hb, i, hi, x, hx, hc, rfl⟩
   exact ⟨k, hk.subset hk', boundary_mono hl hb, i, hi, x, loc?_mono hl hx, hc, rfl⟩
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 theorem declaredIn_take_mono (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (mp : MonitoringPeriod) {k : ℕ}
     (cut : mp.span.Cut k) (w : TickSpan) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}

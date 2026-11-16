@@ -409,7 +409,7 @@ theorem ExecutionPhase.ks (W : ExecutionPhase) (t : ℕ) (τ : FlockSoundness.Ga
                 W.ε)
   · exact ((W.joint t).prob_accepts_of_not_ends he τ).trans_le zero_le
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The constructions the subprotocol reads at a window, applied to a strategy of the period's game** (`Constructions`, at a
 window): the projection, the device's other releases the strategy may ask for (`coins`) and the strategy of the
@@ -499,7 +499,7 @@ structure ExecutionPhaseDeployed (V : Vocab d α) (K : ExecutionPhaseConstructio
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
   loss : ∀ θ x, V.loss .sampled θ x = 0
   claim : ∀ θ F W, S θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
+    ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
     ∀ _ : Nonempty ((K.live W θ F c σ).joint (V.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (V.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card : ℝ)
@@ -525,13 +525,13 @@ theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : Byt
   by_cases hP : ∃ p, ParamsAt θ p
   swap
   · exact recursiveForm_refused V k θ hP F c σ
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE
   swap
   · exact le_top
   obtain ⟨hfs, hpr, hFC, hUf⟩ := hE
-  by_cases hI : Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
+  by_cases hI : ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
   · calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ
           ≤ Verity.Game.prob (fun _ => False) (V.game θ F c) σ :=
             Verity.Game.prob_mono (fun o ho => ho.2 hI) _ σ

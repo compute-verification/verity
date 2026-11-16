@@ -506,9 +506,9 @@ def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under
     WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
     from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, BlockGrid
-    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams, cell
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams, cell
 
-    params = NetworkCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    params = NetworkAttesterParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]

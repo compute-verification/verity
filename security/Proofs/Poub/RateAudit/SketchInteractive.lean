@@ -10,12 +10,12 @@ public import Proofs.Poub.RateAudit.Sketch
 An interactive device is a `RateSketch.Prover`: its chip keeps the bits it sent, and at each side read takes in over
 the link the sector at the address the side sources would pick from them (`IChip.toChip`). Its tags, footprint, compute,
 link sectors and queries are the interactive device's (`IChip.toChip_eq`), so `RateAuditSketch`'s bound is the
-interactive device's (`Accounting.SecurityProofs.RateAuditSketchInteractiveRO`).
+interactive device's (`ResourceAccounting.SecurityProofs.RateAuditSketchInteractiveRO`).
 -/
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits pr)
 
@@ -97,20 +97,20 @@ theorem toProver_eq (A : InteractiveProver N m ρ h S L q w X Sig Dg) (dig : Sig
 
 end InteractiveProver
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
 /-- **The sketch rate audit with interactive side sources that ignore the oracle**
-(`Accounting.Guarantees.RateAuditSketchInteractiveRO`), from `RateAuditSketch` on the interactive device as a device. -/
-theorem Accounting.SecurityProofs.RateAuditSketchInteractiveRO :
-    Accounting.Guarantees.RateAuditSketchInteractiveRO := by
+(`ResourceAccounting.Guarantees.RateAuditSketchInteractiveRO`), from `RateAuditSketch` on the interactive device as a device. -/
+theorem ResourceAccounting.SecurityProofs.RateAuditSketchInteractiveRO :
+    ResourceAccounting.Guarantees.RateAuditSketchInteractiveRO := by
   intro N m ρ h S L q w s k F cTag cEnc g X Sig Dg _ _ _ _ _ dig A
-  have hev : (fun x : Accounting.RateSketch.Data N m ρ X × Accounting.RateSketch.Coins N ρ h s X Sig Dg =>
+  have hev : (fun x : ResourceAccounting.RateSketch.Data N m ρ X × ResourceAccounting.RateSketch.Coins N ρ h s X Sig Dg =>
       A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
-        A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k) =
+        A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < ResourceAccounting.RateSketch.floor m w ρ S L F cTag cEnc k) =
       fun x => A.toProver.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.toProver.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
-        A.toProver.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
+        A.toProver.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < ResourceAccounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
     funext x
     obtain ⟨e1, e2, e3⟩ := A.toProver_eq dig cTag cEnc x.2.1.1 x.2.1.2 x.1 x.2.2
     rw [e2, e3, propext e1]
   rw [hev]
-  exact Accounting.SecurityProofs.RateAuditSketch N m ρ h S L q w s k F cTag cEnc g X Sig Dg dig A.toProver
+  exact ResourceAccounting.SecurityProofs.RateAuditSketch N m ρ h S L q w s k F cTag cEnc g X Sig Dg dig A.toProver

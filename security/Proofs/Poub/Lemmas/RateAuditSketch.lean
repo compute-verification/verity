@@ -20,9 +20,9 @@ record pins it.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.RateSketch
+open ResourceAccounting ResourceAccounting.RateSketch
 
 /-- **Completeness of `RateAuditSketch`: an honest device that reads every sector once is accepted on every coin.**
 For every digest and every `N`, `m`, `ρ`, `h` and `w` there is a device that holds nothing on chip, whose link carries
@@ -31,7 +31,7 @@ exactly the certified stream's `ρ` sectors (`L = ρ·w`) and which makes `N` or
 footprint is the store, `N·m·w` bits, and its compute is `N·c_tag`, with nothing rebuilt. It takes in the stream, reads
 every sector once and queries the oracle at each tile's digest under the stream. Against `RateAuditSketch` at `S = 0`,
 `L = ρ·w`, `q = N` and `F = N·c_tag`, the honest `N·m·w` sits above the floor `k·m·w − (N − k)·c_tag·w/c_enc` by the
-sample's slack `(N − k)·m·w` and the tagging it leaves unspent. Proof: `Accounting.SecurityProofs.RateSketchHonest`. -/
+sample's slack `(N − k)·m·w` and the tagging it leaves unspent. Proof: `ResourceAccounting.SecurityProofs.RateSketchHonest`. -/
 def RateSketchHonest : Prop :=
   ∀ (N m ρ h w : ℕ) (X Sig Dg : Type) [Inhabited X] (dig : Sig → (Fin m → X) → Dg),
     ∃ A : RateSketch.Prover N m ρ h 0 (ρ * w) N w X Sig Dg,
@@ -59,7 +59,7 @@ and one cut to `M` bits covers a fraction `M/(|Sig|·N·d)` of the signs. A boun
 memory, and with memory near the store's size it is a static cell-probe lower bound for random `±1` sketches, which
 this statement neither proves nor refutes.
 
-Proof: `Accounting.SecurityProofs.RateSketchTable`: the chip takes in the stream, then for each tile reads the `d`
+Proof: `ResourceAccounting.SecurityProofs.RateSketchTable`: the chip takes in the stream, then for each tile reads the `d`
 bits of its table entry at the signs and queries the oracle at the digest they encode. -/
 def RateSketchTable : Prop :=
   ∀ (N m ρ h d : ℕ) (X Sig Dg : Type) [Inhabited X] [Fintype Sig] [Fintype Dg] (dig : Sig → (Fin m → X) → Dg),
@@ -75,7 +75,7 @@ of them) and the tensor-core sketch into `k_s` INT32 accumulators (`d = 32·k_s`
 `2^(32·k_s·m)·N·32·k_s` bits, accepted on every coin, that reads `32·k_s` bits per tile. At `k_s = 64` the signs bind
 sectors but for a small chance (`SketchBinds`), and the table still reads 1/16 of a 4 KiB tile: more rows make the
 digest bind, which prices a guess, and do not make the reads pay for the tile. Proof:
-`Accounting.SecurityProofs.RateTensorSketchTable`, from `RateSketchTable`. -/
+`ResourceAccounting.SecurityProofs.RateTensorSketchTable`, from `RateSketchTable`. -/
 def RateTensorSketchTable : Prop :=
   ∀ (N m ρ h ks : ℕ), ∃ A : LayoutDevice N m ρ h Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)),
     (∀ (E : Fin N × Fin m → Sector) (a : ℕ), 2 ^ (ks * m * 32) * (N * (32 * ks)) ≤ a → A.mem E a = false) ∧
@@ -83,4 +83,4 @@ def RateTensorSketchTable : Prop :=
       (∀ t, A.tags σ O D t = O (D.stream, t, sketch σ (D.tile t))) ∧ (A.queries σ O D).length = N ∧
         A.reads σ O D = N * (32 * ks) ∧ A.linkSteps σ O D = ρ
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

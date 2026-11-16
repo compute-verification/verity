@@ -10,7 +10,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
@@ -591,7 +591,7 @@ def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
     keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
     doesn't register is refused."""
     card = cards.load("certifier", "GLM-5.3")
-    schedule = NetworkCertifierParams(**card["value"]["schedule"])
+    schedule = NetworkAttesterParams(**card["value"]["schedule"])
     c, every = f.cards("GLM-5.3"), f.cards("GLM-5.3", served="request")
     assert c["max_tokens_cap"].value == schedule.max_tokens_cap
     assert c["served_bits"].value == schedule.max_tokens_cap * 32 < every["served_bits"].value
