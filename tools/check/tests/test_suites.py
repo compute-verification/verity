@@ -2335,13 +2335,62 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
     [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
     assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
     assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
-    assert [(x.suites, x.procs) for x in S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None)] == [([big], 6), ([a, b], 1)], \
-        "a suite never timed runs in the rest's lane, counted at nothing"
+    assert S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None) == [S.Lane([a, big, b], 7, None)], \
+        "a suite whose seconds aren't known isn't counted at nothing beside the others: one lane, each on all of it in turn"
     assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
     assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
     assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
         "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def test_what_a_run_has_to_do_is_the_seconds_of_the_kept_passes_of_the_tests_it_will_run(tmp_path, monkeypatch):
+    import json
+
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
+    s = S.Suite("pkg", "pkg", (), (), parallel=True)
+    assert S.todo_seconds(s, None) is None, "no kept pass here: not known"
+    d = S.per_test_dir(s)
+    d.mkdir(parents=True)
+    (d / "a.json").write_text(json.dumps({"when": "2026-11-15 10:00", "passed": {"tests/test_a.py::t1": 600.0, "tests/test_a.py::t2": 300.0}}))
+    (d / "b.json").write_text(json.dumps({"when": "2026-11-15 10:00", "passed": {"tests/test_b.py::t3": 100.0, "tests/gone.py::t4": 50.0}}))
+    (d / "a-old.json").write_text(json.dumps({"when": "2026-11-01 10:00", "passed": {"tests/test_a.py::t1": 9.0}}))
+    assert S.todo_seconds(s, None) == 1050.0, "each test at its newest kept pass"
+    mods = {"pkg/tests/test_a.py", "pkg/tests/test_b.py"}
+    assert S.todo_seconds(s, None, mods) == 1000.0, "a test module the tree no longer holds counts nothing"
+    assert S.todo_seconds(s, None, mods, ["tests/test_a.py::t1"]) == 400.0, "a test whose pass it reuses counts nothing"
+    assert S.todo_seconds(s, None, mods, ["tests/test_a.py::t1", "tests/test_a.py::t2", "tests/test_b.py::t3"]) == 1.0
+    by_file = S.Part((1,), 2, ("pkg/tests/test_b.py",), ("pkg/tests/test_a.py", "pkg/tests/test_b.py"), "d", 0.1)
+    assert S.todo_seconds(s, by_file, mods) == 100.0, "a part by file: its files' tests"
+    assert S.todo_seconds(s, S.Part((1,), 2, ("pkg/tests/test_c.py",), (), "d", 0.1), mods) is None
+    by_id = S.Part((3, 4, 5, 6), 6, (), (), "d", 4 / 6, "id")
+    assert S.todo_seconds(s, by_id, mods) == 1000.0 * 4 / 6, "a part by test id: its share of the suite's"
+
+
+def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_duration(tmp_path, monkeypatch):
+    """Check slot b of vy-nebius-cpu-6, lean-suites with --jobs 96 and --mem-gb 135, two one-process suites beside: flock's
+    record was 112 s, from a run that reused most of its passes, so its 4 parts of 6 (75 s) got 16 GB beside vstar_cli's
+    (360 s) 105 GB, one worker at worker_gb 16, and ran 1,413 tests in 5,933 s while vstar_cli's lane sat idle after 359 s.
+    Split by what each run has to do (its kept passes there: 7,143 s and 2,490 s), flock gets five. On vy-nebius-cpu-8 slot
+    b (--mem-gb 145), verity-vllm had no recorded duration, so it ran 7,985 tests on the 15 GB flock's lane left (one worker
+    at 8 GB); in one lane it gets them all while it runs."""
+    S = _suites(monkeypatch, tmp_path)
+    vstar = S.Suite("vstar_cli", "v", (), (), parallel=True, worker_gb=9)
+    flock = S.Suite("verity-flock", "f", (), (), parallel=True, worker_gb=16)
+    r = S.serial_slots([987.0, 1904.0], 2, 96, 135)
+    procs, gb = 96 - r, S.wide_gb(135, r)
+    assert (r, procs, gb) == (2, 94, 126.0)
+
+    def workers(lanes):
+        return {s.name: S.wide_workers(s, x.procs, x.gb) for x in lanes for s in x.suites}
+
+    assert workers(S.wide_lanes([vstar, flock], [360.0, 112.0 * 4 / 6], procs, gb)) == {"vstar_cli": 11, "verity-flock": 1}, \
+        "what tonight's last durations planned"
+    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 5, "vstar_cli": 3}
+    vllm = S.Suite("verity-vllm", "a", (), (), parallel=True, worker_gb=8)
+    evaluate = S.Suite("verity-core-evaluate", "e", (), (), parallel=True)
+    assert workers(S.wide_lanes([vllm, flock, evaluate], [None, 2979.0 * 2 / 6, 220.0], 94, 136.0))["verity-vllm"] == 17
 
 
 def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
@@ -2409,9 +2458,11 @@ def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_pat
 
 
 def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
-    """End to end: three parallel suites whose recorded seconds put the longest beside the other two, on 4 of 6 processes and 2,
-    pass as the same suites under the same keys as in one lane (no recorded seconds)."""
+    """End to end: three parallel suites whose kept passes put the longest beside the other two, on 4 of 6 processes and 2,
+    pass as the same suites under the same keys as in one lane (no kept pass). The split reads the kept passes' seconds, not
+    the last durations, which here say the opposite."""
     import json
+    import shutil
 
     root = tmp_path / "tree"
     test = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
@@ -2422,10 +2473,13 @@ def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_p
     _git(root, "commit", "-qam", "all three are parallel")
     (tmp_path / "cache").mkdir()
 
-    def line(durations: dict | None) -> tuple[str, list[tuple]]:
-        (tmp_path / "cache" / "durations.json").unlink(missing_ok=True)
-        if durations:
-            (tmp_path / "cache" / "durations.json").write_text(json.dumps(durations))
+    def line(seconds: dict | None) -> tuple[str, list[tuple]]:
+        shutil.rmtree(tmp_path / "cache" / "per-test", ignore_errors=True)
+        for name, s in (seconds or {}).items():
+            (tmp_path / "cache" / "per-test" / name).mkdir(parents=True)
+            (tmp_path / "cache" / "per-test" / name / "kept.json").write_text(json.dumps(
+                {"when": "2026-01-01 00:00", "passed": {"tests/test_it.py::test_a": s / 2, "tests/test_it.py::test_b": s / 2}}))
+        (tmp_path / "cache" / "durations.json").write_text(json.dumps({"big": 1.0, "mid": 30.0, "small": 20.0}))
         out = tmp_path / "out.json"
         p = _run_suite(root, tmp_path, "--fresh", "--jobs", "6", "--json", str(out))
         assert p.returncode == 0, p.stdout + p.stderr

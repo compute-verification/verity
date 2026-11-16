@@ -154,8 +154,11 @@ pass kept here, naming a changed directory's files from git's trees, and says pe
 over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run in two
 lanes, the longest of them alone beside the rest one at a time, which split the processes and memory the parallel suites have in
-proportion to their last durations (`shared_lanes`), but a suite that declares `[tool.verity.tests] workers` and would get
-fewer there runs in a third lane of its own on that many, up to half of what the parallel suites have (`wide_lanes`,
+proportion to what each run has to do (`shared_lanes`): the seconds the kept passes of the tests it will run took, its
+reused ones left out (`todo_seconds`), not its last duration, which a run that reused most of its passes makes small; with
+any suite that has no such pass here, they run in one lane, each on all its processes in turn. But a suite that declares
+`[tool.verity.tests] workers` and would get fewer there runs in a third lane of its own on that many, up to half of what the
+parallel suites have (`wide_lanes`,
 `held_workers`); beside them the others run side by side on as few of the processes as let
 them finish about when the longest of them does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
@@ -1870,6 +1873,26 @@ def longest(suite: Suite, n: int) -> list[str]:
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
 
 
+def todo_seconds(suite: Suite, part: Part | None, modules=None, reuse=()) -> float | None:
+    """What a parallel suite's run has to do, as its lanes' share reads it (`shared_lanes`): the seconds the newest kept pass
+    of each test it will run took (`_last_passes`), at least 1. Those are the tests of its test ``modules`` (None: any), in
+    its part (a part by test id: its share of them), whose passes it doesn't ``reuse``; None when none of them has a kept
+    pass here. Not its last run's seconds: those of a run that reused most of its passes would leave a run that reuses none a
+    worker or two."""
+    base = "" if suite.path == "." else suite.path + "/"
+    files = set(part.files) if part is not None and part.by != "id" else None
+    skip, seen, total = set(reuse), False, 0.0
+    for node, (_when, s) in _last_passes([per_test_dir(suite)]).items():
+        f = base + node.split("::", 1)[0]
+        if (modules is not None and f not in modules) or (files is not None and f not in files):
+            continue
+        seen = True
+        total += 0.0 if node in skip else s
+    if not seen:
+        return None
+    return max(1.0, total * (part.share if part is not None and part.by == "id" else 1.0))
+
+
 # ---- a suite in parts (`--files`) ----------------------------------------------------------------------------------------------------
 
 #: `NAME:KS/M[@DIGEST]`: parts KS (``1`` or ``1,3``) of suite NAME's test files in M parts, of the partition whose digest starts
@@ -2519,9 +2542,9 @@ def held_workers(s: Suite, procs: int, gb: float | None) -> int:
 
 
 def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
-    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: each one's last duration, None when none is
-    recorded), split by their seconds (`shared_lanes`); but a suite that declares `workers` and would get fewer there (its
-    last run reused most of its passes, or a longer suite took the larger share) has a lane of its own with what it holds to
+    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
+    None when that isn't known), split by their seconds (`shared_lanes`); but a suite that declares `workers` and would get
+    fewer there (it reuses most of its passes, or a longer suite took the larger share) has a lane of its own with what it holds to
     (`held_workers`), and the others split the rest: a suite whose workers' count bounds its run (circuit_check's, whose
     catalog each worker builds before any test runs) isn't left a few by a short last run."""
     lanes = shared_lanes(wide, seconds, procs, gb)
@@ -2536,17 +2559,17 @@ def wide_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: f
 
 
 def shared_lanes(wide: list[Suite], seconds: list[float | None], procs: int, gb: float | None) -> list[Lane]:
-    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: each one's last duration, None when none is
-    recorded): the longest recorded in a lane of its own beside the rest, the two splitting both in proportion to their
-    recorded seconds, so that they end about together (a lane that ran past the other has the larger share the next run). One
-    lane for fewer than two suites, none recorded, a single process, or a share too small for one worker of a suite at its
-    `worker_gb`."""
-    timed = [i for i, x in enumerate(seconds) if x]
-    if len(wide) < 2 or not timed or procs < 2:
+    """The parallel suites' lanes on ``procs`` processes and ``gb`` (``seconds``: what each one's run has to do, `todo_seconds`,
+    None when that isn't known): the longest in a lane of its own beside the rest, the two splitting both in proportion to
+    their seconds, so that they end about together. One lane for fewer than two suites, a single process, a share too small
+    for one worker of a suite at its `worker_gb`, or any suite whose seconds aren't known: counted at nothing, it would run
+    on what the others leave, one worker for a suite that may need an hour of them, while each suite of one lane gets all of
+    its processes in turn."""
+    if len(wide) < 2 or procs < 2 or not all(seconds):
         return [Lane(wide, procs, gb)]
-    i = max(timed, key=lambda j: seconds[j])
+    i = max(range(len(wide)), key=lambda j: seconds[j])
     big, rest = wide[i], wide[:i] + wide[i + 1:]
-    f = seconds[i] / sum(seconds[j] for j in timed)
+    f = seconds[i] / sum(seconds)
     p = min(procs - 1, max(1, round(f * procs)))
     g = None if gb is None else f * gb
     if g is not None and (g < worker_gb(big) or gb - g < max(map(worker_gb, rest))):
@@ -2891,10 +2914,14 @@ def main(argv: list[str] | None = None) -> int:
     spread = jobs if XDIST else 1
     if spread == 1 and jobs > 1 and any(t[0].parallel for t in todo):
         print("pytest-xdist is not installed: each parallel suite runs in one process")
+    per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
+    reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
+    work = {s: todo_seconds(s, parts.get(s), per[s].keeps if s in per else None, reuse.get(s, ())) for s in wide}
+    wide.sort(key=lambda s: -(work[s] if work[s] is not None else float("inf")))
     r = serial_slots([last(s) for s in one], len(wide), jobs, a.mem_gb)
-    lanes = [Lane(one, r, None), *(wide_lanes(wide, [last(s) for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
+    lanes = [Lane(one, r, None), *(wide_lanes(wide, [work[s] for s in wide], jobs - r, wide_gb(a.mem_gb, r)) if wide else [])]
     lane_of = {s: k for k, lane in enumerate(lanes) for s in lane.suites}
     procs = [Slots(lane.procs) for lane in lanes]
     memory = [Slots(int(lane.gb)) if lane.gb is not None else None for lane in lanes]
@@ -2906,8 +2933,6 @@ def main(argv: list[str] | None = None) -> int:
     elif wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes{beside}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
-    per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
-    reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
     stopping = threading.Event()
 
