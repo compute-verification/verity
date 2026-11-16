@@ -43,7 +43,6 @@ from verity_bench.exfiltration_text import (
 )
 from verity_bench.served_table import RUN_OF_RECORD
 
-
 #: a word `exfiltration/v3` keeps in the document's inputs (their `part` and `source`) until a format version, and the
 #: Glossary's word the print says for it (GLOSSARY.md, Older names)
 HELD_WORDS = {"network certifier": "network attester"}
