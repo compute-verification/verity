@@ -228,7 +228,14 @@
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
 # live, since both open on the window's run root: step 3 is then a development check. With V3c off (V3C_CLASS empty) step
-# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
+# 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. Step 3's
+# SAMPLED-PROOFS line says whose coins they were, the gate's or a development session's, and the audit's coin_trees; on
+# the gate's coins, an audit whose summary says its sessions took their coin trees from anywhere but the session that
+# sampled them (coin_trees other than window, `served_verdicts.py coin-trees`), which the auditor's Lean verifier refuses,
+# stops the run there (`sampled_coins`, exit 20; `served_verdicts.sh sampled-coins` runs that check alone on D). V3c's
+# audit is held to the same on V3C_CHALLENGER's coins: its V3C-AUDIT line says whose coins and its coin_trees, and on the
+# gate's it fails, exit 20 with the same refusal, as a V3c audit that fails does (`v3c_trees`; `served_verdicts.sh
+# v3c-coins K` alone on D at V3C_CLASS). A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
 # research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
@@ -671,6 +678,16 @@ v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
 }
+coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CHALLENGER) took its sessions' coin trees
+  # from the session that sampled them, by its SUMMARY (`served_verdicts.py coin-trees`), else 20 with STEP's refusal
+  # line; a development session's coins pass as before
+  local why
+  why=$("$PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
+  say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
+  return 20
+}
+sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/sampled-proofs-served/summary.json" SAMPLED-PROOFS; }  # step 3's
+v3c_trees() { coin_trees_held "$V3C_CHALLENGER" "$VW/audit/summary.json" V3C-AUDIT; }  # V3c's audit's, VW its directory
 v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
   local g=(ssh -o BatchMode=yes)
   [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
@@ -903,9 +920,11 @@ t = json.loads(line[4:])
 w, ok = t["record"][:16], "PASS" if t["chained"] else "FAIL"
 print(f"the audit read its records tied to W {w}…, R chained right after it: {ok}")' 2>&1 \
     | tail -1 | cut -c1-400)"
-  say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
+  say "V3C-AUDIT class $V3C (records_audit.py exit $rc), $("$PY" "$SV" coins --challenger "$V3C_CHALLENGER" \
+    --summary "$VW/audit/summary.json" 2>&1 | tail -1 | cut -c1-300): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
   [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
     || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
+  v3c_trees || return 20
   return $rc
 }
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
@@ -1709,6 +1728,8 @@ if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone
 if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
 if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
+if [ "${1:-}" = sampled-coins ]; then sampled_coins; exit $?; fi
+if [ "${1:-}" = v3c-coins ]; then K=${2:?served_verdicts.sh v3c-coins WINDOW}; VW=$D/v3c-w$K-$vtag; v3c_trees; exit $?; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = pous-pins ]; then pous_pins_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
@@ -2221,8 +2242,9 @@ if [ -f "$SR/registration.json" ]; then
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
 fi
 say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "$PP_PARTITION" 2>&1 | cut -c1-3000)$(
+  --partition "$PP_PARTITION" --challenger "$SP_CHALLENGER" --summary "$SP/summary.json" 2>&1 | cut -c1-3000)$(
   grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
+sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
