@@ -49,7 +49,14 @@ for n in ("sites2.tsv", "phrases.tsv", "by_owner2.tsv", "row_cell_files.tsv", "e
 
 pn = [r for r in rd(t3 / "path_names.tsv")
       if not (r["term"] == "today:row/cell" and not r["path"].startswith(("benchmarks/", "tools/research/")))]
-wr(out / "path_names.tsv", pn, ["path", "kind", "term", "files_under", "owner"])
+for r in pn:
+    if "/fixtures/" in r["path"] or r["path"].endswith((".json", ".bin", ".patch")):
+        r["class"] = "HELD"; r["evidence"] = "a fixture or data file a test reads by its path"
+    elif r["term"].startswith("today:") or r["term"].lower() in ("row:cap", "row:caps", "row:period", "row:law"):
+        r["class"] = "ASK"; r["evidence"] = "the new word is open, or the word has another live sense here"
+    else:
+        r["class"] = "RENAME"; r["evidence"] = ""
+wr(out / "path_names.tsv", pn, ["path", "kind", "term", "files_under", "owner", "class", "evidence"])
 shutil.copy(t3 / "skipped_areas.tsv", out / "skipped_areas.tsv"); shutil.copy(t3 / "skipped_areas_summary.tsv", out / "skipped_areas_summary.tsv")
 cm = rd(t3 / "commands.tsv")
 for r in cm:
