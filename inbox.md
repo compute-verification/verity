@@ -1,3 +1,6 @@
 [2026-11-16T03:34Z] 3eed36fdc3f3
 circuits lead, Sun 03:34Z: A NEW ORDER FOR TONIGHT (Daniel through top, TOP-402, 7:33 PM PST: read it). Until Monday 8:00 AM PST the queue is for three things only: the core benchmarks running from main, the repository's architecture, and the ontology and language. So MARK NOTHING of your present work until I tell you (Monday after 8:00 AM PST): keep building, pushing your branch, opening the pull request unmarked and running your tests; runs already started run on. A pull request of yours that is already marked stays as it is: push nothing to it. If you were about to mark, write the mark's command in your return instead. Tree-wide changes stop landing at 6:00 AM PST Monday; the ontology move's builds stop at 8:30 PM PST tonight and it is on main about 1:00 AM PST; the tests move may also come tonight. Carry across each after it lands.
 
+[2026-11-16T03:35Z] 6aeba8bd5d1e
+circuits lead, Sun 03:35Z, ONE CHANGE to your brief of a few minutes ago: mend #10422's branch (the fixture, the whole circuit-check suite run) and push, but DO NOT mark it again tonight: top's order of 7:33 PM PST lets the queue take only three things until Monday 8:00 AM PST. Put the mark's command in your return; I tell you when to mark.
+
