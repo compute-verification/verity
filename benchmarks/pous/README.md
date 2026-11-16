@@ -72,7 +72,7 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v3-gpu`: P2 v4 (`verity/protocols/resource_accounting/memory/pous/verifier/README.md`, "P2") under the registered scheme's framing
+- `p2-v3-gpu`: P2 v4 (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2") under the registered scheme's framing
   (`p2-16448/v4`), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`). Its
   reference, wire and vectors are the verifier's (`verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/`), and its GPU library and

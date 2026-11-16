@@ -62,7 +62,7 @@ reference on every vector, and `verity/protocols/resource_accounting/memory/pous
 difftest's instances with the Python's answers on them and which the Lean check runs.
 
 The streamed-label wipe's records and verdict (`streamed_wipe.py`) and the messages both its sides speak
-(`wipe_party.py`) are PoUS's verifier's, an entry point of `verity/protocols/resource_accounting/memory/pous/verifier/README.md`.
+(`wipe_party.py`) are PoUS's verifier's, an entry point of `verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`.
 
 ## Top statements
 
@@ -82,7 +82,7 @@ The streamed-label wipe's records and verdict (`streamed_wipe.py`) and the messa
   no pipelining, a hard deadline and every late answer counted (`security/Proofs/Pous/Continuous/Verifier.lean`).
 
 The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryChallenger.lean`, `Wipe.lean`,
-`Component.lean`), and the PoUS guarantees the verdicts serve are in `verity/protocols/resource_accounting/memory/pous/verifier/README.md`.
+`Component.lean`), and the PoUS guarantees the verdicts serve are in `verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`.
 
 ## Where to look
 
