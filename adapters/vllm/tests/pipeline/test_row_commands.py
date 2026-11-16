@@ -67,7 +67,7 @@ def test_a_checkpoint_serves_a_role_it_names_or_one_inside_a_range_it_names(stat
 def test_a_rows_checkpoint_is_the_one_of_its_role_else_the_local_one_whose_range_holds_it(tmp_path, monkeypatch, no_row_file, capsys):
     """The checkpoint that names the row's role is taken first; without one, the first that serves the role and has a local path.
     The world is the sweep's, else the row's own `tp`, else 2 for a row id that says `__tp2__` and 1 for any other."""
-    monkeypatch.setattr(EP, "ROOT", tmp_path)
+    monkeypatch.setattr(EP, "CHECKPOINTS", tmp_path / "manifests" / "checkpoints.json")
     ranged = [{"role": "A1-A4", "repo": "org/a", "revision": "ra", "local_path": "/a"}, {"role": "B1-B4", "repo": "org/far", "revision": "r0"},
               {"role": "B1-B4", "repo": "org/local", "revision": "r1", "local_path": "/b"},
               {"role": "B2-B3", "repo": "org/later", "revision": "r2", "local_path": "/c"}]

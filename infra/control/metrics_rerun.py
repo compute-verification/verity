@@ -87,21 +87,21 @@ from pathlib import Path
 from typing import Callable
 
 from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
-from research.jobs import dispatch
+from research.jobs import dispatch, runline
+from research.metrics import REGISTRY_ROOTS
 from research.remote import timeout_seconds
 from research.runs import ENDED
 
 SCHEMA = "verity/metrics-rerun/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 NAME = "metrics.toml"
-TREES = ("benchmarks", "demos", "infra", "tools")      # where a metrics.toml may sit (tests/test_metrics_registry.py)
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
 LOOPS = "infra/control/"                                # a row whose command's script is here is a loop's, which sends it itself
 PARKED = "top/parked"                                   # a row whose goal is this is parked work, rerun only by hand
 #: the default job (`research run`'s own, in GiB and seconds): the loop launches a row only when its `research run` asks no more
 #: than this, and its owner reruns any other. None: any value is more, as a pool of the row's own is
 DEFAULT_JOB: dict[str, float | None] = {"--mem-gb": AUTO_MEM_GB, "--timeout": AUTO_MAX_MIN * 60, "--pool": None}
-SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
+SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(REGISTRY_ROOTS)})/\S+\.(?:sh|py))(?:\s|$)")
 EVERY = re.compile(r"^([1-9][0-9]*)([mhd])$")
 UNIT_S = {"m": 60, "h": 3600, "d": 86400}
 #: the machines whose disks are too small for a measurement's tree and outputs
@@ -205,9 +205,9 @@ def span(s: float) -> str:
 # ---- the declarations and their commands ----------------------------------------------------------------------------------------
 
 def declarations(tree: Path) -> tuple[list[Job], list[str]]:
-    """The jobs of every metrics.toml under TREES, and a line for each file that isn't TOML."""
+    """The jobs of every metrics.toml under REGISTRY_ROOTS, and a line for each file that isn't TOML."""
     jobs, broken = [], []
-    for top in TREES:
+    for top in REGISTRY_ROOTS:
         for d, dirs, files in os.walk(tree / top):
             dirs[:] = sorted(x for x in dirs if x not in SKIP)
             if NAME not in files:
@@ -257,30 +257,11 @@ def options(command: str) -> tuple[list[tuple[str, str | None]], list[str], bool
     if "--" not in tokens:
         raise Refused("its `research run` has no `--` before its workload")
     i = tokens.index("--")
-    raw, out, seen = tokens[2:i], [], set()
-    while raw:
-        tok = raw.pop(0)
-        name, eq, value = tok.partition("=")
-        if name not in ALLOWED:
-            raise Refused(f"its `research run` takes {name}, which a declared command may not carry (allowed: "
-                          f"{', '.join(ALLOWED)})")
-        if name in seen:
-            raise Refused(f"its `research run` gives {name} twice")
-        seen.add(name)
-        form = ALLOWED[name]
-        if form is None:
-            if eq:
-                raise Refused(f"its `research run` gives the flag {name} a value")
-            out.append((name, None))
-            continue
-        if not eq:
-            if not raw:
-                raise Refused(f"its `research run` gives {name} no value")
-            value = raw.pop(0)
-        if not (value in form if isinstance(form, frozenset) else form.match(value)):
-            raise Refused(f"its `research run` gives {name} {value!r}, which isn't "
-                          + (" or ".join(sorted(form)) if isinstance(form, frozenset) else f"of the form {form.pattern}"))
-        out.append((name, value))
+    try:
+        out = runline.options(tokens[2:i], ALLOWED, unknown=lambda name: f"takes {name}, which a declared command may not "
+                                                                         f"carry (allowed: {', '.join(ALLOWED)})")
+    except runline.Refused as e:
+        raise Refused(f"its `research run` {e}") from None
     return out, tokens[i + 1:], True
 
 

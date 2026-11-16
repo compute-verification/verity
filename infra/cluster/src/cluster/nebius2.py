@@ -78,8 +78,10 @@ def held_by(pid: int, paths: set[Path], proc: Path = Path("/proc")) -> set[Path]
     try:
         fds = os.listdir(fd_dir)
     except FileNotFoundError:
+        print(f"lease read: pid {pid} is gone, so it holds no lock", file=sys.stderr)
         return set()
     except PermissionError:
+        print(f"lease read: pid {pid}'s descriptors not readable, so what it holds is unknown", file=sys.stderr)
         return None
     for fd in fds:
         try:

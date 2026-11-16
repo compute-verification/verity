@@ -43,7 +43,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -58,7 +57,22 @@ from verity_config import sha256
 
 from verity_bench import jobs, kit, settings, steady, steady_cards, steady_spec
 from verity_bench.steady_cards import Asker, Refused
+from verity_bench.steady_lease import (
+    LEASE_SOURCE,
+    NOT_RUN,
+    lease_argv,
+    lease_tool,
+    leased_card,
+    toolkit,
+    toolkit_on_node,
+)
 from verity_bench.vllm.presets import GPUS
+
+__all__ = ["FETCH", "KEPT_LOG_BYTES", "KEPT_SESSION", "KEPT_SESSION_BYTES", "KIND", "LEASE_SOURCE", "MEMORY", "NOT_RUN",
+           "POINT_FILE", "RATE", "REFUSED", "SESSION_FILES", "STAGED", "STOPPED", "STOP_S", "TIMED_FILE", "VERDICT_FILE",
+           "Runner", "Stamper", "fetched", "keep", "keep_session", "kept", "lease_argv", "lease_tool", "leased_card",
+           "main", "own_cores", "parse", "point", "prover", "statement", "stop_on_signals", "timed", "toolkit",
+           "toolkit_on_node", "write_result"]
 
 KIND = "verity-steady-point/v1"
 POINT_FILE, VERDICT_FILE, TIMED_FILE = steady.POINT, "out/verdict.json", "out/timed.json"
@@ -67,10 +81,6 @@ REFUSED = 4
 STOPPED = 128 + signal.SIGTERM
 #: the seconds a command this process was waiting for has to end, once sent TERM, before it is killed
 STOP_S = 30
-#: the exit code `_ask` gives for a command the node couldn't run at all, as a shell gives it
-NOT_RUN = 127
-#: the lease tool in the tree, which a node has on its path as `gpu-lease`
-LEASE_SOURCE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 #: the files of a staged statement the node side reads; the prover reads the rest
 STAGED = ("stage.json", "circuit.txt", "pin.txt")
 #: the store's fetch, from the shipped tree (`steady_point.sh` puts its package on the path)
@@ -163,14 +173,15 @@ def _spans(cpus: Sequence[int]) -> str:
     return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in spans)
 
 
-def fetched(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner, ask: Asker) -> Path:
+def fetched(row: steady_spec.SteadyRow, stored: tuple[str, str], scratch: Path, out: Path, run: Runner,
+            ask: Asker) -> Path:
     """The statement a row names in the store (`SteadyRow.stored`), fetched into the scratch: the artifact's directory,
     read with the key `research run --store-read` puts in the run's environment. The fetch keeps what it reads in a
     store of its own under the scratch, removed once the files are out of it, so the node's store holds no copy and
     nothing stays on the node after the scratch. Before any byte is fetched it refuses a scratch in the node's memory,
     and one whose disk has less free than the statement twice, which the fetch holds until its store is removed."""
 
-    art, directory = row.stored
+    art, directory = stored
     if MEMORY in scratch.resolve().parents:
         raise Refused(f"the `staged` of row {row.type!r} is fetched from the store onto the node's disk, and the scratch "
                       f"({scratch}) is in its memory: the spec's setup exports VERITY_BENCH_STEADY_SCRATCH, a directory "
@@ -205,8 +216,8 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
 
     stage = scratch / "z" / row.name / f"c{row.n}" / "stage"
     stage.parent.mkdir(parents=True)
-    if row.stored is not None:
-        fetched(row, scratch, out, run, ask).rename(stage)
+    if (stored := row.stored) is not None:
+        fetched(row, stored, scratch, out, run, ask).rename(stage)
         if not all((stage / name).is_file() for name in STAGED):
             raise Refused(f"the `staged` of row {row.type!r}, {row.staged}, holds no staged statement in the store "
                           f"({', '.join(STAGED)})")
@@ -234,73 +245,7 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
             "stage": {key: record.get(key) for key in ("definition", "word", "k_log", "vus_per_block", "circuit_bytes")}}
 
 
-def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence[int] | None = None,
-               cores: str | None = None) -> list[str]:
-    """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
-    says beside it, before the command: the cards it may be (`on`, gpu-lease's `--on`: `cards_near`), the run's CPUs
-    (`cores`, its slot's, gpu-lease's `--cores`: the lease declares them, so gpu-lease refuses or holds a lease whose
-    CPUs and the live leases' pass the machine's CPU quota), preemptible, as a guest's GPU job must be (a preempted
-    point has no passing run, so the next `run` launches it again), and the host memory the spec admits. Whether the
-    machine throttled them while the row ran is the row's check `no_throttling`."""
-
-    minutes = spec.admission.max_minutes
-    if minutes is None:
-        raise Refused(f"spec {spec.id!r} has no admission max_minutes, which bounds the point's lease")
-    near = ["--on", ",".join(map(str, on))] if on else []
-    pinned = ["--cores", cores] if cores else []
-    memory = ["--mem-gb", str(spec.admission.mem_gb)] if spec.admission.mem_gb is not None else []
-    *lease, command = kit.lease(1, minutes)
-    return [*lease, *near, *pinned, "--preemptible", *memory, command, *inside]
-
-
-def lease_tool(ask: Asker) -> None:
-    """Refuses a node on which `gpu-lease` can't be run, before a statement is staged or fetched for a lease that could
-    not be taken: the kit's lease calls it by its bare name."""
-
-    tool = kit.lease(1, 1)[0]
-    rc, text = ask([tool, "status"])
-    if rc == NOT_RUN:
-        raise Refused(f"`{tool}` can't be run on this node ({text.strip()[-200:]}), and the timed step runs under its "
-                      f"lease of one card: put {LEASE_SOURCE} of this tree on the node's path as `{tool}`. A copy on "
-                      "the node's own disk goes when the node is reset")
-
-
 # ---- inside the lease ---------------------------------------------------------------------------------------------------------
-
-
-def leased_card(stamp: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The kit's host stamp, once it is of the lease's one card: its name, its UUID and the driver's version."""
-
-    gpus = stamp.get("gpus") or []
-    if stamp.get("why") or len(gpus) != 1 or not stamp.get("driver"):
-        raise Refused("the host stamp doesn't say what the lease's card is ("
-                      + (stamp.get("why") or f"it names {len(gpus)} GPUs and the driver {stamp.get('driver')!r}")
-                      + "): inside a gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID")
-    return stamp
-
-
-def toolkit_on_node(ask: Asker) -> str:
-    """The CUDA toolkit's version: what the nvcc on the path the spec's setup leaves says it is."""
-
-    rc, text = ask(["nvcc", "--version"])
-    found = re.search(r"release [\d.]+, V(\d+(?:\.\d+)+)", text) if rc == 0 else None
-    if found is None:
-        raise Refused("the nvcc on the path the spec's setup leaves doesn't say its version (exit "
-                      f"{rc}: {text.strip()[-200:]!r}): the setup puts the toolkit the prover was built with first")
-    return found.group(1)
-
-
-def toolkit(spec: steady_spec.SteadySpec, ask: Asker) -> str:
-    """The toolkit's version (`toolkit_on_node`), read before any statement is staged or fetched and any card is asked
-    for, since it needs neither: a node at another toolkit is refused for nothing. The timed step reads it again inside
-    the lease, beside the driver's, which only the lease's card gives."""
-
-    read = toolkit_on_node(ask)
-    if read != spec.cuda_toolkit:
-        raise Refused(f"the node's CUDA toolkit is {read} (its nvcc), and spec {spec.id!r} says {spec.cuda_toolkit}: a "
-                      "row at another toolkit is another point. Set the spec's `cuda_toolkit` to the node's, which times "
-                      "its rows again there")
-    return read
 
 
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str],
@@ -484,8 +429,8 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     root = Path.cwd()
     spec = steady_spec.load_spec(a.spec, root=root)
     item = steady_spec.point(spec, a.point)
-    files = steady_spec.closure(root, spec)
-    files_sha256 = sha256(files)
+    closure = steady_spec.closure(root, spec)
+    files_sha256 = sha256(closure)
     identity = steady_spec.point_identity(spec, item, files_sha256)
     if identity != a.identity:
         raise ValueError(f"point identity changed: this tree gives {item.id} {identity}, and the run was launched as "
@@ -495,7 +440,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
                             f"{', '.join(entry for entry in steady_spec.CLOSURE if (root / entry).is_dir())} counts: one "
                             "the launching checkout doesn't track (what a build or a setup left there) changes the "
                             "identity too. ")
-                         + f"Its closure here is {len(files)} files (SHA-256 {files_sha256[:16]}...); `plan` prints "
+                         + f"Its closure here is {len(closure)} files (SHA-256 {files_sha256[:16]}...); `plan` prints "
                          "the launching checkout's as its `toolchain`")
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     out = run_dir / "out"
