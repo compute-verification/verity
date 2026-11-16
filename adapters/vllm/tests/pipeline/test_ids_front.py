@@ -347,7 +347,7 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     (STREAM + chunked(event(choice([7], " a")))[:-5], [7]),                 # one chunk, then no more
 ])
 @pytest.mark.parametrize("half", [False, True])
-def test_once_the_certifiers_side_has_ended_the_front_ends_the_servers(answer, sent, half):
+def test_once_the_network_attesters_side_has_ended_the_front_ends_the_servers(answer, sent, half):
     """While the front waits on the server's stream of an id request (the server has sent nothing, its 200 head and no
     chunk, or a chunk and no more, as vLLM's own server does for a request the tick gate dropped), the network
     attester's side ends, closed or only its sending half. The front then closes its connection to the server, which
