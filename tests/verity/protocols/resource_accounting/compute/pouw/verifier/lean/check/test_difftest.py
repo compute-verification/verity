@@ -613,12 +613,10 @@ def test_passes_distinct(pass_server):
 
 
 def period_roots_instance(rng: random.Random, name: str = "honest") -> dict:
-    """A `period` case's ledger, key and name with the roots `credit._period_of` presents of its windows (each window's
-    open root, then its sample's), as `credit.period` takes them."""
+    """A `period` case's ledger, key and name with the roots its windows present (`credit.presented`), as `credit.period`
+    takes them; none for windows not of the evidence's form."""
     case = credit_cases.period_instance(rng, name)
-    ws = case["windows"] if isinstance(case["windows"], list) else []
-    roots = [w[s].get("root") if isinstance(w, dict) and isinstance(w.get(s), dict) else None
-             for w in ws for s in ("window", "draw")]
+    roots = Cr.presented(case["windows"]) if Cr._formed(case["windows"], Cr.PERIOD_KEYS) else []
     return {"key": case["key"], "ledger": case["ledger"], "name": case["name"], "roots": roots}
 
 

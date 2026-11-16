@@ -3245,6 +3245,13 @@ def _once(verify: Ch.Verify) -> Ch.Verify:
     return once
 
 
+def presented(windows: list[dict]) -> list[Any]:
+    """The roots a period's formed `windows` present to `period`, in its close's order: each window's open root, then
+    its sample's."""
+    return [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
+                                         w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
@@ -3254,9 +3261,7 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)
-    roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
-                                          w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
-    why = period_twin(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, presented(windows), verify)
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
@@ -3657,6 +3662,6 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
-           "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "pearl_c_period_credit_twin", "period", "period_twin", "presented", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "weights_root", "window"]
