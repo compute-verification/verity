@@ -1,5 +1,22 @@
 # The audit layer (`Audit/`): what is proved
 
+An audit proves only the proof blocks it samples, so what it can establish about the rest is a bound: except with
+probability δ, at most so many proof blocks are incorrect. This directory proves that bound, the integrity profile, and
+what follows lists each theorem and what it takes.
+
+## Try it
+
+~~~sh
+bash tools/verity/lean/setup.sh security/Proofs
+(cd security/Proofs && lake build Proofs.Flock.Soundness.Audit.OneStage Proofs.Flock.Soundness.Audit.Pooled)
+~~~
+
+The first line installs the toolchain and the packages the proofs require and restores `main`'s build from the Lean
+cache; the second builds and checks the proofs of the one-stage audit's integrity profile and of the pooled bound over
+a monitoring period.
+
+## What is proved
+
 The sampled audit's guarantee, the integrity profile of `docs/audit-protocols.md` §2, over any Boolean circuit, any
 partition, any sampling design, and any per-proof-block proof system. The derivations and the deviations from that plan are in
 `../DESIGN.md` §12. Everything here is proved; the per-proof-block proof system enters only through named hypotheses.
