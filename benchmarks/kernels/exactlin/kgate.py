@@ -199,7 +199,7 @@ def stock_doc(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq_ref: torch
     return doc
 
 
-# the tiles triton_scaled_mm's heuristic freezes when Dynamo traces it at M = max_num_batched_tokens 64 and 256 (sbench's T)
+# the tiles triton_scaled_mm's heuristic freezes when Dynamo traces it at M = max_num_batched_tokens 64 and 256
 FROZEN_TILES = ((64, 64, 256), (128, 128, 128))
 
 

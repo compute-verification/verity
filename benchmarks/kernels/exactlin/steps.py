@@ -1,4 +1,4 @@
-"""A served decode step's kernels from an sbench `prof` capture (nsys SQLite export): per arm, each kernel's launches and GPU
+"""A served decode step's kernels from a `prof` capture (nsys SQLite export): per arm, each kernel's launches and GPU
 time a step, the GPU's busy time a step and the step's wall time, as the difference of the arm's two NVTX ranges
 (PROF_RANGE/<arm>/n<N1> and n<N2>, the same 32 requests generating N1 and then N2 tokens) over N2 - N1, so prefill and each
 generate call's own overhead cancel.  Only kernels of the process that pushed the range, starting and ending inside it,

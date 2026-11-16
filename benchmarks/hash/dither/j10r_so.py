@@ -8,8 +8,8 @@ swapped into dither_a's check.
     the gate step                     `j10r_units.call_receipts` (held to J10R's Definition, `h1tile.j10r_reference`, by
                                       its anchor) on every unit of `checked_calls` against the captured receipts, word for
                                       word; dither_a's three CPU units' receipts from it; and those three units by J10R's
-                                      own `j10r_reference(stream=True)` on its tree ($DITHER_J10R_TREE, sbench.sh's
-                                      J10R_SHA): receipt and z (= A B^T)
+                                      own `j10r_reference(stream=True)` on its tree ($DITHER_J10R_TREE):
+                                      receipt and z (= A B^T)
 
 M, the calls' layout rows (`h1tile.j10r_blocks`' m), is `rows` of the step's live rows under $DITHER_SO_J10R_M.
 """
@@ -121,7 +121,7 @@ class Refs:
         its (ri, cj) at layout rows M, from which the Definition derives its blocks."""
         tree = settings.get(TREE_ENV)
         if not tree:
-            return {"tree": None, "sha": J10R_SHA, "error": f"no J10R tree: ${TREE_ENV} (sbench.sh's J10R_SHA={J10R_SHA})"}
+            return {"tree": None, "sha": J10R_SHA, "error": f"no J10R tree: ${TREE_ENV}"}
         ins = []
         for x in units:
             w, u = self.where(x["position"])

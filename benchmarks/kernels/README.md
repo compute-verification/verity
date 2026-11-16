@@ -48,7 +48,7 @@ word to another directory.
 |---|---|---|
 | `ship.sh` | sourced: the ship's toolkit, cubin flags and layout | `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` |
 | `job_nvcc.sh` | run as a script: nvcc for a library a job builds off the card | `benchmarks/hash/dither/job.sh` |
-| `numabind/numabind.py` | run as a script, from the tree or from a copy sent with a job | `benchmarks/hash/dither/sbench.sh`; `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
+| `numabind/numabind.py` | run as a script, from the tree or from a copy sent with a job | `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
 | `s8_linear/sass_gate.py` | loaded by file, which fixes its path, nothing more | `tests/benchmarks/pouw/test_mma_gate.py` (declared in `tests/benchmarks/pouw/pyproject.toml`) |
 | `exactlin/kbench.py` | `timed`, `copies_for`, `nvml`, `ITEM_MS` | `benchmarks/kernels/s8_linear` |
 | `exactlin/kgate.py` | `MODELS` | `benchmarks/kernels/s8_linear` |

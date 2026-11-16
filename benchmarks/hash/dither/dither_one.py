@@ -345,8 +345,7 @@ class DitherState:
         dst.copy_(buf, non_blocking=True)
 
     def phase(self, name: str | None) -> None:
-        """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's (stepprof.py gives each
-        kernel the phase its launch was in)."""
+        """Under DITHER_NSYS=prof, close the open phase's NVTX range and open PHASE_RANGE/NAME's."""
         if not self.nvtx:
             return
         if self.phase_open:
