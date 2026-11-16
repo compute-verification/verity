@@ -329,6 +329,8 @@ EDGE_PORTS = (("edge.kv", "prefix"), ("edge.scale", "prefix_scale"), ("edge.rope
               ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
 #: an edge request Program's returns after its outputs (`build_program(edge=)`), the latent rows first, in this order
 _ROWS = ("prefix", "prefix_scale", "prefix_rope", "prefix_ik", "prefix_iks")
+#: an fp8_ds_mla cache's latent rows as a member's groups: its three parts, which a member carries all or none of
+_DS_MLA_ROWS = ("prefix", "prefix_scale", "prefix_rope")
 
 
 @dataclass(frozen=True)
@@ -366,6 +368,10 @@ def _check_edge(edge: Edge, comps: dict[int, RequestComponent]) -> None:
             gs = tuple(map(tuple, gs))
             if not gs or [g for g, _, _ in gs] != [g for _, g in EDGE_PORTS if g in {h for h, _, _ in gs}]:
                 raise ValueError(f"edge: request {i}'s {side}-port groups {gs} aren't some of {[g for _, g in EDGE_PORTS]}, in order")
+            held = {g for g, _, _ in gs}
+            if held & set(_DS_MLA_ROWS[1:]) and not held >= set(_DS_MLA_ROWS):
+                raise ValueError(f"edge: request {i}'s {side}-port groups {gs} hold part of an fp8_ds_mla cache's rows: "
+                                 f"{', '.join(_DS_MLA_ROWS)} come together")
             types = {g: Array(int(n), Value(int(w))) for g, n, w in gs}
             if i not in comps:
                 if side == "out" and ins.get(int(i)) != gs:

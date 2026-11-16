@@ -16,7 +16,7 @@ is one execution phase, one proof block. Its `window` provenance is `{"kind": "s
 challenger holds w to the registration's order in the stream (`TransferBlocks.register`), so the receipt's order is the
 execution phase. The
 network verdict of record is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share
-credit: it accepts only when every window of the link (its `NetworkCertifierProfile`'s) is registered in order and its outcome
+credit: it accepts only when every window of the link (its `NetworkAttesterProfile`'s) is registered in order and its outcome
 of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
 reject the link. A run's is the AND over its links'.
 
@@ -106,16 +106,16 @@ reads them in the clear), and the certifier's host audit doesn't read them. `Tra
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
-**The link** (`TransferBlocks(network_attester=NetworkCertifierProfile(…))`) is the network attester's (`network_attester.NetworkCertifier`) own two records of
+**The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`network_attester.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`network_attester.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network attester runs no shaper clock, so a window declares
 no sync and the charge is 0. Each head check holds its end's head to the network attester's grid and digest and to its
 signed digest. N2 takes no frames: the frames, their content and their order, are the scan's, and N2 says nothing of
-them. A `TransferBlocks` without a `NetworkCertifierProfile` raises `ValueError`.
+them. A `TransferBlocks` without a `NetworkAttesterProfile` raises `ValueError`.
 
 **The verdict of record is the Lean's**: `NetworkCheck.TransferBlocks.verdict`
 (`verity/protocols/resource_accounting/network/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
@@ -126,8 +126,8 @@ both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds
 are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- the network attester's parameters digest (`NetworkCertifierProfile.digest`, which the network attester's deployment publishes
-  as its schedule's, `network_attester.NetworkCertifierParams.digest`), which neither derives;
+- the network attester's parameters digest (`NetworkAttesterProfile.digest`, which the network attester's deployment publishes
+  as its schedule's, `network_attester.NetworkAttesterParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -451,9 +451,9 @@ class Hidden:
 
 
 @dataclass(frozen=True)
-class NetworkCertifierProfile:
+class NetworkAttesterProfile:
     """A network attester link's profile (`TransferBlocks.network_attester`, the module docstring's "A network attester link"): the
-    link's windows and the network attester's parameters digest (`network_attester.NetworkCertifierParams.digest`), which both ends' heads
+    link's windows and the network attester's parameters digest (`network_attester.NetworkAttesterParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -482,11 +482,11 @@ class TransferBlocks:
     certifier_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
-    network_attester: NetworkCertifierProfile | None = None
+    network_attester: NetworkAttesterProfile | None = None
 
     def __post_init__(self) -> None:
         if self.network_attester is None:
-            raise ValueError("a link is the network certifier's: TransferBlocks(network_attester=NetworkCertifierProfile(windows, digest))")
+            raise ValueError("a link is the network certifier's: TransferBlocks(network_attester=NetworkAttesterProfile(windows, digest))")
         if self.ingress_params != self.params:
             raise ValueError("a network certifier link's two ends are on the network certifier's one grid")
 
@@ -502,12 +502,12 @@ class TransferBlocks:
 
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network attester's grid under
-        its parameters digest (`NetworkCertifierProfile.digest`)."""
+        its parameters digest (`NetworkAttesterProfile.digest`)."""
         return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_attester.digest)
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: its `NetworkCertifierProfile`'s."""
+        """The link's windows, which `network_verdict` takes by default: its `NetworkAttesterProfile`'s."""
         return self.network_attester.windows
 
     @cached_property
@@ -1011,7 +1011,7 @@ class TransferBlocks:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. The windows are by default the `NetworkCertifierProfile`'s (`windows`).
+        the verdict to the stream and those records. The windows are by default the `NetworkAttesterProfile`'s (`windows`).
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
         exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
@@ -1079,4 +1079,4 @@ class TransferBlocks:
 
 
 __all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "TransferBlocks", "OUTPUTS", "OUT_BITS", "Hidden", "PORTS",
-           "PUBLIC", "ROWS", "SCHEMA", "VALUE", "NetworkCertifierProfile", "encode", "output_row", "rows", "unit"]
+           "PUBLIC", "ROWS", "SCHEMA", "VALUE", "NetworkAttesterProfile", "encode", "output_row", "rows", "unit"]

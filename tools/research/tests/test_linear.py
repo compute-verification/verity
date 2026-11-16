@@ -1134,6 +1134,26 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     assert len(lin.sent("commentCreate")) == 2 and lin.moved == []
 
 
+def test_a_comment_stamped_ahead_of_the_clock_is_refused_from_a_worker_and_a_holder(fake, registry, capsys, lin, monkeypatch,
+                                                                                    tmp_path):
+    """Lean's lead and workers stamped comments up to 17 minutes ahead of the clock while keeping the rule by hand."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 11, 15, 7, 18, 40, tzinfo=UTC))        # 11:18 PM PST, Sat
+    body = tmp_path / "c.md"
+    body.write_text("lean/AREAS, Sat 14 Nov 11:19 PM PST: the PR is up\n\nsecond paragraph")
+    for argv in (["--worker", "lean/AREAS", "--file", str(body)], ["--worker", "AREAS", "--file", str(body), "--dry-run"],
+                 ["--as", "infra", "lean (lead), 12:14 AM PST: x"]):
+        rc, _, err = run(capsys, "linear", "comment", "INF-1", *argv)
+        assert rc == 2 and "and it is " in err and "leave the time out" in err
+    assert lin.sent("commentCreate") == []
+    lin.subscribers["I1"] = []
+    body.write_text("lean/AREAS, Sat 14 Nov 11:18 PM PST: the PR is up")
+    monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
+    monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
+    monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--worker", "lean/AREAS", "--file", str(body))
+    assert rc == 0 and out.strip() == "INF-1 commented as lean/AREAS"
+
+
 def test_a_workers_comment_naming_handles_rings_none_and_says_so_and_how_its_lead_rings_them(
         fake, registry, routes_dirs, capsys, lin, monkeypatch, tmp_path):
     """Workers addressed other lanes by @name, read that the comment posted, and nobody heard of it until a lead re-rang

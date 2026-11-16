@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # An auditor party's assumptions: `Faithful`, `Secret`, `Confined`, and its witness path's `WitnessPathPrivate`
 
-An auditor party (a network certifier, the memory challenger) is a program the auditor runs on its own device: code, a
+An auditor party (a network attester, the memory challenger) is a program the auditor runs on its own device: code, a
 state it keeps, coins of its own, and declared channels it sends messages on, each to the auditor in the clear (a public
 message) or to the prover only (witness: what the prover's zero-knowledge proofs read). These are what a protocol that
 reads a party's messages takes of one party `p`, each a named `Prop` about one run of it (`Run`), in place of
@@ -54,13 +54,13 @@ owns and the prover doesn't control is why we believe them, not an assumption.
   endpoints, so nobody else sees a witness message. Witness messages travel unencrypted for now; an encrypted path
   would replace this assumption.
 
-`Covered` (`Accounting.Covered`) stays the site premise. What the auditor and the prover see of a party under these
+`Covered` (`ResourceAccounting.Covered`) stays the site premise. What the auditor and the prover see of a party under these
 (`auditorView`, `proverView`) is stated over its code's messages in `Properties.Attest`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions.Parties
+namespace ResourceAccounting.Assumptions.Parties
 
 /-- Where a declared channel's messages go: to the auditor in the clear, or to the prover only, as witness. -/
 inductive Dest
@@ -128,4 +128,4 @@ def auditorView (wire : Ch × M → Wi) (r : Run Ω S I Ch M Wi A) : List Wi :=
 /-- What the prover sees of the party: all it emitted, and its accesses to the party's secret state. -/
 def proverView (r : Run Ω S I Ch M Wi A) : List Wi × List A := (r.emitted.map (·.2), r.access)
 
-end Accounting.Assumptions.Parties
+end ResourceAccounting.Assumptions.Parties

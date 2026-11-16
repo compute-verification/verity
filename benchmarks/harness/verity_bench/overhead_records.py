@@ -335,8 +335,8 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
         scheme, card, point = row.split("/")
         r = rows.get((scheme, card, point))
         g = (r or {}).get("gamma") or {}
-        m = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-             "extra": {"covers": table["covers"]}}
+        m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
+                             "extra": {"covers": table["covers"]}}
         if r is None or not r["of_record"] or g.get("gamma") is None:
             why = (r or {}).get("why") or f"no labelled run times {scheme} at {card}'s {point} (`{RUN_OF_RECORD}={RUN_RECORD}`)"
             out.append(m | {"value": None, "why": f"no γ of record: {why}"})

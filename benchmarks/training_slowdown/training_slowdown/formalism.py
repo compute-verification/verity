@@ -32,7 +32,7 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
 
 - **Fit** (construction, checked per part): the training's three kinds of block, compute Δ + sτ ≤ k, reduction
   2Δ_grad ≤ k and update application Δ_t + Δ_grad ≤ k (Δ counts only when its decoder fits, d < c, and so does Δ_t;
-  a part with no token blocks has only the compute kind). Where every part fits, the record's slowdown is c/(c − d) (`rho_fit`).
+  a part with no token blocks has only the compute kind). Where every part fits, the record's slowdown is c/(c − d) (`slowdown_fit`).
 - **Slowdown** (the counting lemma at B = A \\ R; stated, not yet proved in Lean): its token form with the largest
   per-token affected count α_max where token blocks vary, slowdown ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
   affected count (for identical token blocks the last factor is 1). The claim takes the assumption's upper bounds,
@@ -72,7 +72,7 @@ choices favourable to the block:
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
 **The one bound** (`bound`, which `at` reads): the counting lemma over kinds K of block work, each a lower
-bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
+bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(q_K(k)/c), q_K the yield of a block of kind K: each kind's term, the max, the kind it binds on and what each
 kind rests on (`RESTS_ON`). Where Fit fails the record's slowdown is the entry point's, max(1, that max); where Fit holds it is
 c/(c − d), and every term is at most that. Its one kind:
 - products: the theorem of record's count on M (`RESTS_ON` has its statement), a theorem for the run's circuit given
@@ -664,8 +664,8 @@ def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
                       math.floor(c / (t * m.alpha_max)) if t * m.alpha_max else math.inf) if 0 < t < 1 else 0
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     b = bound(m, c, k, kinds)
-    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": slowdown_fit,
-            "rho": slowdown_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
+    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "slowdown_fit": slowdown_fit,
+            "slowdown": slowdown_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
             "bound": b}
 
 
@@ -711,7 +711,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
 
     v = at(m, c, k)
     b = v["bound"]
-    slowdown, partial, why = v["rho"], False, None
+    slowdown, partial, why = v["slowdown"], False, None
     off = uncomputed(b)
     if v["fit"]:
         binding = "fit"
@@ -726,7 +726,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
         binding = "none"
     he = b["inputs"]["products"]
     products = he_rests_on(he) if b["terms"]["products"] is not None else None
-    return {"label": f"{THE_CODE} {VERSION}", "rho": slowdown, "binding_kind": binding,
+    return {"label": f"{THE_CODE} {VERSION}", "slowdown": slowdown, "binding_kind": binding,
             "rests_on": products if binding == "products" else RESTS_ON_CELL["unmeasured" if slowdown is None else binding],
             "products_rests_on": products, "partial": partial, "why": why, "terms": dict(b["terms"]),
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},

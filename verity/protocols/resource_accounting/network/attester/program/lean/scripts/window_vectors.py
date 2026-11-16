@@ -3,7 +3,7 @@
 
     python scripts/window_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/window/instances.jsonl`, one instance per line as `NetworkCertifier.WindowCharge.WindowDifftest.rawOfJson`
+Writes `DIR/window/instances.jsonl`, one instance per line as `NetworkAttester.WindowCharge.WindowDifftest.rawOfJson`
 reads it, and `DIR/window/python.jsonl`, the same line's results from the checkout's
 `verity.protocols.resource_accounting.network.prover.window_charge`: `reference_window` window by window from the instance's carry, each
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges

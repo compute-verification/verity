@@ -12,8 +12,8 @@ verity bench exfiltration --json          the same as one document: value, unit,
 verity bench exfiltration --share 0.05    read at another share of total compute
 verity bench exfiltration --served-run F  beside it, the share a served two-stage run's record F measures
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
-verity bench exfiltration --response-ids N the network certifier's part for a class of at most N ids a response
-verity bench exfiltration --scan-delta D  the network certifier's errors at another δ of its scans (a fraction)
+verity bench exfiltration --response-ids N the network attester's part for a class of at most N ids a response
+verity bench exfiltration --scan-delta D  the network attester's errors at another δ of its scans (a fraction)
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
 verity bench exfiltration --help          every parameter and its default
 ```

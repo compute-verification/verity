@@ -1333,7 +1333,7 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
     on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
     assert got == [
         {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "mark": "measured",
-         "better": "higher", "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
+         "better": "higher", "target": 100.0, "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
          "requests_differing": 2, "reproduces": False, **on,
          "inputs": [f"measured: prod-record's served tokens on the {LOAD} load's burst rep 1 against its replay's, up "
                     "to each request's first difference"]},
@@ -1374,6 +1374,8 @@ def test_each_of_the_three_measurements_carries_its_mark_and_inputs(tmp_path: Pa
         assert m["mark"] == "measured", m["name"]
         assert m["inputs"] and all(isinstance(i, str) and i for i in m["inputs"]), m["name"]
         assert m["inputs"][0].startswith(f"{m['mark']}: "), m["name"]
+    # the dashboard counts a goal's number as running only with a target (infra/dashboard/run.py); advice has none agreed
+    assert [m.get("target") for m in got] == [P.TARGET, P.MATCH_TARGET, None]
 
 
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(

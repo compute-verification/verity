@@ -41,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 /-!
 # The decodes' range lemmas: decoding an encoded in-range word gives it back
 
-A field's decode (`Accounting.TS.Lanes.decLane`, `decComb`) reads its bits through `bitsN` and, for a signed word,
+A field's decode (`ResourceAccounting.TS.Lanes.decLane`, `decComb`) reads its bits through `bitsN` and, for a signed word,
 `sgnBits`. Where a reader holds a word's bits (`Holds`: bit `i` of the field is bit `i` of the word):
 
 * `bitsN_eq`: the bits of `x < 2^n` spell `x`, and `bitsN_eq_mod` in general `x mod 2^n`;
@@ -57,7 +57,7 @@ ports' rows decode to (`Lanes.Committed`), so nothing is asked of those rows.
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
 /-- **A reader holds `x`'s low `n` bits at `[lo, lo + n)`**: bit `i` of the field is bit `i` of `x`. -/
 def Holds (rd : ℕ → Option Bool) (lo n x : ℕ) : Prop := ∀ i < n, rd (lo + i) = some (x.testBit i)
@@ -144,4 +144,4 @@ theorem sgnBits_bitsN {rd : ℕ → Option Bool} {lo n : ℕ} {v : ℤ} (hn : 0 
   rw [bitsN_eq h (encS_lt n v)]
   exact sgnBits_encS hn hlo hhi
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

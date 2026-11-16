@@ -126,10 +126,7 @@ def policy_output(cmd: str) -> str:
         try:
             out, err = communicate(p, POLICY_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(p.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signalled(p.pid, signal.SIGKILL)
             raise
     if p.returncode:
         raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
@@ -207,25 +204,57 @@ def locked(path: Path) -> bool:
     except OSError:
         return False
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return False
-    except BlockingIOError:
-        return True
+        return not granted(fd)
     finally:
         os.close(fd)
+
+
+def granted(fd: int) -> bool:
+    """Whether an exclusive flock on `fd` is granted at once: False exactly while another descriptor holds the file."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone, or when it isn't this user's to signal."""
+    try:
+        os.killpg(pgid, sig)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError as e:
+        print(f"n1_lease: group {pgid} not signalled, it isn't this user's ({e})", file=sys.stderr, flush=True)
+        return False
+
+
+def reaped(pid: int) -> bool:
+    """Whether `pid` was this process's child, now reaped: False for another process's (an earlier n1_lease's fence)."""
+    try:
+        os.waitpid(pid, 0)
+        return True
+    except ChildProcessError:
+        return False
 
 
 def cmdline(pid: int) -> list[str]:
     try:
         return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")
-    except OSError:
+    except OSError as e:
+        if Path(f"/proc/{pid}").exists():
+            print(f"n1_lease: pid {pid}'s command line unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
 
 
 def pod_uid_of(pid: int) -> str | None:
     try:
         m = re.search(r"pod([0-9a-f_-]{36})", Path(f"/proc/{pid}/cgroup").read_text())
-    except OSError:
+    except OSError as e:
+        if Path(f"/proc/{pid}").exists():
+            print(f"n1_lease: pid {pid}'s cgroup unread, so its pod is unknown ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
         return None
     return m.group(1).replace("_", "-") if m else None
 
@@ -248,19 +277,11 @@ def fence(i: int, t: float) -> int | None:
 def unfence(pids: list[int]) -> None:
     """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
-        try:
-            os.killpg(pid, signal.SIGTERM)
-        except OSError:
-            pass
+        signalled(pid, signal.SIGTERM)
     for pid in pids:
-        try:
-            os.waitpid(pid, 0)
-        except ChildProcessError:
-            pass
+        reaped(pid)
         for _ in range(200):
-            try:
-                os.killpg(pid, 0)
-            except OSError:
+            if not signalled(pid, 0):
                 break
             time.sleep(0.01)
 

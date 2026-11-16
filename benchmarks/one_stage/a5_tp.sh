@@ -266,6 +266,7 @@ else
       continue
     fi
     case $e in warden|warden:*) echo "STANDIN $e: its name is network_attester${e#warden}; set that instead"; exit 3;; esac
+    case $e in network_certifier|network_certifier:*) echo "STANDIN $e: its name is network_attester${e#network_certifier}; set that instead"; exit 3;; esac
     if [ "${e%%:*}" = network_attester ]; then
       case $e in network_attester) REFUSE=();; network_attester:altered) REFUSE=(--altered);; network_attester:pad|network_attester:pad-named|network_attester:swapped) REFUSE=(--made-for ${e#network_attester:});;
         *) echo "STANDIN $e: network_attester, network_attester:altered, network_attester:pad, network_attester:pad-named or network_attester:swapped"; exit 3;; esac

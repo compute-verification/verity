@@ -19,7 +19,7 @@ responses.
     python benchmarks/one_stage/network_attester_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
     python benchmarks/one_stage/network_attester_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
-``--serve-window`` is the served run's Commit window; ``--window`` is the network attester's own, in buckets (`NetworkCertifierParams`).
+``--serve-window`` is the served run's Commit window; ``--window`` is the network attester's own, in buckets (`NetworkAttesterParams`).
 """
 from __future__ import annotations
 

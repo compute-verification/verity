@@ -20,7 +20,7 @@ together.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The compute audit's coins in PoUW's game at protocol `P`, workload `U` and `t` tickets: the oracle, the salt and the
 tickets. -/
@@ -44,4 +44,4 @@ structure RealizesPouw {Q R S : Type} (CM : Pouw.CostModel Q R S) (P : Pouw.Prot
   calls_le : ∀ x o, (adv o).pre.calls x.1 + CM.calls (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
     (r.schedule (x, o)).ops (r.win .compute) (r.acct .compute) .oracle
 
-end Accounting
+end ResourceAccounting

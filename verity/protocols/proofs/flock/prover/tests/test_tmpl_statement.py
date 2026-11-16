@@ -231,7 +231,7 @@ def _served(name: str):
 SERVED = ("FlashInferFp8Linear", "SparseMlaCombine", "RMSNormFusedCudaVector8", "AllReduceMultimem")
 
 
-@pytest.mark.skipif(not of(__file__).VERITY_FLOCK_STRUCT_TYPES,
+@pytest.mark.skipif(not of(FC.__file__).VERITY_FLOCK_STRUCT_TYPES,
                     reason="stages each served type flat and structural, the MUFU reads' 2^23- and 2^24-word tables inline: "
                            "about ten minutes and 40 GB; set VERITY_FLOCK_STRUCT_TYPES=1")
 @pytest.mark.parametrize("name", SERVED)

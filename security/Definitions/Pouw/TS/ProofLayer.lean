@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A window's proofs: what (I8) reads of the proof system (trusted)
 
-EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
+EPS1-SPEC §2.7's (I8), `ResourceAccounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
 TS model's accounting:
 
 * **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows or keyed
@@ -72,7 +72,7 @@ round's leaves and σ_w, so they need no binding of their own.
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -163,4 +163,4 @@ def Of [Fintype Ω] {K T L U : Type} (P : Play Ω S K T L U) : Prop :=
 
 end ProofLayer
 
-end Accounting.TS
+end ResourceAccounting.TS
