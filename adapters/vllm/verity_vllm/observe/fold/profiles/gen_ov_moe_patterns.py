@@ -445,7 +445,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
     (`target.moe_construction`, a Program static of record, read from the manifest by run_config and passed down) -- never read off the
     trace, which is construction-agnostic (the engine ran the same kernels either way).
 
-    What the record no longer names: the router's (weights, ids), the pair caches (cache1 / cache2 / cache3) and the alignment schedule
+    What the record does not name: the router's (weights, ids), the pair caches (cache1 / cache2 / cache3) and the alignment schedule
     are INTERIOR to the one Compute -- no instance is emitted for them and no other kernel reads them (moe_sum's output is this Compute's).
     Their (token, slot) reading for Commit is Stage 3a's (`verity_vllm/observe/moe_pad_transcript.py`: pair row p of token t with `ids[t][k] = e`
     is slot e; the E-TOPK other slots are DISABLED, `enc(bot)`), not the fold's.  Kernel census: every launch of the scope is claimed

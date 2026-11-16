@@ -35,7 +35,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   own stock.
 - `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32.
 - `llama31-8b-fp8-1gpu-commit-served-width-h200`: the same on one H200.
-- `llama31-8b-fp8-1gpu-commit-served-width-b200`: the same on one B200.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
@@ -46,7 +45,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 ## PoUW
 
 - `llama31-8b-1gpu-pouw-h1`: H1 with fx1 on the eager exact-int8 engine, against that engine without PoUW.
-- `llama31-8b-1gpu-pouw-h1-served`: the same, with stock FP8 as vLLM serves it as the baseline.
 - `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
@@ -66,6 +64,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
   two and four provers on one H200 with ten cores, each statement fetched from the store.
+- `glm53-flock-steady-head-block-h200-c24`: the same two forms at four provers on 24 cores, six a prover, so a node
+  whose NUMA nodes hold 24 cores keeps all of a point on the card's node.
 
 ## Sweeps
 

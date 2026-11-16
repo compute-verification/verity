@@ -2,9 +2,8 @@
 
 γ is a PoUW scheme's prover overhead over stock: how much more busy GPU time, with the host CPU time it adds at a
 weight, the scheme spends than stock does for the same useful output, at a card's operating points.
-`verity bench overhead` is the one front door for it: it finds a card's operating points, times a scheme against the
-fastest stock kernels there, and gives γ from labelled runs of record alone. Its code is the harness's
-([`benchmarks/harness`](../harness/README.md)); this directory holds its runner.
+`verity bench overhead` is the one front door for it: it gives γ from labelled runs of record alone. Its code is the
+harness's ([`benchmarks/harness`](../harness/README.md)); this directory holds its runner.
 
 A card has two operating points, each a number of rows m over one layer's four linears of Llama-3.1-70B:
 
@@ -28,12 +27,5 @@ note `without y's commitment (y tree not timed)`: its arm commits no output y ye
 ## Commands
 
 ```text
-verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
-verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
-verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
-    [--cubin ART]                                             the cubin S's arm loads, sent with the run
-verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
-
-A sweep of `points` and a timed `run` are research runs, each taking one GPU of a node through its `gpu-lease`.

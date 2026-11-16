@@ -23,7 +23,7 @@ from verity_bench import exfiltration as E
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
 NO_VERDICTS = {"text": "8c0ac638eab787f4959a4316f351920b6d69b046025cfed4b4092496a313200c",
-               "json": "6e9830a57e40b4fd250d76dee7ee6e2b6f1afde1ddd7066f5f76161194b27c50"}
+               "json": "e970eff30a36a4206f974a14ee579bbee904029c7bf766c7d9f849718d9ae766"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}

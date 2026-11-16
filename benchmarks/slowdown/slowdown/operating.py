@@ -6,7 +6,7 @@ the registry).
   known attack's (`Scenario.seconds`); the reference itself in `T_0 / (mfu_train Φ_total)` (`unencumbered`), and the
   unregistered leaves alone in `T_0 / (mfu_unreg ε_unreg Φ_total)`.
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what registered locations produce reaches the unregistered leaves only through
-  the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
+  the channels no attester reads (the network attester's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
 * **Incorrect outputs** (`incorrect.*`): a block SPOT lets go unchecked returns outputs the malicious developer

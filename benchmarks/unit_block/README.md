@@ -13,7 +13,7 @@ says `fits: false` with the refusal it would get. `--stage N` stages N instances
 word primitive, the first parameter's value in each from `--first`.
 
 ~~~text
-research run --on vy-nebius-cpu-6 --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
+research run --on NODE --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
   d=$(mktemp -d) && trap "rm -rf $d" EXIT &&
   .venv/bin/python benchmarks/unit_block/run.py GatherF32x50304_v1 --first 0,50303,50304,-1 --stage 4 --scratch "$d" --out "$OUT"'
 ~~~
