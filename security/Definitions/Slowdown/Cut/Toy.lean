@@ -11,7 +11,8 @@ Five one-bit gates: three unregistered inputs, `w` (gate 0), `x₀` and `x₁` (
 work `W` is that matmul alone: `N = 2` MACs and `O = 2` output wires, and `|C| = 2` computed gates. Each word carries
 its own value (`val`), and the arrays are `W`'s `w`-words and its `x`-words (`arrays`), which the matmul reads as the
 edge `(0, 1)` (`edge`). `P1` puts both computed gates in one block, which reads the three inputs; `P2` gives each its
-own, which reads two.
+own, which reads two. `dReg` is the same circuit with the three inputs registered, and `inputWords` its three input
+words.
 -/
 
 @[expose] public section
@@ -75,6 +76,12 @@ abbrev arrays : Fin 2 → Finset (Finset (Fin C.N)) := ![W.allW, W.allX]
 
 /-- The one matmul reads the two arrays, the edge `(0, 1)` of the complete graph on them. -/
 abbrev edge : Unit → Fin 2 × Fin 2 := fun _ => (0, 1)
+
+/-- The toy with its three input gates registered: a block reads nothing outside `θ`. -/
+abbrev dReg : RegisteredCircuit := .ofCircuit C {0, 1, 2} (by decide)
+
+/-- The toy's three input words, `{w}`, `{x₀}` and `{x₁}`, one gate each. -/
+abbrev inputWords : Finset (Finset (Fin C.N)) := {{0}, {1}, {2}}
 
 /-- One block holding both computed gates. -/
 def P1 : Partition C 1 where

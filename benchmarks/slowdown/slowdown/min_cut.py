@@ -1,6 +1,6 @@
 """The min-cut bound's arithmetic: the one place that computes Lean's `HE` and `HEShared`, the bound's two statements,
-and `HECharged`, the count with some blocks charged whole (`HE`, `HE_SHARED` and `HE_CHARGED` below are their full
-names).
+`HECharged`, the count with some blocks charged whole, and `HEChargedUntied`, that count over a monitoring period
+with some words untied (`HE`, `HE_SHARED`, `HE_CHARGED` and `HE_CHARGED_UNTIED` below are their full names).
 
 Standard library only, and it imports nothing of this package, so another benchmark loads it by path. Each function is
 one side of an inequality those statements conclude, or that inequality solved for one of its terms, and says which.
@@ -74,11 +74,17 @@ HE_CHARGED = f"{AREA}.Guarantees.HECharged"
 #: `HECharged`'s count with (H) asked of each block of `G` at what that block reads, a `β_x` a block: no guarantee
 #: states it
 HE_ROWS = "draft:count-hardness-a-block"
-#: what `bound_charged` takes beside (H) and (E), neither of them a Lean statement: that a monitoring period's accepted
-#: execution phases hold at most its `untied` words between them, fed by at most its `untied_macs` MACs, at one δ (the
-#: SPOT's bound, a node's: over the accepted execution phases of one node, however long the period, and over
-#: several nodes their sum); and that an untied word is at most `word` fresh bits, in the one block that reads it
-UNTIED_WORDS, WORD_BITS = "draft:period-untied-words", "draft:untied-word-bits"
+#: that count over a monitoring period whose untied words its blocks read as fresh input, the statement
+#: `bound_charged` computes: at most `U / (w + 1)` blocks charged, `T + word · U` read and
+#: `S + word (2 k + word · w) min(U, |G| w)` in squares, on the outcomes where at most `U` words are untied
+HE_CHARGED_UNTIED = f"{AREA}.Guarantees.HEChargedUntied"
+#: what `HEChargedUntied` takes beside (H) and (E): that a monitoring period is accepted with more than its `untied`
+#: words untied at most at one δ (the SPOT's bound, a node's: over the accepted execution phases of one node, however
+#: long the period, and over several nodes their sum), an open premise no Lean proves; and that each untied word is
+#: at most `word` gates, read by at most one block, and at most `w` of them in a block that isn't charged, a domain
+#: hypothesis of the count, from which it proves each block's reads
+UNTIED_WORDS = "Slowdown.Assumptions.PeriodUntiedAtMost"
+WORD_BITS = f"{AREA}.UntiedWords"
 #: (H)'s `β` for an activation by block size, rows `(k, β)` in bits, `k` rising (`premise.training-cut-hardness.beta`)
 BETA: tuple[tuple[float, float], ...] = tuple(
     (float(k), float(b)) for k, b in _ROWS["training-cut-hardness"]["beta"]["value"])
@@ -413,10 +419,10 @@ class Charged:
     #: those MACs' gates as a plain circuit, at most, and no more than the blocks' own: the pooled total over the
     #: period, in the gates `c` counts
     gates: float
-    #: the statement: `HECharged`, which asks (H) once, or `HE_ROWS`, the count with a `β_x` a block
+    #: the statement: `HEChargedUntied`, which asks (H) once, or `HE_ROWS`, the count with a `β_x` a block
     statement: str
-    #: what it takes that no Lean statement proves: (H), (E), the period's bound on the untied words and an untied
-    #: word's bits
+    #: what it takes that no Lean statement proves: (H), (E), the period's limit on its untied words and that an untied
+    #: word is at most `word` gates with one reader
     premises: tuple[str, ...]
     k: float
     #: the budget of a block that isn't charged, the most it reads: `k + word · min(w, most)`. It is where (H) is
@@ -471,7 +477,7 @@ class Charged:
                     f"(H)'s β for an activation ({HARDNESS}) is stated up to k = {BETA[-1][0]:.4g}")
         if self.statement == HE_ROWS:
             count = (f"the count with (H) asked of each block at what it reads, a β_x a block ({HE_ROWS}), which no "
-                     f"guarantee states ({HE_CHARGED} asks (H) once)")
+                     f"guarantee states ({HE_CHARGED_UNTIED} asks (H) once)")
             hardness = (f"at what each block reads, up to k = {self.budget:.4g} bits, β_w = {self.beta_w:.4g} and "
                         f"β_x = {self.beta_x:.4g} bits a value there")
         else:
@@ -481,13 +487,14 @@ class Charged:
         return (f"{count}, at T = {self.total:.4g} bits and Q = {self.squares_by_q:.4g}, with {threshold}; under "
                 f"(H) ({HARDNESS}) {hardness}, and (E) ({EXPORTS}) at "
                 f"b = {self.b:.4g} bits an output, conjectures one set of gates refutes, both at the circuit with "
-                f"the untied words as inputs, whichever words they are; and two premises no Lean statement gives: "
-                f"the period's accepted execution phases hold at most {self.untied:.6g} untied words between them, "
-                f"at most {self.most:.6g} of them in one block, fed by at most {self.untied_macs:.6g} MACs, which "
-                f"are charged whole ({UNTIED_WORDS}), and an untied word is at most {self.word:.4g} fresh bits in "
-                f"the one block that reads it ({WORD_BITS}); the work's structure, the fewest gates of one of its "
-                "MACs among it, is its caller's to state; the work no block is credited for is in no term here "
-                "(`capped`)")
+                f"the untied words as inputs, whichever words they are; that the period is accepted with more than "
+                f"{self.untied:.6g} untied words between its accepted execution phases at most at one δ "
+                f"({UNTIED_WORDS}, an open premise no Lean proves); and that an untied word is at most "
+                f"{self.word:.4g} gates, read by one block, at most {self.most:.6g} of them in one block "
+                f"({WORD_BITS}, a domain hypothesis of the count); the untied words are fed by at most "
+                f"{self.untied_macs:.6g} MACs, which are charged whole, a count of the work's shape its caller "
+                "states, as is the fewest gates of one of its MACs; the work no block is credited for is in no term "
+                "here (`capped`)")
 
 
 def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, untied_macs: float,
@@ -521,13 +528,13 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     * one `β_x`, with the threshold `w`: (H) is asked once, of every block that isn't charged, at `k + word · w`.
       `w` is fixed before the period and is a parameter of the figure, never left out of it; a block over it is
       charged at its whole work, which takes `c` and `mac_gates`, the circuit's with every word tied. It is
-      `HECharged` at the best `G`;
+      `HEChargedUntied` at the best `G`;
     * one `β_x` at the top budget, no block charged: no threshold, and nothing is added to the policy's parameters, but
-      (H) is asked of every block where the block that reads the most untied words reads. It is `HECharged` at `G`
-      every block;
+      (H) is asked of every block where the block that reads the most untied words reads. It is `HEChargedUntied`
+      at `G` every block;
     * a `β_x` a block, no threshold (`rows`): no block is charged, nothing is added, and each block is asked (H) at
       the table's row for what it reads itself, so (H) is taken at every row up to the most a block reads. No
-      guarantee states this count (`HE_ROWS`): it is not `HECharged`, which asks (H) once.
+      guarantee states this count (`HE_ROWS`): it is not `HEChargedUntied`, which asks (H) once.
 
     All take the bound on the period's untied words as a premise, and a figure for more nodes than were measured is
     scaled from one node's, which its caller says.
@@ -550,9 +557,9 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
 
     Which blocks are charged is not the caller's to say, so each term is taken at its most: `H` at every block that
     can be charged, and `Q` at `|G| = blocks`, none charged. The count holds of any partition and any set of its
-    blocks; that the partition a period's audit reads, fixed before its coins, has so few blocks over `w` is that
-    audit's to give, a join the guarantee that reads this bound owes and nothing here states. The MACs `M'` of the
-    count then satisfy
+    blocks, and with each untied word read by one block at most `⌊untied / (w + 1)⌋` blocks read more than `w` of
+    them (`HEChargedUntied`'s third conclusion), so the partition a period's audit reads has no more. The MACs `M'` of
+    the count then satisfy
     `M' ≤ H + macs_on(T, Q, (O / N) M', 1, b)`, which is solved for `M'`; the period's MACs are `M = untied_macs + M'`,
     their gates as a plain circuit `M · size / N` (`Charged.gates`, the pooled total, no more than the blocks' own),
     and the slowdown is the blocks' gates over those, `blocks · c / (M · size / N)`, at least 1. With no untied word
@@ -580,7 +587,7 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     under = most <= w or (most < math.inf and math.floor(most) <= w)
     charged = 0 if under else min(blocks, math.floor(untied / (w + 1)))
     total = blocks * k + word * untied
-    statement, premises = HE_ROWS if rows else HE_CHARGED, (HARDNESS, EXPORTS, UNTIED_WORDS, WORD_BITS)
+    statement, premises = HE_ROWS if rows else HE_CHARGED_UNTIED, (HARDNESS, EXPORTS, UNTIED_WORDS, WORD_BITS)
     if beta_x is None or N <= 0 or blocks <= 0:
         return Charged(1.0, blocks, untied, untied_macs, w, most, word, charged, math.nan, math.inf, blocks * c,
                        statement, premises, k, budget, total, math.inf, mac_gates or math.nan, beta_w, beta_x, b)

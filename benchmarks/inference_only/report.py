@@ -283,15 +283,16 @@ def tied_lines(d: dict[str, Any], file: str, words_of: Mapping[str, str] = TYPED
                   [(r["where"], r["period"], r["reading"], _g(r["charged"]), f"{r['number']:,.1f}",
                     f"{r['limit']:,.1f}", _g(r["gates"]["training_at_the_limit"]), _g(100 * r["share"]) + "%")
                    for r in d["periods"]], 3, "    ")
-    charged, rows = (STANDING[lean.status(x)] for x in (min_cut.HE_CHARGED, min_cut.HE_ROWS))
+    charged, rows = (STANDING[lean.status(x)] for x in (min_cut.HE_CHARGED_UNTIED, min_cut.HE_ROWS))
     out += [
         f"  proved    {min_cut.HE} ({STANDING[lean.status(min_cut.HE)]}), the count one block's number is solved "
-        f"from. A period's count is {min_cut.HE_CHARGED} ({charged}), and with a β_x a block {min_cut.HE_ROWS} ({rows}). "
-        + words_of["limit"],
-        f"  premise   {words_of['premise']} the bound on a period's untied words ({min_cut.UNTIED_WORDS}) and an untied word's bits "
-        f"({min_cut.WORD_BITS}), neither a Lean statement; (H) {min_cut.HARDNESS} and (E) {min_cut.EXPORTS}, conjectures, "
-        "at the circuit with the untied words as inputs; a threshold fixed before the period, with so few blocks over "
-        "it in the partition the period's audit reads; and the work's structure, as above",
+        f"from. A period's count is {min_cut.HE_CHARGED_UNTIED} ({charged}), and with a β_x a block {min_cut.HE_ROWS} "
+        f"({rows}). " + words_of["limit"],
+        f"  premise   {words_of['premise']} the limit on a period's untied words ({min_cut.UNTIED_WORDS}, an open "
+        f"premise no Lean proves) and that an untied word is at most its bits' gates, read by one block "
+        f"({min_cut.WORD_BITS}, a domain hypothesis of the count); (H) {min_cut.HARDNESS} and (E) {min_cut.EXPORTS}, "
+        "conjectures, at the circuit with the untied words as inputs; a threshold fixed before the period; and the "
+        "work's structure, as above",
         "  scaled    every row: the blocks are a fleet's at its data sheet's rate, the fleets' sizes the census's; a "
         "node's bound on its untied words is one execution phase's, scaled by the blocks the node serves in a phase; "
         "the uncredited share is taken as every block's; and one block may be untied whole",

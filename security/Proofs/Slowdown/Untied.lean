@@ -2,6 +2,7 @@ module
 
 public import Definitions.ResourceAccounting.Actual
 public import Definitions.InferenceOnly
+public import Definitions.Slowdown.Untied
 public import Proofs.Slowdown.Cut
 public import Mathlib.Data.Finset.Sort
 public import Mathlib.Logic.Function.Basic
@@ -79,11 +80,6 @@ open InferenceOnly
 namespace Verity
 
 open Finset
-
-/-- `d` **untied at `E`**: `d`'s circuit, inference blocks, proof blocks and positions, with `E`'s gates taken out of
-`θ`. -/
-@[reducible] def RegisteredCircuit.untie (d : RegisteredCircuit) (E : Finset (Fin d.D.N)) : RegisteredCircuit :=
-  .ofOutput ⟨d.D, d.θ \ E, fun g hg => d.θ_input g (mem_sdiff.1 hg).1, d.n, d.𝓘, d.m, d.P, d.refines, d.pos⟩
 
 /-- `C` with the gates `T` as input gates that read nothing. Every other gate, every width and every other operation
 is `C`'s. -/
@@ -334,10 +330,6 @@ namespace Slowdown.Cut.SecurityProofs.Untied
 
 open Verity Finset
 
-/-- The words of `𝒲` that `R` reads: those with a gate in `in(R)`. -/
-def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
-  𝒲.filter fun W => ¬ Disjoint W (C.into R)
-
 /-- The gates of `𝒲`'s words that `R` reads lie in the words of `𝒲` it reads. -/
 theorem into_inter_biUnion_subset (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) :
     C.into R ∩ 𝒲.biUnion id ⊆ (wordsRead C 𝒲 R).biUnion id := by
@@ -453,10 +445,6 @@ theorem isCK_untie {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {c k 
     (hw : ∀ u, (wordsRead d.D 𝒲 (P.gates u)).card ≤ w) :
     Partition.IsCK (d.untie (𝒲.biUnion id)) P c (k + b * w) :=
   ⟨hP.boolean, hP.card, readsAtMost_untie d P 𝒲 h𝒲 hP.reads hw⟩
-
-/-- Each word of `𝒲` is read by at most one block of `P`. -/
-def OneReader {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N))) : Prop :=
-  ∀ W ∈ 𝒲, ∀ u v, ¬ Disjoint W (C.into (P.gates u)) → ¬ Disjoint W (C.into (P.gates v)) → u = v
 
 /-- The blocks of `P` that read more than `w` words of `𝒲`: the blocks charged whole at the threshold `w`. -/
 def readersOver {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N))) (w : ℕ) : Finset (Fin m) :=

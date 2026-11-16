@@ -369,9 +369,9 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
         assert (each["reading"], each["statement"]) == ("a β_x a block, no threshold", min_cut.HE_ROWS)
         assert in_k["reading"].endswith(f", {T.IN_K}") and in_k["uncredited_words_in_k"] and in_k["k"] == k_words
         assert in_k["number"] < best["number"] and in_k["limit"] < best["limit"]
-        assert best["statement"] == top["statement"] == in_k["statement"] == min_cut.HE_CHARGED
+        assert best["statement"] == top["statement"] == in_k["statement"] == min_cut.HE_CHARGED_UNTIED
     # each statement prints with the standing the locks give it, and no limit is called proved
-    standing = {x: report.STANDING[lean.status(x)] for x in (min_cut.HE, min_cut.HE_CHARGED, min_cut.HE_ROWS)}
+    standing = {x: report.STANDING[lean.status(x)] for x in (min_cut.HE, min_cut.HE_CHARGED_UNTIED, min_cut.HE_ROWS)}
     assert standing[min_cut.HE] == "proved in the lock" and standing[min_cut.HE_ROWS] == "no Lean statement"
     for word in ("  proved    ", "  premise   ", "  scaled    ", *(f"{x} ({y})" for x, y in standing.items()),
                  "No limit is proved", min_cut.UNTIED_WORDS, min_cut.WORD_BITS,

@@ -137,10 +137,10 @@ it at no block size (`bounds.lock_only`, `data/premises.toml`; `scenario._combin
 and listed, labeled draft (`Estimate.drafts`). A cut's premises and the structure's (`draft:no-straddle`) are not a
 class's own. `--set bounds.lock_only=false` admits every bound whose premises aren't refuted at a block.
 
-**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
-(`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
-that inequality solved for one term; it is standard library only, so another benchmark loads it by path. `HECharged`
-is stated and no lock lists a proof of it. A work of `N` MACs with `O` output wires needs at
+**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared`, `HECharged` and
+`HEChargedUntied` (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`, `min_cut.HE_CHARGED_UNTIED`), each
+function one side of an inequality they conclude or that inequality solved for one term; it is standard library only,
+so another benchmark loads it by path. The lock lists a proof of each of the four. A work of `N` MACs with `O` output wires needs at
 least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
 under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
 
@@ -162,32 +162,33 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   into products and call it; `tests/test_one_slowdown.py` at the root holds every other file away from `bound`.
 - `min_cut.bound_charged(c, k, n, blocks=…, untied=…, untied_macs=…, w=…, N=…, O=…, size=…)` is the bound over a
   monitoring period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word`
-  fresh bits in the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a
-  set of blocks with the rest charged whole: `N ≤ H + T + ½ √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks
-  read between them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output
-  wires and `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. The count is
-  taken with the untied words as inputs, so the MACs that feed them, at most `untied_macs`, are added whole. A block
-  that reads more than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by
-  default there is none and no block is charged. `most` is the most untied words one block reads, where its caller
-  states one: below the threshold no block is charged and (H) is taken there. It gives the slowdown, the period's
-  pooled total in gates (`gates`, the most gates of the work the period's blocks hold) and its share of the blocks'
-  own, the blocks charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it
-  rests on: `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement
-  gives, the period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is
-  `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block count. A node's bound on its
-  untied words is a share of one execution phase's ticket weight, so nodes faster than the measured one take its
-  bound scaled by their rate; where the untied words are then as many as the blocks, `w = 0` charges every block and
-  gives 1, and the figure states its threshold. The count holds of any partition and any set of its blocks, and the
-  caller picks neither: that the partition a period's audit reads has so few blocks over `w` is a join the guarantee
-  that reads the bound owes. `O` is wires, values times their width, and a work that reads a registered table by a
-  few fresh gates leaves the matmuls that read it out. Its three readings are quoted side by side, each under its
-  premise's name (`Charged.reading`), never one as another:
+  fresh bits in the one block that reads it. It computes Lean's `HEChargedUntied` (`min_cut.HE_CHARGED_UNTIED`),
+  `HECharged`'s count over a set of blocks with the rest charged whole, over the period's untied words: `N ≤ H + T + ½
+  √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks read between them, `S` the squares of what the blocks that
+  aren't charged read, summed, `O` the whole work's output wires and `H` what the charged blocks hold, each at most
+  its gates over the fewest gates of a MAC. The count is taken with the untied words as inputs, so the MACs that feed
+  them, at most `untied_macs`, are added whole. A block that reads more than the threshold `w` of the untied words is
+  charged whole; `w` is fixed before the period, and by default there is none and no block is charged. `most` is the
+  most untied words one block reads, where its caller states one: below the threshold no block is charged and (H) is
+  taken there. It gives the slowdown, the period's pooled total in gates (`gates`, the most gates of the work the
+  period's blocks hold) and its share of the blocks' own, the blocks charged at most, the MACs they hold and their
+  share of the blocks and of the MACs, and what it rests on: `HEChargedUntied`, (H) at the most a block that isn't
+  charged reads, (E), the period's limit on its untied words, a node's (`min_cut.UNTIED_WORDS`, an open premise no
+  Lean proves), and that an untied word is at most `word` gates read by one block (`min_cut.WORD_BITS`, a domain
+  hypothesis of the count). With no untied word it is `bound`'s slowdown. `best_w` is the threshold at which it is
+  largest for a block count. A node's bound on its untied words is a share of one execution phase's ticket weight, so
+  nodes faster than the measured one take its bound scaled by their rate; where the untied words are then as many as
+  the blocks, `w = 0` charges every block and gives 1, and the figure states its threshold. The count holds of any
+  partition and any set of its blocks, and the caller picks neither: with each untied word read by one block, at most
+  `untied / (w + 1)` blocks read more than `w` of them, which `HEChargedUntied` concludes. `O` is wires, values times
+  their width, and a work that reads a registered table by a few fresh gates leaves the matmuls that read it out. Its
+  three readings are quoted side by side, each under its premise's name (`Charged.reading`), never one as another:
 
   | reading | (H) is asked | fixed before the period | a block over it | the count |
   |---|---|---|---|---|
-  | one `β_x`, with the threshold `w` | once, at `k + word · w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | `HECharged` at the best set of blocks |
-  | one `β_x` at the top budget, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HECharged` at every block |
-  | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HECharged` asks (H) once |
+  | one `β_x`, with the threshold `w` | once, at `k + word · w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | `HEChargedUntied` at the best set of blocks |
+  | one `β_x` at the top budget, no block charged | once, where the block that reads the most untied words reads | nothing | no block is charged | `HEChargedUntied` at every block |
+  | a `β_x` a block, no threshold (`rows=True`) | of each block at the table's row for what it reads | nothing | no block is charged | `min_cut.HE_ROWS`, which no guarantee states: `HEChargedUntied` asks (H) once |
 
 - `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
   `1 / (uncredited + 1 / slowdown)`: the unregistered share of `theorem.multiple_bound`, which no count covers. A figure of

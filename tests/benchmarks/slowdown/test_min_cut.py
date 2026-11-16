@@ -184,6 +184,10 @@ WORK_ON = "noncomputable def workHEOn (T S : ℕ) (q b O : ℝ) : ℝ := T + √
 HE_CHARGED = ("(W.N : ℝ) ≤ ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) + workHEOn T S (βw * βx) b W.O ∧ "
               "((∀ s, γ ≤ (W.mac s).card) → (∀ u ∈ Gᶜ, (P.gates u).card ≤ c) → "
               "(γ : ℝ) * W.N ≤ (Gᶜ.card : ℝ) * c + γ * workHEOn T S (βw * βx) b W.O)")
+#: `HEChargedUntied`'s reads at `U` untied words of at most `z` gates, at most `w` in a block of `G`, and its count of
+#: the charged blocks, which `bound_charged` takes at `z = word`
+HE_CHARGED_UNTIED = ("workHEOn (T + z * U) (S + z * (2 * k + z * w) * min U ((G x).card * w)) (βw * βx) b (W x).O",
+                     "((∀ u ∈ (G x)ᶜ, w < (wordsRead d.D (untied x) (P.gates u)).card) → (w + 1) * (G x)ᶜ.card ≤ U)")
 
 
 def work_he_on(t, s, q, b, o):
@@ -191,18 +195,21 @@ def work_he_on(t, s, q, b, o):
     return t + math.sqrt(s * o / q) / 2 + math.sqrt(s * t / (q * b)) / 2
 
 
-def test_the_charged_count_is_the_lean_statement_which_no_lock_lists_a_proof_of():
+def test_the_charged_count_is_the_lean_statement_whose_proof_the_lock_lists():
     """`macs_on` against `workHEOn`, transcribed from the text pinned here, and `HECharged`'s two bounds as its file
     concludes them: `N` is at most the MACs the charged blocks hold whole and `workHEOn`, and with MACs of at least
     `γ` gates and charged blocks of at most `c`, `γ N ≤ x c + γ workHEOn`, which `bound_charged` solves at
-    `x c / γ`. At every block under one budget it is `HE`'s count. The statement is in Lean and no lock lists a proof of
-    it, so the lock records neither it nor `workHEOn`: their text is read from the files that define `workHE` and
-    state `HE`, where they are. The period's bound on the untied words and an untied word's bits are no Lean
-    statement."""
+    `x c / γ`. At every block under one budget it is `HE`'s count. The statement is in Lean and the lock lists its proof.
+    Its text and `workHEOn`'s are read from the files that define `workHE` and state `HE`, where they are. The
+    period's count, `HEChargedUntied`, is proved too, and the lock lists its period's limit and its words' gates as
+    premises it takes."""
     assert WORK_ON in lean_text(f"{min_cut.AREA}.workHE") and HE_CHARGED in lean_text(min_cut.HE)
     assert f"def {min_cut.HE_CHARGED.rsplit('.', 1)[1]} : Prop :=" in lean_text(min_cut.HE)
-    assert lean.status(min_cut.HE_CHARGED) == "absent"
-    assert lean.status(min_cut.UNTIED_WORDS) == lean.status(min_cut.WORD_BITS) == "draft"
+    assert lean.status(min_cut.HE_CHARGED) == "proved"
+    assert lean.status(min_cut.HE_CHARGED_UNTIED) == "proved"
+    assert all(x in lean_text(min_cut.HE) for x in HE_CHARGED_UNTIED)
+    assert lean.premises(min_cut.HE_CHARGED_UNTIED)[min_cut.UNTIED_WORDS] == "open"
+    assert lean.premises(min_cut.HE_CHARGED_UNTIED)[min_cut.WORD_BITS] == "domain"
     for (_, o, _, _, k, bw, bx, b), m in itertools.product(POINTS, (1.0, 7.0, 1e6)):
         q = bw * bx
         for t, sq in ((m * k, m * k * k), (3 * m * k, 5 * m * k * k), (0.0, 0.0)):
@@ -280,9 +287,9 @@ def test_with_no_untied_word_the_charged_bound_is_the_bounds_and_with_every_bloc
     assert squares(none) == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * UNTIED)
     assert none.slowdown == charged(54_300, UNTIED).slowdown > charged(54_300, UNTIED - 1).slowdown
     assert charged(54_300, UNTIED).charged == 0 < charged(54_300, UNTIED - 1).charged == 1
-    assert none.statement == min_cut.HE_CHARGED
+    assert none.statement == min_cut.HE_CHARGED_UNTIED
     assert none.premises == (min_cut.HARDNESS, min_cut.EXPORTS, min_cut.UNTIED_WORDS, min_cut.WORD_BITS)
-    assert all(x in none.rests_on for x in (*none.premises, min_cut.HE_CHARGED, "no threshold"))
+    assert all(x in none.rests_on for x in (*none.premises, min_cut.HE_CHARGED_UNTIED, "no threshold"))
     assert "w = 20435, fixed before the period" in charged(54_300, 20_435).rests_on
 
 
@@ -419,7 +426,7 @@ def test_the_period_at_the_served_class_under_each_reading():
         assert two.charged == pytest.approx(over, rel=1e-5) and none.charged == 0, blocks
         assert two.slowdown == pytest.approx(at_w, abs=0.05) and none.slowdown == pytest.approx(at_none, abs=0.05)
         assert f"w = {w}" in two.rests_on and "no threshold" in none.rests_on
-        assert two.statement == none.statement == min_cut.HE_CHARGED and "once, at k = " in two.rests_on
+        assert two.statement == none.statement == min_cut.HE_CHARGED_UNTIED and "once, at k = " in two.rests_on
         assert (two.reading, none.reading, rows.reading) == (
             f"one β_x, with the threshold w = {w}", "one β_x at the top budget, no block charged",
             "a β_x a block, no threshold")

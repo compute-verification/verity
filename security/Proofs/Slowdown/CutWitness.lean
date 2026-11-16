@@ -346,7 +346,7 @@ gates outside `θ` and the untied word has one reader. At the untied circuit, `d
 costs 1 and every `k`; (E) holds and the values are distinct. (H) at `d` fails at every `k` and all positive costs:
 the work multiplies by the untied word, whose `κ` at `d` is 0. -/
 theorem toyR_premises :
-    ReadsAtMost dR Toy.P1 2 ∧ Untied.OneReader Toy.P1 ({wordR} : Finset (Finset (Fin Toy.C.N))) ∧
+    ReadsAtMost dR Toy.P1 2 ∧ OneReader Toy.P1 ({wordR} : Finset (Finset (Fin Toy.C.N))) ∧
       (∀ k, Assumptions.Hardness (dR.untie (({wordR} : Finset (Finset (Fin Toy.C.N))).biUnion id)) Toy.arrays Toy.val
         ![1, 1] k) ∧
       Assumptions.Exports Toy.W 1 ∧ ValuesInjective Toy.W Toy.val ∧ NoSharedPair Toy.W Toy.val ∧
@@ -364,10 +364,10 @@ theorem toyR_bound :
     (Toy.W.N : ℝ) ≤ (∑ u ∈ (univ : Finset (Fin 1))ᶜ, ∑ a, (inBlock Toy.P1 Toy.W u a).card : ℕ) +
         (1 * 2 + 1 * ({wordR} : Finset (Finset (Fin Toy.C.N))).card : ℕ) +
       1 / 2 * √((∑ u : Fin 1,
-            (2 + 1 * (Untied.wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
+            (2 + 1 * (wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
           outOn Toy.P1 Toy.W univ / (1 * 1)) +
       1 / 2 * √((∑ u : Fin 1,
-            (2 + 1 * (Untied.wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
+            (2 + 1 * (wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
           (1 * 2 + 1 * ({wordR} : Finset (Finset (Fin Toy.C.N))).card : ℕ) / (1 * 1 * 1)) := by
   obtain ⟨hk, hone, hH, hE, hval, hshare, -⟩ := toyR_premises
   exact Untied.bound_untie_he dR Toy.P1 Toy.W Toy.val (b := 1) ({wordR} : Finset (Finset (Fin Toy.C.N))) (by decide) hk
