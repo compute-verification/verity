@@ -8,7 +8,8 @@ one PR, `research.queue._message`) against its first parent, and the other commi
 them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
 ratchet is a shrink-only allowlist under ``tests/adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
-and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
+and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared, the change's copy read wherever
+the change moves the base's (``git diff -M``), out of the lint directories too; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
 integration's ruff lint to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
 ``adapters/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and its counted lints (``COUNTED``)
@@ -59,7 +60,8 @@ when:
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
   lowered under a tree that its base's list covered is one.  A file the change renames (``git diff -M``) is its old
   path's file, so a move adds none of the sites its base holds there past its list, which are named at the old path
-  (`at_paths`).  In a temporary worktree of the change's top, each
+  (`at_paths`); a counted lint's sites in it are those of the base's text where the change puts it (`moved_sites`), so a
+  lint whose terms or reach depend on the path finds none that the move alone brings in.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -99,7 +101,7 @@ the change doesn't touch is never linted.
 
 Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
 counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
-new sites and the lint's fix.  Of a file's rise, the sites the other files it changes lose are no new text and not
+new sites and the lint's fix.  A renamed file's before is the base's text counted at its new path.  Of a file's rise, the sites the other files it changes lose are no new text and not
 growth, where the change's list records the file's sites: each is known by what it is and the stripped line it stands
 on, as many as those files' counts fall by, so a class split out of a file takes its sites with it and pays for no new
 one.  Its direct environment reads (configuration is read in one place), unless the file is a
@@ -397,13 +399,14 @@ def count(entry: object) -> int:
     return n if isinstance(n, int) else 1
 
 
-def ratchets(rev: str) -> tuple[dict[str, list], dict[str, str], list[str]]:
-    """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``."""
+def ratchets(rev: str, moved: Iterable[str] = ()) -> tuple[dict[str, list], dict[str, str], list[str]]:
+    """({slug: entries}, {slug: path}, the ratchet-named files that aren't readable allowlists) at ``rev``, with ``moved``,
+    the paths a change moves its base's ratchets to, wherever they are."""
     entries: dict[str, list] = {}
     paths: dict[str, str] = {}
     bad: list[str] = []
     listed = git("ls-tree", "-r", "-z", "--name-only", rev, "--", TESTS, f"{REPO_LINT}/").split("\0")
-    for path in sorted(p for p in listed if is_ratchet(p)):
+    for path in sorted({p for p in listed if is_ratchet(p)} | set(moved)):
         try:
             doc = json.loads(git("show", f"{rev}:{path}"))
         except ValueError:
@@ -672,10 +675,13 @@ def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
     return [(n, lines[n - 1].strip()) for n in sorted(rows)]
 
 
-def added_rows(lo: str, hi: str, path: str) -> set[int]:
-    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds."""
+def added_rows(lo: str, hi: str, path: str, was_at: str | None = None) -> set[int]:
+    """The line numbers of ``path`` at ``hi`` that its diff from ``lo`` adds, from ``was_at`` there when the change renames
+    it."""
     rows: set[int] = set()
-    for m in HUNK.finditer(git("diff", "--no-renames", "-U0", lo, hi, "--", path)):
+    diff = (git("diff", "-U0", f"{lo}:{was_at}", f"{hi}:{path}") if was_at and was_at != path
+            else git("diff", "--no-renames", "-U0", lo, hi, "--", path))
+    for m in HUNK.finditer(diff):
         rows.update(range(int(m[1]), int(m[1]) + int(m[2] or 1)))
     return rows
 
@@ -827,11 +833,11 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
     counts = Counter((f, rule) for f, rule, *_ in now)
     grown = sorted(k for k in counts if counts[k] > was[k])
     named = []
+    old = {path: was_at for path, was_at, *_ in sources}
     for f, rule in grown:
-        fresh = added_rows(c.lo, c.hi, f)
+        fresh = added_rows(c.lo, c.hi, f, old[f])
         sites = sorted((line not in fresh, line, message) for g, r, line, message in now if (g, r) == (f, rule))
         named += [(f, line, f"{f}:{line} {rule} {message}") for _, line, message in sites[:counts[f, rule] - was[f, rule]]]
-    old = {path: was_at for path, was_at, *_ in sources}
     listed_before, listed = repo_list(c.lo), repo_list(c.hi)
     unmoved = []
     for f, rule in sorted(k for k in counts if counts[k] <= was[k]):
@@ -902,7 +908,9 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     """The base's counted lint ``slug``'s count of each ``*.py`` file the change adds or modifies that the lint holds, before
     and after, per file as that lint counts (None when the base has no such lint): the files it ``read``; each site the change
     adds, ``file:line what`` (``new``); each file whose count ``grown``, with its counts; and each list entry a rename leaves
-    behind (``unmoved``).  A file the lint exempts (``is_registry``: the environment-read lint's settings registries) is
+    behind (``unmoved``).  A renamed file's before is the base's text counted where the change puts it, so a lint whose
+    terms or reach depend on the path finds no site the move brings in that the base's text didn't hold.  A file the lint
+    exempts (``is_registry``: the environment-read lint's settings registries) is
     exempt as the change's base marks it, so a mark that comes with the sites it would exempt doesn't.  A file's rise is
     growth less the sites the files whose counts fall lose (each by what it is and the stripped line it stands on, as
     many as those files fall by), where the change's list allows the file its sites.  Of a grown file's sites, those on
@@ -931,7 +939,7 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     for f, o, lo, hi in sources:
         if not exempt(f, marked_before):
             before, after = (data[b].decode("utf-8", errors="replace") if b else "" for b in (lo, hi))
-            read.append((f, o, before, after, count(before, o) if lo else [], count(after, f)))
+            read.append((f, o, before, after, count(before, f) if lo else [], count(after, f)))
     lost: Counter = Counter()
     room = 0
     for _, _, before, after, was, now in read:
@@ -953,7 +961,7 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
                 else:
                     came, note = Counter(), f"{note}, which {listed_at} doesn't record: it allows {allows} of the file's"
         if over > 0:
-            fresh, lines = added_rows(c.lo, c.hi, f), after.split("\n")
+            fresh, lines = added_rows(c.lo, c.hi, f, o), after.split("\n")
             found = sorted((line not in fresh, came[what, lines[line - 1].strip()] > 0, line, what) for line, what in now)
             new += [(f, line, f"{f}:{line} {what}") for *_, line, what in found[:over]]
             out["grown"].append(f"{f} {len(was)} -> {len(now)}{note}")
@@ -1372,6 +1380,30 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
 
 
+def moved_sites(c: Change, found: list[str], to: dict[str, str], had: list[str]) -> list[str]:
+    """For each counted lint's count at a file the change renames (``to``: old path to new) in ``found``, where ``had``, the
+    base's run on its own tree, names none, the base's own count there, as that lint names it (``lint: file: N found, 0 allowed``, then ``lint: file:line what`` for each site):
+    the base's text of the file, counted by the base's lint where the change puts it.  A lint whose terms or reach depend on
+    the path (the retired terms a row keeps in one directory) counts a moved file anew, and what it counts is the base's
+    text, which the move didn't write."""
+    back = {n: o for o, n in to.items()}
+    named = {s: (sites, noun) for s, sites, noun in COUNTED}
+
+    def counts(vs: list[str]) -> set[tuple[str, str]]:
+        return {(v.partition(": ")[0], m[1]) for v in vs if (m := SITE.match(v)) and not m[2] and COUNT.search(v)}
+
+    out = []
+    for s, f in sorted(counts(found) - counts(had)):
+        if s not in named or f not in back or (lint := counted_lint_at(c.lo, s, *named[s])) is None:
+            continue
+        holds, count = counter(lint, named[s][0])
+        if not holds(f):
+            continue
+        sites = count(git("show", f"{c.lo}:{back[f]}"), f)
+        out += [f"{s}: {f}: {len(sites)} found, 0 allowed"] + [f"{s}: {f}:{line} {what}" for line, what in sites]
+    return out
+
+
 def renamed(c: Change) -> dict[str, str]:
     """{old path: new path} of each file the change renames (``git diff -M``)."""
     fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", c.lo, c.hi).split("\0")
@@ -1439,10 +1471,11 @@ def judge(c: Change, base: str, every: bool = False) -> None:
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:
         before, was_at, _ = ratchets(c.lo)
-        after, now_at, bad = ratchets(c.hi)
+        to = renamed(c)
+        after, now_at, bad = ratchets(c.hi, (to[p] for p in was_at.values() if p in to))
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        moved = {new: old for old, new in renamed(c).items()}
+        moved = {new: old for old, new in to.items()}
         placed_before = carried(before, moved)
         grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
         uncalled, public = public_callers(c)
@@ -1469,6 +1502,7 @@ def judge(c: Change, base: str, every: bool = False) -> None:
                 repo = frozenset(PurePosixPath(p).stem.removeprefix("test_")
                                  for p in git("ls-tree", "--name-only", c.lo, f"{REPO_LINT}/").splitlines())
                 at_base = at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]), to, repo)
+                at_base += moved_sites(c, found, to, at_base)
                 inherited, new = beyond(found, at_base)
                 inherited = at_paths(inherited, {n: o for o, n in to.items()}, repo)
                 had, found = set(at_base) | (set(found) - set(new)), new
