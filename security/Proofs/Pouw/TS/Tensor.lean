@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.TS
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The tensor slots and the output count
@@ -16,9 +16,9 @@ T1, its tightness and Lemma 2's count (EPS1-TENSOR).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Finset
+open ResourceAccounting.TS Finset
 
 /-- Every form writes at most `ρ_T` slots a pipe cycle. -/
 theorem div_le_rhoT {ι : Type} [Fintype ι] (w c : ι → ℕ) (i : ι) : (w i : ℝ) / c i ≤ rhoT w c :=
@@ -33,7 +33,7 @@ theorem card_le_slots {ι : Type} [Fintype ι] (w n : ι → ℕ) (N : ℕ) (slo
   simpa [SlotWrite, Fintype.card_sigma, Fintype.card_prod] using Fintype.card_le_of_injective slot hinj
 
 /-- T1. -/
-theorem TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount := by
+theorem TensorSlotCount : ResourceAccounting.Guarantees.TS.TensorSlotCount := by
   intro ι _ _ w c n N slot hc hinj
   have hN : (N : ℝ) ≤ ∑ i, (n i : ℝ) * w i := by exact_mod_cast card_le_slots w n N slot hinj
   have hw : ∀ i, (w i : ℝ) ≤ rhoT w c * c i := fun i =>
@@ -47,7 +47,7 @@ theorem TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount := by
       _ = c i * n i * rhoT w c := by ring
 
 /-- T1's tightness. -/
-theorem TensorSlotTight : Accounting.Guarantees.TS.TensorSlotTight := by
+theorem TensorSlotTight : ResourceAccounting.Guarantees.TS.TensorSlotTight := by
   intro ρH ρT dH L hρH hle hdH hdL
   have hρT : 0 < ρT := hρH.trans_le hle
   have hL : 0 < L := hdH.trans_le hdL
@@ -78,10 +78,10 @@ theorem card_headWrite {K : Type} [Fintype K] [DecidableEq K] (ω : K → ℕ) (
     classCount, mul_comm]
 
 /-- Lemma 2's count. -/
-theorem OutputCount : Accounting.Guarantees.TS.OutputCount := by
+theorem OutputCount : ResourceAccounting.Guarantees.TS.OutputCount := by
   intro K _ _ ω G cls Nc head
   have h : (univ.image head).card ≤ ∑ k, ω k * classCount cls k :=
     (card_le_univ _).trans (card_headWrite ω G cls).le
   exact_mod_cast h
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

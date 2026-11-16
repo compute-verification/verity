@@ -1,6 +1,6 @@
-"""The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (security/Definitions/Accounting/
+"""The falsification tests of `ResourceAccounting.Assumptions.SquaringFloor` and `ChainSum` (security/Definitions/ResourceAccounting/
 Assumptions/SquaringChain.lean), which replace the falsified `EncodeChainHardness` (EncodeChain.lean, refuted by
-`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the circuit
+`ResourceAccounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the circuit
 model costs at least `e = (2L − 1) + (L − d(ε))` nonlinear units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with
 `d₀ = 4`, at every `ε ≥ 2^−64` (`test_squaring_floor_known_constructions`), and chained squarings cost their sum
 (`test_chain_sum_known_chains`).
@@ -14,7 +14,7 @@ them. Every other gate is budgeted, one unit each, reading at most `B = 128` ope
 operands (`OperandBits`). The nonlinear units are the budgeted units and the data products. Each construction is run on
 seeded inputs and checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = 3L − 1 − d₀`); a cheaper one, added
 here, fails the test and falsifies `SquaringFloor` at `e`. Its budgeted units are also the test of the per-squaring
-statement `Accounting.Guarantees.Gates.Renormalization` at `c = 0` (`L − d(ε)`): its outputs are limbs congruent to the
+statement `ResourceAccounting.Guarantees.Gates.Renormalization` at `c = 0` (`L − d(ε)`): its outputs are limbs congruent to the
 square. The bitwise codec, which refuted `EncodeChainHardness`, pays a data product an AND
 (`benchmarks/property_redteam/tests/test_bitwise_codec.py`).
 
@@ -23,8 +23,8 @@ squares' column sums don't carry, the column sums (s8-family steps, folded mod `
 team's families and a sampled one at p1024 are kept here as
 regressions the stated form must survive: each refutes the form with no floor, and sits below the floor `2^−64`.
 
-The model's codec is held to this one: `codecRows` (security/Proofs/Accounting/Gates.lean) are `codec.encode_word`'s
-words at toy fields, which the Lean check evaluates `Accounting.Gates.encodeWord` on in the kernel
+The model's codec is held to this one: `codecRows` (security/Proofs/ResourceAccounting/Gates.lean) are `codec.encode_word`'s
+words at toy fields, which the Lean check evaluates `ResourceAccounting.Gates.encodeWord` on in the kernel
 (`encodeWord_codecRows`), and `test_encode_word_agrees_with_lean` recomputes each here. `RhoPairs`, proved there for
 every prime `p ≡ 3 mod 4`, is sampled on `codec.rho` at p1024.
 """

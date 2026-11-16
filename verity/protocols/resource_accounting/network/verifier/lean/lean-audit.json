@@ -20,7 +20,7 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
- "meaning": ["NetworkCheck", "NetworkCertifier", "Base"],
+ "meaning": ["NetworkCheck", "NetworkAttester", "Base"],
  "layers": {
   "NetworkCheck.Certificate": {
    "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
@@ -28,7 +28,7 @@
    "why": "the encodings are code: Lean core, C-Flock's hashes, bytes and canonical JSON, and core's tagged SHA-512 only, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Check": {
-   "imports": ["NetworkCheck.Certificate", "NetworkCertifier.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
+   "imports": ["NetworkCheck.Certificate", "NetworkAttester.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
@@ -94,7 +94,7 @@
    "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
   },
   "NetworkCheck.RowsAudit": {
-   "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkCertifier.Rows"],
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkAttester.Rows"],
    "except": [],
    "why": "the audit of the active network certifier's run over its certified records is code: the period's schedule and its digest, the records' encoding and the certificate check, and the certifier program's rows audit, no Mathlib and nothing of Security"
   }

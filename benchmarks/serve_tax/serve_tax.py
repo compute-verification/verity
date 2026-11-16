@@ -1901,7 +1901,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
 
 def certifier_schedule(cells: dict[str, int]):
     """The network attester's own parameters for a schedule, in the id form; a ValueError where they are none."""
-    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams as CertifierParams
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams as CertifierParams
 
     return CertifierParams(**cells, egress="id")
 

@@ -72,8 +72,8 @@ NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: remote's composite of record, whose work subprotocol is Pearl+'s), and `Core.Verdict`'s names
 CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v0", "verity/remote/v1")}
 VERDICTS = ("accept", "reject", "undecided")
-JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
-                 "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
+JOINT_HORIZON = {"name": "ResourceAccounting.Guarantees.JointPooledLive", "proved": True,
+                 "file": "Security/Definitions/ResourceAccounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
 

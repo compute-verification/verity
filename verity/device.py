@@ -1194,7 +1194,7 @@ class Site:
 
     def device(self, d: str, auditor: Auditor, cuda: int = 0, oracle: int = 0,
                cap: Mapping[str, int] | None = None) -> dict[str, Any] | None:
-        """**Device `d`'s model** (`Accounting.Device`, `Site.device`), at ticks of the site's unit of time
+        """**Device `d`'s model** (`ResourceAccounting.Device`, `Site.device`), at ticks of the site's unit of time
         (`time_unit`), read off its sheet `k` and the auditor's sheet `a` for `k`'s SKU: `k`'s on-chip state (`chip`),
         `k`'s device memory in bits (`mem`), and a tick's bits from device memory to the chip (`bw`) and tensor-core
         MACs (`rate["tc"]`), each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest peak rate of

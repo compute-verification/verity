@@ -37,19 +37,19 @@ import Mathlib.Topology.Sheaves.Init
 # Per-stage coins' named assumption (trusted)
 
 STEER-PROOF's route A: the one premise per-stage coins add to the tensor–scalar
-model's, a `Prop` over `Accounting.TS.StageExecutionPhase`, taken as a hypothesis, never an `axiom`.
+model's, a `Prop` over `ResourceAccounting.TS.StageExecutionPhase`, taken as a hypothesis, never an `axiom`.
 
 * `StageLuck`: (L) at `p` per unit at its stage's coin, the per-stage form of (I7) `LuckAt`. Under one σ the same
   statement is false for a steered consumer (it is cheap and passes with probability 1), which is why one σ needs a
-  closure and a steering bound (`Accounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
+  closure and a steering bound (`ResourceAccounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
   after its operands are committed there is no such unit.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-- `accounting-ts-stage-luck` ((L) per unit, per-stage coins). **(L) at `p` under per-stage coins**: in every round,
 at every stage, whatever the past, a unit of the stage that the cheater skips (does not pay for) passes its proof with
@@ -59,4 +59,4 @@ values, which under one σ is ε_adapt. -/
 def StageLuck {C U D : Type} [Fintype C] {M s n : ℕ} (p : ℝ) (stg : U → ℕ) (W : StageExecutionPhase C U D M s n) : Prop :=
   W.LuckAt p stg
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

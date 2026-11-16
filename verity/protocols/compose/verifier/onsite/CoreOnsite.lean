@@ -9,7 +9,7 @@ inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
-`verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
+`verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
@@ -19,7 +19,7 @@ one), and both must commit to the same one; every window of the period must name
 remote's tie (`Core.Remote.executionPhases`). Two records reject onsite whatever the subprotocols answer. PoUS and PoUB
 must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
-`counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network certifier's: the wipe's
+`counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network attester's: the wipe's
 subprotocol is `countedWipe` (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
 the count its evidence gives, and beside it stands the count over the span between the wipe's two marks (`hostSpan`,
 `NetworkCheck.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
@@ -204,7 +204,7 @@ private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided 
 #guard (answer (executionPhasesOn (registration 0) [registration 1])).reason.map
   (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 
-/-! ## The wipe's count, held to the network certifier's -/
+/-! ## The wipe's count, held to the network attester's -/
 
 /-- The wipe whose count the composition holds (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
 under the accepted schemes. -/
@@ -212,9 +212,9 @@ def countedWipe : Protocol :=
   MemoryChallenger.WipeProtocol.mkCounted MemoryChallenger.WipeProtocol.COUNTED_ID MemoryChallenger.SCHEMES
 
 /-- The one link what leaves `host` leaves on, as the registered hardware `S` has it: `host`'s links besides the memory
-challengers' are one link, and it joins `host` and a network certifier. Refused, by name: an id that is no host's; a
+challengers' are one link, and it joins `host` and a network attester. Refused, by name: an id that is no host's; a
 host with no such link; a host with more than one, a link to another host and a bare uplink among them, since a count
-on one link is not of what left on another; and a host whose one link joins no network certifier. -/
+on one link is not of what left on another; and a host whose one link joins no network attester. -/
 def wipeLink (S : Core.Site) (host : String) : Except String String := do
   unless S.kind? host = some .host do throw s!"{host} is no host of the registered hardware"
   let own := S.links.filter fun k => (k.ends.1 = host ∨ k.ends.2 = host) ∧ ¬ S.Joins k .challenger .host
@@ -297,7 +297,7 @@ def countedComponents : List BlobProtocol :=
 /-- `counted`'s ties: onsite's, the wipe on the count's host, and the wipe and the count on one span and one count. -/
 def countedTies : List Tie := ties ++ wipeNode :: wipeCount
 
-/-- Onsite with the wipe's count held to the network certifier's count over the span between its two marks. -/
+/-- Onsite with the wipe's count held to the network attester's count over the span between its two marks. -/
 def counted : BlobProtocol := tiedSameB COUNTED_ID tied countedTies countedComponents
 
 #guard orderedB countedComponents
@@ -324,7 +324,7 @@ private def countedAnswer (xs : List Case) : Answer :=
 /-- A key in the registered form, the count's `#guard`s' zero key. -/
 private def key0 : String := "".pushn '0' 48
 
-/-- Two hosts, a network certifier registering `key0` and a memory challenger, joined by `links`. -/
+/-- Two hosts, a network attester registering `key0` and a memory challenger, joined by `links`. -/
 private def siteWith (links : List Core.Site.Link) : Core.Site :=
   ⟨[],
     [{ id := "node0", kind := .host }, { id := "node1", kind := .host },

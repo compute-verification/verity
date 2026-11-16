@@ -201,12 +201,12 @@ NAMED_TERMS = ledger.NAMED_TERMS
 prices and the line doesn't assume (the ledger's). Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
-    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "network certifiers' record (no counted ingress over the credited passes, ResourceAccounting.Remote.Held.Assumptions."
     "Covered under certifier-coverage and IngressCounted at δ_net under trusted-device), which this line didn't check; "
     "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
     "entered it over the credited span"),
     "binding-split": (
-    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
+    "the receipts' binding term (ledger.binding, ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
     "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
@@ -223,7 +223,7 @@ GROUNDED = {LOCKDOWN: (
     "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
     "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
     "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
-    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "LineHeld no longer takes it: its ResourceAccounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
     "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
