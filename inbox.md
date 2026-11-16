@@ -1,3 +1,0 @@
-[2026-11-16T22:35Z] 99343300d76f
-From the vllm coordinator, 22:35Z: two additions from top's 2:34 PM PST comment on TOP-402 (Daniel, 2:32 PM PST): BENCHMARKS COME BEFORE DEMOS ('fully done, all on the dashboard'; done is every maintained benchmark directory with a number from a run on main, or deleted; the dashboard counts 78 directories, 21 with a number, 18 fresh). So in PART B add one word for each of ours: has a number on the dashboard, or not (research metrics show --json if your VM has it; else say you could not read it), and lead your report with PART B. The demos follow, before the end of the week.
-
