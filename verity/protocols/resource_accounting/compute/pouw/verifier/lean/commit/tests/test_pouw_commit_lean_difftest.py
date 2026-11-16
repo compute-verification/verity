@@ -87,15 +87,15 @@ def test_the_tree_cases_reach_every_branch():
 
 
 def test_the_salt_and_sample_cases_reach_every_branch():
-    for kind in ("salt_of", "unverified_salt", "key", "sampled", "pearl_sample"):
+    for kind in ("salt_of", "unverified_salt", "key", "sampled", "pearl_draw"):
         outcomes = [c["python"] for c in _of(kind)]
         assert any("ok" in o for o in outcomes), kind
         assert any("error" in o for o in outcomes), kind
     assert {c["in"]["which"] for c in _of("key") if "ok" in c["python"]} == {"audit", "draw", "replay", "after"}
     for kind, starts in (("epoch_salt", ("the salt's coin is epoch ", "the salt's coin is the epoch's ",
                                          "the salt's coin does not open", "the salt's coin was not opened after")),
-                         ("draw_coin", ("the epoch has no coin commitment", "the sample's coin is the epoch's ",
-                                        "the sample's coin does not open", "the sample's coin was not opened after"))):
+                         ("draw_coin", ("the epoch has no coin commitment", "the draw's coin is the epoch's ",
+                                        "the draw's coin does not open", "the draw's coin was not opened after"))):
         outcomes = [c["python"] for c in _of(kind)]
         assert any("ok" in o for o in outcomes) and any("error" in o for o in outcomes), kind
         for start in starts:

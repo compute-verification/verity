@@ -657,17 +657,17 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["programs"] != [rec["program"]]:
         return "reject", f"profile: programs {', '.join(prof['programs'])}, not the registered {rec['program']}", None
     if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
-        return "reject", f"profile: its levels are not the registered partition's {w.n} units sampled subset:{k}", None
+        return "reject", f"profile: its levels are not the registered partition's {w.n} units drawn subset:{k}", None
     if prof["delta"] != p["delta"]:
         return ("reject", f"profile: delta {Wd.ratio_str(prof['delta'])}, not the window's {Wd.ratio_str(p['delta'])}",
                 None)
     if prof["drawn"] != [(LEVEL, k)]:
-        return "reject", f"profile: sampled {_canon(dict(prof['drawn']))}, not {k} units", None
+        return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (sample["law"] == "subset" and sample["k"] == k) or sample["population"] != w.n:
         return "reject", f"sample: {sampling_design_name(sample)} over {sample['population']}, not subset:{k} over {w.n}", None
     units = sample["units"]
     if len(units) != k or any(b <= a for a, b in zip(units, units[1:])) or (units and units[-1] >= w.n):
-        return "reject", f"sample: its {len(units)} units are not {k} ascending distinct units below {w.n}", None
+        return "reject", f"draw: its {len(units)} units are not {k} ascending distinct units below {w.n}", None
     why = window_salt(p, rec, e["salt"])
     if why is not None:
         return "reject", f"salt: {why}", None
@@ -857,7 +857,7 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
     the proof's body starts with their b ‖ c and then its public row's, which must be `public_bc` of the execution phase's context,
     `salt`, the unit's position and the entry's side roots."""
     if units is not None and unit not in units:
-        return f"unit {unit} is not sampled"
+        return f"unit {unit} is not drawn"
     t = TILES.get(p["check"]["template"])
     why = _salt_reason(p, t, salt)
     if why is not None:
@@ -1403,20 +1403,20 @@ def sample_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registrat
     try:
         o = Ch.LiveOpening.from_json(opening) if live else opening_of(opening)
     except (Refused, Ch.CoinError) as e:
-        return "coin", f"the sample's {e}"
+        return "coin", f"the draw's {e}"
     if live:
         why, old = Ch.live_reason(c, o, Wd.SAMPLE, 0, bytes.fromhex(registration)), False
     else:
         why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
-        return "coin", f"the sample's {why}"
+        return "coin", f"the draw's {why}"
     ctx, n = sample_key_context(stream, registration, receipt), 2 * k * width(population) + 64
     src = stream_v1(derive_v1(o.coin, SAMPLE_DOMAIN, ctx), "draw", n) if old else derive(o.coin, SAMPLE_DOMAIN, ctx).stream("draw", n)
     got = stream_subset(k, population, src)
     if got is None:
-        return "sampler", "the sample's stream ran out"
+        return "sampler", "the draw's stream ran out"
     if not (isinstance(units, list) and all(_nat(u) for u in units) and units == got):
-        return "draw", f"the units are not the sampling coin's subset:{k} over {population}"
+        return "draw", f"the units are not the draw coin's subset:{k} over {population}"
     return None
 
 

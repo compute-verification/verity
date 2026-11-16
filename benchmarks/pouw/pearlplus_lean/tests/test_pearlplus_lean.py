@@ -457,10 +457,10 @@ def test_a_challenger_sample_that_is_not_the_runs_coin(exe, tmp_path):
     same(exe, [path], 3, None, good, sample=challenger_sample())
     held = json.loads(good.read_text())
     salt_only = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(7).randbytes).commitment.to_json()
-    cases = [(json.loads(rec.read_text()), "the record's sampling coin: coin was not opened after what the verifier recorded"),
+    cases = [(json.loads(rec.read_text()), "the record's draw coin: coin was not opened after what the verifier recorded"),
              ({**held, "source": "ab" * 64}, "the record's source is not its draw session's coin"),
              ({**held, "draw": {**held["draw"], "commitment": salt_only}},
-              "the record's sampling coin: the coin commitment's coins are not a live window's sample session's"),
+              "the record's draw coin: the coin commitment's coins are not a live window's sample session's"),
              ({**held, "draw": {**held["draw"], "opening": {"coin": "00"}}}, "the record's sample is malformed: ")]
     for doc, why in cases:
         (bad := tmp_path / "bad.json").write_text(json.dumps(doc))

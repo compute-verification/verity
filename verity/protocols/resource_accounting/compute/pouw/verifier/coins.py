@@ -37,7 +37,7 @@ from .protocol import DomainError, tagged
 
 SCHEME = domains.POUW_EPOCH_COINS
 COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
-LABELS = ("salt", "sample")
+LABELS = ("salt", "draw")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
 KEY = HM96.default_key

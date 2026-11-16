@@ -588,7 +588,7 @@ def measure_inputs(path: Path, per_linear: int, census_max: int, samples: int, s
         if row["method"] == "census" and len(seen) < len(row["drawn"]):
             raise ValueError(f"{label}: census input {row['matmul']} has {len(row['drawn']) - len(seen)} tiles unmeasured")
         fail = [t for t in seen if t["openings_ok"] and not t["ok"]]
-        rows.append({k: v for k, v in row.items() if k not in ("area", "sampled")} | {
+        rows.append({k: v for k, v in row.items() if k not in ("area", "drawn")} | {
             "pass": label, "run": job["man"].get("run"), "manifest_sha256": job["sha256"], "drawn": len(seen),
             "unmeasured_draws": len(row["drawn"]) - len(seen),
             "openings_failed": sum(not t["openings_ok"] for t in seen), "failures": len(fail),

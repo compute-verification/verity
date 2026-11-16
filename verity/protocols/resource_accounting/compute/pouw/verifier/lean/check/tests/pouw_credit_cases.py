@@ -26,7 +26,7 @@ An `outcome` case is a `sampled` case's arguments and one accepted proof outcome
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an unsampled unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window-sampled` case is what `credit._window_sampled` reads of an execution phase, the sample `Credit.descriptorSampled` gives the
+A `window-drawn` case is what `credit._window_sampled` reads of an execution phase, the sample `Credit.descriptorSampled` gives the
 J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditSampled`): the execution phase's open root, its sample (its coin's live
 opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
 mutations break the coin's opening, the root and receipts the sample is keyed by, the descriptor's hex and K's form, and
@@ -580,7 +580,7 @@ CREDIT_NAMES = ["changed", "withdrawn", "row-changed", "stale-root", "no-bit", "
                 "calls-form", "salt-form", "served-form", "commit-form", "rounds-form", "draw-form", "no-draw",
                 "draw-coin", "key-form", "forged-ledger", "unpinned", "branch-pin", "unwithheld", "draw-elsewhere",
                 "draw-session", "draw-after-other"]
-CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "sample")
+CREDIT_KEYS = ("key", "ledger", "pins", "main", "salt", "calls", "served", "commit", "rounds", "draw")
 
 
 def credit_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -1067,7 +1067,7 @@ def _sample_coin(rng: random.Random) -> dict:
 
 
 def window_sampled_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `window-sampled` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
+    """One `window-drawn` case: an execution phase's open root, its sample (its coin's live opening, its root and its receipts), its
     circuit's descriptor (`descriptor`, today's units or J10-R's) and a committed K, then mutation `name`."""
     lay, j10r = layout(rng), rng.random() < 0.5
     if j10r:

@@ -91,7 +91,7 @@ def test_a_windows_sampling_session_is_its_sampling_coin_alone():
     assert Wd.live_epoch_reason(sampling) is not None
     for layout in (Wd.live_families(1), ((Wd.SALT, 1), (Wd.SAMPLE, 1), (Wd.ROUND, 1)), ((Wd.SAMPLE, 2),)):
         assert Wd.sample_epoch_reason(Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("o")).commitment) == \
-            "the coin commitment's coins are not a live window's sample session's: its sampling coin alone"
+            "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
     other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.SAMPLE_FAMILIES, entropy("v")).commitment
     assert Wd.sample_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
 
@@ -171,7 +171,7 @@ def test_the_check_item_names_the_windows_coin_mode():
 
 
 def test_a_seeded_window_is_as_it_was():
-    assert (Co.SCHEME, Co.LABELS) == ("verity/pouw/epoch-coins/v1", ("salt", "sample"))
+    assert (Co.SCHEME, Co.LABELS) == ("verity/pouw/epoch-coins/v1", ("salt", "draw"))
     seeded = Co.Challenger(7, entropy("s"))
     assert Co.coin_reason(seeded.commitment, seeded.open("draw", b"t"), "draw", b"t") is None
     assert "coins" not in CC.expected_items(CC.params(_params({})), 0, Wd.Work.at(0, 2), 1, None)["check"]

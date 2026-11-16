@@ -43,7 +43,7 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 #: a sample root no withheld session opened on: its sampling coin was never sampled after it
-NO_SAMPLE_SESSION = "the sample's session is not trusted: the auditor's ledger opens no challenger session for this window"
+NO_SAMPLE_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
@@ -53,13 +53,13 @@ CREDIT_EXPECT = {
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
     "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
     "draw-form": ("draw", Cr.SAMPLE_FORM),
-    "no-draw": ("draw", Cr.NO_SAMPLE), "draw-coin": ("coin", "the sampling coin: "),
+    "no-draw": ("draw", Cr.NO_SAMPLE), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
-    "forged-ledger": ("coin", "the sample's session is not trusted: "),
-    "unpinned": ("coin", "the sample's session is not trusted: session "),
-    "branch-pin": ("coin", "the sample's session is not trusted: session "),
+    "forged-ledger": ("coin", "the draw's session is not trusted: "),
+    "unpinned": ("coin", "the draw's session is not trusted: session "),
+    "branch-pin": ("coin", "the draw's session is not trusted: session "),
     "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_SAMPLE_SESSION),
-    "draw-session": ("coin", "the sample's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
+    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
@@ -90,7 +90,7 @@ SAMPLED_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 WINDOW_SAMPLED_EXPECT = {
-    "coin-form": ("coin", "the sampling coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.SAMPLE_ARGS),
+    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.SAMPLE_ARGS),
     "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {
@@ -107,7 +107,7 @@ WINDOW_EXPECT = {
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
     "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("coin", NO_SAMPLE_SESSION), "credit-no-draw": ("draw", Cr.NO_SAMPLE),
-    "credit-forged-ledger": ("coin", "the sample's session is not trusted"),
+    "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
     "never-received": ("rounds", NOT_RECEIVED), "round-coin": ("coin", "coin was not opened after"),
@@ -179,7 +179,7 @@ PERIOD_EXPECT = {
     "bad-circuit": ("window", "so the period earns nothing: layout: "),
     "tile-k": ("window", "so the period earns nothing: tile-k: the window's tile at K = "),
     "never-received": ("window", "so the period earns nothing: rounds: " + NOT_RECEIVED),
-    "proof-other-registration": ("window", "so the period earns nothing: registration: sampled proof block "),
+    "proof-other-registration": ("window", "so the period earns nothing: registration: drawn unit "),
     "branch-pin": ("circuit", "doesn't count toward it, so the period earns nothing: session s-"),
     "no-weights": ("weights", UNSIGNED), "weights-form": ("weights", UNSIGNED),
     "no-model": ("weights", "open signs a weights' root but no model (model, {name, checkpoint_sha512})"),
@@ -935,7 +935,7 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert got is None and refused[0] == "registration" and OTHER_ROOT in refused[1]
     got, refused = _period("proof-other-registration", seed)
-    assert got is None and refused[0] == "window" and "registration: sampled proof block " in refused[1]
+    assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)

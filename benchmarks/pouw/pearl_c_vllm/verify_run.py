@@ -1018,7 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",
-                   help="with --fast, replay the first tile and every N-th after it, in the sample's order, on the scalar "
+                   help="with --fast, replay the first tile and every N-th after it, in the draw's order, on the scalar "
                         "reference too; any verdict that differs rejects the pass and exits 2 (0: none)")
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
     a = p.parse_args(argv)

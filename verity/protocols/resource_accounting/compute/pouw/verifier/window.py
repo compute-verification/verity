@@ -104,7 +104,7 @@ PUBLIC = (
                                             "is stated in them")),
     ("length", "structure", "parameter", ("the workloads of record's fixed length: each slot's max_tokens, served whatever it "
                                           "samples (ignore_eos), so the useful work is public")),
-    ("drawn", "coins", "outcome", "the verifier's own sample, after the receipt"),
+    ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items an execution phase's execution phase commitment record carries; the verdict and the sample come after it
@@ -763,7 +763,7 @@ def instance_ts(registration: Mapping[str, Any], sampled: Sequence[int], sigma: 
     sampled = list(sampled)
     if len(sampled) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in sampled) \
             or sampled != sorted(set(sampled)) or not 0 <= sampled[0] <= sampled[-1] < n:
-        raise ValueError(f"the sample is not {k} distinct ascending indices of [0, {n})")
+        raise ValueError(f"the draw is not {k} distinct ascending indices of [0, {n})")
     if not isinstance(sigma, int) or not 0 <= sigma < sessions(k, cap):
         raise ValueError(f"session {sigma!r} is not one of the window's {sessions(k, cap)}")
     return [sampled[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
@@ -831,7 +831,7 @@ def sample_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     if commitment.scheme != LIVE_SCHEME:
         return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
     if commitment.families != SAMPLE_FAMILIES:
-        return "the coin commitment's coins are not a live window's sample session's: its sampling coin alone"
+        return "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
     return None
 
 

@@ -210,12 +210,12 @@ def test_the_full_sample_passes(n: int, server) -> None:
     assert FULL.lean(server, {"record": _record(sample)}) == ("output", "true")
 
 
-@pytest.mark.parametrize(("draw", "why"), [
+@pytest.mark.parametrize(("sample", "why"), [
     (None, "has no sample"),
     ({"law": "subset", "population": 3, "k": 2, "units": [0, 2]}, "not every unit"),
     ({"law": "subset", "population": 0, "k": 0, "units": []}, "not every unit"),
     ({"law": "bernoulli", "population": 2, "p": "1/1", "units": [0, 1]}, "law is not subset"),
-    ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's sample: U2"),
+    ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's draw: U2"),
 ])
 def test_the_sample_policy_refuses_a_partial_sample(sample: dict | None, why: str, server) -> None:
     """A session record with no sample, a sample that leaves a unit out, an empty population, another sampling design, or a sample

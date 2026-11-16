@@ -63,7 +63,7 @@ def sample_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[byt
         return None, "the epoch has no coin commitment for its draw coin to open against"
     opening = challenger.open("draw", after)
     reason = coin_reason(epoch.coins, opening, "draw", after)
-    return (None, f"the sample's {reason}") if reason is not None else (opening.coin, None)
+    return (None, f"the draw's {reason}") if reason is not None else (opening.coin, None)
 
 
 @dataclass(frozen=True, slots=True)

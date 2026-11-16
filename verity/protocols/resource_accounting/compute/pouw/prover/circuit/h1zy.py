@@ -807,7 +807,7 @@ def _refuse_tile_chunks(b: dict) -> str | None:
         return f"UNIT is h1zy's PouwH1TileZy_v1 over an H1 tile, not {getattr(u, 'id', u)!r}"
     t = u.bindings["TILE"]
     if t.defn.id != "PouwH1Tile_v1":
-        return (f"a unit on chunk rows is over PouwH1Tile_v1, not {t.defn.id}: its sampled leaf is proved as lanes in chunks "
+        return (f"a unit on chunk rows is over PouwH1Tile_v1, not {t.defn.id}: its drawn leaf is proved as lanes in chunks "
                 "(PouwH1LaneZyChunk_v1), and v3's and v4's one-stream z starts from O' and the digits, which only a lane's "
                 "last chunk has")
     if getattr(t.bindings["EXACT"], "defn", None) is not BG.GemmAccumulatorS8:

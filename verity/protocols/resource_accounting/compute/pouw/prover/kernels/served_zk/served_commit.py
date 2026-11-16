@@ -247,7 +247,7 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
-    ("population", "structure", "N, the padded tile count g_(ℓ+1): the sample's range, a function of the registered level"),
+    ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
     ("window", "output", ("PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, "
                           "root_W), each the verifier's own recomputation at the registered level, the length its "
                           "fixed max_tokens (`public_problem`)")),
@@ -804,7 +804,7 @@ def sample_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
 def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
     units = CC.stream_subset(sampling_design["k"], n, src)
     if units is None:
-        raise _refused("sampler", "the sample's stream ran out")
+        raise _refused("sampler", "the draw's stream ran out")
     return units
 
 
@@ -1729,7 +1729,7 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
         p.add_argument(x)
     p.add_argument("case", choices=CASES)
     p = sub.add_parser("check")
-    for x in ("params", "registration", "sample"):
+    for x in ("params", "registration", "draw"):
         p.add_argument(x)
     p.add_argument("unit", type=int)
     p.add_argument("pub")

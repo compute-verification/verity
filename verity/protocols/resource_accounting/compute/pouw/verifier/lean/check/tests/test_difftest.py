@@ -18,7 +18,7 @@ Pearl-C pass's, and honest samples, then one mutation each aimed at every refusa
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
-`sampled`, `window-sampled`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
+`sampled`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
 `credit.sampled`, `credit._window_sampled` (at the strata of the descriptor's layout, `Credit.descriptorSampled`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
@@ -124,7 +124,7 @@ def _template(why: str) -> str:
 
 #: `core_check.opening_twin`'s reasons
 REASONS = {_template(r) for r in (
-    "unit # is not sampled", "the registered window domain is not the window's served domain",
+    "unit # is not drawn", "the registered window domain is not the window's served domain",
     "the registered window root is not a SHA-512 digest", "the opening names no entry",
     "the opening's salt is not # bytes, or a path or a side's index is not one (paths of SHA-512 digests)",
     "entry # is not the registered window's entry", "entry #: index # is not in the entry's range",
@@ -395,18 +395,18 @@ def test_credit(pass_server):
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "sampled accept", "window-sampled accept", "outcome accept", "window accept", "period accept",
+    assert {"credit accept", "sampled accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
     for part in ("credit sample: the sample root over the manifest", "credit sample: the window's sample root is not",
                  "credit sample: the challenger's session closed with no sampling coin", "credit credit: manifest row # has no",
-                 "credit credit: call # is credited with no z", "credit coin: the sampling coin: ",
-                 "credit coin: the sample's session is not trusted",
+                 "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
+                 "credit coin: the draw's session is not trusted",
                  "credit coin: the session the auditor's ledger opens on the window does not withhold",
                  "outcome missing: ", "outcome failed: ",
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "sampled layout: linear ", "sampled layout: the A slot #", "sampled layout: the A blocks of K = #",
-                 "sampled layout: a call of lm_head", "sampled sample: the sampling coin is not", "sampled sample: the sample's stream",
+                 "sampled layout: a call of lm_head", "sampled sample: the sampling coin is not", "sampled sample: the draw's stream",
                  "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
                  "so the period earns nothing: tile-k: the window's tile at K = #",
                  "pad its linears' A and B rows with zero codes to K = #",
@@ -421,7 +421,7 @@ def test_credit(pass_server):
                  "period period: period ", "period missing: session #", "period order: session #",
                  "period period: the sessions presented run past", "period period: session ", "period window: window #",
                  "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
-                 "sampled budget: the sample's K is not",
+                 "sampled budget: the draw's K is not",
                  "sampled budget: the window's # units are fewer than K", "period budget: period ",
                  "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
                  "window layout: the window's circuit's units are not its record's tiles",
@@ -441,15 +441,15 @@ def test_credit(pass_server):
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",
                  "so the period earns nothing: rounds: the round roots are not",
-                 "the sampled proof blocks' proof outcomes are not a list of {program, registered, unit, verdict}",
+                 "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
                  "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
-                 "window registration: sampled proof block #'s proof opened port ",
+                 "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",
-                 "window registration: sampled proof block #'s proof was verified against another circuit",
+                 "window registration: drawn unit #'s proof was verified against another circuit",
                  "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
                  "which the window registers not",
                  "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
-                 "so the period earns nothing: registration: sampled proof block #",
+                 "so the period earns nothing: registration: drawn unit #",
                  "window weights: the window's registered weights' root ",
                  "open signed: a B row's codes or s_w differ from the ones the period registered",
                  "'s open signs no weights' root (weights_root, a SHA# digest",

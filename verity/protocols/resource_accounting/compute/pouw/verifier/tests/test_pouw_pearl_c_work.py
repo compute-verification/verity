@@ -543,7 +543,7 @@ def test_the_sample_coin_must_open_against_the_epochs_commitment_after_the_commi
     )
     for reason, challenger in refused:
         out = CW.audit(S, epoch, prover, tr, SPLITS, records, challenger, 8)
-        assert not out.audit.accepted and out.audit.verdicts == (CW.Verdict(-1, False, "the sample's " + reason),)
+        assert not out.audit.accepted and out.audit.verdicts == (CW.Verdict(-1, False, "the draw's " + reason),)
     bare = Epoch.unverified(epoch.workload, epoch.weight_roots, b"beacon")
     out = CW.audit(S, bare, prover, tr, SPLITS, records, E.challenger(), 8)
     assert not out.audit.accepted and "no coin commitment" in out.audit.verdicts[0].reason

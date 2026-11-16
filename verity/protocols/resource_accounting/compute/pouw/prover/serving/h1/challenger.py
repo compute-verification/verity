@@ -61,7 +61,7 @@ verifier's check that a served window's coins are that challenger's.
   after its coins).
 * **Credit** is core's rules of record (`verity.protocols.resource_accounting.compute.pouw.verifier.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
-  Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``sample_k``, `sample_k`: the proof system's selection
+  Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `sample_k`: the proof system's selection
   at `SAMPLE_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
   registered weights' root (`credit.WEIGHTS_FIELD`, the gate's ``--weights-root``) before sampling. A window's credit
   (`credit_reason`) is core's `credit.window` on its evidence (`window_evidence`: its registered ``entries``, and each
@@ -525,7 +525,7 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
     a window of it with no accepted window, which ended complete, so released every coin: a window abandoned after its
     coins, which a prover keeps only when it liked them. With `presented`, the window roots the verifier is shown, in
     order, also core's rules of record: `credit.period` (exactly the close's windows, in its order, the close complete)
-    and `credit.committed_k` (the open committed ``sample_k``), each refusal as ``code: why``; a period's credit itself is
+    and `credit.committed_k` (the open committed ``draw_k``), each refusal as ``code: why``; a period's credit itself is
     `period_credit`'s."""
     p = ledger.periods.get(period)
     if p is None:
@@ -612,7 +612,7 @@ def program_salt_of(c: Mapping[str, Any]) -> bytes:
 
 
 def sample_k(layout: Any, eps: Fraction = SAMPLE_EPS, credited: Fraction = EXPECTED_CREDIT) -> int:
-    """The K the proof system commits as ``sample_k`` in a period's open, before sampling, for windows of `layout` (the
+    """The K the proof system commits as ``draw_k`` in a period's open, before sampling, for windows of `layout` (the
     period's declared Program's, `pouw_h1_served.declared_layout`, what `credit.layout_of` reads from its descriptor):
     `window.k_prime` at `eps` and core's δ (`credit.DELTA`) over the window's work W, the credited work the share
     `credited` of it (⌊credited·W⌋, the fraction the service expects credited, unknown at the open), at most the
@@ -754,7 +754,7 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
                   run: Any = None) -> tuple[dict | None, Any]:
     """Period `period`'s credit and None, or None and the refusal: core's `credit.period_credit` over the auditor's
     `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
-    in its order, the close complete, its open's ``sample_k``, circuit files and weights' root committed, and every window
+    in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
     credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
     log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each sampled proof block verified from its
     statement's proof files by `run` (default credit's verifier). The credit is ``{windows, work, k, delta,

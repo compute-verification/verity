@@ -50,7 +50,7 @@ own Commit.
   window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.drawn`): the proof
   blocks core samples (`credit.sampled` over the window Program's layout, as `pouw_h1_challenger.sampled_of` samples them), each
   read as the Commit's values it opens (`sampled_reads`): its call's x_q and s_a rows of its row tile at the engine step its
-  step maps to. With a gate session its stream is the window's open root and its K its period-open's ``sample_k``; with
+  step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
   in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
   (`pouw_h1_challenger.sample_k`). A window whose sample can't be formed (it never opened, its close failed, no sampling coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
@@ -620,7 +620,7 @@ class H1Windows:
 
     def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
         """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
-        ``sample_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
+        ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.sample_k`) and its calls_root.
         ValueError when the session joined no period, the ledger commits it no K, or its window commits no gate
         session's open root."""
@@ -630,7 +630,7 @@ class H1Windows:
         )
 
         if held is None:
-            return sample_k(self.layout()), run.commits["calls_root"], "the proof system's sample_k (in-process coins)"
+            return sample_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
         assert self.sessions is not None, "a held session is a gate session"
         period = held.get("period")
         if period is None:

@@ -11,7 +11,7 @@ is its CLI, which reads ``--checkpoint`` with the live challenger's model regist
     sampled check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
 
 SERVE_DIR is serve-openai's ``--out`` (`served_verdicts.sh`'s D): the window's record ``h1/w<WINDOW>/pouw-h1-calls.json``,
-the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``sample_k``, else ``--k``); the
+the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``draw_k``, else ``--k``); the
 prover's state is ``private/h1/w<WINDOW>`` (`prover`: its salt key and each served call's A codes, scales and z/y
 records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest binds each K's circuit file to the Program.
 
@@ -250,7 +250,7 @@ def sample_k(serve_dir: Path, k: int | None) -> int:
     try:
         return int(json.loads((serve_dir / PERIOD).read_text())["draw_k"])
     except (OSError, KeyError, ValueError) as e:
-        raise Refused(f"no sample K: give --k, or a serve dir whose {PERIOD} has the open's sample_k ({e})") from None
+        raise Refused(f"no sample K: give --k, or a serve dir whose {PERIOD} has the open's draw_k ({e})") from None
 
 
 def sampled_calls(win: dict, k: int) -> dict[int, list[int]]:
@@ -391,7 +391,7 @@ def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[st
         src = pub if port == CR.PUB_PORT else ok if port == CR.OK_PORT else values[e["value"]]
         at = [CC.port_reads(e)[u] for u in units]
         if any(x is None for x in at):
-            raise Refused(f"port {port} reads no row at a sampled proof block of call {call}")
+            raise Refused(f"port {port} reads no row at a drawn unit of call {call}")
         z[f"w_{port}"] = np.array([src.rows[x] for x in at], np.uint16)
         z[f"s_{port}"] = np.frombuffer(b"".join(bytes(src.salts[x]) for x in at), np.uint8).reshape(len(at), SALT_BYTES)
         z[f"r_{port}"] = np.array(at, np.int64)
@@ -526,7 +526,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
         call = CR.leaf_call(lay, u)[0]
         at = CR.leaf_place(lay, win["shape"], u, win["steps"])
         if len(win["roots"].get(at[LL.RECEIPT][0], ())) != 1:
-            raise Refused(f"sampled leaf {u}: the window registers its call's {at[LL.RECEIPT][0]} "
+            raise Refused(f"drawn leaf {u}: the window registers its call's {at[LL.RECEIPT][0]} "
                           f"{'twice' if win['roots'].get(at[LL.RECEIPT][0]) else 'not'}, which its combine reads: serve "
                           "the window with its zy receipts (served.Served.receipts) to prove it as lanes")
         for v in (LL.A, LL.B, LL.ZY, LL.RECEIPT):
@@ -700,7 +700,7 @@ def statements(a: Any) -> int:
                 for x in plan["calls"]]
     leaves = plan.get("leaves", [])
     for x in leaves:
-        sessions = session(x, f"sampled leaf {x['unit']}'s statement {x['statement']}")
+        sessions = session(x, f"drawn leaf {x['unit']}'s statement {x['statement']}")
         out.append({"unit": int(x["unit"]), "statement": list(x["statement"]), "circuit": str(x["circuit"]),
                     "public": str(Path(x["dir"]) / "pub.bin"), "sessions": [str(s) for s in sessions]})
     if leaves:
