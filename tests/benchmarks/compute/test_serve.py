@@ -1,8 +1,7 @@
 """`serve.sh`'s refusal of a run directory that already holds a record, before it touches the machine or writes a file:
 a share read after a failed run would otherwise be an earlier run's number. And its serve's card under a caller's
 gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant. And the Lean verdict's limit, which
-grows as the cores fall. And PoUW's row in the record of verdicts, which is the window compose's row
-(`served_verdicts.piece`) under the local gate's key pin and lane, not one serve.sh writes itself."""
+grows as the cores fall."""
 from __future__ import annotations
 
 import json
@@ -125,8 +124,6 @@ def verdicts(tmp_path, gate: dict | None, run_id: str = "") -> tuple[dict, str]:
 
 
 def test_pouws_row_is_the_window_composes_under_the_local_gates_key_pin_and_lane(tmp_path):
-    """The row was a fixed `missing` that named no condition of record: it is `served_verdicts.piece`'s on out/pieces,
-    with no SPOT window registration (none is made here), the local gate's key pin and lane, and the run's id."""
     doc, line = verdicts(tmp_path, {"key_sha512": "ab" * 64, "lane": "vllm", "pin": "p"}, "run-under-test")
     asked = {"key": "work", "pieces": str(tmp_path / "out" / "pieces"), "run": "run-under-test", "spot": None,
              "key_sha512": "ab" * 64, "lane": "vllm"}
@@ -137,7 +134,6 @@ def test_pouws_row_is_the_window_composes_under_the_local_gates_key_pin_and_lane
 
 
 def test_with_in_process_coins_the_row_is_asked_under_no_key_pin_or_lane(tmp_path):
-    """`COINS=in-process` writes no auditor-gate.json: the row is asked with no pin and no lane, so it can't be of record."""
     doc, _ = verdicts(tmp_path, None)
     assert '"key_sha512": null, "lane": null' in doc["protocols"]["work"]["why"]
     assert '"run": null' in doc["protocols"]["work"]["why"]
@@ -149,10 +145,6 @@ def steps() -> list[str]:
 
 
 def test_the_circuit_record_and_the_period_come_before_the_serve_and_its_close_before_the_sample():
-    """PoUW's verdict of record holds the serve's salt session to a Pearl-C period of the lane's own that committed the
-    circuit record, and the sample to the lane's first reserve after that period closed: so the circuit record is built
-    before the period opens, the period opens before the serve, and it closes after the serve's passes are retained and
-    before python-verify takes the sample."""
     got = steps()
     for name in ("serve-phi", "circuit", "period-open", "serve", "retain", "period-close", "python-verify", "verdicts"):
         assert got.count(name) == 1, (name, got)
@@ -176,9 +168,6 @@ def period(tmp_path, verb: str) -> tuple[list[str], Path]:
 
 
 def test_the_period_opens_on_the_runs_circuit_record_and_closes_once_the_serves_salt_session_has_ended(tmp_path):
-    """The open commits the circuit record's bytes (`pearlplus-period open --circuit-record`), the record
-    `pearlplus_of_record` holds the period's circuit to; the close reads the serve's salt session from its served.json
-    as one window's and waits for the gate's ledger to end it, since the gate closes no period a window of which runs."""
     opened, _ = period(tmp_path, "open")
     assert opened == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(tmp_path / "piece"),
                       "--gate", "gate cmd", "--name", "pearlplus-run-under-test", "--scheme", "pearl-c-h100-v1-h3",
