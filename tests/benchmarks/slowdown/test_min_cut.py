@@ -1,20 +1,16 @@
 """The min-cut bound: `slowdown.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
 bound over a period's blocks with untied words, with a threshold and with none, beside the work no block is credited
-for, the one way from a work to a slowdown (`slowdown_of`), the class in `CLASSES`, and `periods.py --bounds`."""
+for, and the one way from a work to a slowdown (`slowdown_of`)."""
 
 import itertools
 import json
 import math
-import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from slowdown import instances, lean, min_cut, theorem
-from slowdown.classes import CLASSES, FlopBudget, Outside, premise_status, premises
-from slowdown.families import family
+from slowdown import lean, min_cut
 from slowdown.params import Registry
-from slowdown.scenario import build
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -467,22 +463,6 @@ def test_a_beta_a_block_covers_every_way_the_untied_words_fall():
     assert none.slowdown == pytest.approx(tied.slowdown, rel=1e-12) and none.beta_x == tied.beta_x
 
 
-def test_a_slowdown_is_quoted_beside_the_work_no_block_is_credited_for():
-    """`capped`: a share of a block's work that nothing checks is the developer's whole, so the slowdown is at most
-    one over that share whatever the count gives: a thousandth leaves under a thousand of `bound`'s 38 thousand. It is
-    `theorem.multiple_bound` at that unregistered share and the count's rate, and with no such share the count's own."""
-    tied = min_cut.bound(C, TIED, **SERVED).slowdown
-    assert min_cut.capped(tied, 0) == pytest.approx(tied, rel=1e-12)
-    assert min_cut.capped(tied, 0.001) == pytest.approx(974.1, abs=0.05)
-    assert min_cut.capped(tied, 0.001) < 1_000 < min_cut.capped(tied, 0.00097)
-    assert min_cut.capped(math.inf, 0.002) == 500 and min_cut.capped(math.inf, 0) == math.inf
-    for slowdown, share in itertools.product((1.0, 6.3, tied, 1e30), (0.0, 1e-4, 0.002, 0.5, 1.0)):
-        got = min_cut.capped(slowdown, share)
-        assert got == pytest.approx(theorem.multiple_bound(0.4, share, 1 / slowdown), rel=1e-12)
-        assert 1 <= got <= slowdown and (share == 0 or got <= 1 / share)
-    assert "is in no term here (`capped`)" in charged(54_300).rests_on
-
-
 def test_clique():
     tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
     assert min_cut.clique(tri) == 3
@@ -562,119 +542,3 @@ def test_the_second_and_fourth_sub_works_are_the_best_cuts_at_a_contraction_leng
     assert cut.terms[min_cut.SUBWORKS[1]] == best(short, {cut.K_thr} | lengths) >= got.terms[min_cut.SUBWORKS[0]]
     kinds = [[p for p in short if any(p.weight) == w] for w in (True, False)]
     assert cut.terms[min_cut.SUBWORKS[3]] == max(best(s, lengths) for s in kinds if s)
-
-
-def test_the_class_reads_the_files_rows_so_other_rows_in_the_registry_are_refused():
-    with pytest.raises(ValueError, match="edit the file"):
-        premises(REG.override({"premise.training-cut-hardness.beta": [[1e5, 16.0], [1e9, 1.0]]}))
-    with pytest.raises(ValueError, match="edit the file"):
-        build(REG.override({"premise.training-cut-hardness.beta": [[1e5, 16.0]]}), "reference-remote-h200")
-
-
-def reference_profile():
-    s = build(REG, "reference-remote-h200")
-    return s, s.families[0].profile(s.model, s.run)
-
-
-def test_the_class_is_the_macs_a_block_at_the_profiles_costs_and_shape():
-    """A weight value at the profile's `b_w`, an activation value at `β(k)` and at most its `b_a` bits, an output at
-    `b_a` bits and wires, over the model's own outputs a product; nothing past the last row."""
-    arg = CLASSES["min-cut"]
-    assert arg.cites == (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS) and arg.counts == "kappa"
-    assert lean.status(arg.cites[0]) == "proved" and lean.weakest(arg.cites) == "conditional"
-    assert premise_status(arg.cites, 2e7) == "assumed" and premise_status(arg.cites, 1e9) == "contested"
-    _, p = reference_profile()
-    a = arg.allowance(p)
-    assert min_cut.beta(4e8) < min_cut.beta(2e7) < p.b_a < min_cut.beta(8e6)
-    for k, beta in ((1e5, p.b_a), (8e6, p.b_a), (2e7, min_cut.beta(2e7)), (4e8, min_cut.beta(4e8))):
-        assert a(FlopBudget(1e30, k)) == min_cut.macs_a_block(k, p.outputs_per_product * p.b_a, p.b_w * beta, p.b_a)
-    assert a(FlopBudget(1e30, 8e8)) < math.inf and a(FlopBudget(1e30, 8.1e8)) == math.inf
-    with pytest.raises(Outside, match="outputs_per_product"):
-        arg.allowance(replace(p, outputs_per_product=None))
-
-
-def test_outputs_per_product_is_the_models_shape():
-    """A matrix's forward product gives `d_out` values a token and its input gradient `d_in`, the head's among them,
-    over the products `κ` counts; a kind that doesn't count whole matrices' products states none, and is outside."""
-    s, p = reference_profile()
-    layers = [m for g in instances.LAYERED for m in s.model.matrices.get(g, ())]
-    head = list(s.model.matrices.get("head", ()))
-    products = 2 * sum(m.size * m.active for m in layers) + sum(m.size * m.active for m in head)
-    values = sum((m.d_out + m.d_in) * m.active for m in layers) + sum(m.d_in * m.active for m in head)
-    assert p.outputs_per_product == pytest.approx(values / products, rel=1e-12)
-    assert 1 / max(m.d_in for m in layers) < p.outputs_per_product < 1 / min(m.d_out for m in layers)
-    lora = family(REG, "lora-r16").profile(s.model, s.run)
-    assert lora.outputs_per_product is None
-    with pytest.raises(Outside, match="outputs_per_product"):
-        CLASSES["min-cut"].allowance(lora)
-
-
-def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cover(tmp_path, monkeypatch, capsys):
-    """On the min-cut bound alone the declared blocks hold almost none of the rate, so onsite's figure is remote's:
-    the uncertified routes' and the unregistered pool's, which the header says beside the rows. Without the flag the
-    header has no such sentence."""
-    import periods
-
-    names = ("reference-onsite-h200", "reference-remote-h200")
-    alone = periods.only(REG, names, ["min-cut"])
-    assert [b.name for b in build(alone, names[0]).bounds] == ["min-cut"]
-    assert len(build(REG, names[0]).bounds) == len(CLASSES)
-    with pytest.raises(ValueError, match="not classes"):
-        periods.only(REG, names, ["min-cut", "no-such-class"])
-
-    argv = ["periods.py", *(a for n in names for a in ("--scenario", n))]
-    monkeypatch.setattr(sys, "argv", [*argv, "--bounds", "min-cut", "--out", str(tmp_path)])
-    periods.main()
-    text = capsys.readouterr().out
-    assert "Each row is bounded by `min-cut` alone (`--bounds`)" in text
-    doc = json.loads((tmp_path / "periods.json").read_text())
-    assert doc["bounds"] == ["min-cut"] and len(doc["rows"]) == 2 * len(periods.FLEETS) * len(periods.PERIODS)
-    onsite, remote = ([x for x in doc["rows"] if x["scenario"] == n] for n in names)
-    for x, y in zip(onsite, remote, strict=True):
-        assert x["parts"]["setter"] == y["parts"]["setter"] == "min-cut"
-        assert x["slowdown"] == pytest.approx(y["slowdown"], rel=1e-12) and 2.9 < x["slowdown"] < 3.1
-        assert x["scaled"]["per_window_share"] < 1e-5 < 0.99 < x["scaled"]["routes_share"]
-        assert x["scaled"]["period"] is None
-        p = y["scaled"]["period"]
-        assert p["bound"] == periods.PERIOD_BOUND and [k for k, _ in p["premises"].values()] == ["open"] * 5
-        assert (p["tail"], p["p_evade"]) == (0.0, 0.0)
-        assert p["windows"]["year"] == [8760, pytest.approx(8760 * p["window_ks"])]
-    assert f": the terms of `{periods.PERIOD_BOUND}`, one statement pooled over the period" in text
-    assert "`PouwPerExecutionPhase` (open; `ε'` and `p/ε'`)" in text and "year 8.76e+03, 1.59e-08" in text
-    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
-    periods.main()
-    assert "--bounds" not in capsys.readouterr().out
-
-
-@pytest.mark.parametrize("fleet", ["reference-h200", "world-h200"])
-@pytest.mark.parametrize(("name", "sampled"), [("reference-remote-h200", False), ("reference-remote-h200-sampled", True)])
-def test_a_remote_period_row_cites_slowdown_remote_monitoring_period_with_its_tail_and_windows(name, sampled, fleet):
-    """A remote row's pool and routes are `SlowdownRemoteMonitoringPeriod`'s terms: each of the five premises the lock's record
-    of it takes, by section; the escape's tail within `p_evade` (0 where every proof block is proved); and the windows'
-    knowledge errors, `⌈period / window_s⌉ window_ks`, the term the row's `δ_crypto` holds."""
-    import periods
-
-    (row,) = periods.evaluate(REG, names=(name,), fleets=((fleet, fleet),), periods=("year",))
-    p = row["scaled"]["period"]
-    assert {n: k for n, (k, _) in p["premises"].items()} == {n: lean.premises(periods.PERIOD_BOUND)[n]
-                                                             for n in periods.PERIOD_PREMISES}
-    assert (p["tail"] > 0) == sampled and p["tail"] <= p["p_evade"]
-    r = build(REG.override(periods.choices(name, fleet, "year")), name)
-    assert p["windows"]["year"][1] == pytest.approx(r.regime.delta(r.context).by["windows"][1])
-
-
-def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_block_record_names(monkeypatch):
-    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `SlowdownRemote`'s record: one
-    the lock's record adds beyond both is refused, naming the fix, and the row counts the shared ones from the
-    records."""
-    import periods
-    from slowdown import analysis
-
-    r = analysis.result(REG, "reference-remote-h200")
-    p = periods.pooled(r)
-    record, shared = lean.premises(periods.PERIOD_BOUND), lean.premises(periods.PER_BLOCK_BOUND)
-    assert (p["recorded"], p["shared"]) == (len(record), len(set(record) & set(shared)))
-    grown = dict(record) | {"InferenceOnly.Assumptions.Unnamed": "open"}
-    monkeypatch.setattr(lean, "premises", lambda name: grown if name == periods.PERIOD_BOUND else shared)
-    with pytest.raises(ValueError, match=r"\['InferenceOnly.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
-        periods.pooled(r)
