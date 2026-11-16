@@ -164,6 +164,29 @@ def test_indexer_rows(indexer_window):
         IF.check_proof_block(fn, circuit.cuts.get(tid))
 
 
+@pytest.mark.slow
+def test_indexer_scores(indexer_window):
+    """The indexer's scores are their slices along the keys, a unit one row's score of one key (the logits' Boolean body at
+    N = 1): the prefill's last row scores the prompt's 32 keys and the decode's row 33. Unit n reads its row's query and head
+    weights from the row's `DsaIndexerQ_v1` unit and key n's row and scale from key n's `DsaIndexerKRow_v1` unit, each one
+    writer's row, so no port is cut. About 6 s with `test_indexer_rows`, whose window it reads."""
+    circuit, w = indexer_window
+    census = w.census(circuit)
+    assert "DsaMqaLogits" not in census["unlowered"] and "DsaMqaLogits" not in census["free"]
+    scores = _tid(circuit, r"DsaMqaLogits_v3\{N=1,.*\}")
+    krow, q = (_tid(circuit, rf"{f}_v1\{{.*\}}") for f in ("DsaIndexerKRow", "DsaIndexerQ"))
+    assert circuit.units[scores] == 2 * LP + 1
+    assert scores not in circuit.cuts
+    assert {(x.writer, x.port) for x in circuit.wires if x.reader == scores} == {(q, "q"), (q, "w"), (krow, "k"), (krow, "ks")}
+    for at, count, _f in w.allocs[scores]:
+        first = {p: _writer(circuit, scores, p, at) for p in ("q", "w", "k", "ks")}
+        assert first["k"][1:] == ("o0", first["ks"][2]) and first["ks"][1] == "o1" and first["q"][2] == first["w"][2]
+        for n in (1, count - 1):
+            assert _writer(circuit, scores, "k", at + n) == (krow, "o0", first["k"][2] + n)
+            assert _writer(circuit, scores, "ks", at + n) == (krow, "o1", first["ks"][2] + n)
+            assert _writer(circuit, scores, "q", at + n) == first["q"]
+
+
 TOPK, E = 8, 256
 MOE = ("CublasSplitKGemmF32Out", "LlBf16DotprodGemm", "MoeRouterSigmoidBias", "Fp8GroupQuantUe8m0", "MoeExpertFp8Gemm",
        "MoeExpertFp8GemmW")
