@@ -1,4 +1,4 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbitrary serving: what it can carry".
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbitrary serving: what it can carry".
 
 ### Attacks
 
@@ -42,7 +42,7 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - a duplicate `id`, and requests out of their first rows' order, are refused (14, written);
   - schedule choices that leave the outputs unchanged (a chunked prefill, a hit instead of a recomputation, a resume in
     place) are distinct advices, each charged (2, 7, written).
-- **N2's advice mode** (no N2 unit reads the advice yet):
+- **N2's advice mode** (no N2 proof block reads the advice yet):
   - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11);
   - a response handed before its request's anchor plus the window's δ and ⌊λ/ρ⌋ is refused, and with δ = 0 the
     anchor's own bucket is admitted;

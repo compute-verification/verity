@@ -1,4 +1,4 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The replay at the served shape
 

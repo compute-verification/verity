@@ -1,4 +1,4 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The charge's carry across windows (`charge_chain`)
 
@@ -204,7 +204,7 @@ premise (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`
 
 The Lean definitions (`security/Definitions/Certifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
-(`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
+(`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`../../attester/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
 **The slice.** The compile slice's class runs inside the pool bound with the network attester's ingress, so its
@@ -215,7 +215,7 @@ the length terms yet. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-ch
 terms. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`, the served windows' slice except under the certified
 tick) charges them with `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its
 ``a_valid``, mt its certified max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What
-holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens
+holds ``cert`` to the certified record is a stand-in, the honest cert row under the network attester's salt, until max_tokens
 is read from the certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits
 passes at a lower charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the
 arrivals the replay loads. A class whose windows send order entries or length terms (or a code's that sends hits) does

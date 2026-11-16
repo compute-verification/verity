@@ -1,4 +1,4 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The compile slice's charge, and a served window at its engine's class
 
@@ -14,7 +14,7 @@ checked witness unique, that witness counts as free input at its width, so its c
 one a block the window keys, from a ragged token row registered with each slot's keyed block count, RB's touched list
 is the addresses the stream touches, and each running slot's request number is carried in the slot row ``cout``
 registers. Its charge is v4's, at its own checked witness's width. `CompileSlice_v6` and `PoolWindow_v1`
-(`verity_vllm.compiler.compile_slice_v6`) are v5 cut in two units with the block pool carried between windows: the pool
+(`verity_vllm.compiler.compile_slice_v6`) are v5 cut in two proof blocks with the block pool carried between windows: the pool
 window opens the pool row under the previous window's output root, registered before the window's coins, and commits the
 row its stream leaves as the next. Both are proved every window, and a chain restarts from the empty pool's root after a
 failed window. A request open at the window's edge is cut, having emitted its ``a_O``, and continues in the next window
@@ -106,8 +106,10 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
   - With the served rows in ``srv``, they are refused by ``rows``.
   - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
 
-**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each proof
-block, a `CompileSlice_v7` unit, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
+**In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py prove --slice w212 --out DIR --bin FLOCK --lean
+VERIFY`, and `--slice demo`; `compile_slice_zk.sh` builds Flock's `flock-circuit` and the Lean `verity-verify-proof` and
+runs it as a job of 16 CPUs and 64 GB), each proof
+block, a `CompileSlice_v7`, is proved by Flock `prove --zk` behind the Lean ZK server and held by Lean
 `verify --zk`. The verifier opens only ``pub`` and the verdict, and runs the bindings, the carry chain's among them, on
 the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
 salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path
