@@ -71,10 +71,15 @@ block of `FregR` is paid once, at most `e i` (`pr_phaseHit_le`, summed over the 
 It and `CheckedWitness` each say the check holds on an accepted run except with probability `εchk`, at different runs
 and provers, and neither gives the other yet. `CheckedWitness` is at the runs of the extracted witness (`certifierRun`),
 over the extractor's coins as well, for every prover, its runs fixed before the prover; `PhaseChecks` is at `regRunR`,
-which reads the prover's strategy, for the period's own provers. So `CheckedWitness` cannot be stated at `regRunR`'s
-run, and a check that discharges one does not yet discharge the other. At one prover, `prCheckMissR_le_prCheckMiss`
-bounds this miss by `PrCheckMiss` on `regRunR`'s run plus the probability that an accepted run's extraction fails or
-meets a class sampled `all`, which no premise bounds. -/
+which reads the prover's strategy, for the period's own provers.
+
+The bridge lemma is `prCheckMissR_le_prCheckMiss`, and it is one-way: it bounds `PrCheckMissR` by `PrCheckMiss` on
+`regRunR`'s run plus a second term, not the reverse. The second term is the probability that an accepted run's
+extraction gives no witness, or one whose incorrect set meets a class sampled `all`; it is paid by the proof system's
+knowledge error at `δ = 0` (`D.κ 0 x + √(D.γ x · Pr[B]) + Pr[B_ext]`, from `A.KS`, the commitment's binding and the
+sessions' contract). What is still open is the other leg: `CheckedWitness` bounds `PrCheckMiss` at runs fixed before the
+prover, while `regRunR` reads the prover's strategy, so `CheckedWitness` cannot be stated at `regRunR`'s run. Until that
+bridge is closed, the existing hypothesis `CheckedWitness` does not discharge `PhaseChecks`. -/
 def PhaseChecks [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) {L S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (sw : Fin m → AuditStatement) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)

@@ -21,10 +21,12 @@ network attester has no connection; its record is the one step's `twoObs` (`chec
 guarantee's event there, which is not empty: at every history the phase is accepted, registered as the period's and
 its record complete.
 
-Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`): at that instance the bound's right side is `0`, below
-`1`, the phase's own error being `0` (`twoL` makes no SHA-512 call, `twoL_εregX` and `twoL_bopsX`), and the checked
-count is strictly below `PooledLeakRegistered`'s, the checked input being a free input outside the registered ones
-(`pooledCount_checked_lt`).
+Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`) is in the lock's form: the negated probability bound at
+`main`'s `leakL` instance, with the checked good event at a nonempty checked set and the pinning predicate, which follows
+from `PooledLeakRegistered_nontrivial` through `pooledGood_of_pooledGoodChecked`. The count comparison is a separate
+lemma (`PooledLeakRegisteredChecked_count_lt`): with the gate `1` checked and no input registered, the factor the count
+takes for the phase's inputs is strictly below this theorem's own count at `chk = ∅` (`pooledCount_checked_lt`), not
+below `PooledLeakRegistered`, which states no count.
 
 Its third (`PhaseChecks_invalid`): `PhaseChecks` at `εchk = 1/2` at a prover `twoL` accepts on half its tapes
 (`coinP₂`), under a check that pins the checked input and that the run at the trace with the registered openings fails
@@ -38,7 +40,8 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness
 open Claims.SamplingGeneric (Arg Compiled)
-open Claims.Witness.SamplingGeneric (twoA twoL twoStmt twoPart twoProg twoSessions_meets twoL_parse twoL_partition)
+open Claims.Witness.SamplingGeneric (twoA twoL twoStmt twoPart twoProg twoSessions_meets twoL_parse twoL_partition
+  leakL notProg notStmt notPart)
 
 local notation "shaD" => FlockDeploy.sha512
 
@@ -90,6 +93,69 @@ ingress, which is the gate `0`. -/
 theorem one_mem_freeInputs : 1 ∈ freeInputs twoStmt.prog twoLay 1 := by
   decide
 
+/-! ## An output lane where the pin passes and the always-true predicate is refused
+
+`twoLay`, the honest instance's layout, has no output lane (`L = 0`), so `CheckedUnique` over it holds for every check,
+including the always-true one: it is vacuous there, and over `twoStmt`'s program of two inputs no fitting layout has an
+output lane (every output of that program is an input). `notLay` (`⟨fun _ _ _ => (1, []), fun _ => [0]⟩`) does not fit
+`twoStmt`'s program for the same reason, so the honest witness cannot be rebuilt on it. The smallest instance with an
+output lane where the pin passes and the always-true predicate is refused is `notProg` (`[input, ¬ gate 0]`) under the
+layout `outLay`, whose egress presence gate is the computed output `1` and whose ingress is empty, so the gate `0` is a
+free input the output varies with. There the pinning predicate at the checked set `{0}` meets `CheckedUnique`
+(`outLay_pins`) while the always-true predicate does not (`outLay_refuses_allTrue`). It carries no sampled sessions and
+is not used to rebuild the accepting witness; it exhibits, on `main`'s toy definitions, a layout at which the check's
+predicate is load-bearing. -/
+
+/-- A layout with an output lane: no ingress, the egress presence gate the program's computed output `1`. Unlike
+`notLay`, whose ingress is the gate `0`, it leaves the gate `0` a free input, so the output gate `1 = ¬ gate 0` varies
+with it. -/
+def outLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => []⟩
+
+/-- `outLay` fits `notProg` over one step: its egress presence gate `1` is a computed output (`¬ gate 0`), not an input;
+it has no ingress gate; and there is no later step for an egress gate to depend on. -/
+theorem outLay_fits : outLay.Fits notProg 1 := by
+  refine ⟨fun t ht ℓ σ g hg => ?_, fun t ht g hg => by simp [outLay] at hg,
+    fun t ht t' ht' htt' => absurd htt' (by omega)⟩
+  simp only [outLay, slotGates, List.mem_cons, List.not_mem_nil, or_false] at hg
+  subst hg
+  exact ⟨by decide, by decide⟩
+
+/-- The gate `0` of `notProg` is a free input at `outLay`: an input, and no step's ingress, which is empty. -/
+theorem zero_mem_freeInputs_notProg : 0 ∈ freeInputs notProg outLay 1 := by decide
+
+/-- `notProg`'s output gate `1` runs to the negation of its ingress gate `0`, at inputs held nowhere. -/
+theorem notProg_valOver_one (inp : ℕ → Bool) {free : ℕ → Option Bool} (h0 : free 0 = none) (h1 : free 1 = none) :
+    valOver notProg inp free 1 = !(inp 0) := by
+  rw [valOver_of_none_some notProg inp h1 (show notProg.gates[1]? = some (.not 0) from rfl)]
+  show (!(valOver notProg inp free 0)) = !(inp 0)
+  rw [valOver_of_none_some notProg inp h0 (show notProg.gates[0]? = some .input from rfl)]
+
+/-- **The pin passes at the output lane**: the check that pins the free input `0` to `false` meets `CheckedUnique` at
+`notProg` under `outLay` (`checkedUnique_pin`, which needs the layout to fit). -/
+theorem outLay_pins :
+    CheckedUnique notProg notPart notStmt.design outLay 1 {0} (fun ρ => ∀ g ∈ ({0} : Finset ℕ), ρ g = false) :=
+  checkedUnique_pin notPart notStmt.design outLay_fits
+    (Finset.singleton_subset_iff.2 zero_mem_freeInputs_notProg) (fun _ => false)
+
+/-- **The always-true predicate is refused at the output lane**: `CheckedUnique` over `notProg` and `outLay` at the
+checked set `{0}` fails for the check that accepts every run. Two runs that agree off `{0}` but set the free input `0`
+to `false` and to `true` compute the output gate `1` to `true` and to `false`, so their egress rows differ, though both
+pass the always-true check. So the honest and nontrivial witnesses' `CheckedUnique` is not satisfied by any predicate:
+the pinning predicate is what makes it hold here. -/
+theorem outLay_refuses_allTrue :
+    ¬ CheckedUnique notProg notPart notStmt.design outLay 1 {0} (fun _ => True) := by
+  intro h
+  have hrow := h 0 Nat.one_pos [[]] [[]] (fun _ => false) (fun g => decide (g = 0)) (fun _ => none)
+    rfl rfl (fun _ _ => rfl) (fun g hg => by have hg0 : g ≠ 0 := by simpa using hg; simp [hg0])
+    (fun g b hb => by simp at hb) trivial trivial 0
+  have hv1 : valOver notProg (outLay.inputOf 1 [[]] (fun _ => false)) (fun _ => none) 1 = true := by
+    rw [notProg_valOver_one _ rfl rfl, inputOf_of_mem_freeInputs rfl (fun _ => false) zero_mem_freeInputs_notProg]
+  have hv2 : valOver notProg (outLay.inputOf 1 [[]] (fun g => decide (g = 0))) (fun _ => none) 1 = false := by
+    rw [notProg_valOver_one _ rfl rfl,
+      inputOf_of_mem_freeInputs rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg]
+  have hc := congrFun hrow 0
+  simp only [rowOf, outLay, hv1, hv2] at hc
+
 /-- At the honest instance the phase is registered as the period's with no input registered: its statement parses to
 `twoStmt` with the partition `twoPart`. -/
 theorem twoPhase_registered_none (ω : Ω₂) (i : Fin 1) :
@@ -107,7 +173,12 @@ construction; it is not a check any deployed system runs. The network attester h
 client, and one secret: the read-back and the channel hold trivially. At every history the phase is accepted, registered
 as the period's and its record complete, which is the guarantee's event. The prover is the one that sends nothing, so
 the witness shows the premises jointly satisfiable at an accepting instance, not that an honest prover of a real program
-passes. -/
+passes.
+
+`twoLay` has no output lane, so its `CheckedUnique` conjunct holds for every check and does not test that the check
+pins anything; `twoStmt`'s program of two inputs admits no fitting layout with an output lane. That the pinning
+predicate is load-bearing where a layout does have an output lane is shown separately, at `notProg` under `outLay`:
+`outLay_pins` holds the pinning predicate and `outLay_refuses_allTrue` refutes the always-true one. -/
 theorem PooledLeakRegisteredChecked_honest :
     (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧
       PhasesAdaptive x₂ P₂ ops₂ ∧
@@ -166,7 +237,7 @@ example (h : Guarantees.PooledLeakRegisteredChecked) :
       (fun _ _ _ => le_rfl) ops₂ had (fun _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl
       (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) checkedArr₂ checkedFormat₂ ()
       checkedTrace₂ htrust checkedRead₂ (fun _ _ => True) hread Set.univ Set.univ checkedSched₂ (fun _ _ => ()) (fun _ _ => ()) hch
-      (fun _ _ _ s hs _ => hcert s hs) 1).1 () (Set.mem_univ _))
+      (fun _ _ _ s hs _ => hcert s hs) 1).1 ())
   exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
 /-! ## The instance's error is `0`: `twoL` makes no SHA-512 call -/
@@ -240,21 +311,68 @@ theorem twoL_εregX (H : Msg → Msg) (x : Msg) : (twoL Bool).εregX H x silentP
   rw [hκ, hγ, twoL_bconfX]
   simp
 
-/-- **`PooledLeakRegisteredChecked`'s bound is not vacuous at the honest instance**: there, at `q = 1`, `Fmax = 1` and
-`εchk = 0`, its right side is `0`, below `1`, the phase's own error being `0` (`twoL_εregX`, `twoL_bopsX`); and the factor
-its count takes for the phase's inputs, with no input registered and the gate `1` checked, is strictly below the one
-`PooledLeakRegistered`'s count takes at the same registration, the gate `1` being a free input outside the registered
-ones (`pooledCount_checked_lt`). Toy code, one phase: it compares the two bounds at one instance and says nothing of a
-deployed check or of how many secrets a deployed record singles out. -/
+/-! The instance the bound fails at: one step's record over one egress link that holds no frame, jitter class `0`,
+every status complete (`obs₁`), as in `PooledLeakRegistered_nontrivial`. -/
+
+local notation "obs₁" => ([Obs.mk (fun _ _ => none) 0 (fun _ => Status.complete)] : List (Obs 1 1 1))
+
+/-- **`PooledLeakRegisteredChecked`'s bound fails at a verifier that always accepts**, in the lock's form: the negated
+probability bound at `main`'s `leakL` instance, with the checked good event `PooledGoodChecked` at a nonempty checked set
+`{0}` and the pinning predicate in place of `PooledLeakRegistered_nontrivial`'s `PooledGood`, and the checked error
+summand `εchk = 0` added. One execution phase audited by `leakL` with no registered opening, at `q = 1`, `Fmax = 1` and
+no error; the phase is registered as the period's and its record of one step is complete, and the layout `trivLay` does
+not fit the registered program, so its good event fails at every history. That the checked good event also fails there
+follows from `main`'s `PooledLeakRegistered_nontrivial` reasoning through `pooledGood_of_pooledGoodChecked`, since
+`PooledGoodChecked` implies `PooledGood`. Toy code, one phase, no secret: the prover is the one that sends nothing. -/
 theorem PooledLeakRegisteredChecked_nontrivial :
-    (1 - 1 : ℝ) ^ 1 + ∑ i, e₂ i + ∑ _ : Fin 1, (0 : ℝ) < 1 ∧
+    ¬ Pr (fun ω : Fin 1 → Unit × (Fin 1 → Bool) =>
+        (∀ i, phaseAcc (m := 1) (kV := 1) shaD (fun _ => leakL Bool) (fun _ _ _ => []) (fun _ _ _ => silentP)
+            (fun _ _ _ => le_rfl) () i ω (ω i) ∧
+          PhaseRegistered (m := 1) (kV := 1) (fun _ => leakL Bool) (fun _ => trivLay) (fun _ => 1) (fun _ => ∅)
+            (fun _ => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => []) (fun _ _ _ _ => []) () ω i ∧
+          RecordComplete (m := 1) (kV := 1) (fun _ => 1) 1 (fun _ => notStmt) (fun _ _ _ => obs₁) () ω i) ∧
+        ¬PooledGoodChecked (fun _ => trivLay) (fun _ => 1) (fun _ => ∅)
+          (fun _ ρ => ∀ g ∈ ({0} : Finset ℕ), ρ g = false) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
+          (fun _ _ => false) (fun _ _ _ => [false]) 1
+          (WregR (m := 1) (kV := 1) shaD (fun _ => leakL Bool) (fun _ _ _ => []) (fun _ _ _ => silentP)
+            (fun _ _ _ _ => []) () ω) (fun _ => obs₁)) ≤
+      (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
+  have hp : (fun ω : Fin 1 → Unit × (Fin 1 → Bool) =>
+      (∀ i, phaseAcc (m := 1) (kV := 1) shaD (fun _ => leakL Bool) (fun _ _ _ => []) (fun _ _ _ => silentP)
+          (fun _ _ _ => le_rfl) () i ω (ω i) ∧
+        PhaseRegistered (m := 1) (kV := 1) (fun _ => leakL Bool) (fun _ => trivLay) (fun _ => 1) (fun _ => ∅)
+          (fun _ => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => []) (fun _ _ _ _ => []) () ω i ∧
+        RecordComplete (m := 1) (kV := 1) (fun _ => 1) 1 (fun _ => notStmt) (fun _ _ _ => obs₁) () ω i) ∧
+      ¬PooledGoodChecked (fun _ => trivLay) (fun _ => 1) (fun _ => ∅)
+        (fun _ ρ => ∀ g ∈ ({0} : Finset ℕ), ρ g = false) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
+        (fun _ _ => false) (fun _ _ _ => [false]) 1
+        (WregR (m := 1) (kV := 1) shaD (fun _ => leakL Bool) (fun _ _ _ => []) (fun _ _ _ => silentP)
+          (fun _ _ _ _ => []) () ω) (fun _ => obs₁)) = fun _ => True := by
+    funext ω
+    refine propext (iff_true_intro ⟨fun i => ⟨run_accV_out shaD silentP [] (ω i).1 _, ?_, ?_⟩, fun h => ?_⟩)
+    · exact ⟨notStmt, rfl, ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, fun g hg => by simp at hg⟩
+    · refine ⟨fun t ht _ κ => ?_, rfl, fun y hy => ?_⟩
+      · obtain rfl : t = 0 := Nat.lt_one_iff.1 ht
+        rfl
+      · simp only [List.mem_singleton] at hy
+        subst hy
+        exact Nat.one_pos
+    · exact absurd (((pooledGood_of_pooledGoodChecked (op := fun _ _ _ _ => [false]) h).2 0).1.1 0 Nat.one_pos 0 0 0
+        (by simp [trivLay, slotGates])).1 (by decide)
+  rw [hp, Claims.Sampling.Pr_true]
+  norm_num
+
+/-- **The checked count is strictly below this theorem's count at `chk = ∅`**: where the gate `1` is checked, no input
+registered and `Dj = 1`, the factor the count takes for the phase's inputs is strictly below the one it takes at the
+empty checked set, the gate `1` being a free input outside the registered ones (`pooledCount_checked_lt`). It compares
+this theorem's count at `chk = {1}` against its own count at `chk = ∅`, not against `PooledLeakRegistered`, which states
+no count. Toy code, one phase. -/
+theorem PooledLeakRegisteredChecked_count_lt :
     ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ (∅ ∪ {1})).card *
         1 ^ 1) <
-      ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ ∅).card * 1 ^ 1) := by
-  refine ⟨?_, pooledCount_checked_lt (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) Nat.one_pos
-    (fun _ => twoStmt) 0 (Finset.mem_singleton_self 1) one_mem_freeInputs (Finset.notMem_empty 1)⟩
-  simp only [twoL_εregX, twoL_bopsX]
-  norm_num
+      ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ ∅).card * 1 ^ 1) :=
+  pooledCount_checked_lt (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) Nat.one_pos
+    (fun _ => twoStmt) 0 (Finset.mem_singleton_self 1) one_mem_freeInputs (Finset.notMem_empty 1)
 
 /-! ## A check missed by an invalid run at a phase that accepts on half its tapes -/
 
@@ -329,8 +447,10 @@ with the registered openings (`coinValid₂`): a check that pins a checked input
 `checkedUnique_pin`), which that run fails. That run reads no tape, so it fails the check on every tape. The incorrect
 set `FregR` is empty, so the miss is not charged to the phase's error: it is the acceptance probability, `1/2`, and
 `PhaseChecks` holds at `εchk = 1/2` and at no smaller value. So the premise is more than "the run passes the check": it
-bounds how often a phase accepts while its run fails. Toy code, one phase, no secret: the check is not one a deployed
-system runs, and the prover is not an honest prover of a real program. -/
+bounds how often a phase accepts while its run fails. The run at the registered trace reads no tape, so the `1/2` comes
+from acceptance alone; the lemma shows `εchk < 1` is reachable for a prover whose run fails the predicate on every tape,
+and does not show a prover whose run fails on some tapes only. Toy code, one phase, no secret: the check is not one a
+deployed system runs, and the prover is not an honest prover of a real program. -/
 theorem PhaseChecks_invalid :
     (∀ _ : Fin 1, CheckedUnique twoStmt.prog twoPart twoStmt.design twoLay 1 {1} (coinValid₂ twoStmt)) ∧
       ¬coinValid₂ twoStmt coinRun₂ ∧
@@ -353,3 +473,10 @@ theorem PhaseChecks_invalid :
     fun g => !coinRun₂ g, hnot, hmiss, fun _ _ _ => hmiss.le⟩
 
 end NetTiming.Witness
+
+#print axioms NetTiming.Witness.PooledLeakRegisteredChecked_honest
+#print axioms NetTiming.Witness.PooledLeakRegisteredChecked_nontrivial
+#print axioms NetTiming.Witness.PooledLeakRegisteredChecked_count_lt
+#print axioms NetTiming.Witness.PhaseChecks_invalid
+#print axioms NetTiming.Witness.outLay_pins
+#print axioms NetTiming.Witness.outLay_refuses_allTrue

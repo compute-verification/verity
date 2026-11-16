@@ -80,7 +80,7 @@ def PooledLeakRegisteredChecked : Prop :=
         (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i)) s (ops z ω i s)
         ((run tap (schedOf z ω, srvOf z ω)).2 i))
     (Fmax : ℕ),
-    (∀ z ∈ Zs, Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i) ∧
+    (∀ z, Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i) ∧
           PhaseRegistered D lay k reg sw Pw ρ x ops z ω i ∧
           RecordComplete k Dj sw (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) z ω i) ∧
         ¬PooledGoodChecked lay k reg valid Dj sw Pw ρ

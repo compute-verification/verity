@@ -4,6 +4,7 @@ public import Definitions.Certifier.Guarantees.PooledRegChecked
 public import Proofs.Certifier.PooledReg
 public import Proofs.Certifier.Carried
 import Proofs.Certifier.MonitoringPeriodSum
+import Proofs.Flock.SamplingGeneric
 
 /-!
 # The checked bound pooled over a monitoring period, proved
@@ -536,7 +537,7 @@ theorem pooledLeakRegisteredChecked : Guarantees.PooledLeakRegisteredChecked := 
   intro Coin _ _ _ A H D hA hb hS Lk K S lay k reg chk valid Dj m kV Tp Sec _ _ sw Pw ρ hchk op x Pv hk ops had hops
     q hq0 hq1 hrate e he εchk hck hfit Conn Cell Srv Dev Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf
     dec hch hcert Fmax
-  refine ⟨fun z _ => ?_, fun ω => ?_⟩
+  refine ⟨fun z => ?_, fun ω => ?_⟩
   · have he0 : ∀ i, 0 ≤ e i := fun i =>
       le_trans' (he z (fun _ => (Classical.arbitrary Tp, fun _ => default)) i)
         (add_nonneg (Compiled.εregX_nonneg H _ _ _) (Claims.Pr_nonneg _))
@@ -587,7 +588,8 @@ theorem pooledGood_of_pooledGoodChecked {L K S m : ℕ} {lay : AuditStatement �
 
 /-- **The discount is real**: where some phase's check covers a free input off its registered ones and `Dj > 0`, the
 count's product over the phases with the checked inputs left out is strictly below the product with only the
-registered inputs left out (`PooledLeakRegistered`'s inputs, `chk = ∅`). -/
+registered inputs left out, which is this theorem's own count at `chk = ∅`. The comparison is against this theorem's
+count at the empty checked set, not against `PooledLeakRegistered`, which states no count. -/
 theorem pooledCount_checked_lt {L S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg chk : AuditStatement → Finset ℕ) {Dj : ℕ} (hDj : 0 < Dj) (sw : Fin m → AuditStatement) (i₀ : Fin m)
     {g : ℕ} (hg : g ∈ chk (sw i₀)) (hgf : g ∈ freeInputs (sw i₀).prog (lay (sw i₀)) (k (sw i₀)))
@@ -616,29 +618,72 @@ theorem pr_lift_ext {Ω β γ : Type} [Fintype Ω] [Fintype β] [Fintype γ] [No
 
 /-- **`PhaseChecks`'s miss from `CheckedWitness`'s, at one prover**: the check's miss at the trace with the registered
 openings (`PrCheckMissR`) is at most its miss at the extracted witness (`PrCheckMiss`) on the run `regRunR`, plus the
-probability that the run accepts while the extraction gives no witness, or one whose incorrect set meets a class
-sampled `all`. One direction only, and not at the same `εchk`: `CheckedWitness` bounds `PrCheckMiss` at runs fixed
-before the prover, and `regRunR` reads the prover's strategy, so `CheckedWitness` at `regRunR` needs its runs read at
-the prover; and the second term, the extraction's failure on an accepted run, is bounded by no premise here. -/
+proof system's knowledge error at `δ = 0` (`D.κ 0 x + √(D.γ x · Pr[B]) + Pr[B_ext]`). One direction only: it bounds
+`PrCheckMissR` by `PrCheckMiss`, not the other way, because `CheckedWitness` bounds `PrCheckMiss` at runs fixed before
+the prover while `regRunR` reads the prover's strategy, so `CheckedWitness` at `regRunR` needs its runs read at the
+prover.
+
+The second summand is the probability that the run accepts while the extraction gives no witness, or one whose incorrect
+set meets a class sampled `all`. That event lies inside the sampling relation's bad event at `δ = 0`: an accepted run
+whose extraction is `none` is bad, and one whose extraction is `some w` with the incorrect set not disjoint from the
+`all`-sampled slots has that set's sampling probability `0` (`classesPa_eq_zero`), so it is in no `M_0` and is bad too.
+Knowledge soundness of the sampled compiler (`compilerKS`, from `A.KS`, the commitment's binding and the sessions'
+contract) pays that event with its `δ = 0` error. -/
 theorem prCheckMissR_le_prCheckMiss (H : Msg → Msg) (D : Compiled Coin A) {L S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (ops : AuditStatement → List (Opening Bool))
-    [Nonempty (D.E.C x)] :
+    (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (ops : AuditStatement → List (Opening Bool))
+    [Nonempty (D.E.C x)] (hA : A.KS H) (hb : D.commit.Binds H) (hS : D.Sessions H) :
     PrCheckMissR H D lay k valid x P ops ≤
       PrCheckMiss H D (fun s Pt _ => {regRunR H D P x ops lay k s Pt}) valid x P +
-        Pr fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => (run H P D.V x r.1 r.2.1).out = .acc ∧
+        (D.κ 0 x + Real.sqrt (D.γ x * PrB H D.V P x) + (Bext H D.V D.E Ω P x).Pr H) := by
+  classical
+  have hstep : PrCheckMissR H D lay k valid x P ops ≤
+      PrCheckMiss H D (fun s Pt _ => {regRunR H D P x ops lay k s Pt}) valid x P +
+        Pr (fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => (run H P D.V x r.1 r.2.1).out = .acc ∧
           ¬∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧ D.partition s = some Pt ∧
-            Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt) := by
-  unfold PrCheckMissR PrCheckMiss
-  refine le_trans (pr_lift_ext (γ := D.E.C x) _).le (Claims.Sampling.Pr_or_le (fun r hr => ?_) le_rfl le_rfl)
-  by_cases he : ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧
-      D.partition s = some Pt ∧ Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt)
-  · obtain ⟨w, s, Pt, hw, hs, hPt, hd⟩ := he
-    obtain ⟨hacc, s', Pt', hs', hPt', -, hv⟩ := hr
-    obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
-    obtain rfl : Pt' = Pt := Option.some.inj (hPt'.symm.trans hPt)
-    exact Or.inl ⟨hacc, w, s', Pt', hw, hs, hPt, hd, _, Set.mem_singleton _, hv⟩
-  · exact Or.inr ⟨hr.1, he⟩
+            Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt)) := by
+    unfold PrCheckMissR PrCheckMiss
+    refine le_trans (pr_lift_ext (γ := D.E.C x) _).le (Claims.Sampling.Pr_or_le (fun r hr => ?_) le_rfl le_rfl)
+    by_cases he : ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧
+        D.partition s = some Pt ∧ Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt)
+    · obtain ⟨w, s, Pt, hw, hs, hPt, hd⟩ := he
+      obtain ⟨hacc, s', Pt', hs', hPt', -, hv⟩ := hr
+      obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
+      obtain rfl : Pt' = Pt := Option.some.inj (hPt'.symm.trans hPt)
+      exact Or.inl ⟨hacc, w, s', Pt', hw, hs, hPt, hd, _, Set.mem_singleton _, hv⟩
+    · exact Or.inr ⟨hr.1, he⟩
+  refine hstep.trans (add_le_add_left ?_ _)
+  have hKS : D.KS H := Claims.SamplingGeneric.compilerKS Coin A D H hA hb hS
+  have hsub : Pr (fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x => (run H P D.V x r.1 r.2.1).out = .acc ∧
+      ¬∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧ D.parse x = some s ∧ D.partition s = some Pt ∧
+        Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt)) ≤
+      PrBad H D.V (Claims.Sampling.R H D.commit D.parse D.partition 0) D.E x P := by
+    refine Claims.Pr_mono fun r hr => ⟨hr.1, ?_⟩
+    rintro hR
+    cases he : (D.E.eval H P x r.1 r.2.1 r.2.2).1 with
+    | none => rw [he] at hR; exact hR
+    | some w =>
+      rw [he] at hR
+      obtain ⟨s, Pt, hs, hPt, hrel⟩ := hR
+      simp only [RelS, Design.M, Set.mem_setOf_eq] at hrel
+      refine hr.2 ⟨w, s, Pt, he, hs, hPt, ?_⟩
+      by_contra hnd
+      have hz : s.design.Pa Pt (faulty H D.commit s Pt w) = 0 :=
+        NetTiming.SampledAuditProof.classesPa_eq_zero s.design.rules Pt.classes 0 _ hnd
+      rw [hz] at hrel
+      exact lt_irrefl 0 hrel
+  refine hsub.trans ?_
+  by_cases hsc : D.Scope x
+  · have hk := (hKS 0 le_rfl) x hsc Ω P
+    simpa using hk
+  · have hzero : PrBad H D.V (Claims.Sampling.R H D.commit D.parse D.partition 0) D.E x P = 0 := by
+      unfold PrBad
+      refine le_antisymm ?_ (Claims.Pr_nonneg _)
+      refine (Claims.Pr_mono (q := fun _ => False) fun r hr => hsc ?_).trans_eq Claims.Pr_false
+      exact hS.refuses x Ω P r.1 r.2.1 hr.1
+    rw [hzero]
+    refine add_nonneg (add_nonneg (D.κ_nonneg le_rfl x) (Real.sqrt_nonneg _)) ?_
+    unfold Finder.Pr; exact Claims.Pr_nonneg _
 
 end NetTiming
 
