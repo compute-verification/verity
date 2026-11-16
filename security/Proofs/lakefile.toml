@@ -207,7 +207,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.AcceptsTop", "Proofs.Properties.Verity.SampledTwo.BlobFinder",
   "Proofs.Properties.Verity.SampledTwo.CopyOfOne", "Proofs.Properties.Verity.SampledTwo.CouplesWired",
   "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormAgreed",
-  "Proofs.Properties.Verity.SampledTwo.FormBytes",
+  "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
   "Proofs.Properties.Verity.SampledTwo.FormCount", "Proofs.Properties.Verity.SampledTwo.FormDraw",
   "Proofs.Properties.Verity.SampledTwo.FormMember", "Proofs.Properties.Verity.SampledTwo.FormPrint",
   "Proofs.Properties.Verity.SampledTwo.FormSetup", "Proofs.Properties.Verity.SampledTwo.FormStmts",
