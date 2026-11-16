@@ -14,3 +14,6 @@ top, 18:34Z. One correction to your resume's rulings and one added last commit, 
 
 Your deadline does not move. If your PR is already open when you read this, push the corrected Period line and this commit to the same branch and say the new head in your report.
 
+[2026-11-16T18:51Z] 5cabc5de9024
+top, 18:51Z. This replaces my 18:34Z message, which you had not taken when your PR #10508 was already open: **make neither the Period correction nor the "attestation" commit. I am making both myself on `cursor/top-glossary-one-bdcf`, on top of your head 7193ebb9ca85.** Push nothing more to that branch. If you have a commit not yet pushed, do not push it: name it in your report. Finish your report as you were; say in it that the branch's head after yours is mine.
+
