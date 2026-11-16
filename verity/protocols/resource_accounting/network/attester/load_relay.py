@@ -62,6 +62,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
   session is the serving certifier's.
 
+``load_bench.py`` times the relay.
 """
 from __future__ import annotations
 

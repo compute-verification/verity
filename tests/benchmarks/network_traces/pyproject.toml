@@ -29,6 +29,7 @@ untraced = [
     "test_scan_zk_challenger.py",
     "test_scan_zk_lean_one.py",
     "test_served_session.py",
+    "test_wipe_gate.py",
 ]
 # record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor device's gate, whose
 # session served_session starts, is live_challenger's auditor device. test_certifier_piece holds the block record's certifier entry to the block record's

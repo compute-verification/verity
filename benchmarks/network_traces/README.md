@@ -42,7 +42,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `leak_guard.py` (the record's leak
   guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
   `served_session.py` is the served session's runbook (below).
-- **The weights' load:** the network attester's `attester/load_relay.py` (below).
+- **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
+- **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 
 ## The gate's load
 
@@ -64,13 +65,26 @@ two gate verbs on the auditor's machine:
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The network attester's host
   never writes a salt.
 
+## The wipe's egress
+
+Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
+its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
+(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
+when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
+`$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
+record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
+gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
+is certified. The record is all the script writes: what the wipe's reader does with one is
+its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
+
 ## The served session
 
 `served_session.py` is the runbook of the served session of record, the network attester in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
 `site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
-(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`) and a chain on the gate's coins read
-it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
+(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
+`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
