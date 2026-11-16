@@ -1,6 +1,6 @@
 # network_traces
 
-The network certifier (`verity/protocols/accounting/certifier/`) on real served traffic: per-token timing traces for its
+The network certifier (`verity/protocols/resource_accounting/network/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint as a relay of the egress record's one form (`network_certifier`), the
 zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
@@ -19,11 +19,11 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## Entry points
 
 - **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and
-  `verity/protocols/accounting/certifier/device/stall_probe.py` finds what makes a tick late.
+  `verity/protocols/resource_accounting/network/attester/stall_probe.py` finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** The certifier's `device/network_certifier_serve.py` runs
-  `verity.protocols.accounting.certifier.verifier.network_certifier`, the network certifier as a relay in front of any
+  `verity.protocols.resource_accounting.network.verifier.network_certifier`, the network certifier as a relay in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
   run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags, the publisher's keep of each
@@ -57,7 +57,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## The demo's load
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`verity.protocols.accounting.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`verity.protocols.resource_accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
@@ -85,7 +85,7 @@ record from what the gate published. Each execution phase that, with its verific
 schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
 gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
 is certified. The record is all the script writes: what the wipe's reader does with one is
-its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
+its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
 
 ## The served session
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 
-from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.runtime.stream import Side
 
 if __name__ == "__main__":

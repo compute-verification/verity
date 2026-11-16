@@ -19,7 +19,7 @@ from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K, members as M, partition as P, proofs as PF
 
 from test_challenger import entropy

@@ -439,12 +439,12 @@ def record_counts(run: Path) -> dict:
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
-    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
-    from verity.protocols.accounting.certifier.verifier.link_frame import DATA
-    from verity.protocols.accounting.certifier.verifier.certificate import record_head
-    from verity.protocols.accounting.certifier.verifier.grid import row_count
-    from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-    from verity.protocols.accounting.certifier.verifier.network_certifier import END, NetworkCertifierParams, audit, read_cell
+    from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
+    from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
+    from verity.protocols.resource_accounting.network.verifier.certificate import record_head
+    from verity.protocols.resource_accounting.network.verifier.grid import row_count
+    from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+    from verity.protocols.resource_accounting.network.verifier.network_certifier import END, NetworkCertifierParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())
     params = NetworkCertifierParams(**dep["params"])

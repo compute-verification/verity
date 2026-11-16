@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
-from verity.protocols.accounting.poub.prover.node_store.interface import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
     IDENTITY,
     Append,
     Codec,
@@ -46,14 +46,14 @@ from verity.protocols.accounting.poub.prover.node_store.interface import (
     Segment,
     WindowRecord,
 )
-from verity.protocols.accounting.poub.prover.node_store.registry import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
     KindReceipt,
     NodeMemory,
     PoubReceipt,
 )
 
 if TYPE_CHECKING:
-    from verity.protocols.accounting.poub.verifier.audit import Tiles
+    from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 

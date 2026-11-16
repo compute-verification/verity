@@ -31,15 +31,15 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 from p2_v1 import serve  # noqa: E402
 
 import layout as L  # noqa: E402
 import sketch as K  # noqa: E402
 import stage as S  # noqa: E402
-from verity.protocols.accounting.poub.verifier import p2  # noqa: E402
-from verity.protocols.accounting.poub.verifier import receipts as R  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import p2  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as R  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

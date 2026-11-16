@@ -22,9 +22,9 @@ export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/ada
 setup
 (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-(cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
+(cd verity/protocols/resource_accounting/network/verifier/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
   || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-records
 export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
   > "$OUT/build-zk-server.log" 2>&1

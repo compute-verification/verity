@@ -71,7 +71,7 @@ import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from benchmarks.network_traces import network_certifier_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
-from verity.protocols.accounting.registration.verifier import registration as REG  # noqa: E402
+from verity.protocols.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
@@ -1131,7 +1131,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     each, the period's check's terms however few connections were served; with the jitter T_j log2 d_jit = 32 at
     d_jit = 2, a phase's terms but ℓ_{a,j} and k_{skip,j} are 800 bits."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, jitter=schedule["window"])
     public = dict(PUBLIC, K=3 * (768 + 9088 + 32), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
@@ -1160,7 +1160,7 @@ def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whol
     blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure of record adds the
     run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
     audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
@@ -1192,7 +1192,7 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
     over those windows. Drawn whole, none is read and eps is the scans' δ alone. The ONSITE line states the count and
     each period's pooled eps beside the per-window term, and the record and its line leave the node as written."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
     entries = 896 if drawn < 16 else 0
     scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)

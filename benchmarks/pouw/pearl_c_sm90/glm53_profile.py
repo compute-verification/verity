@@ -126,7 +126,7 @@ def _instrument(run, PPD) -> None:
 def run_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)

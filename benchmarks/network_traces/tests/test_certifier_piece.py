@@ -56,19 +56,19 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
-from verity.protocols.accounting.certifier.prover import scan_period as SP  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
-from verity.protocols.accounting.certifier.device import network_certifier_serve as WS  # noqa: E402
-from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_certifier_serve as WS  # noqa: E402
+from verity.protocols.resource_accounting.network.prover.tests.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_network_certifier_chain import WC, gate_run  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import network_certifier as W  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import network_certifier as W  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = ROOT / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
@@ -1620,7 +1620,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
     SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
     lanes and EVERY."""
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
 
     spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)

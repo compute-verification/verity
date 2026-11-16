@@ -20,11 +20,11 @@ import pytest
 from conftest import load
 
 from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.verifier import audit
-from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 
-HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
 R = load("pearl_c_sm120/run.py")
@@ -368,7 +368,7 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
     torch = pytest.importorskip("torch")
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
     from verity_torch.pouw.pearl_c import served_y_device as SYD
     salt_key = bytes(range(100, 132))
     const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
