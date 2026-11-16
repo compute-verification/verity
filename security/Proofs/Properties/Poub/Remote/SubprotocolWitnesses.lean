@@ -847,9 +847,6 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
     have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
 
-/-- **`PublishedEps`' conclusion fails at a check that accepts every log**: such a check publishes one byte read at
-eps 0, and for every session a log may decode to, those outputs neither certify nothing nor carry the sample term,
-which is positive at every node of positive δ. -/
 theorem publishedEps_acceptAll :
     ∀ (params : Poub.Session.Params) (g : ℕ) (_ _ : Array ByteArray) (_ : ℕ) (_ : Array Poub.Session.Event),
       ¬ (((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = ⟨0, 1⟩ ∧ (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).qBytes = 0) ∨
@@ -872,8 +869,6 @@ theorem publishedEps_acceptAll :
 
 /-! ## The honest one-window log -/
 
-/-- **`PublishedEps`' honest witness**: the deployed check accepts the honest one-window log (`HonestLogAccepted`,
-witnessed outside Lean). -/
 theorem publishedEps_honest (h : HonestLogAccepted) :
     ∃ (reg : Poub.Registration) (pub : Poub.Protocol.Public) (prof : Lean.Json),
       Poub.Difftest.registrationOf HonestLog.registration = .ok reg ∧
