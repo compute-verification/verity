@@ -9,11 +9,14 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tomllib
 from pathlib import Path
 
 import pytest
+from verity_cli import run as verity_run
+from verity_cli import served_table
 
 HERE = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run"
 SERVED_RUN = Path("adapters/vllm/tools/served_run")
@@ -317,16 +320,17 @@ def test_a_command_starts_only_under_the_nodes_env_files(tmp_path, mode, sets, r
 
 
 @pytest.mark.parametrize("demo", ["remote", "onsite_network"])
-def test_the_bindings_bind_the_demos_parties_by_the_env_files_names(demo):
-    root = HERE.parents[3]
-    cfg = tomllib.loads((root / "demos" / f"{demo}.toml").read_text())
-    text = (HERE / "bindings" / f"{demo}.toml").read_text()
-    bound = tomllib.loads(text)
-    parties = {p["name"] for p in cfg["party"]}
-    assert set(bound) <= parties and {c for t in bound.values() for c in t} <= set(cfg["protocols"])
-    values = " ".join(str(v) for t in bound.values() for c in t.values() for v in c.values())
-    assert set(re.findall(r"\$\{(\w+)\}", values)) <= {*NODE_A["env_files"], "HOME"}
-    assert not re.search(r"\d+\.\d+\.\d+\.\d+", text)
+def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_path, demo):
+    path = HERE.parents[3] / "demos" / f"{demo}.toml"
+    got = subprocess.run(["bash", str(HERE / "run.sh"), "bindings", str(path)], capture_output=True, text=True, check=False,
+                         env={**os.environ, "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}"})
+    assert got.returncode == 0, got.stderr
+    (f := tmp_path / "bindings.toml").write_text(got.stdout)
+    cfg = tomllib.loads(path.read_text())
+    bound = verity_run.bindings(f, cfg, verity_run.registry())
+    assert bound and not [k for p in cfg["party"] for piece in served_table.pieces(cfg, p["name"]) for k in piece.unbound(bound)]
+    assert set(re.findall(r"\$\{(\w+)\}", got.stdout)) <= {*NODE_A["env_files"], "HOME"}
+    assert not re.search(r"\d+\.\d+\.\d+\.\d+", got.stdout)
 
 
 @pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])

@@ -86,7 +86,7 @@ untraced = [
 # rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
-# tests/tools/test_served_run.py holds the served run's bindings to the demos' configurations they bind.
+# tests/tools/test_served_run.py reads `run.sh bindings`' output for the demos' configurations with `verity run`'s reader.
 # tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
 # tests/protocols/test_pous_option.py runs the memory challenger, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
@@ -122,7 +122,7 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py", "tools/difftest",
-          "tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml"]
+          "tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli"]
 parallel = true
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser

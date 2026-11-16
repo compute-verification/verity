@@ -4,7 +4,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../../../.."
 RUN=window
-case ${1:-} in window|compose|setup|copy|audit|settings) RUN=$1; shift;; esac
+case ${1:-} in window|compose|setup|copy|audit|settings|bindings) RUN=$1; shift;; esac
 DRY=0 DEV=0 TIE=0
 while :; do
   case ${1:-} in --dry-run) DRY=1; shift;; --development) DEV=1; shift;; --tie) TIE=1; shift;; *) break;; esac
@@ -24,6 +24,15 @@ from pathlib import Path
 here, run, dev, tie = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1", sys.argv[4] == "1"
 script = f"adapters/vllm/tools/served_run/{run}.sh"
 placement = tomllib.loads((here / "placement.toml").read_text())
+if run == "bindings":
+    from verity_cli.served_table import pieces
+    cfg, values, out = tomllib.loads(Path(sys.argv[5]).read_text()), placement["node"]["vy-spot-glm53"]["bindings"], {}
+    for piece in (x for p in cfg["party"] for x in pieces(cfg, p["name"])):
+        if mine := {k: values[k] for k in (*piece.binds, *piece.optional) if k in values}:
+            out.setdefault(piece.reaches or piece.party, {})[piece.component] = mine
+    print("\n".join(f"[{p}.{c}]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in t.items())
+                    for p, c_t in out.items() for c, t in c_t.items()))
+    sys.exit(0)
 r = placement["run"]["window" if run == "settings" else run]
 if dev and "development" not in r.get("coins", {}):
     sys.exit(f"run.sh: the {run} run takes no coins, so --development chooses nothing: drop it")
@@ -141,7 +150,7 @@ print("\n".join(["research", "run", "--on", on, "--project", "verity", "--source
 EOF
 )
 [ "${#ARGV[@]}" -gt 0 ] || exit 1
-if [ "$RUN" = settings ]; then
+if [ "$RUN" = settings ] || [ "$RUN" = bindings ]; then
   while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
   [ $# -gt 1 ] || { printf '%s\n' "${ARGV[@]}"; exit 0; }
   shift

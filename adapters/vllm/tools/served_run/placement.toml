@@ -26,6 +26,14 @@ TAPS_AT = "811eb216fe373d3ae3d19973cf4925d98cc87528"
 VY_CHALLENGER_1_HOST = "/root/.config/verity/challenger-1.env"
 VY_AUDITOR_2_HOST = "/root/.config/verity/auditor-2.env"
 
+[node.vy-spot-glm53.bindings]
+# by binding key: `run.sh bindings DEMO` binds each to every party of the demo whose piece reads it
+gate = "research@${VY_CHALLENGER_1_HOST}"
+peer = "vy-spot-glm53"
+key = "tests/benchmarks/pouw/fixtures/challenger-key.json"
+gate-key = "${HOME}/.ssh/vllm_lane_ed25519"
+address = "${VY_AUDITOR_2_HOST}:47611"
+
 [node.vy-nebius-cpu-14]
 
 [run.setup]
