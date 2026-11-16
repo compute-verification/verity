@@ -59,19 +59,31 @@ def _git(*a):
     return subprocess.run(["git", *a], capture_output=True, text=True, errors="replace").stdout
 
 
-def keeps_of(mapname: str, commit: str):
-    key = (mapname, commit)
-    if key in _keeps:
-        return _keeps[key]
+def _map_data(mapname: str, commit: str) -> dict:
     txt = _git("show", f"{commit}:tools/move/{mapname}") if commit and commit != "worktree" else ""
     if not txt:
         p = Path("tools/move") / mapname
         txt = p.read_text() if p.exists() else ""
-    pats = []
-    for m in re.finditer(r"(?ms)^\[keep\]\s*(.*?)(?=^\[|\Z)", txt):
-        pats += [a or b for a, b in re.findall(r"'([^'\n]+)'|\"([^\"\n]+)\"", m.group(1))]
-    _keeps[key] = pats
-    return pats
+    import maps_words
+    try:
+        return maps_words.parse(txt) or {}
+    except Exception:
+        return {}
+
+
+def keeps_of(mapname: str, commit: str):
+    """The regexes a map's [keep] holds (its `patterns`, and its `strings` escaped), as the move tool reads them."""
+    key = (mapname, commit)
+    if key not in _keeps:
+        keep = _map_data(mapname, commit).get("keep", {})
+        _keeps[key] = list(keep.get("patterns", [])) + [re.escape(s) for s in keep.get("strings", [])]
+    return _keeps[key]
+
+
+def keeps_in_of(mapname: str, commit: str):
+    """(glob, word) for each word [keep_in] or [keep_paths] lists for the files a glob matches."""
+    d = _map_data(mapname, commit)
+    return [(g, w) for sec in ("keep_in", "keep_paths") for g, ws in d.get(sec, {}).items() for w in ws]
 
 
 def live_sense(old: str, pairs: list[dict], scoped: bool) -> str:
@@ -86,6 +98,11 @@ def live_sense(old: str, pairs: list[dict], scoped: bool) -> str:
             if old.lower() in re.sub(r"[\\\[\]()?*+^$]|\(\?[^)]*\)", "", pat).lower():
                 hits.append(f"{p['map']}: {pat[:60]}")
                 break
+        else:
+            for g, w in keeps_in_of(p["map"], p["commit"]):
+                if old.lower() in w.lower():
+                    hits.append(f"{p['map']}: [keep_in] {g}: {w}")
+                    break
     if hits:
         why.append("the map's [keep] holds it: " + "; ".join(hits[:2]))
     return " | ".join(why) if why else "no sign (not scoped, no [keep] pattern holds it)"

@@ -66,4 +66,5 @@ def main():
         f.write("map\tcommit\tscope\told\tnew\tin_tree_now\n")
         for r in rows: f.write("\t".join(r) + "\n")
     print(len(rows), "pairs from", len({r[0] for r in rows}), "maps;", len({r[3] for r in rows}), "distinct old")
-main()
+if __name__ == "__main__":
+    main()
