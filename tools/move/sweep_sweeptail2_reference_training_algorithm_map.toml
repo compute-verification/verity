@@ -9,7 +9,7 @@ scope = "prose"
 [[words_in]]
 files = ["security/README.md"]
 [words_in.words]
-"to reproduce a reference\ncircuit." = "to reproduce the reference\ntraining algorithm."
+"to reproduce a reference\ncircuit" = "to reproduce the reference\ntraining algorithm"
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256",

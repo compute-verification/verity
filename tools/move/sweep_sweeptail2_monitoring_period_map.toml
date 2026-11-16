@@ -11,7 +11,6 @@
 # value carry `IntegrityHorizon` in a window report's record, so `benchmarks/one_stage/onsite_record.py` and its test are excluded.
 # The map is `scope = "prose"`: `IntegrityHorizon` in a printed report line of `cost/h200.py` is a string, a hand edit.
 
-scope = "prose"
 
 [words]
 "PeriodError" = "MonitoringPeriodError"
