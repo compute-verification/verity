@@ -5,15 +5,17 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (lake): keyed on the suite's whole tree
-untraced = ["tests/test_site_difftest.py"]
+untraced = ["tests/test_registration_difftest.py", "tests/test_site_difftest.py"]
 # Test-only: the reference is the Site's Python mirror, `verity.device` (with what it imports and the data sheets it
 # reads), and the log's, `registration.py`; `lake` builds this package against the core protocol interface and the difftest harness, both required by
 # path, and through them the base packages.
 inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "hardware",
           "verity/protocols/interface", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean",
           "verity/commitments/lean", "tools/difftest",
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py",
-          "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
-          "verity/protocols/registration/verifier/registration.py"]
-# Build outputs the tests run (`check` runs this suite after its Lean steps): the Site's difftest server.
-artifacts = ["verity/protocols/registration/verifier/lean/.lake/build/bin/site-difftest"]
+          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/protocols/accounting/registration/__init__.py", "verity/protocols/accounting/registration/verifier/__init__.py",
+          "verity/protocols/accounting/registration/verifier/registration.py"]
+# Build outputs the tests run (`check` runs this suite after its Lean steps): the Site's difftest server and the log's
+# check.
+artifacts = ["verity/protocols/accounting/registration/verifier/lean/.lake/build/bin/site-difftest",
+             "verity/protocols/accounting/registration/verifier/lean/.lake/build/bin/core-registration"]

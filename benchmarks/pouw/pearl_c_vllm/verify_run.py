@@ -23,7 +23,7 @@
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
-  too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s own verdict.
+  too).  `benchmarks/pouw/tests/test_pearl_c_vllm.py` holds this to `audit`'s own verdict.
 - **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
   the tile's columns is refused, ``the opened row holds N words``), and each of the tile's words must be the unscale of

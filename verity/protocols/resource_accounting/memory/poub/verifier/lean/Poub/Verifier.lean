@@ -52,7 +52,12 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
   `{"refused": why}`, a record sampled g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
   record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
-  the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
+  the same line of groups and windows given (`Line.line`, `Difftest.lineFn`);
+* `{"op": "gamma", "record", "delta", "block_bytes", "chip_bytes", "capacity_bytes_per_s", "squarings_per_s"}`: γ's
+  terms of an accepted session's record against a capacity (`Gamma.gamma`), the session one this process ran and its
+  record as `outcome` gives it, on its own registration and windows a coin (`Difftest.gammaOfRegistry`), or
+  `{"refused": why}`: `Verifier.ledgers`' terms (`session/verifier.py`'s `gamma_answer`) are this answer, held to
+  `ledger.gamma`'s.
 
 A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_parties.py` runs it beside `p2.Session`,
 which can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and
@@ -333,6 +338,7 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
   | "registry" => pure (srv.registry.toJson, srv)
   | "line" => pure (← ofV (Difftest.lineFn req), srv)
   | "line_record" => pure (← ofV (Difftest.lineRecordFn req), srv)
+  | "gamma" => pure (← ofV (Difftest.gammaOfRegistry srv.registry req), srv)
   | "p2_hold" =>
     let bytes ← readBytes stdin (← ofV (nat req "bytes"))
     if srv.p2.isSome then throwThe String "the verifier holds one P2 store"

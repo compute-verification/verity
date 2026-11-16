@@ -371,10 +371,10 @@ def test_recorded_public_headers(server):
 #: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories, and the
 #: served inner session SPOT's Lean `innerTreesReason` reads in Flock's prover tests.
 VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
-    "verity/protocols/resource_accounting/network/verifier/network/tests/fixtures",
-    "verity/protocols/resource_accounting/network/verifier/tests/fixtures",
-    "verity/protocols/resource_accounting/memory/poub/verifier/tests/fixtures", "verity/protocols/resource_accounting/memory/poub/verifier/tests/vectors.json",
-    "verity/protocols/resource_accounting/memory/pous/verifier/tests/fixtures", "verity/protocols/resource_accounting/compute/pouw/verifier/tests/vectors",
+    "verity/protocols/accounting/certifier/verifier/network/tests/fixtures",
+    "verity/protocols/accounting/certifier/verifier/tests/fixtures",
+    "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/vectors.json",
+    "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
     "verity/protocols/proofs/recursion/verifier/zk_server/tests/fixtures",
     "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served",
     "verity/protocols/proofs/spot/verifier/tests/fixtures"))

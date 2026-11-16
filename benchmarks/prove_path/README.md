@@ -42,9 +42,42 @@ Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prov
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`, of the row `LROW` names, the bf16
+RTX PRO 6000 B4 row by default; its workload the stored one of that name) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
+
+The single-GPU arm proves only a Commit made under I2's Programs, whose Builds (`build_request_<shape>_<policy>*`) are in its
+row dir. A row dir `verity-vllm row run` made (`../one_stage/a5_llama1b_h200.sh`'s among them) can't be proved by it: its
+Commit is under the row's declared Programs, and I2's request Programs end in their length rule (`steps.stop_of`). `run.sh`
+refuses such a row dir before any build. The way to prove such a row is a serve-openai run's sealed window, the served arm,
+which reads the serve run's own records and never a row dir's Builds. On the node holding the serve dir `D` (for
+`../one_stage/served_verdicts.sh`, `/dev/shm/vllm-servedproof/<run id>`), with `K` the window it picked:
+
+~~~bash
+K=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["window"])' $D/private/window.json)
+# Flock (plain sessions, a stratified sample of every unit of layer 0's SiluMul_v2 at step 1)
+OUT=$RESEARCH_RUN_DIR/flock/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_PLAIN=1 \
+  PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
+  env -u PYTHONPATH bash benchmarks/prove_path/run.sh
+# zero knowledge (--zk behind the Lean ZK server, every unit sampled, audited from the window's records alone)
+OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_RECORDS=1 \
+  PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  env -u PYTHONPATH bash benchmarks/prove_path/run.sh
+~~~
+
+`PP_PLAIN=1` goes without `PP_RECORDS=1`: `records_audit.py` runs `--zk` sessions only, so a plain run is audited by
+`prove_path.py audit --plain`, whose partition's rule must be a stratified rate. Each run writes `$OUT/ran_with.txt`, the
+line naming its coins and parameters (`prove_path.py ran-with`).
+
+The forged run commits its own window with one unit's value flipped (`--forge`, default member 0's unit 0), so its
+partition needs that unit in the window and sampled, not units other than the honest run's. A served window of steps 1 to
+2 has no unit at step 24, so the forged partition above is the honest one's steps with every unit sampled, which is also
+what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py forged-partition`, kept as
+`$OUT/forged-partition.json`). One naming steps outside the honest partition's is refused before any build. A run with
+`PP_ONLY=honest` prints `PROVE-PATH {"name": "…-forged", "ran": false, "why": "PP_ONLY=honest: no forged run"}`.
 
 ## What changes when Programs come from advice
 

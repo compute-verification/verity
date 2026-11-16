@@ -26,7 +26,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_bench.py", "tests/test_spot_status.py", "tests/test_steady_point.py", "tests/test_steady_specs.py"]
+untraced = ["tests/test_bench.py", "tests/test_bench_engines.py", "tests/test_bench_results.py",
+            "tests/test_bench_resume.py", "tests/test_bench_served.py", "tests/test_env.py",
+            "tests/test_spot_status.py", "tests/test_steady_launch.py", "tests/test_steady_node.py",
+            "tests/test_steady_node_kept.py", "tests/test_steady_node_refusals.py", "tests/test_steady_point.py",
+            "tests/test_steady_runs.py", "tests/test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -58,51 +62,51 @@ inputs = [
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
+    "verity/protocols/accounting/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",
     "adapters/vllm/verity_vllm/protocols/pous.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
+    "verity/protocols/accounting/pouw/prover/serving/circuit.py",
+    "verity/protocols/accounting/pouw/prover/serving/device.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/prover.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/records.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/records.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
     "adapters/torch/verity_torch/pouw/h1/registered_device.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/native.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/static.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
+    "verity/protocols/accounting/pouw/prover/serving/native.py",
     "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
+    "verity/protocols/accounting/pouw/prover/serving/pearl_c/__init__.py",
     "adapters/torch/verity_torch/pouw/pearl_c/graphs.py",
     "adapters/torch/verity_torch/pouw/pearl_c/grouped.py",
     "adapters/torch/verity_torch/pouw/pearl_c/host.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/kernel.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
+    "verity/protocols/accounting/pouw/prover/serving/pearl_c/kernel.py",
+    "verity/protocols/accounting/pouw/prover/serving/pearl_c/lanes.py",
+    "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py",
     "adapters/torch/verity_torch/pouw/pearl_c/screen.py",
     "adapters/torch/verity_torch/pouw/pearl_c/screen_kernels.py",
     "adapters/torch/verity_torch/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
     "adapters/torch/verity_torch/pouw/pearl_c/whole_calls.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/kept.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
+    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda",
+    "verity/protocols/accounting/pouw/prover/serving/h1/kept.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/live.py",
+    "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py",
     "adapters/torch/verity_torch/pouw/h1/tables_device.py",
     "benchmarks/vllm_encoded/bench_arm.py",
     "benchmarks/vllm_encoded/step_spans.py",
-    "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.cu",
+    "verity/protocols/accounting/poub/prover/word_codec/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
-    "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.cu",
+    "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
@@ -129,7 +133,7 @@ inputs = [
     "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/second_stage.py",
     "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",
-    "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
+    "verity/protocols/accounting/certifier/prover/stop_verdicts.py",
     "benchmarks/exfiltration/run.py",
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
@@ -138,20 +142,49 @@ inputs = [
     # test checks against the interface's list of public modules
     "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
+    # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
+    # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
+    "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
+    # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
+    # slowdown calculator, which reads the census, the NCI catalog and each name's standing from the locks
+    "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
+    "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+    "benchmarks/nci/calibrations.json",
+    # the core benchmarks' interface: a test reads each directory that declares itself a core command in its own
+    # pyproject.toml ([tool.verity.interface] core), its README and its runner, so a declared directory and its README
+    # are listed here, which the test checks
+    "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_bench.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
+tests = ["tests/test_bench.py", "tests/test_bench_engines.py", "tests/test_bench_results.py",
+         "tests/test_bench_resume.py", "tests/test_bench_served.py"]
+paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",
-         "tests/test_steady_point.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/test_overhead_node.py",
+         "tests/test_overhead_points.py", "tests/test_overhead_store.py", "tests/test_prove_command.py",
+         "tests/test_prove_lean_warm.py", "tests/test_prove_rows.py", "tests/test_prove_store.py",
+         "tests/test_prove_store_rows.py", "tests/test_served_table.py", "tests/test_steady_launch.py",
+         "tests/test_steady_node.py", "tests/test_steady_node_kept.py", "tests/test_steady_node_refusals.py",
+         "tests/test_steady_point.py", "tests/test_steady_runs.py"]
 paths = ["artifacts.json"]
+
+# env.sh puts every workspace member's packages on PYTHONPATH, which a test checks reaches everything the adapter imports
+[[tool.verity.tests.reads]]
+tests = ["tests/test_env.py"]
+paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
 paths = ["benchmarks/harness/tests", "benchmarks/harness/verity_bench"]
+
+# the core benchmarks' interface test reads every benchmarks/*/pyproject.toml for its [tool.verity.interface] key
+[[tool.verity.tests.reads]]
+tests = ["tests/test_interface.py"]
+paths = ["benchmarks/*/pyproject.toml"]

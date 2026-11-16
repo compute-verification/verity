@@ -1,4 +1,4 @@
-"""The verifier's process: PoUB v0's `AuditRun` (verity/protocols/resource_accounting/memory/poub/verifier/audit.py)
+"""The verifier's process: PoUB v0's `AuditRun` (verity/protocols/accounting/poub/verifier/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -67,13 +67,13 @@ beside it, and where the two differ the session is refused as `disagreement` (it
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
-was set, which `replay.py transcript` (verity/protocols/resource_accounting/memory/poub/verifier/lean/tests) replays through both
+was set, which `replay.py transcript` (verity/protocols/accounting/poub/verifier/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
 A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
-(`--challenger local`, the default), from `verity/protocols/compose/verifier/live_challenger/serve.py`, started for the session on this
+(`--challenger local`, the default), from `verity/protocols/compose/device/live_challenger/serve.py`, started for the session on this
 machine and reached through `spot.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor device's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
@@ -90,7 +90,7 @@ the Lean's session, which holds only the append coins released, otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
-Its process is `verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
+Its process is `verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
 serve` starts.
 
@@ -122,12 +122,12 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
-from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
-from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
-from verity.protocols.proofs.spot.verifier.challenger.challenger import Verify
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.accounting.poub.verifier import store as rstore
+from verity.protocols.accounting.poub.verifier.session import challengers, wire
+from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
+from verity.protocols.accounting.poub.verifier.session.checks import Checks
+from verity.protocols.proofs.spot.device.challenger import Verify
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
@@ -170,7 +170,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity.protocols.resource_accounting.memory.poub.prover.node_store.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity.protocols.accounting.poub.prover.node_store.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:
@@ -673,12 +673,81 @@ def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | 
             len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
 
 
+GAMMA_HELD_LOG2 = 40
+"""How near `ledger.gamma`'s floats are held to the Lean's exact γ terms: a share of the capacity within 2^-40 of the
+larger of it and 1, an error within 2^-40 of itself.  The floats round each term and sum, and a timing term near 0
+cancels to about 2^-52 of the capacity, so a share below 1 is held absolutely; every term is nonnegative once the
+capacity checks pass, so none exceeds γ, and one above 1 (a span too short for its passes) is held relatively."""
+
+
+def _gamma_differs(lean: object, python: object, at: str = "") -> tuple[str, object, object] | None:
+    """Where `python`, `GammaTerms.to_json()`, is not the Lean's exact `lean` (`GAMMA_HELD_LOG2`), with both values there,
+    or None: the same keys and lengths, the same integers, booleans and nulls, and each float near its rational."""
+    if isinstance(python, dict):
+        if not isinstance(lean, dict) or sorted(lean) != sorted(python):
+            return at or ".", lean, python
+        return next((d for k in sorted(python) if (d := _gamma_differs(lean[k], python[k], f"{at}.{k}"))), None)
+    if isinstance(python, list):
+        if not isinstance(lean, list) or len(lean) != len(python):
+            return at or ".", lean, python
+        return next((d for i, (x, y) in enumerate(zip(lean, python)) if (d := _gamma_differs(x, y, f"{at}[{i}]"))), None)
+    if type(python) is float:
+        try:
+            q = line.number(lean)
+        except line.Malformed:
+            return at, lean, python
+        slack = abs(q) if at.startswith(".error") else max(1, abs(q))
+        return None if abs(Fraction(python) - q) <= slack / 2 ** GAMMA_HELD_LOG2 else (at, lean, python)
+    return None if type(lean) is type(python) and lean == python else (at, lean, python)
+
+
 def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float,
                  python: dict) -> dict:
     """The Lean's γ terms for an accepted session's record against the node's R (`capacity_bytes_per_s`), from PoUB's
-    Lean verifier (`verity/protocols/resource_accounting/memory/poub/verifier/lean/`), the ones `Verifier.ledgers` declares, held to
-    `python`, `ledger.gamma`'s `Gamma.ledger.to_json()`. Until it is written the reading is undecided."""
-    raise NotImplementedError(coins.UNWRITTEN)
+    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`, its `gamma`: `Poub.Gamma`, exact rationals, on
+    the session it ran and accepted, whose record `lv.summary_json` writes), the ones `Verifier.ledgers` declares, at
+    the node's S_chip and squaring ceiling and the record's δ, each float read as its exact value.  It is held to
+    `python`, `ledger.gamma`'s `Gamma.ledger.to_json()` (`_gamma_differs`), each worst window to one of the Lean's
+    largest γ within the slack (`gamma_held`); a refusal, an error of the process or a disagreement is a `ValueError`
+    naming both."""
+    deltas = {w.profile.delta for w in record.windows}
+    if len(deltas) != 1:
+        raise ValueError(f"the record's windows are sampled at {len(deltas)} δ, and the Lean's γ terms read one")
+    request = {"op": "gamma", "record": lv.summary_json(record), "delta": line.text(Fraction(deltas.pop())),
+               "block_bytes": record.block_bytes, "chip_bytes": node.chip_bytes,
+               "capacity_bytes_per_s": line.text(Fraction(capacity_bytes_per_s)),
+               "squarings_per_s": line.text(Fraction(node.rebuild(record.codec).squarings_per_s))}
+    try:
+        got = lean.call(request)
+    except lv.LeanError as e:
+        raise ValueError(f"the Lean verifier gave no γ terms: {e}") from e
+    return gamma_held(got, python)
+
+
+def gamma_held(got: object, python: dict) -> dict:
+    """The Lean's γ terms `got` (`Poub.Gamma`'s answer), held to `python`, `GammaTerms.to_json()`: a `ValueError` naming
+    both values where it refuses or they differ (`_gamma_differs`), or naming the fault where `got` is not of that
+    shape, each of `python`'s worst windows taken as the Lean's where the Lean's γ there is within twice the slack of its
+    largest."""
+    if not isinstance(got, dict) or "refused" in got:
+        raise ValueError(f"the Lean verifier refuses the γ terms the Python ledger computed: "
+                         f"{got.get('refused') if isinstance(got, dict) else got!r}")
+    held = json.loads(json.dumps(python))
+    try:
+        gs = [line.number(w["gamma"]) for w in got["windows"]]
+        hs = [line.number(w["horizon"]["gamma"]) for w in got["windows"]]
+        if max(gs) - gs[held["worst"]["window"]] <= max(1, max(gs)) * Fraction(2, 2 ** GAMMA_HELD_LOG2):
+            held["worst"]["window"] = got["worst"]["window"]
+        if max(hs) - hs[held["worst"]["horizon"]["window"]] <= max(1, max(hs)) * Fraction(2, 2 ** GAMMA_HELD_LOG2):
+            held["worst"]["horizon"]["window"] = got["worst"]["horizon"]["window"]
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise ValueError(f"the Lean verifier's γ terms are not of `GammaTerms.to_json`'s shape, so they hold "
+                         f"nothing: {type(e).__name__}: {e}") from e
+    if (d := _gamma_differs(got, held)) is not None:
+        at, a, b = d
+        raise ValueError(f"the Lean verifier's γ terms and the Python ledger's disagree at {at}: the Lean's "
+                         f"{json.dumps(a)}, the Python's {json.dumps(python if at == '.' else b)}")
+    return got
 
 
 class Pair:
@@ -1422,7 +1491,10 @@ class Verifier:
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
-        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
+        had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
+        reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
+        nothing.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
+        the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
         forms carry.
@@ -1470,28 +1542,29 @@ class Verifier:
         readings: dict[str, ledger.Gamma] = {}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                g = readings[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
+                g = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
+            whole = r * record.span_ns / 1e9
+            reading = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
+                       "certified_bytes": (1 - g.gamma) * whole,
+                       "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
+            if parts:
+                reading["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
             try:
                 gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
-            except NotImplementedError:
-                del readings[name]
-                out[name] = {"capacity_bytes_per_s": r, "undecided": coins.undecided("γ terms")}
+            except ValueError as e:
+                out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
-            whole = r * record.span_ns / 1e9
-            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
-                         "certified_bytes": (1 - g.gamma) * whole,
-                         "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
-            if parts:
-                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
+            readings[name] = g
+            out[name] = reading
         out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
-                           if len(readings) == 2 else next({w: out[n][w]} for w in ("refused", "undecided")
-                                                           for n in ("spec", "measured") if w in out[n]))
+                           if len(readings) == 2 else next({"refused": out[n]["refused"]}
+                                                           for n in ("spec", "measured") if "refused" in out[n]))
         out["sketch_failure"] = {"queries_log2": audit.QUERIES_LOG2,
                                  "log2": timing.log2(timing.sketch_failure(record.passes, record.rows,
                                                                            blocks=record.blocks))}
@@ -1526,7 +1599,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
     serve` starts the challenger's process `serve`,
     which the process's entry hands in with the figures
-    (`verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
+    (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
     the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
@@ -1737,8 +1810,9 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
             mem = r.get("ledger", {}).get("memory", {})
             lines = r.get("ledger", {}).get("declared", {}).get("memory", {})
             if (pl := r.get("ledger", {}).get("paced")) is not None:
-                line = f"refused: {pl['refused']}" if "refused" in pl else \
-                    f"snapshot {pl['snapshot']['share']:.4%} time {pl['time']['share']:.4%}"
+                line = f"refused: {pl['refused']}" if "refused" in pl else "; ".join(
+                    f"{form} credited weights {pl[form]['share']:.4%} hbm {pl[form]['hbm_share']:.4%} filler "
+                    f"{pl[form]['filler_share']:.4%}" for form in ("snapshot", "time"))
                 print(f"verifier: session {k} paced {json.dumps(r['pace'])}: {line} "
                       f"gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
             passes = [w["passes"] for w in r["windows_seen"]]
