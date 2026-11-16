@@ -13,7 +13,7 @@ order of every frame are fixed by the declared Program.
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the network attester's
   boundary before it has them), and `OneClock` (the challenger's release times and the network attester's ingress ticks are
-  read on one clock; on two devices, within 1.03 s of each other), prose only. The certifier program's Lean reads
+  read on one clock; on two devices, within 1.03 s of each other), prose only. The network attester's program's Lean reads
   neither.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
   and the record's digest hidden under a salt the network attester samples ("Network certificates").
@@ -24,7 +24,7 @@ Where each part is stated in Lean:
 - the timing analysis `NetTiming`, its guarantees and its modelling choices: `security/Definitions/Certifier` and
   `security/Proofs/Certifier` (whose `README.md` has the modelling choices), with each bound's guarantee in
   "Capacity";
-- the certifier program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
+- the network attester's program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
   charges as code, proved equal to the analysis's definitions and held to this package by its difftests;
 - the record and certificate encodings: `NetworkCheck.Certificate` (`verity/protocols/resource_accounting/network/verifier/lean`);
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
@@ -32,7 +32,7 @@ Where each part is stated in Lean:
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
 - a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
 - an active network attester's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
-  (`verity/network-rows/v1`), over the certifier program's `NetworkCertifier.Rows`. It does not hold an egress cell to
+  (`verity/network-rows/v1`), over the network attester's program's `NetworkCertifier.Rows`. It does not hold an egress cell to
   the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
   caller that runs no io tie holds it itself.
 
@@ -60,7 +60,7 @@ The certificate's signature reads no hash of witness. The network attester signs
   prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf is
   the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
-- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
+- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, execution phase) and
   `D`, a hiding commitment to `R`. The in-the-clear check (`TransferBlocks.clear`, a debug comparison) also checks `D`
   against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
 
@@ -68,7 +68,7 @@ The certificate's signature reads no hash of witness. The network attester signs
 
 Each boundary link has a network attester with fixed parameters (W1). The protocol programs them from a security
 parameter, and the network attester only executes them:
-- T buckets per window;
+- T buckets per execution phase (`window` in the records);
 - the bucket width τ_b, 100 ms by default;
 - the allocation r, in frames per bucket;
 - the frame size B, in bytes;
@@ -76,17 +76,17 @@ parameter, and the network attester only executes them:
 
 On each link:
 
-- **Constant rate, with a cap, left-packed (W4).**
+- **Constant rate, with a limit, left-packed (W4).**
   - Every bucket emits exactly r frames: `n_t = min(queue, r)` real frames in slots 0 … n_t − 1, in queue order, then
     padding. The I/O tie reads the active network attester's grid instead, each live connection's r slots of a bucket
     by ordinal ("The I/O tie", (c)).
   - The **occupancy** is (n_0, …, n_{T−1}), the number of real frames per bucket.
   - A colluding receiver can tell padding from a real frame, so occupancy is the timing channel.
-- **FIFO, with the queue carried across windows.** The release count is Lean's `released`, and the grid Lean's `fill`.
+- **FIFO, with the queue carried across execution phases.** The release count is Lean's `released`, and the grid Lean's `fill`.
 - **Fail-closed (W6).**
   - A fault is an overflow beyond Q, a frame of the wrong size, or a reported one (monitor unavailable, drop, delivery
     refused, coverage never established).
-  - After a fault, the rest of the window is padding, the queue is dropped, and the first reason is recorded.
+  - After a fault, the rest of the execution phase is padding, the queue is dropped, and the first reason is recorded.
 - **The record is exactly (grid, status) (W5).** The status is one untimed symbol per execution phase: complete, or not
   established with a reason. It carries no bucket index, time or count.
 
@@ -99,7 +99,7 @@ the status instead, which is 64 bytes per execution phase, or about 92 KB per li
   only those: `tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that
   isn't left-packed has no encoding.
 - **The record digest** is `tagged_sha512("verity-network-certifier/record-sha512/v1", …)`. It covers:
-  - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
+  - the canonical JSON of the link, the execution phase, (T, r, B, τ_b) and the status;
   - then the T 64-byte row digests.
 
   `tagged_sha512` is `verity.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
@@ -116,7 +116,7 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 **The trust change.** The **network attester**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
 committed record reaches the auditor as published. Instead, once per execution phase whose status is complete, the
-network attester signs a **network certificate**: a signature over a hiding digest of the window's record, salted by the
+network attester signs a **network certificate**: a signature over a hiding digest of the execution phase's record, salted by the
 network attester (`certificate.Issuer`). Any other execution phase gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
@@ -125,7 +125,7 @@ raw records.
 
 **The record (v2)** is still exactly the grid and one status (W5), with padding elided: a fixed binary head
 (`RecordHead.encode`: the execution phase, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
-occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the window's real frames. Its layout,
+occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the execution phase's real frames. Its layout,
 the frame tree and the record digest are `certificate.py`'s module docstring, stated in Lean by
 `NetworkCheck.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
 Python by `NetworkCheck.Difftest`.
@@ -140,7 +140,7 @@ D fixes R up to a SHA-512 collision (`cr/sha-512`). D hides R as SHA-512 under a
 which rests on `random-oracle`; no Lean guarantee states the hiding.
 
 **The certificate** is D and a signature over a 64-byte message that binds D to the key, the network attester's session and the
-execution phase, so a certificate can't be replayed onto another window, link, direction, key or session:
+execution phase, so a certificate can't be replayed onto another execution phase, link, direction, key or session:
 
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
@@ -178,7 +178,7 @@ One execution phase's certificates are registered through the proof system
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the network attester's salt, then the
   certificate), and their heads,
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
-  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
+  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the execution phase. A proof that reads only a
   head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
   more. The ZK server keeps the records and salts (`Hidden`). The challenger receives one salted root and never a
   certificate, a network attester's salt or a head.
@@ -186,17 +186,17 @@ One execution phase's certificates are registered through the proof system
   fact. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`TransferBlocks.register`): the receipt keeps the order, and the order is the execution phase.
 - **The network verdict of record** is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε
-  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
-  the link (`TransferBlocks.windows`), the w-th registration is window w and its outcome of
-  record accepted. A rejected or late window,
-  a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
+  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every execution phase w of
+  the link (`TransferBlocks.windows`), the w-th registration is execution phase w and its outcome of
+  record accepted. A rejected or late execution phase,
+  a registered one with no outcome yet, a gap in the registrations (one registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
-  their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
+  their execution phases. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
   Python model, not the verifier) builds no `TransferBlocks` outcomes, so its account doesn't read this
-  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
+  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port's execution phase, each
   charged at its link's line rate (`refused_bits`).
-- **Public** (`service.PUBLIC`): the population, the window, the value's leaf count, domain and salted root, the
-  parameters digests and the network attester's profile (its windows and parameters digest), all bound by the spec's context with the link, the run,
+- **Public** (`service.PUBLIC`): the population, the execution phase, the value's leaf count, domain and salted root, the
+  parameters digests and the network attester's profile (its execution phases and parameters digest), all bound by the spec's context with the link, the run,
   the network attester's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
   rejected execution phase shows only the service's `reject`; the violation's kind stays in the verifier. A registration
   with any other field, a second root, a root entry with another key, or anything more in `window` is refused.
@@ -211,10 +211,10 @@ One execution phase's certificates are registered through the proof system
   `TransferBlocks.proof_block`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
-  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
+  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and `window` are the
   execution phase's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
-  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the window
-  (`NetworkHeadCounts`; a window past the profile has no row and is a reject), and the head's record digest R
+  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the execution phase
+  (`NetworkHeadCounts`; an execution phase past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the certificate
   signs the head the check opened. In the proof block's Program each head check is one gate that names the Definition
   and its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment
@@ -243,7 +243,7 @@ One execution phase's certificates are registered through the proof system
   `TransferBlocks.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the
   verifier's own copy (`TransferBlocks.public_arguments`: the registered root, the execution phase's public fields and both
   signed digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
-  certificates verify (`TransferBlocks.certified`); and the window's declared sync is one of Σ_sync. It receives the
+  certificates verify (`TransferBlocks.certified`); and the execution phase's declared sync is one of Σ_sync. It receives the
   registration, the sample, the certificates' public fields and signatures (from the network attester, beside the proof
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
