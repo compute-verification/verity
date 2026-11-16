@@ -1,41 +1,25 @@
 # Coordinators as Cursor cloud agents
 
-Each coordinator is a plain Cursor cloud agent on the one-repo environment "Verity compute-verification"
-(`6542f951-c746-11f1-ac31-5e2d0494121f`), created with Daniel's user key on his laptop. The key stays off every VM, and the
-GitHub broker trusts only managed, single-repo agents created by their owner, so no service account launches one.
+Each of the team's coordinators (top, lean, proofs and the rest) is a plain Cursor cloud agent. This directory's one
+script, `launch_coordinator.py`, launches a coordinator's successor or a new one, archives the old, and puts one message
+of Daniel's in every coordinator's chat, all through Cursor's Cloud Agents API.
 
-`launch_coordinator.py` (standard library only) creates and archives them through the Cloud Agents API:
+It runs on Daniel's laptop with his user key. The key stays off every VM, and the GitHub broker trusts only managed,
+single-repo agents created by their owner, so no service account launches one.
 
-~~~text
-launch_coordinator.py ids                                                  # each coordinator's id and branch suffix
-launch_coordinator.py launch HANDLE --predecessor BC_ID --pairing-thread TS   # a successor, from its predecessor's handoff
-launch_coordinator.py launch HANDLE --charter-from BC_ID --pairing-thread TS  # a new slice, from its charter
-launch_coordinator.py archive BC_ID
-launch_coordinator.py tell --file MSG.md --dry-run                            # who gets what; sends nothing, needs no key
-launch_coordinator.py tell --file MSG.md [--only|--skip HANDLE ...]          # Daniel's message, in each coordinator's chat
+## Try it
+
+~~~sh
+python3 infra/cursor/launch_coordinator.py ids
 ~~~
 
-- **The handoff or charter travels as an artifact.** The outgoing lead copies its handoff to
-  `/opt/cursor/artifacts/handoff-HANDLE.md` (a charter's author, `charter-HANDLE.md`) and ends its turn; the script reads it
-  through the API and puts it under the standard brief. No store, notes token or evidence-store credential is needed on the
-  old VM. `--text-file` reads a local file instead.
-- **Ids are fixed.** An agent's id is `uuid5` of its handle and generation (2 for a successor, 1 for a new slice), so it
-  is known before launch (the agent's `names open` records it as the handle's holder, in its inbox route), and a repeated
-  launch gets the existing agent back (409 `agent_id_conflict`) rather than a second one. The handle must be in the
-  registry (`.agents/skills/using-slack/registry.json`) first.
-- **The brief's first hour**: a launch check (git push, gh, Linear, the Slack inbox), the handoff or charter copied into
-  the notes repo under `lanes/HANDLE/`, its items filed in the handle's Linear team, the inbox opened (a successor's with
-  `--succeeds`), "up" posted in the pairing thread, and each acting loop started only after the predecessor posts
-  "stopped LOOP".
-- `--dry-run` prints the create request and sends nothing; with `--text-file` it needs no key.
-- **`tell` puts one message of Daniel's in every coordinator's own chat**, for a ruling a lead acts on only when Daniel
-  says it there. It reads each handle's holder from the registry in the checkout (pull `main` first), leaves out `top` and
-  any handle a desktop agent holds, and sends each target one steer (`POST /v1/agents/{id}/runs` with `delivery: steer`,
-  [Send A Follow-Up Or Steer](https://cursor.com/docs/cloud-agent/api/endpoints)): a running turn takes it, an idle
-  agent gets it as its next follow-up, and an archived one refuses it. Run it with `--dry-run` first, which prints each
-  target and the text. It prints one line a target and exits nonzero listing those not sent (a steer that failed with a
-  5xx or never got an answer may still have arrived: look in that chat before resending with `--only`); `--no-steer`
-  sends plain follow-ups, which a running agent refuses.
+This prints each coordinator's handle, its generation, the agent id it has or will have, and its branch suffix. It
+needs no key: an agent's id is fixed by its handle and generation, so it is known before launch. `launch` and `tell` take
+`--dry-run`, which prints what it would send and sends nothing; the script's docstring gives each subcommand.
+
+An outgoing lead's handoff, or a new slice's charter, travels as an artifact: the author copies it to
+`/opt/cursor/artifacts/handoff-HANDLE.md` (or `charter-HANDLE.md`) and ends its turn, and the launch reads it through the
+API and puts it under the standard brief.
 
 ## Handing over
 
