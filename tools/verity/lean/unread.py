@@ -140,7 +140,7 @@ MODULE_CITED_BY = (".py", ".sh", ".rs", ".ts", ".js")
 DOCS = (".md",)
 #: the files that name modules and declarations without reading them: this tool and its test (the Lean tools'
 #: fixtures, `modules.FIXTURES`, neither)
-NOT_READERS = ("tools/verity/lean/unread.py", "tools/verity/lean/Unread.lean", "tools/verity/lean/tests/test_unread.py")
+NOT_READERS = ("tools/verity/lean/unread.py", "tools/verity/lean/Unread.lean", "tests/tools/verity/lean/test_unread.py")
 #: a cited file larger than this is data, not code
 CITE_MAX_BYTES = 4 << 20
 #: a dotted identifier, as a file outside Lean would name a declaration: never from inside a word, and possessive, so a
