@@ -400,7 +400,8 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                     response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only,
                     record=None if rec is None else rec.path)
         doc["spot_holes"] = (spot_status.served(served) if served is not None else
-                             spot_status.status(doc["runs"], store=None if rec is None else _Commits(rec.path)))
+                             spot_status.status(doc["runs"]) if rec is None else
+                             spot_status.status(doc["runs"], store=_Commits(rec.path)))
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
