@@ -1145,7 +1145,7 @@ def test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows():
     assert reason is not None and reason.startswith("the replayed inert_work") and "exceeds the cap" in reason
 
 
-def test_v_ex_past_its_count_cap_fails_the_audit():
+def test_v_ex_past_its_count_inert_bound_fails_the_audit():
     """At most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight: one each on 32 x 128 x 16."""
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
@@ -1279,7 +1279,7 @@ def test_h3_is_the_default_and_h0_is_named():
     assert get("pearl-c-nvfp4-v0").hashing == "h0"
 
 
-def test_the_h0_caps_are_one_400th():
+def test_the_h0_inert_bound_are_one_400th():
     """Pearl-C4's own inert-work bound is Pearl-C's at sm_120's prices, 1/400 (`test_pouw_pearl_c_sm120`)."""
     assert C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0").cap == Fraction(1, 400) == F.PearlC4(hashing="h0").cap
 

@@ -373,8 +373,8 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     certs = all([w for g in cert[i][j] for w in g] == inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev)
                 for i in range(tm) for j in range(tn))
     sd = [_salt_dead(d, ops.a.alpha[i], ops.a.beta[i], a[i]) for i in range(tm)]
-    capped = (_cap_ok(d, k, n, rho, ops.a.codes, ops.b.codes, sd)
-              and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tm)))
+    capped = (_inert_bound_ok(d, k, n, rho, ops.a.codes, ops.b.codes, sd)
+              and all(_inert_bound_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tm)))
     served = 0 <= col < n // tn and _served(y, checked, ops, col, tm, tn)
     return C.leaf(checked, "h3"), int(admitted and certs and capped and served)
 
@@ -397,7 +397,7 @@ def _salt_dead(d, alpha: int, beta: int, x: Sequence[int]) -> list[int]:
     return [sum(dead[s:s + SLICE]) for s in range(0, len(x), SLICE)]
 
 
-def _cap_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
+def _inert_bound_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
     """rev1's inertBoundOK over every row of ``ac`` and column of ``bc`` at ρ = 1/rho on a unit of ``n`` columns
     (`pearlCTilesDevRev1`), False where the replay raises."""
     try:

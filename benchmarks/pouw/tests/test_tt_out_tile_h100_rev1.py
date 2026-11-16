@@ -351,7 +351,7 @@ def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run:
             "bound": float((1 - G0) * (1 - RHO) * per_word), "fires": _fires(credit, cost)}
 
 
-def _over_the_cap_by_its_mends(name: str, case: dict) -> None:
+def _over_the_inert_bound_by_its_mends(name: str, case: dict) -> None:
     """The tile is over its cap, and only by its mends: without them its inert work is within the cap, and the class's program
     beats TT_OUT's bound (the falsification the mends answer), so the test also fails if the class stops reaching it."""
     assert case["rules"], case
@@ -362,14 +362,14 @@ def _over_the_cap_by_its_mends(name: str, case: dict) -> None:
     assert case["fires"], case
 
 
-def test_dead_pairs_are_over_the_cap():
+def test_dead_pairs_are_over_the_inert_bound():
     """Dead pairs: positions where a row of A and a row of B are both dead, so the product is fixed before the salt. On
     rows that put liveness's k/64 dead entries in whole promotion groups, at the same positions in A and B, with signs
     that cancel, a W1 program replaces each such group's four atoms by 16/30 of one (`_dead_pair_program`), and beats
     TT_OUT's bound. The test forms one 64 x 64 audit tile of such rows under §5, checks the rules on every row and the
     program's 4,096 ticket words against the reference's, and asserts that the tile's replayed inert work exceeds its cap by
     its dead pairs (112 a word), so the tile is not good and TT_OUT does not range over it."""
-    _over_the_cap_by_its_mends("dead pairs", _dead_pair_case(k=8192, n=8192, groups=1, units=256))
+    _over_the_inert_bound_by_its_mends("dead pairs", _dead_pair_case(k=8192, n=8192, groups=1, units=256))
 
 
 # ---- raised adder: a second class of the same kind, which the inert work's forced-zero term charges ------------------------
@@ -494,7 +494,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
             "credit": float(per_word), "bound": float((1 - G0) * (1 - RHO) * per_word), "fires": _fires(credit, cost)}
 
 
-def test_raised_adder_groups_are_over_the_cap():
+def test_raised_adder_groups_are_over_the_inert_bound():
     """Raised adder: six planted entries in a promotion group, at the same positions in every row of A and of B, make the
     group's last three atoms add a constant whatever else they hold (`_raised_rows`), so a W1 program runs one atom of
     the group's four (`_raised_program`). At 8192 deep liveness admits twenty such groups of the 64. The test forms one
@@ -503,10 +503,10 @@ def test_raised_adder_groups_are_over_the_cap():
     bound by about a fifth of the credit, and the test asserts that the tile's replayed inert work exceeds its cap by its
     mends: every product of a later atom's unplanted entries is cut on both ends of the support (a forced zero), and the
     top-code entries are dead pairs."""
-    _over_the_cap_by_its_mends("raised adder", _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero"))
+    _over_the_inert_bound_by_its_mends("raised adder", _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero"))
 
 
-def test_planted_cross_group_skips_are_over_the_cap():
+def test_planted_cross_group_skips_are_over_the_inert_bound():
     """The cross-group class on operands an adversary chooses, with a program that only skips. `test_cross_group_joint_skips_
     stay_within_the_gap` rests on W1 charging a fragment whole, so that a program saves an atom only where every word the
     fragment covers can skip it, which census tiles do not offer. Planted rows offer it: the second and third atoms of
@@ -517,7 +517,7 @@ def test_planted_cross_group_skips_are_over_the_cap():
     exceeds its cap by its mends, the same tile's as above."""
     case = _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero", program="skip")
     assert case["flagged_in_planted_groups"] == 0, case
-    _over_the_cap_by_its_mends("planted cross-group skips", case)
+    _over_the_inert_bound_by_its_mends("planted cross-group skips", case)
 
 
 # ---- live raisers: the raised adder with no dead entry -------------------------------------------------------------------
@@ -577,21 +577,21 @@ def _over_the_cap(name: str, case: dict) -> None:
         f"{case['cap']:.0f}")
 
 
-def test_live_raisers_are_over_the_cap():
+def test_live_raisers_are_over_the_inert_bound():
     """Four raisers at 432 (the 416/448 boundary) in each of 16 groups: no entry is salt-dead, and the tile's inert work
     exceeds its cap by its forced zeros alone."""
     _over_the_cap("live raisers at 432", _live_raiser_case(k=8192, groups=16, raisers=4, at=432.0))
 
 
-def test_sub_rule_raisers_are_over_the_cap():
+def test_sub_rule_raisers_are_over_the_inert_bound():
     """Five raisers at 368 (the 352/384 boundary, below a reviewer's 384 rule) in each of 14 groups: the tile's inert work
     exceeds its cap by its forced zeros alone."""
     _over_the_cap("raisers at 368", _live_raiser_case(k=8192, groups=14, raisers=5, at=368.0))
 
 
 @pytest.mark.slow
-def test_live_raisers_at_the_deepest_shape_are_over_the_cap():
-    """`test_live_raisers_are_over_the_cap` at k = 65,536, the H100 domain's deepest (`k_max`), with liveness's whole
+def test_live_raisers_at_the_deepest_shape_are_over_the_inert_bound():
+    """`test_live_raisers_are_over_the_inert_bound` at k = 65,536, the H100 domain's deepest (`k_max`), with liveness's whole
     allowance planted (128 groups of the 512). What 8192 can't check: that the forced-zero term keeps up with the cap,
     which grows with k, when the planted groups grow with k too, and that the cut survives 2,048 atoms of each end's chain,
     whose running totals the plants keep raising."""
@@ -599,38 +599,38 @@ def test_live_raisers_at_the_deepest_shape_are_over_the_cap():
 
 
 @pytest.mark.slow
-def test_sub_rule_raisers_at_the_deepest_shape_are_over_the_cap():
-    """`test_sub_rule_raisers_are_over_the_cap` at k = 65,536 with 112 planted groups of the 512, which 8192 can't check
-    for the reasons `test_live_raisers_at_the_deepest_shape_are_over_the_cap` gives."""
+def test_sub_rule_raisers_at_the_deepest_shape_are_over_the_inert_bound():
+    """`test_sub_rule_raisers_are_over_the_inert_bound` at k = 65,536 with 112 planted groups of the 512, which 8192 can't check
+    for the reasons `test_live_raisers_at_the_deepest_shape_are_over_the_inert_bound` gives."""
     _over_the_cap("raisers at 368", _live_raiser_case(k=65536, groups=112, raisers=5, at=368.0))
 
 
 @pytest.mark.slow
-def test_dead_pairs_at_the_deepest_shape_are_over_the_cap():
-    """`test_dead_pairs_are_over_the_cap` at k = 65,536, the H100 domain's deepest (`k_max`), with liveness's whole
+def test_dead_pairs_at_the_deepest_shape_are_over_the_inert_bound():
+    """`test_dead_pairs_are_over_the_inert_bound` at k = 65,536, the H100 domain's deepest (`k_max`), with liveness's whole
     allowance planted (nine frozen groups of the 512). What 8192 can't check: that the dead-pair term keeps the tile over
     its cap when the cap has grown eightfold with k and the planted groups only ninefold, and that the program, which
     saves more of the credit here than at 8192, is still answered by the mends alone."""
-    _over_the_cap_by_its_mends("dead pairs", _dead_pair_case(k=65536, n=8192, groups=9, units=256))
+    _over_the_inert_bound_by_its_mends("dead pairs", _dead_pair_case(k=65536, n=8192, groups=9, units=256))
 
 
 @pytest.mark.slow
-def test_raised_adder_groups_at_the_deepest_shape_are_over_the_cap():
-    """`test_raised_adder_groups_are_over_the_cap` at k = 65,536 with liveness's whole allowance planted (170 groups of
+def test_raised_adder_groups_at_the_deepest_shape_are_over_the_inert_bound():
+    """`test_raised_adder_groups_are_over_the_inert_bound` at k = 65,536 with liveness's whole allowance planted (170 groups of
     the 512). What 8192 can't check: that the program's 4,096 words are still the reference's after 2,048 atoms and 512
     promotions, whose running total the planted groups keep moving, and that the forced zeros of 170 groups keep up with
     a cap that grows with k."""
-    _over_the_cap_by_its_mends("raised adder", _raised_case(k=65536, n=8192, groups=170, units=1, fill="zero"))
+    _over_the_inert_bound_by_its_mends("raised adder", _raised_case(k=65536, n=8192, groups=170, units=1, fill="zero"))
 
 
 @pytest.mark.slow
-def test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_cap():
-    """`test_planted_cross_group_skips_are_over_the_cap` at k = 65,536 with 170 planted groups of the 512, which 8192
-    can't check for the reasons `test_raised_adder_groups_at_the_deepest_shape_are_over_the_cap` gives; here too no
+def test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_inert_bound():
+    """`test_planted_cross_group_skips_are_over_the_inert_bound` at k = 65,536 with 170 planted groups of the 512, which 8192
+    can't check for the reasons `test_raised_adder_groups_at_the_deepest_shape_are_over_the_inert_bound` gives; here too no
     flag is set in a planted group."""
     case = _raised_case(k=65536, n=8192, groups=170, units=1, fill="zero", program="skip")
     assert case["flagged_in_planted_groups"] == 0, case
-    _over_the_cap_by_its_mends("planted cross-group skips", case)
+    _over_the_inert_bound_by_its_mends("planted cross-group skips", case)
 
 
 def test_honest_tiles_take_no_mends():

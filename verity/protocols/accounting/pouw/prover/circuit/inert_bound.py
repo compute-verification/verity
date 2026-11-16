@@ -592,12 +592,12 @@ Pc8CapWordUnitDef = CompositeDefinition(
 
 
 #: a tile row's inert-work bound-chunks row as 32-bit words: its chunk digests (TN <= 64, pc8's tile), then zeros
-CHUNK_WORDS = L.CAP_ROW_WORDS // 2
+CHUNK_WORDS = L.INERT_BOUND_ROW_WORDS // 2
 
 
 def _columns(tn: int) -> int:
-    if not 0 < tn <= L.CAP_CHUNKS * C.CHUNK:
-        raise DomainError(f"Pearl-C's cap circuit takes at most {L.CAP_CHUNKS * C.CHUNK} columns a tile: TN = {tn}")
+    if not 0 < tn <= L.INERT_BOUND_CHUNKS * C.CHUNK:
+        raise DomainError(f"Pearl-C's cap circuit takes at most {L.INERT_BOUND_CHUNKS * C.CHUNK} columns a tile: TN = {tn}")
     return tn
 
 
@@ -635,7 +635,7 @@ Pc8CapTileDef = CompositeDefinition(
 #: a strip's admission bits in its cap-rows row: the scheme's tile rows, so TM <= 64
 STRIP_BITS = pc8.TILE[0]
 #: the zero words that end a cap-rows row, after its admission bits and its bound's two words
-STRIP_TAIL = L.CAP_ROW_WORDS - STRIP_BITS // 16 - 2
+STRIP_TAIL = L.INERT_BOUND_ROW_WORDS - STRIP_BITS // 16 - 2
 _TAIL = Array(STRIP_TAIL, Value(16))
 
 

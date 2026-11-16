@@ -155,7 +155,7 @@ def admit(job: Job, name: str, side: str, r0: int, r1: int) -> dict:
     keep, k_unit = job.keep(name)
     k = codes.shape[1]
     got = {"rows": r1 - r0, "non_finite": 0, "dnf_fail_full": 0, "dnf_fail_split": 0, "screened_blocks": 0, "blocks": 0,
-           "rows_screened": 0, "rows_old_cap": 0}
+           "rows_screened": 0, "rows_old_inert_bound": 0}
     for full, split in zip((r.tobytes() for r in codes), unit_rows(codes, keep, k_unit)):
         try:
             x_full, x_split = F.parse_row(full, k), F.parse_row(split, k_unit)
@@ -168,7 +168,7 @@ def admit(job: Job, name: str, side: str, r0: int, r1: int) -> dict:
         got["screened_blocks"] += sum(dead)
         got["blocks"] += len(dead)
         got["rows_screened"] += any(dead)
-        got["rows_old_cap"] += 64 * sum(dead) > len(dead)
+        got["rows_old_inert_bound"] += 64 * sum(dead) > len(dead)
     return got
 
 

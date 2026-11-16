@@ -553,7 +553,7 @@ def test_the_split_h0_is_pearl_tile_digests_on_edge_tiles(tile):
     for cr, ur, ch in zip(c, u, chunks):
         want = b"".join(C.message_digest(struct.pack(f"<{len(cr[h:h + 32])}I", *cr[h:h + 32]) +
                                          struct.pack(f"<{len(ur[h:h + 32])}I", *ur[h:h + 32])) for h in range(0, tn, 32))
-        assert L.digest_bytes(ch) == want + bytes(2 * L.CAP_ROW_WORDS - len(want))
+        assert L.digest_bytes(ch) == want + bytes(2 * L.INERT_BOUND_ROW_WORDS - len(want))
 
 
 def test_the_split_units_rows_are_their_ports_words():

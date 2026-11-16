@@ -148,9 +148,9 @@ P_WORDS = 64
 INDEX_WORDS = 8
 INDEX = Array(INDEX_WORDS, Value(16))
 #: a cap-chunks row's chunk digests: a tile row of at most 64 columns (pc8's tile)
-CAP_CHUNKS = 2
+INERT_BOUND_CHUNKS = 2
 #: a cap-rows or cap-chunks row's words, its elements then zeros: one whole SHA-512 block
-CAP_ROW_WORDS = 64
+INERT_BOUND_ROW_WORDS = 64
 #: each row's schema id, which a registration domain binds with the row's word count (`ROW_WORDS`, at depth k) and role
 SCHEMAS = {"bf16": domains.POUW_ROW_BF16, "fp32": domains.POUW_ROW_FP32, "nvfp4-p": domains.POUW_ROW_NVFP4_P,
            "fp8-p": domains.POUW_ROW_FP8_P, "fp8-pi": domains.POUW_ROW_FP8_PI, "ok": domains.POUW_ROW_OK,
@@ -163,8 +163,8 @@ SCHEMAS = {"bf16": domains.POUW_ROW_BF16, "fp32": domains.POUW_ROW_FP32, "nvfp4-
            "nvfp4-codes": domains.POUW_ROW_NVFP4_CODES}
 ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: k // 4 + k // 32 + P_WORDS,
              "fp8-p": lambda k: k // 2 + P_WORDS, "fp8-pi": lambda k: k // 2 + P_WORDS + INDEX_WORDS, "ok": lambda k: 1, "tile": lambda k: 16, "sd": lambda k: k // 16,
-             "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: CAP_ROW_WORDS,
-             "cap-chunks": lambda k: CAP_ROW_WORDS, "cap-sums": lambda k: 7,
+             "cap-word": lambda k: 4, "cap-flags": lambda k: -(-k // 512) + 5, "cap-rows": lambda k: INERT_BOUND_ROW_WORDS,
+             "cap-chunks": lambda k: INERT_BOUND_ROW_WORDS, "cap-sums": lambda k: 7,
              "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
              "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
@@ -307,14 +307,14 @@ def words_cap_rows(oks: Sequence[int], bound: int) -> list[int]:
         raise ValueError("a cap-rows row is a strip's 1 to 64 admission bits, then a 32-bit bound")
     bits = list(oks) + [0] * (64 - len(oks))
     out = [sum(bits[w + q] << q for q in range(16)) for w in range(0, 64, 16)] + words_fp32([bound])
-    return out + [0] * (CAP_ROW_WORDS - len(out))
+    return out + [0] * (INERT_BOUND_ROW_WORDS - len(out))
 
 
 def words_cap_chunks(digests: Sequence[bytes]) -> list[int]:
-    if not 0 < len(digests) <= CAP_CHUNKS or any(len(d) != 32 for d in digests):
-        raise ValueError(f"a cap-chunks row is a tile row's 1 to {CAP_CHUNKS} 32-byte chunk digests")
-    raw = b"".join(digests) + bytes(2 * CAP_ROW_WORDS - 32 * len(digests))
-    return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(CAP_ROW_WORDS)]
+    if not 0 < len(digests) <= INERT_BOUND_CHUNKS or any(len(d) != 32 for d in digests):
+        raise ValueError(f"a cap-chunks row is a tile row's 1 to {INERT_BOUND_CHUNKS} 32-byte chunk digests")
+    raw = b"".join(digests) + bytes(2 * INERT_BOUND_ROW_WORDS - 32 * len(digests))
+    return [int.from_bytes(raw[2 * i:2 * i + 2], "little") for i in range(INERT_BOUND_ROW_WORDS)]
 
 
 def words_cap_sums(atoms: int, zeros: int, elems: int, good: int) -> list[int]:
@@ -426,7 +426,7 @@ def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> d
     return {"row_schemas": ins + outs, **({"out_row_ports": counts} if named else {})}
 
 
-__all__ = ["CAP_CHUNKS", "CAP_ROW_WORDS", "DIGEST", "INDEX", "INDEX_WORDS", "INST", "KEY", "OK", "P_WORDS",
+__all__ = ["INERT_BOUND_CHUNKS", "INERT_BOUND_ROW_WORDS", "DIGEST", "INDEX", "INDEX_WORDS", "INST", "KEY", "OK", "P_WORDS",
            "PearlTileDigestDef", "ROW_SCHEMA", "ROW_WORDS", "SCHEMAS", "chunk_digests", "commit", "digest_bytes", "leaf_digest",
            "messages_type", "ok_of", "row_digest", "statement_rows", "tile_digest", "tile_messages", "tree_leaf", "words_bf16",
            "words_cap_chunks", "words_cap_flags", "words_cap_rows", "words_cap_sums", "words_cap_word", "words_fp32",
