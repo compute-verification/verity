@@ -73,8 +73,8 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{64}\) for
-a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
+receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{256}\) for
+a first block whose every word is rejected (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
 under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2Q + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
 and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
@@ -1004,7 +1004,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus the
   receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
   bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
-  plus the sketch's (`timing.sketch_failure`) plus the sample's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),
+  plus the sketch's (`timing.sketch_failure`) plus the sample's rejection \(\sum_t k_t / 2^{256}\) (`ledger.rejection`),
   at the receipts each sample requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it took: a sample
   that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is. These are the ledger's parts
   (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these three. `LineHeld`'s error also carries the
@@ -1356,9 +1356,9 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   argument at each window's own
   size: `ResourceAccounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`ResourceAccounting.Remote.Sample`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
-  word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
-  \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
-  \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
+  block and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
+  \(2^{64}\) receipts (the verifier's `RECEIPT_LIMIT`), at δ plus \(\sum_t s_t/2^{256}\) (every word of a first block
+  rejected) plus each window's PRF advantage, C3's term, against one
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
   and reads at most \(s_t\) first blocks of the stream it is given). It has no hiding term: the prover is sent each
   coin's value as it is released and the coin commitment only once the session has its outcome (§4), so the session
