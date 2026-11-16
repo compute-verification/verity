@@ -1,13 +1,14 @@
 /-
-Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
+Onsite Verity (`verity/onsite/v1`): remote Verity's accounting with the verifier's hardware at the site, so it also
 accounts for space, bandwidth and communication. Its subprotocols are integrity by SPOT
 (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage v2's audit on the proofs themselves, on the
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit, which SPOT's
 soundness doesn't cover, are refused), the
 inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the registered circuit divides into inference blocks within their gate and fresh-input
-budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
-period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
+budgets), work by Pearl+'s run verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served
+run's retained passes, the work-weighted sample over their tiles at δ, and the run's credit at Pearl's assumption), as
+remote's composite of record has it, space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
@@ -15,11 +16,16 @@ by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and SPOT's are the run's registration record (in either form, the one-stage
-one), and both must commit to the same one; every window of the period must name that record as its Commit record,
-remote's tie (`Core.Remote.executionPhases`). Two records reject onsite whatever the subprotocols answer. PoUS and PoUB
-must also be on one store (`store`): two stores reject onsite unless it rejects already.
+one), and both must commit to the same one. PoUS and PoUB must be on one store (`store`), Pearl+'s run must name that
+record, and the policy's record must be chained right after the window record W Pearl+'s check holds the run's passes
+to: remote v1's ties (`Core.Remote.V1.run`, `Core.Remote.V1.executionPhase`). Two records, two stores or a W the record
+isn't chained after reject onsite unless it rejects already.
 
-`counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network attester's: the wipe's
+The id bumps with the work subprotocol, as remote's does: v0's work was H1's period credit (`PouwCheck.Period.protocol`,
+`verity/pouw/period/v1`), and a caller that read a v0 answer as v1's would read an H1 period credit as a Pearl+ run's.
+No onsite composite over H1's period remains: `Core.Composites.ofIds` refuses its subprotocols.
+
+`counted` (`verity/onsite/counted/v1`) is onsite with the wipe's count held to the network attester's: the wipe's
 subprotocol is `countedWipe` (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
 the count its evidence gives, and beside it stands the count over the span between the wipe's two marks (`hostSpan`,
 `NetworkCheck.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
@@ -46,7 +52,7 @@ public import InferenceOnlyCheck.Protocol
 public import NetworkCheck.Period
 public import NetworkCheck.Span
 public import PousCheck.RunProtocol
-public import PouwCheck.Period
+public import PouwPearlPlus.Protocol
 public import Poub.P2Protocol
 public import Spot.OneStage
 public import Spot.OneStageZk
@@ -61,7 +67,7 @@ meta import InferenceOnlyCheck.Protocol
 meta import NetworkCheck.Period
 meta import NetworkCheck.Span
 meta import PousCheck.RunProtocol
-meta import PouwCheck.Period
+meta import PouwPearlPlus.Protocol
 meta import Poub.P2Protocol
 meta import Spot.OneStage
 meta import Spot.OneStageZk
@@ -75,8 +81,9 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
-    Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
+  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol,
+    PouwCheck.PearlPlus.Protocol.protocol, Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol,
+    MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
 def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
@@ -91,11 +98,12 @@ def store : Tie :=
       (Poub.P2Protocol.protocol.id,
         fun k => (Poub.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
-/-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.executionPhases`), and PoUS and
-PoUB on one store. -/
-def ties : List Tie := [Core.Remote.executionPhases, store]
+/-- Onsite's ties: PoUS and PoUB on one store, and remote v1's, Pearl+'s run on the policy's record
+(`Core.Remote.V1.run`) and the policy's record chained right after the window record W Pearl+ holds the run's passes
+to (`Core.Remote.V1.executionPhase`). -/
+def ties : List Tie := [store, Core.Remote.V1.run, Core.Remote.V1.executionPhase]
 
-def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied ties components
+def protocol : BlobProtocol := tiedSameB "verity/onsite/v1" tied ties components
 
 /-- A case its subprotocol's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=
@@ -108,12 +116,13 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
-  "verity/pouw/period/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+  "verity/pouw/pearl-plus/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 #guard tied.all fun s => (components.map (·.id)).contains s
 #guard ties.all fun t => t.names.all fun n => (components.map (·.id)).contains n.1
 
 -- every subprotocol refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
+#guard allRefused.protocol == "verity/onsite/v1"
 #guard allRefused.verdict == .reject
 #guard allRefused.published.isNone && allRefused.profile.isNone
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
@@ -121,15 +130,23 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
 -- a part of onsite's subprotocols is not onsite's, onsite has no policy-less, wipe-less or PoUS-less form, and neither
 -- v1's nor v2's one-stage audit alone is onsite's integrity subprotocol
-#guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answer [refused PouwCheck.PearlPlus.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
--- a served run that leaves PoUS's case or the wipe's out of the composite gets a rejection naming the one missing
+-- a served run that leaves Pearl+'s case, PoUS's or the wipe's out of the composite gets a rejection naming the one
+-- missing
 private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
-#guard [PousCheck.RunProtocol.protocol.id, MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
+#guard [PouwCheck.PearlPlus.Protocol.protocolId, PousCheck.RunProtocol.protocol.id,
+    MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
   (without id).verdict == .reject && (without id).published.isNone &&
     (without id).reason == some s!"params: {id} is missing"
+-- Pearl+'s rejection rejects onsite, naming it
+#guard (allRefused.reason.map (contains · "; verity/pouw/pearl-plus/v1 reject: params: ")).getD false
+-- H1's period is not onsite's work subprotocol: a case set with it in Pearl+'s place is refused
+#guard (answer (components.map fun P => if P.id == PouwCheck.PearlPlus.Protocol.protocolId then
+    { refused P with id := "verity/pouw/period/v1" } else refused P)).reason ==
+  some "params: verity/pouw/period/v1 is not a component of this composition"
 #guard (answer ((components.take 5).map refused ++
     [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
@@ -166,42 +183,61 @@ private def committed (policy audit : ByteArray) : Answer :=
   (contains · ", verity/sampled-proofs/v1 committed ") == some true
 #guard !((committed (record "y") (record "x")).reason.map (contains · "reject: params")).getD true
 
--- every window of PoUW's period on the policy's record: one record leaves the verdict to the subprotocols, and a window
--- on another record rejects onsite, naming both, whatever the subprotocols answer but a rejection, which stands
-/-- A registration record every record reader decodes, a window's Commit record among them. -/
+-- Pearl+'s run on the policy's record, which is chained right after the run's window record W: the ties leave the
+-- verdict to the subprotocols. A run on another record, or a policy's record chained after another W or after none,
+-- rejects onsite, naming both, whatever the subprotocols answer but a rejection, which stands
+/-- A registration record every record reader decodes, W among them. -/
 private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
-private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
+private def policyOn (r : String) : Case :=
+  { refused InferenceOnlyCheck.Protocol.protocol with commitment := r.toUTF8 }
 
-/-- Onsite's cases, each refused, with the policy's committing to `policy` and the period's execution phases on the records
-`rs`. -/
-private def executionPhasesOn (policy : String) (rs : List String) : List Case :=
+/-- The digest the policy and Pearl+'s run name the record `r` by. -/
+private def digestOf (r : String) : ByteArray :=
+  ((Core.Remote.policyRecord (policyOn r)).bind (·.head?)).getD ByteArray.empty
+
+/-- A registration record chained right after the record `w`. -/
+private def chainedAfter (n : Nat) (w : String) : String :=
+  s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"previous\":\"{Flock.hexOf (digestOf w)}\",\"registered\":[]}"
+
+/-- Onsite's cases, each refused, with the policy's committing to `policy` and Pearl+'s run naming the record `run`, its
+passes held to the window record `w`. -/
+private def runOn (policy run w : String) : List Case :=
   components.map fun P =>
-    if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
-    else if P.id == PouwCheck.Period.protocolId then
-      { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
+    if P.id == InferenceOnlyCheck.Protocol.protocolId then policyOn policy
+    else if P.id == PouwCheck.PearlPlus.Protocol.protocolId then
+      { refused P with commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf run) ++
+          "\",\"window\":{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}}").toUTF8 }
     else refused P
 
-/-- Why onsite's ties reject the outcome `o` its subprotocols reached on `executionPhasesOn policy rs`; `none` when they hold
+/-- Why onsite's ties reject the outcome `o` its subprotocols reached on `runOn policy run w`; `none` when they hold
 it. -/
-private def stray (policy : String) (rs : List String) (o : Outcome Keyed Keyed) : Option String :=
-  match holdTies ties (executionPhasesOn policy rs) o with
+private def stray (policy run w : String) (o : Outcome Keyed Keyed) : Option String :=
+  match holdTies ties (runOn policy run w) o with
   | .reject r => some r
   | _ => none
 
 private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided "u"]
 
-#guard answered.all fun o => stray (registration 0) [registration 0, registration 0] o == none
--- a window on another record
-#guard answered.all fun o => stray (registration 0) [registration 0, registration 1] o ==
-  some "record: verity/inference-only/v0 and verity/pouw/period/v1 named different values"
--- every window on a record that isn't the policy's
-#guard answered.all fun o => (stray (registration 1) [registration 0] o).isSome
--- a window naming no Commit record leaves the period to refuse it
-#guard answered.all fun o => stray (registration 0) [registration 0, "{}"] o == none
+private def w9 : String := registration 9
+private def onW9 (n : Nat) : String := chainedAfter n w9
+
+#guard (digestOf (onW9 0)).size == 64
+#guard answered.all fun o => stray (onW9 0) (onW9 0) w9 o == none
+-- a run on another record
+#guard answered.all fun o => stray (onW9 0) (onW9 1) w9 o ==
+  some "record: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values"
+-- the policy's record chained after another W, or after none
+#guard answered.all fun o => stray (onW9 0) (onW9 0) (registration 8) o ==
+  some "window: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values"
+#guard answered.all fun o => (stray (registration 0) (registration 0) w9 o).isSome
+-- a run whose commitment doesn't decode leaves Pearl+ to refuse it
+private def undecoded : List Case := components.map fun P =>
+  if P.id == InferenceOnlyCheck.Protocol.protocolId then policyOn (onW9 0) else refused P
+#guard answered.all fun o => !(holdTies ties undecoded o matches .reject _)
 -- a subprotocol's rejection stands, and onsite's answer on those cases is its subprotocols' refusals
-#guard stray (registration 0) [registration 1] (.reject "r") == some "r"
-#guard (answer (executionPhasesOn (registration 0) [registration 1])).reason.map
+#guard stray (onW9 0) (onW9 1) w9 (.reject "r") == some "r"
+#guard (answer (runOn (onW9 0) (onW9 1) w9)).reason.map
   (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 
 /-! ## The wipe's count, held to the network attester's -/
@@ -287,7 +323,7 @@ def wipeCount : List Tie :=
         (hostSpan.id, fun k => (spanNamed k).bind fun n =>
           n.egressBits.map fun b => [mibBytes (MemoryChallenger.StreamedWipe.egressUnits b)])]⟩]
 
-def COUNTED_ID : String := "verity/onsite/counted/v0"
+def COUNTED_ID : String := "verity/onsite/counted/v1"
 
 /-- `counted`'s subprotocols, in the order of their ids: onsite's, with the count over the wipe's span and the wipe
 whose count the composition holds. -/
@@ -302,11 +338,12 @@ def counted : BlobProtocol := tiedSameB COUNTED_ID tied countedTies countedCompo
 
 #guard orderedB countedComponents
 #guard countedComponents.map (·.id) == ["verity/certifier/span/v0", "verity/certifier/v0", "verity/inference-only/v0",
-  "verity/pous/p2/v4/run", "verity/pouw/period/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1",
+  "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1",
   "verity/wipe/counted/v0"]
 #guard tied.all fun s => (countedComponents.map (·.id)).contains s
 #guard countedTies.all fun t => t.names.all fun n => (countedComponents.map (·.id)).contains n.1
-#guard countedTies.map (·.what) == ["record", "store", "node", "start mark", "start message", "end message", "egress"]
+#guard countedTies.map (·.what) ==
+  ["store", "record", "window", "node", "start mark", "start message", "end message", "egress"]
 
 private def countedAnswer (xs : List Case) : Answer :=
   Cases.answerCases (counted.on #[]) xs ⟨(List.replicate 64 0).toArray⟩

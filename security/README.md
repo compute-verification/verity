@@ -531,11 +531,13 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
-(`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`InferenceOnlyCheck.Protocol`), and
+(`verity/pouw/period/v1`) and the inference-only policy's check (`InferenceOnlyCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every execution phase of the period names it as its Commit record
-(`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
-PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
+(`Core.Composition.tiedSame`, `Core.Remote.windows`). The composite of record, `Core.Remote.V1.protocol`, has Pearl+'s run
+verdict in the period check's place, tied to that record (`Core.Remote.V1.run`, `Core.Remote.V1.executionPhase`).
+Onsite (`Core.Onsite.protocol`, `verity/onsite/v1`) composes Pearl+'s run verdict under the same two ties
+(`Core.Onsite.ties`) and adds PoUS, PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
 - **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, both proved. Neither is stated yet as its target in

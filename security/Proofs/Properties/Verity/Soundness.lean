@@ -57,8 +57,8 @@ open scoped ENNReal
 
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, with each tie between subprotocols it lists: at
-onsite every window of PoUW's period on the policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s
-run on the policy's record and its window record the one the policy's record is chained after. -/
+onsite and remote Pearl+'s run on the policy's record and its window record the one the policy's record is chained
+after, and at onsite PoUS and PoUB-P2 on one store too. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
     Properties.Composition.answerAccepts ((verifier k).on s.blobs) s.params s.commitment s.evidence h
@@ -349,15 +349,14 @@ theorem holds_pouw_of_not_mem {k : Verity.Registration.Composite} (hk : PouwChec
   simp only [Holds, if_neg hk]
 
 /-- **A target of a subprotocol that decides an `Audit` is the per-period guarantee** `ResourceAccounting.PeriodLive.Sound` at
-the period `live`, read in the one vocabulary, except PoUW's at remote, which is Pearl+'s claim in MACs. -/
-theorem target_audit (k : Verity.Registration.Composite) (b : Audit) (hb : k = .onsite ∨ b ≠ .pouw) :
+the period `live`, read in the one vocabulary, except PoUW's where the composite lists Pearl+'s id (onsite and remote),
+which is Pearl+'s claim in MACs. -/
+theorem target_audit (k : Verity.Registration.Composite) (b : Audit)
+    (hb : PouwCheck.PearlPlus.Protocol.protocolId ∉ k ∨ b ≠ .pouw) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
   cases b
   case pouw =>
-    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := by
-      rcases hb with rfl | h
-      · decide
-      · exact absurd rfl h
+    have hk : PouwCheck.PearlPlus.Protocol.protocolId ∉ k := hb.resolve_right (absurd rfl)
     simp only [Target, Subprotocol.ofAudit, V.holds_pouw_of_not_mem hk]
     exact Iff.rfl
   all_goals exact Iff.rfl

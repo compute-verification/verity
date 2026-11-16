@@ -1,5 +1,5 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (SPOT), the
-# inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v1`): the composition of integrity (SPOT), the
+# inference-only policy (`verity/inference-only/v0`), work (Pearl+'s run verdict, `verity/pouw/pearl-plus/v1`), space (PoUS's
 # run check), bandwidth (the PoUB session), communication (the network certifier over the period,
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
@@ -24,8 +24,8 @@ path = "../../../interface"
 name = "core_composition"
 path = "../lean"
 
-# The ported subprotocols: SPOT's one-stage audit (integrity) and PoUW's period credit (work,
-# `PouwCheck.Period`).
+# SPOT's one-stage audit (integrity), and PoUW's period credit (`PouwCheck.Period`), the work of remote's development
+# composite that `remote-network` builds on.
 [[require]]
 name = "core_spot"
 path = "../../../proofs/spot/verifier/lean"
@@ -66,8 +66,9 @@ path = "../../../proofs/spot_flock/verifier/lean"
 name = "core_memory_challenger"
 path = "../../../resource_accounting/memory/pous/attester/lean"
 
-# Remote, the other composite `product` names, whose tie of PoUW's windows to the run's record onsite reads
-# (`Core.Remote.windows`).
+# Remote, the other composite `product` names, whose ties of Pearl+'s run to the run's record onsite reads
+# (`Core.Remote.V1.run`, `Core.Remote.V1.executionPhase`), and through it Pearl+'s run verdict
+# (`PouwCheck.PearlPlus.Protocol`, onsite's work).
 [[require]]
 name = "core_remote"
 path = "../remote"
@@ -79,7 +80,7 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# Onsite with the wipe's count held to the network certifier's (`Core.Onsite.counted`, `verity/onsite/counted/v0`), a
+# Onsite with the wipe's count held to the network certifier's (`Core.Onsite.counted`, `verity/onsite/counted/v1`), a
 # development composite: `onsite-counted id | check | serve`.
 [[lean_exe]]
 name = "onsite-counted"

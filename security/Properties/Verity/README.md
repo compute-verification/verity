@@ -67,8 +67,7 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | Subprotocol | Target | Compiled check | Remote | Plain | Onsite |
 |---|---|---|---|---|---|
 | SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes | yes |
-| PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | | yes |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | yes | |
+| PoUW | `PouwSound` | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | yes | yes |
 | the inference-only policy | `InferenceOnlySound` | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | | yes |
 | | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
@@ -108,7 +107,8 @@ In this order:
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network attester): a target is the
   per-period guarantee `ResourceAccounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Compose/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
-  a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
+  a composite that lists Pearl+'s id (remote, its plain sibling and onsite) is Pearl+'s claim in MACs instead, which
+  reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
   (`security/Proofs/Properties/Verity/Sampled/Target.lean`) proves `SpotSound` at every composite, for a vocabulary whose
   sampled fields are the deployment's sessions (`Sampled.Deployed`, `Sampled.Covers`), from the coupling at each session

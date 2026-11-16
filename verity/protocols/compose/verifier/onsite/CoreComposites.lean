@@ -1,10 +1,11 @@
 /-
 The composite a configuration's subprotocols make (`verity run CONFIG`): onsite (`Core.Onsite.protocol`,
-`verity/onsite/v0`) when they are onsite's, remote (`Core.Remote.V1.protocol`, `verity/remote/v1`) when they are
+`verity/onsite/v1`) when they are onsite's, remote (`Core.Remote.V1.protocol`, `verity/remote/v1`) when they are
 remote's, listed in any order. These two are the only composites a verifier runs: protocol soundness covers only these
 two (`Verity.verifier`), so `ofIds` refuses any other set by name (an id no composite composes, one listed twice, none,
-or a set that is no composite's). Remote's development composite, H1's `Core.Remote.protocol` (`verity/remote/v0`), is
-no composite here: `ofIds` refuses its subprotocols, and it runs only as its own development executable (`remote`).
+or a set that is no composite's). Both compose Pearl+'s run verdict as their work. Remote's development composite,
+H1's `Core.Remote.protocol` (`verity/remote/v0`), is no composite here: `ofIds` refuses its subprotocols, since H1's
+period is no composite's, and it runs only as its own development executable (`remote`).
 Remote's plain sibling (`Core.Site.Registration.Composite.plain`, the inference-only policy's rows check in v0's place)
 is refused by name until its soundness is proved (`plainRefusal`): `Verity.PlainSoundness` takes the rows check's target
 as a hypothesis, and no compiled check carries the rows check's id.
@@ -79,18 +80,20 @@ private def onsiteIds : List String := Core.Onsite.components.map (·.id)
 private def remoteIds : List String := Core.Remote.components.map (·.id)
 private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 
-#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v1"]
+#guard composites.map (·.1.id) == ["verity/onsite/v1", "verity/remote/v1"]
 #guard onsiteIds.all known.contains && remoteV1Ids.all known.contains
 #guard known.length == (onsiteIds ++ remoteV1Ids).eraseDups.length
 
 -- the composites by their subprotocols, in any order, and no other set
-#guard idOf onsiteIds == some "verity/onsite/v0"
-#guard idOf onsiteIds.reverse == some "verity/onsite/v0"
--- H1's development composite is none: its subprotocols are refused, by name
-#guard idOf remoteIds == none
-#guard idOf remoteIds.reverse == none
-#guard contains (match ofIds remoteIds with | .error e => e | .ok _ => "")
-  "is no composite's subprotocols (verity/onsite/v0: "
+#guard idOf onsiteIds == some "verity/onsite/v1"
+#guard idOf onsiteIds.reverse == some "verity/onsite/v1"
+-- H1's development composites are none: H1's period is no composite's subprotocol, so remote's development composite
+-- and onsite's list with the period in Pearl+'s place are refused, naming it
+private def h1OnsiteIds : List String :=
+  onsiteIds.map fun i => if i == "verity/pouw/pearl-plus/v1" then "verity/pouw/period/v1" else i
+#guard [remoteIds, remoteIds.reverse, h1OnsiteIds, h1OnsiteIds.reverse].all fun ids => idOf ids == none &&
+  contains (match ofIds ids with | .error e => e | .ok _ => "") "verity/pouw/period/v1 is no composite's subprotocol ("
+#guard !known.contains "verity/pouw/period/v1"
 #guard idOf remoteV1Ids == some "verity/remote/v1"
 #guard idOf remoteV1Ids.reverse == some "verity/remote/v1"
 #guard idOf (remoteV1Ids ++ ["verity/pouw/period/v1"]) == none

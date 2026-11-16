@@ -33,8 +33,7 @@ audited inference read the same weights. The audited circuit, cut at its linears
 v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the registered
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
-(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), onsite's work
-subprotocol, and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
+(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
 v2's audit on the proofs themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's,
 and the recursive audit, which SPOT's soundness doesn't cover, are refused). `Core.Composition.tiedSameB`
 composes them on the caller's blobs: every
