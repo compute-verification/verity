@@ -75,11 +75,11 @@ means = "the rules in force, and the map"
 
 [[tree]]
 path = "ARCHITECTURE.md"
-means = "the architecture and the Glossary"
+means = "the architecture"
 
 [[tree]]
 path = "GLOSSARY.md"
-means = "the rest of the Glossary: notation, older names and narrower senses"
+means = "the Glossary: terms, notation, narrower senses and older names"
 
 [[tree]]
 path = "pyproject.toml"
