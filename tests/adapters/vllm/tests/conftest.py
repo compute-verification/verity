@@ -103,7 +103,6 @@ cases stay in the default run, and circuit-check's `word_view` checks each Boole
 merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
 
-import gc  # noqa: E402
 import importlib  # noqa: E402
 import os  # noqa: E402
 import shutil  # noqa: E402
@@ -160,33 +159,6 @@ def pytest_collection_modifyitems(items) -> None:
             item.add_marker(pytest.mark.xfail(reason=f"known failure on main: {reason}", strict=False))
         if not SWEEPS and "boolean_sweep" in item.keywords:
             item.add_marker(sweep)
-
-
-#: how far a process may grow past its size at its last full collection before the next test's end collects again
-COLLECT_GROWTH = 256 << 20
-_collected_at = 0
-
-
-def _resident() -> int:
-    """This process's resident bytes; 0 where there is no /proc (macOS), which never collects."""
-    if not os.path.exists("/proc/self/statm"):
-        return 0
-    with open("/proc/self/statm") as f:
-        return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
-
-
-def pytest_runtest_logfinish(nodeid, location) -> None:
-    """A full collection once the process has grown `COLLECT_GROWTH` past its last one.  Python collects its oldest generation only
-    once that generation has grown by a quarter, rarely in a worker that holds GBs of long-lived objects, so without this the cycles
-    each test leaves (a raised exception's frames, a builder's graph) stay held and a worker grows with every test of its share:
-    the suite's `worker_gb` is what a worker reaches under this collection."""
-    global _collected_at
-    now = _resident()
-    if now - _collected_at > COLLECT_GROWTH:
-        gc.collect()
-        _collected_at = _resident()
-    elif now < _collected_at:
-        _collected_at = now
 
 
 @pytest.fixture(autouse=True)
