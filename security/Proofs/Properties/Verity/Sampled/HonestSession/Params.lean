@@ -79,7 +79,8 @@ open Flock
 open Lean (Json)
 open FlockSoundness.Discharge.Recursion.FirewallObj
 open FlockSoundness.Discharge.Recursion.FirewallJson renaming norm → jnorm
-open FlockSoundness.Discharge.Recursion.FirewallJson (normObj normObj_eq normList normList_eq)
+open FlockSoundness.Discharge.Recursion.FirewallJson (normObj normObj_eq normList normList_eq jsonCharsList_eq
+  jsonCharsObj_eq memberChars)
 open Std.DTreeMap.Internal (Impl)
 
 set_option maxHeartbeats 400000
@@ -388,9 +389,9 @@ private theorem printable_hexOf (b : ByteArray) : JsonCanon.Printable (.str (hex
     · exact key _ (Nat.mod_lt _ (by decide))
   · rw [List.mem_singleton] at hq; subst hq; decide
 
+set_option maxHeartbeats 4000000 in
 /-- The partition object prints to ASCII: its format tag and query are concrete literals, its one spliced leaf is the
 program digest (`printable_hexOf`). -/
-set_option maxHeartbeats 4000000 in
 private theorem printable_partition : JsonCanon.Printable partitionObj := by
   unfold partitionObj Spot.Partition.build
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
@@ -407,10 +408,10 @@ private theorem printable_partition : JsonCanon.Printable partitionObj := by
     dsimp only
     split <;> exact ProgramParse.printable_of _ (by decide +kernel)
 
+set_option maxHeartbeats 4000000 in
 /-- The component parameters print to ASCII: every character of `printJson paramsJ` is below `0x7f`. The concrete members
 are discharged by the kernel; the hash-spliced ones (the challenger key, the proofs' digests, the program and the window
 root) by `printable_hexOf`, `printable_partition` and `ProgramParse.printable_programJ`. -/
-set_option maxHeartbeats 4000000 in
 theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
   rw [paramsJ]
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
@@ -457,9 +458,9 @@ theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
   · exact ⟨by decide, printable_hexOf _⟩                           -- window_root
   · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- work_table
 
+set_option maxHeartbeats 4000000 in
 /-- The composite's parameters print to ASCII; the `Printable` witness `canon_plain` takes for `θJ`. The one component's
 `id` is a concrete literal and its `params` is `paramsJ`. -/
-set_option maxHeartbeats 4000000 in
 theorem printable_θJ : JsonCanon.Printable θJ := by
   rw [θJ]
   refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
