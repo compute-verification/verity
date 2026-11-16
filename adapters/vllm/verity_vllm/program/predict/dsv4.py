@@ -31,11 +31,10 @@ from verity.circuits.types import Type
 
 from verity_vllm.engine.profiles import family_facts as FF
 
-from . import dsa
 from .common import Unexpressible, _arr, _Peers, served_class
+from .dsa_calls import _Calls, _refuse
 from .phi import Phi
 
-_refuse = dsa._refuse
 Shape = tuple[tuple[int, ...], int]
 
 
@@ -194,10 +193,10 @@ class Net:
         return _Model(self, B, W, peers)
 
 
-class _Model(dsa._Calls):
+class _Model(_Calls):
     """The forward over one call's rows, emitted into `B`: the HC residual streams and their (post, comb) mixes carried from sublayer
     to sublayer, and each layer's window, compressor state and compressed rows carried across calls as `vllm_dsv4` keeps them (its
-    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Calls`'s.  Its mHC split
+    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa_calls._Calls`'s.  Its mHC split
     counts, FlashMLA planner and Marlin configs read the call's own rows, so it is never given a launch batch."""
 
     reads_launch = False

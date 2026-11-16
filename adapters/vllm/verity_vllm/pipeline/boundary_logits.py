@@ -8,7 +8,7 @@ wraps it in a replay): at each call it keeps, for every request that emits a tok
 
 **The value.** A class's span r holds O·K rows of N words (`Layout.logit_rows`): token j's row of V logits as its K
 units read it, unit k's lanes [k·N, (k + 1)·N) at row j·K + k, so a span's rows are its (O, V) logits reshaped to
-(O·K, N); past its n ids served, token n−1's rows again (`span_rows`), as `boundary_rows.id_rows` repeats its id. The
+(O·K, N); past its n ids served, token n−1's rows again (`span_rows`), as `boundary_span.id_rows` repeats its id. The
 rows are `hm96-sha512/row/v2` rows under the class's window domain (`boundary_rows.window_domain`), each salt fresh from
 the OS.
 

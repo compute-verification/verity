@@ -172,9 +172,10 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/served_seed.py",
           "adapters/vllm/verity_vllm/llm.py", "adapters/vllm/verity_vllm/pipeline/program_graph.py",
           # boundary_rows defines TemplateInlined_v1 and boundary_stop EgressStop_v1, which their sidecars bind;
-          # boundary_rows imports boundary_tables, and its template lookup imports serving_templates when a named
-          # target builds
+          # boundary_rows imports boundary_tables and boundary_span, and its template lookup imports serving_templates
+          # when a named target builds
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_span.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",

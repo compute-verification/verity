@@ -619,7 +619,7 @@ def test_code_version_is_one_tree_over_a_namespaces_portions(monkeypatch, tmp_pa
     """`verity` as a namespace: the digest is the same over any order of its portions and with a cwd directory that joined it
     without a module, and moves with an edit."""
     version = _portions(monkeypatch, tmp_path, ("upper/verity/circuits/__init__.py", "lower/verity/ir/__init__.py", "lower/verity/ir/defs.py",
-                                                "cwd/verity/primitives/circuits/src/verity/ir/defs.py"))
+                                                "cwd/verity/circuits/src/verity/ir/defs.py"))
     a = version("repo/upper", "repo/lower")
     assert version("repo/lower", "repo/upper") == version("repo/cwd", "repo/upper", "repo/lower") == a
     (tmp_path / "repo" / "lower" / "verity" / "ir" / "defs.py").write_text("# edited\n")

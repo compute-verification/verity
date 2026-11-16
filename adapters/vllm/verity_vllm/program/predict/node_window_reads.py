@@ -9,7 +9,7 @@ the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter
 - **The served ids** (`served_reads`): the leaves of the Program's first return field, the tokens, as the window writes
   them (the select combine's ``o0`` a token, `node_window_select`), at their leaves of `EGRESS`. Every rank computes the
   same tokens; rank 0 alone declares them, so over the ranks' windows each leaf of the return is written once
-  (`written_once`). The return's row is O ids zero past the n served (`boundary_rows.egress_row`), and the combines'
+  (`written_once`). The return's row is O ids zero past the n served (`boundary_span.egress_row`), and the combines'
   ids are it at every n: each step's select writes the next step's live bit, and the steps past n write zeros.
 
 A rank's window is built here (`rank_window`), the one place that states what a rank reads: its registered reads, its

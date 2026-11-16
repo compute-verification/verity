@@ -148,7 +148,7 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
 def applicability_conditions(profile, applied: dict, attention_impls: dict, export_facts: dict, sampling: dict | None = None, tp: dict | None = None,
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
-    which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
+    which the artifact may be reused (`artifact.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         GEMM_PINS,
@@ -489,7 +489,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     from verity_torch.correspondence.runtime import correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-    from verity_vllm.program.frontend.target_profile import ArtifactIdentity
+    from verity_vllm.program.frontend.artifact import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest

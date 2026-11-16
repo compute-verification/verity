@@ -28,6 +28,7 @@ from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_torch.frontend.correspond import compare_bodies
 from verity_torch.frontend.derive import Unsupported
+from verity_torch.frontend.derive_examples import NegMoE
 from verity_vllm.program.frontend.vllm_derive import derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.family import DecoderLayerT
@@ -892,7 +893,7 @@ def test_hf_tiny_lm_reference_mode_greedy_token_matches_torch_and_shares_one_rop
 def test_moe_routing_is_refused_not_approximated():
     """A sparse MoE gathers expert weights by a top-k routing index: data-dependent structure. Refused at `topk` (no kind; a
     `TopKRef` would only move the refusal to the gather on a value index -> `dynamic_control_flow`). Never a partial program."""
-    r = derive(ex.NegMoE(), (torch.empty(3, 16),), mode="reference")
+    r = derive(NegMoE(), (torch.empty(3, 16),), mode="reference")
     assert isinstance(r, Unsupported) and r.reason in ("numerics_unregistered", "dynamic_control_flow") and "topk" in str(r), r
 
 

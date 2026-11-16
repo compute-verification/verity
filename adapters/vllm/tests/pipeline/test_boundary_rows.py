@@ -40,6 +40,7 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import boundary_stop as BS
 from verity_vllm.pipeline import boundary_windows as BW
+from verity_vllm.pipeline import boundary_span as WD
 from verity_vllm.pipeline import long_row as LR
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -95,17 +96,17 @@ def test_each_span_is_one_ingress_row_and_one_egress_row_laid_out_as_the_spec_sa
     the ids, zero past them; every u32 two u16 words, low first."""
     s = BR.Span("e", (70000, 5), {**GREEDY, "temperature": 0.75, "top_k": -1, "seed": (1 << 40) + 3, "max_tokens": 9},
                 (1, 2, 3), "stop")
-    ing = _u32s(BR.ingress_row(s, 4))
+    ing = _u32s(WD.ingress_row(s, 4))
     f32 = struct.unpack("<I", struct.pack("<f", 0.75))[0]
     assert ing == [2, 9, 0, 1, f32, struct.unpack("<I", struct.pack("<f", 1.0))[0], 0xFFFFFFFF, 0, 0, 0,
                    struct.unpack("<I", struct.pack("<f", 1.0))[0], 1, 3, 1 << 8, 70000, 5, 0, 0]
-    assert len(ing) == BR.HEAD_U32 + 4 and BR.ingress_row(s, 4)[-8:-6].tolist() == [70000 & 0xFFFF, 70000 >> 16]
-    assert _u32s(BR.egress_row(s, 4)) == [3, 1, 1, 2, 3, 0]
-    assert _u32s(BR.egress_row(BR.Span("u", (1,), GREEDY), 2)) == [0, 0, 0, 0]
+    assert len(ing) == WD.HEAD_U32 + 4 and WD.ingress_row(s, 4)[-8:-6].tolist() == [70000 & 0xFFFF, 70000 >> 16]
+    assert _u32s(WD.egress_row(s, 4)) == [3, 1, 1, 2, 3, 0]
+    assert _u32s(WD.egress_row(BR.Span("u", (1,), GREEDY), 2)) == [0, 0, 0, 0]
     with pytest.raises(ValueError, match="past the class"):
-        BR.ingress_row(s, 1)
+        WD.ingress_row(s, 1)
     with pytest.raises(ValueError, match="u32"):
-        BR.egress_row(BR.Span("n", (1,), GREEDY, (-1,), "stop"), 2)
+        WD.egress_row(BR.Span("n", (1,), GREEDY, (-1,), "stop"), 2)
 
 
 def test_a_span_is_classed_by_its_prompt_and_its_outputs_each_capped_at_a_power_of_two():
@@ -194,11 +195,11 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     salts and root. A class without ``ids`` writes the record it wrote before: the
     same two roots under the same salts, and no ``ids``. Refused before anything is committed where the block returns
     no such ids: a check that returns other than 32 bits, or more instances than outputs."""
-    assert _u32s(BR.id_rows(BR.Span("e", (1,), GREEDY, (70000, 5), "stop"), 4)) == [70000, 5, 5, 5]
-    assert BR.id_rows(BR.Span("e", (1,), GREEDY, (70000,), "stop"), 2).tolist() == [[70000 & 0xFFFF, 1], [70000 & 0xFFFF, 1]]
-    assert not BR.id_rows(BR.Span("u", (1,), GREEDY), 2).any()
+    assert _u32s(WD.id_rows(BR.Span("e", (1,), GREEDY, (70000, 5), "stop"), 4)) == [70000, 5, 5, 5]
+    assert WD.id_rows(BR.Span("e", (1,), GREEDY, (70000,), "stop"), 2).tolist() == [[70000 & 0xFFFF, 1], [70000 & 0xFFFF, 1]]
+    assert not WD.id_rows(BR.Span("u", (1,), GREEDY), 2).any()
     with pytest.raises(ValueError, match="past the class"):
-        BR.id_rows(BR.Span("e", (1,), GREEDY, (1, 2, 3), "stop"), 2)
+        WD.id_rows(BR.Span("e", (1,), GREEDY, (1, 2, 3), "stop"), 2)
     spans = [BR.Span(f"r{i}", (1, 2, 3), GREEDY, tuple(range(70000 + 10 * i, 70000 + 10 * i + n)), "length")
              for i, n in enumerate((4, 3, 4, 3, 4))]
     L, off = BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128, ids=True), BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128)
@@ -544,7 +545,7 @@ def _word(n: int, finish: int) -> int:
 def _block(rule: BS.Stop, span: BR.Span, served: tuple[int, ...] | None = None) -> int:
     """The stop block's output on the rows a class under ``rule`` holds of ``span``, its `b.egress` row of ids ``served``."""
     ids = span.served if served is None else served
-    head = _u32s(BR.ingress_row(span, span.shape[0]))[:BR.HEAD_U32]
+    head = _u32s(WD.ingress_row(span, span.shape[0]))[:WD.HEAD_U32]
     (word,) = evaluate(rule.template, head, [*ids, *[0] * (rule.outputs - len(ids))])
     return word
 
@@ -559,8 +560,8 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
     response at it and counts, else ``max_tokens``, else the model's length; no stop ids, and no id stops it; and past
     the T it runs on, finish 0, where `Stop.word` holds no span. A T the word's n can't hold is refused."""
     params, ret = RULE.template.signature()
-    assert [(k, t.leaves) for k, t in params] == [("request", BR.HEAD_U32), ("ids", 4)] and ret == Bits(16)
-    assert (BR.FIELD_AT["lp"], BR.FIELD_AT["max_tokens"]) == (0, 1)
+    assert [(k, t.leaves) for k, t in params] == [("request", WD.HEAD_U32), ("ids", 4)] and ret == Bits(16)
+    assert (WD.FIELD_AT["lp"], WD.FIELD_AT["max_tokens"]) == (0, 1)
     assert [_block(RULE, s) for s in HELD] == [_word(3, 1), _word(4, 2), _word(2, 2), _word(2, 3)]
     assert [RULE.word(s) for s in HELD] == [_block(RULE, s) for s in HELD]
     for ids, mt, lp in [((9, 3, 7, 9), 4, 3), ((9, 9, 9, 9), 3, 1), ((7, 9, 9, 9), 4, 62), ((9, 9, 9, 9), 4, 61),
@@ -597,9 +598,9 @@ def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_i
     held = _ended("h", (9, 7), "stop")
     assert RULE.word(heeds) is None and RULE.word(held) == _word(2, 1)
     assert RULE.word(_ended("i", (9, 7), "stop", ignore_eos=True)) is None
-    head = _u32s(BR.ingress_row(heeds, 4))[:BR.HEAD_U32]
-    at = BR.FIELD_AT["ignore_eos"]
-    assert head[at] == 0 and _u32s(BR.ingress_row(ignores, 4))[at] == 1
+    head = _u32s(WD.ingress_row(heeds, 4))[:WD.HEAD_U32]
+    at = WD.FIELD_AT["ignore_eos"]
+    assert head[at] == 0 and _u32s(WD.ingress_row(ignores, 4))[at] == 1
     for word, want in ((0, _word(2, 1)), (1, _word(4, 2)), (2, _word(4, 2)), (1 << 31, _word(4, 2)),
                        (stop_check.NOT_AN_ID, _word(4, 2))):
         assert evaluate(RULE.template, [*head[:at], word, *head[at + 1:]], [9, 7, 9, 9]) == (want,)
@@ -638,7 +639,7 @@ ADD32 = PrimitiveDefinition("BoundaryRowsTestAdd32", 1, (("a", Bits(32)), ("b", 
 #: a template that reads a span's `b.request` row whole and gives its ``max_tokens``
 READS_REQUEST = bind(CompositeDefinition(
     "BoundaryRowsTestRequest", 0, (), lambda S_: ((("request", BR.row_type(BR.REQUEST)),), BR.U32),
-    lambda B, S_, r: B.call(TAKE32, r[BR.FIELD_AT["max_tokens"]]), register=False))
+    lambda B, S_, r: B.call(TAKE32, r[WD.FIELD_AT["max_tokens"]]), register=False))
 #: a template that reads a span's `b.prompt` row whole and adds its first and last ids
 READS_PROMPT = CompositeDefinition(
     "BoundaryRowsTestPrompt", 0, ("P",), lambda S: ((("prompt", BR.row_type(BR.PROMPT, S.P)),), BR.U32),
@@ -676,8 +677,8 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     assert [n for n, _t in params] == list(BR.PARAMS) == [BR.REQUEST, BR.PROMPT]
     assert [2 * BR.row_type(v, 4).leaves for v in BR.PARTS] == [_stop_layout(prompt=4).words(v) for v in BR.PARTS]
     assert dict(RULE.template.signature()[0]) == {p: BR.row_type(v, RULE.outputs) for p, v in BS.STOP_READS.items()}
-    row = _u32s(BR.ingress_row(_ended("x", (), None, 7, (1, 2, 3, 4)), 4))
-    assert evaluate(D, row[:BR.HEAD_U32], row[BR.HEAD_U32:]) == (7, 12)
+    row = _u32s(WD.ingress_row(_ended("x", (), None, 7, (1, 2, 3, 4)), 4))
+    assert evaluate(D, row[:WD.HEAD_U32], row[WD.HEAD_U32:]) == (7, 12)
 
     program = P.population_program(D, 3)
     templates = {BR.REQUEST: (descriptor_id(READS_REQUEST), "request"),
@@ -718,12 +719,12 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
     rows = BR.port_rows(HELD[:3], L)
     assert list(rows) == [BR.REQUEST, BR.PROMPT, BR.EGRESS, BR.STOP] == list(L.committed) and L.values == BR.PARTS
     for i, s in enumerate(HELD[:3]):
-        assert np.concatenate([rows[BR.REQUEST][i], rows[BR.PROMPT][i]]).tolist() == BR.ingress_row(s, 4).tolist()
-        assert _u32s(rows[BR.EGRESS][i]) == [*s.served, *[0] * (4 - len(s.served))] == _u32s(BR.egress_row(s, 4))[2:]
+        assert np.concatenate([rows[BR.REQUEST][i], rows[BR.PROMPT][i]]).tolist() == WD.ingress_row(s, 4).tolist()
+        assert _u32s(rows[BR.EGRESS][i]) == [*s.served, *[0] * (4 - len(s.served))] == _u32s(WD.egress_row(s, 4))[2:]
         assert rows[BR.STOP][i].tolist() == [RULE.word(s)] == [_block(RULE, s)]
     pub = json.loads(json.dumps(c.public()))
     assert pub["stop"] == RULE.to_json() and pub["stopped"] is True and (pub["prompt"], pub["outputs"]) == (4, 4)
-    assert {k: v["words"] for k, v in pub["values"].items()} == {BR.REQUEST: 2 * BR.HEAD_U32, BR.PROMPT: 8, BR.EGRESS: 8,
+    assert {k: v["words"] for k, v in pub["values"].items()} == {BR.REQUEST: 2 * WD.HEAD_U32, BR.PROMPT: 8, BR.EGRESS: 8,
                                                                   BR.STOP: 1}
     mine = BR.layout_of(pub, PAIR, RULE)
     rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
@@ -779,7 +780,7 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     by_port = {r["port"]: r for r in rec["roots"]}
     assert ({e["value"]: (e["root"], e["domain"], e["leaves"], e["words"], e["word_bits"]) for e in srec["registered"]}
             == {v: (by_port[p]["root"], by_port[p]["domain"], 3, w, 32)
-                for (v, p), w in zip(BS.STOP_READS.items(), (BR.HEAD_U32, 4))})
+                for (v, p), w in zip(BS.STOP_READS.items(), (WD.HEAD_U32, 4))})
     assert reg.outputs == {v: {"record": R.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
     assert srec["window"] == {**rec["window"], "population": "stop"} and srec["registered"] == reg.registered
 
@@ -1185,7 +1186,7 @@ def test_a_class_commits_byte_for_byte_what_a_layout_built_for_its_window_alone_
     lines = _served(monkeypatch, tmp_path / "served", check, inline, stop)
     classes: dict[tuple[int, int, int, bool], list[BR.Span]] = {}
     for w, requests in enumerate(WINDOWS):
-        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, BR.sampling_of(Request("", [], n).sampling_params), (20 + w,) * n,
+        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, WD.sampling_of(Request("", [], n).sampling_params), (20 + w,) * n,
                          "length") for name, p, n in requests]
         classes |= {(w, *k): mine for k, mine in BS.filed(spans, stop).items()}
     assert [(x["window"], x["prompt"], x["outputs"]) for x, _ in lines] == [k[:3] for k in classes]

@@ -21,7 +21,6 @@ from verity.commitments import history as HT
 
 from verity_vllm.pipeline import boundary_logits as BL, boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
-    FINISH,
     FORMAT,
     ONE_RETURN,
     TABLES_UNDER_A_RULE,
@@ -30,11 +29,11 @@ from verity_vllm.pipeline.boundary_rows import (
     check_template,
     commit,
     run_root,
-    sampling_of,
     table_roots,
     write,
 )
 from verity_vllm.pipeline.boundary_stop import Stop, filed
+from verity_vllm.pipeline.boundary_span import FINISH, sampling_of
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}

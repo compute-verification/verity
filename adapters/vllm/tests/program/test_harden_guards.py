@@ -32,10 +32,12 @@ import subprocess
 import sys
 
 import pytest
-from verity_vllm.program.frontend.target_profile import (
+from verity_vllm.program.frontend.artifact import (
     ArtifactIdentity,
-    TargetProfile,
     reuse_mismatches,
+)
+from verity_vllm.program.frontend.target_profile import (
+    TargetProfile,
 )
 
 import verity.circuits

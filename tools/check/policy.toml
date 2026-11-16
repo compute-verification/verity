@@ -57,39 +57,3 @@ id = "suite verity-vllm::protocols/test_credit_gate.py::test_a_window_presented_
 owner = "compute-accounting"
 expires = "2026-11-21T07:59:00Z"
 reason = "the credit period's verdict of record is the Lean verifier's; this test of the Python gate follows it once it reads the Lean's"
-
-[[allow]]
-id = "suite verity-vllm::tests/lint/test_p10_size.py::test_no_new_or_grown_offenders"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "three adapter modules over 800 lines after the torch cut; vllm splits them"
-
-[[allow]]
-id = "suite verity-vllm::tests/tools/test_scorecard.py::test_the_real_tree_agrees_with_the_p10_and_p7_allowlists"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "the scorecard counts the same three adapter modules over 800 lines; it agrees again once vllm splits them"
-
-[[allow]]
-id = "suite verity-vllm::tests/lint/test_p08_facts.py::test_no_new_violations"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "one facts-lint site in the adapter's example derivation after the torch cut; vllm mends it"
-
-[[allow]]
-id = "suite verity-vllm::lint/test_p10_size.py::test_no_new_or_grown_offenders"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "three adapter modules over 800 lines after the torch cut; vllm splits them"
-
-[[allow]]
-id = "suite verity-vllm::tools/test_scorecard.py::test_the_real_tree_agrees_with_the_p10_and_p7_allowlists"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "the scorecard counts the same three adapter modules over 800 lines; it agrees again once vllm splits them"
-
-[[allow]]
-id = "suite verity-vllm::lint/test_p08_facts.py::test_no_new_violations"
-owner = "vllm"
-expires = "2026-11-17T07:59:00Z"
-reason = "one facts-lint site in the adapter's example derivation after the torch cut; vllm mends it"
