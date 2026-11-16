@@ -162,7 +162,7 @@ execution phases and one mutation per refusal, the case's own framing among them
 undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
-every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.sample_twin` the same way, over
+every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest samples, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live execution phase's
 round roots and coins, read through the challenger's session (its record and close signed under the execution phase's pinned key,
@@ -170,11 +170,11 @@ its release log, and the auditor's signed ledger opening and ending it for the e
 in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
 end, a second session for the execution phase, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign execution phase's, a seeded execution phase's commitment or another
-layout's). `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+layout's). `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
 verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
-`outcome` and `a-link` against the steps they run, `credit._credited`, `credit.sampled`, `credit._outcome` and
+`outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, proof blocks the prover chose, a sampled proof block failed or
 missing, a credit period unclosed or an execution phase of it missing or out of order, an A tree the round roots didn't commit, a
@@ -182,7 +182,7 @@ descriptor whose record names another layout than its nodes, a round log the cha
 sampled proof block's proof of another registration than the execution phase's, an entry whose root is not its sessions', an execution phase of a
 credit period whose B rows, one row's s_w or every code, are not the ones the credit period's open signed, a credit period whose open signs
 no weights' root, an execution phase whose request runs past its public max_tokens or stops before it, a credit period whose open
-commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit.py`
+commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean

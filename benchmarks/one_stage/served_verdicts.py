@@ -300,7 +300,7 @@ PEARLPLUS_COINS = {"epoch": "a salt-only session on vy-challenger-1, reserved th
                             "the passes' coin.json before any replay and held to the session through the auditor's signed "
                             "ledger (`pearlplus_draw`); the piece puts that record in the evidence store the moment it is "
                             "drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
-#: the replay's samples where verify ran without the gate (`verify_run.node_sample`)
+#: the replay's samples where verify ran without the gate (`verify_run.node_draw`)
 PEARLPLUS_NODE_SAMPLES = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
                         "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
                         "replay; the piece puts that record in the evidence store the moment it is drawn and holds the "
@@ -384,7 +384,7 @@ PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json
 #: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
 #: why `pearlplus_live_sample` refuses a node's sample source
-PEARLPLUS_NODE_SAMPLE = ("the verifier's draw source is drawn on the serving node (verify_run.node_sample, PEARLPLUS_NODE_SAMPLES), "
+PEARLPLUS_NODE_SAMPLE = ("the verifier's draw source is drawn on the serving node (verify_run.node_draw, PEARLPLUS_NODE_SAMPLES), "
                        "not a challenger coin opened on the run commitment (served_passes.py verify under "
                        "PEARLC_CHALLENGER_GATE)")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -919,7 +919,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     circuit, rows, steps = meta["program_digest"], int(meta["rows"]), int(meta["steps"])
     if proto is not None and proto.get("program") != circuit:
         raise ValueError(f"serve.json's Program {str(proto.get('program'))[:16]}... is not {H1_META}'s {circuit[:16]}...")
-    redo = (f"build them with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
+    redo = (f"build them, from tests/adapters/vllm, with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
             f"--live {rows},{steps}")
     try:
         doc = json.loads((circuits / CIRCUITS_MANIFEST).read_text())
@@ -934,7 +934,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
                          f"{rows}, {steps}: {redo}")
     strata = sorted({int(k) for _n, k, _w in meta["layout"]["linears"]})
     missing = [k for k in strata if f"k{k}" not in files]
-    k = PHC.sample_k(meta["layout"]) if draw_k is None else int(draw_k)
+    k = PHC.draw_k(meta["layout"]) if draw_k is None else int(draw_k)
     length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
     weights = ["--model", model] if model else []
     compact = {"sort_keys": True, "separators": (",", ":")}
@@ -1005,7 +1005,7 @@ def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cu
     record `record` byte for byte where it is given, else `pearlplus_descriptor`. That descriptor is each pass's
     ``descriptor`` for credit's circuit clause (`challenger.circuit_reason`). The open and what it committed go to
     ``piece_dir/PERIOD``, which `period_close` closes. The run's sample session is reserved after the close, so it joins
-    no period (`bench_arm.LiveSample`) and the close lists the salt session alone (`credit.pearl_c_period_credit`)."""
+    no period (`bench_arm.LiveDraw`) and the close lists the salt session alone (`credit.pearl_c_period_credit`)."""
     raw = record.read_bytes() if record is not None else pearlplus_descriptor(scheme, cubin)
     piece_dir.mkdir(parents=True, exist_ok=True)
     (piece_dir / PEARLPLUS_DESCRIPTOR).write_bytes(raw)
@@ -1109,7 +1109,7 @@ def period_reserves_said(doc: Mapping[str, Any]) -> str:
 def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -> tuple[bool, str]:
     """The rule the verifier's sample keeps, read in the gate's ledger once its coin is flipped: the sample session of the coin
     record `record` (``draw.reserved.session``) is lane `lane`'s first reserve after the period in ``piece_dir/PERIOD``
-    closed (`pouw_h1_window.after_close`, which `bench_arm.LiveSample` held it to before asking its coin, and
+    closed (`pouw_h1_window.after_close`, which `bench_arm.LiveDraw` held it to before asking its coin, and
     `pearlplus_live_sample` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
     ``rule``."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
@@ -1148,14 +1148,14 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
                      inputs: Mapping[str, str], python: str) -> dict[str, Any]:
-    """`pouw_h1_gpu.py --check-challenger` (run by `python` in adapters/vllm, so ``tests`` is that package's) of the
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in tests/adapters/vllm, so ``tests`` is the adapter's) of the
     window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
     ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
             "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
             *(x for kv in inputs.items() for x in kv)]
-    p = subprocess.run(argv, cwd=ROOT / "adapters" / "vllm", capture_output=True, text=True, check=False)
+    p = subprocess.run(argv, cwd=ROOT / "tests" / "adapters" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
         return json.loads((out / "pouw_h1_challenger.json").read_text())
@@ -1311,7 +1311,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     host's pins log as it answers now, written to `out` (the session's tree at ``out/session/<id>``, beside the salt
     session's), the ledger opening that session alone on the run's commitment C under the challenger key `key` pins, run
     from a commit on main's line `main` (`challenger.trusted_session_of`), withheld (`challenger.withheld_on`), its signed
-    commitment the record's and of a sample session's layout (`window.sample_epoch_reason`), its log showing C as the one
+    commitment the record's and of a sample session's layout (`window.draw_epoch_reason`), its log showing C as the one
     root its coin followed, and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`) with
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's
     origin, its session and None or the first refusal; a node's sample has no session and no refusal here (the compose
@@ -1349,15 +1349,15 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
                                                   remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         if not Ch.withheld_on(lines, c):
-            raise ValueError(f"the run's sample session: {Ch.WITHHELD}")
-        if (why := Wd.sample_epoch_reason(trusted)) is not None:
+            raise ValueError(f"the run's draw session: {Ch.WITHHELD}")
+        if (why := Wd.draw_epoch_reason(trusted)) is not None:
             raise ValueError(f"the draw session's signed coins: {why}")
         if trusted.to_json() != draw.get("commitment"):
             raise ValueError("the record's draw commitment is not the one the draw session's challenger signed")
-        if tuple(received.get(Wd.SAMPLE, ())) != (bytes.fromhex(c),):
+        if tuple(received.get(Wd.DRAW, ())) != (bytes.fromhex(c),):
             raise ValueError("the draw session's log does not show the run's commitment as the one root its draw coin "
                              "followed")
-        if (why := Ch.live_reason(trusted, opening, Wd.SAMPLE, 0, bytes.fromhex(c))) is not None:
+        if (why := Ch.live_reason(trusted, opening, Wd.DRAW, 0, bytes.fromhex(c))) is not None:
             raise ValueError(f"the record's draw coin: {why}")
         if opening.coin.hex() != rec.get("source"):
             raise ValueError("the record's source is not its draw session's coin")
@@ -1821,7 +1821,7 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
         return (f"the draw session {sid} is not lane {lane}'s first reserve after its Pearl-C period {period} closed "
                 f"(that is {None if after is None else after.get('session')}): a draw is taken once")
     body = after.get("body") or {}
-    if body.get("withheld") is not True or [tuple(f) for f in body.get("families") or ()] != list(Wd.SAMPLE_FAMILIES):
+    if body.get("withheld") is not True or [tuple(f) for f in body.get("families") or ()] != list(Wd.DRAW_FAMILIES):
         return f"the draw session {sid} was not reserved withheld with a draw session's layout alone"
     c = record.get("commitment")
     opens = [e.get("session") for e in entries if e.get("kind") == "open"
@@ -1831,7 +1831,7 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     try:
         commitment = Ch.LiveCommitment.from_json(draw.get("commitment"))
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
-        why = Wd.sample_epoch_reason(commitment) or Ch.live_reason(commitment, opening, Wd.SAMPLE, 0, bytes.fromhex(str(c)))
+        why = Wd.draw_epoch_reason(commitment) or Ch.live_reason(commitment, opening, Wd.DRAW, 0, bytes.fromhex(str(c)))
     except (Ch.CoinError, ValueError, TypeError) as e:
         return f"the record's draw is malformed: {type(e).__name__}: {e}"
     if why is not None:

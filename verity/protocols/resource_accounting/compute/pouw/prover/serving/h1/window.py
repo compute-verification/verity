@@ -14,8 +14,8 @@ over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `a
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``), H1's R. An H1 window's sampling coin is not S's: it comes
-from a sample session of its own (`SampleSession`, the pouw setting ``sample_session``, reserved withheld with
-`window.SAMPLE_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
+from a sample session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved withheld with
+`window.DRAW_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
 commitment is in, its open answering no root (`gate_of`), so its challenger releases its coin commitment only after
 that commitment. The challenger is auditor-trusted
 (`trusted-device`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
@@ -111,14 +111,14 @@ def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAI
 
 
 def reserved_of(raw: Any, name: str = "session") -> dict[str, Any] | None:
-    """H1's pouw setting ``session`` (or ``sample_session``, `name`): None, or the gate's answer to the window's
+    """H1's pouw setting ``session`` (or ``draw_session``, `name`): None, or the gate's answer to the window's
     ``reserve`` (its ``session``, a gate session id, and optionally its `RESERVE_FIELDS`); ValueError otherwise."""
     if raw is None:
         return None
     if not (isinstance(raw, Mapping) and "session" in raw and set(raw) <= {"session", *RESERVE_FIELDS}
             and isinstance(raw["session"], str) and PS.SESSION.fullmatch(raw["session"])):
         opens = ("its window-open root" if name == "session"
-                 else "its sample root, withheld, once the prover's commitment is in")
+                 else "its draw root, withheld, once the prover's commitment is in")
         raise ValueError(f"H1's pouw setting {name!r} is the challenger gate's reserve answer for the window, {{'session'}} "
                          f"(a gate session id) and optionally {', '.join(repr(k) for k in RESERVE_FIELDS)}, not {raw!r}: the "
                          f"window opens it itself, on {opens} (the pouw setting 'gate')")
@@ -140,7 +140,7 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
 def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
     """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
     whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's sample
-    session may be, so a sample is taken once (`bench_arm.LiveSample`, `served_verdicts.pearlplus_live_sample`)."""
+    session may be, so a sample is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_sample`)."""
     closed = False
     for e in map(json.loads, lines):
         if not closed:
@@ -299,13 +299,13 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
     return reserved, period
 
 
-def reserve_sample(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
-    """A sample session (`window.SAMPLE_FAMILIES`, the sampling coin alone) reserved withheld at infra's gate, as words (`call`,
-    ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `SampleSession` takes it
+def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
+    """A sample session (`window.DRAW_FAMILIES`, the sampling coin alone) reserved withheld at infra's gate, as words (`call`,
+    ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `DrawSession` takes it
     (`reserved_of`). `CoinError` when the gate refuses, or reserves it plain."""
-    answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.sample_families(), "--withhold")
+    answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
     if answer.get("withheld") is not True:
-        raise CoinError(f"the gate reserved sample session {answer.get('session')} plain, not withheld")
+        raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
     reserved = reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
     assert reserved is not None
     return reserved
@@ -338,34 +338,34 @@ def at_port(at: str, port: Any) -> str:
 
 #: ``gate(session, root)``: the gate's answer (`pouw_h1_challenger.session_of`'s form) to ``open --session SESSION --root ROOT`` (ROOT 128
 #: lowercase hex), its ``commitment`` the session's (``status SESSION``'s when the open answer's is null); with
-#: ``withhold=True`` (a sampling session's, reserved withheld, `SampleSession`) the answer has no commitment
+#: ``withhold=True`` (a sampling session's, reserved withheld, `DrawSession`) the answer has no commitment
 Gate = Callable[..., Mapping[str, Any]]
 #: why the gate's open of a sampling session is refused before any coin (`gate_of`)
 WITHHELD_OPEN = ("a sampling session is withheld: the gate's open answers `withheld: true`, no coin commitment root "
                  "(`commitment` null until the session's end) and `signed: true`, since its challenger releases its root "
                  "only at its close, after the prover's commitment (`reserve --withhold`)")
-#: why an H1 window's sampling coin has no session to come from (`SampleSession`)
-NO_SAMPLE_SESSION = ("the window's sampling coin comes from a sample session of its own, opened withheld on its sample root once "
+#: why an H1 window's sampling coin has no session to come from (`DrawSession`)
+NO_DRAW_SESSION = ("the window's draw coin comes from a draw session of its own, opened withheld on its draw root once "
                    "the prover's commitment is in, and the pouw setting 'draw_session' reserves none")
 
 
-def in_process_sample(rounds: Any, coins: Any) -> LiveRecord | None:
+def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:
     """Tests' sampling coin held in this process, which credits nothing (`pouw_h1.IN_PROCESS`): a `LiveRecord` over a sample
-    challenger at the epoch of `rounds`'s challenger under `coins` (`window.sample_challenger`); None without `rounds`."""
-    return None if rounds is None else LiveRecord(Wd.sample_challenger(rounds.challenger.commitment.epoch, coins), Wd.SAMPLE)
+    challenger at the epoch of `rounds`'s challenger under `coins` (`window.draw_challenger`); None without `rounds`."""
+    return None if rounds is None else LiveRecord(Wd.draw_challenger(rounds.challenger.commitment.epoch, coins), Wd.DRAW)
 
 
-class SampleSession:
-    """An H1 window's sampling coin from a sample session of its own (`window.SAMPLE_FAMILIES`) on the challenger at `at`'s host,
+class DrawSession:
+    """An H1 window's sampling coin from a sample session of its own (`window.DRAW_FAMILIES`) on the challenger at `at`'s host,
     reserved withheld on infra's gate (`reserved`, its reserve answer, `reserved_of`; None reserves none, and the sample is
-    refused, `NO_SAMPLE_SESSION`) and opened by `gate` on the window's sample root (`pouw_h1_requests.sample_root`) once the
+    refused, `NO_DRAW_SESSION`) and opened by `gate` on the window's sample root (`pouw_h1_requests.draw_root`) once the
     prover's commitment is in: its challenger answers the hello with the sample session's layout alone and the coin's raw
     bytes, and releases its commitment and the coin's full opening only at its close (`remote.RemoteChallenger.close`,
     which checks them). `record(root)` is that opening (`LiveRecord.record`'s form), once: a retry never resamples.
     `session` is the gate's answer as the window carries it (`pouw_h1_challenger.carried`) and `commitment` the
     commitment the session released, once it has closed."""
 
-    label = Wd.SAMPLE
+    label = Wd.DRAW
 
     def __init__(self, entry: str, at: str, reserved: Mapping[str, Any] | None, gate: Gate | None,
                  sleep: Callable[[float], Any] = time.sleep) -> None:
@@ -376,30 +376,30 @@ class SampleSession:
 
     def record(self, root: bytes) -> LiveOpening:
         if self.reserved is None or self.gate is None:
-            raise CoinError(NO_SAMPLE_SESSION)
+            raise CoinError(NO_DRAW_SESSION)
         if self._asked:
-            raise CoinError("the window's sample session is opened once: a retry never redraws")
+            raise CoinError("the window's draw session is opened once: a retry never redraws")
         self._asked = True
         sid = self.reserved["session"]
         try:
             answer = dict(self.gate(sid, root.hex(), withhold=True))
             if (answer.get("session"), answer.get("root")) != (sid, root.hex()):
-                raise ValueError(f"the gate's answer is not sample session {sid} opened on the sample root {root.hex()[:16]}...")
+                raise ValueError(f"the gate's answer is not draw session {sid} opened on the draw root {root.hex()[:16]}...")
             secret = answer.get("secret")
             client = remote.connect_when_listening(at_port(self.at, answer.get("port")),
                                                    None if secret is None else bytes.fromhex(secret), None,
                                                    remote.TUNNEL_WAIT_S, time.monotonic, self.sleep)
         except (OSError, ValueError) as e:
-            raise CoinError(f"{self.entry}: the window's sample session {sid}: {e}") from e
+            raise CoinError(f"{self.entry}: the window's draw session {sid}: {e}") from e
         with client:
             if not client.withheld:
-                raise CoinError(f"sample session {sid}'s challenger answered its hello with a coin commitment: a sample "
+                raise CoinError(f"draw session {sid}'s challenger answered its hello with a coin commitment: a draw "
                                 "session is withheld, its commitment released only at its close")
-            if [tuple(f) for f in client.families] != list(Wd.SAMPLE_FAMILIES):
-                raise CoinError(f"sample session {sid}'s layout is not a sample session's, its sampling coin alone")
-            client.open(Wd.SAMPLE, 0, root)
+            if [tuple(f) for f in client.families] != list(Wd.DRAW_FAMILIES):
+                raise CoinError(f"draw session {sid}'s layout is not a draw session's, its draw coin alone")
+            client.open(Wd.DRAW, 0, root)
         self.session, self.commitment = PHC.carried(answer), client.commitment
-        return client.opened[(Wd.SAMPLE, 0)]
+        return client.opened[(Wd.DRAW, 0)]
 
 
 class Window:
@@ -407,17 +407,17 @@ class Window:
     `reserved_of`) and opened by `open` once round 0's request table is committed (`pouw_h1.H1Run.open_window`): the gate
     opens it (`gate`) on the window's open root, `salt.window_open_root` of the weights' root `weights_root`, that
     table's root and the session, and the salt coin opens after that root, on the port the answer names (`at_port`).
-    Its sampling coin comes from the sample session reserved as `sample_reserved` (`SampleSession`). `close` closes the session."""
+    Its sampling coin comes from the sample session reserved as `draw_reserved` (`DrawSession`). `close` closes the session."""
 
     def __init__(self, entry: str, at: str, steps: int, weights_root: bytes, reserved: Mapping[str, Any],
-                 gate: Gate, sample_reserved: Mapping[str, Any] | None = None) -> None:
+                 gate: Gate, draw_reserved: Mapping[str, Any] | None = None) -> None:
         self.entry, self.at, self.steps, self.weights_root = entry, at, steps, weights_root
         self.reserved, self.gate, self.client = dict(reserved), gate, None
-        self.sample_reserved = None if sample_reserved is None else dict(sample_reserved)
+        self.draw_reserved = None if draw_reserved is None else dict(draw_reserved)
 
-    def open(self, requests_root: bytes) -> tuple[bytes, LiveRecord, SampleSession, dict[str, Any]]:
+    def open(self, requests_root: bytes) -> tuple[bytes, LiveRecord, DrawSession, dict[str, Any]]:
         """The epoch's salt (`audit.salt_of` over the weights' root), the round coins' `LiveRecord`, the sampling coin's
-        `SampleSession` and what the commitment records of the session (its ``coins``, ``round_coins``, ``salt_opening`` and the gate's answer
+        `DrawSession` and what the commitment records of the session (its ``coins``, ``round_coins``, ``salt_opening`` and the gate's answer
         without its secret, ``session``). Refused (ValueError, the session closed when it was reached): an answer
         that isn't the gate's open of the reserved session on the window's open root, or a challenger off it
         (`_live`); `CoinError` is the challenger's."""
@@ -428,7 +428,7 @@ class Window:
         client, c, opening, answer = opened(self.entry, self.at, self.steps, self.gate, sid, root, "the window's open root")
         self.client = client
         return (salt_of(c, opening.coin, self.weights_root), LiveRecord(client, Wd.ROUND),
-                SampleSession(self.entry, self.at, self.sample_reserved, self.gate),
+                DrawSession(self.entry, self.at, self.draw_reserved, self.gate),
                 {"coins": c.to_json(), "round_coins": c.to_json(), "salt_opening": opening.to_json(),
                  "session": PHC.carried(answer)})
 
@@ -468,7 +468,7 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["SampleSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_SAMPLE_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "after_close",
-           "at_port", "closed_on_error", "connect", "finish", "gate_of", "in_process_sample", "open_period", "open_session", "opened",
-           "period_reason", "period_setting", "refusals", "reserve_sample", "reserve_salt", "reserved_of", "salt_session",
+__all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "after_close",
+           "at_port", "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
+           "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
            "session", "session_setting"]

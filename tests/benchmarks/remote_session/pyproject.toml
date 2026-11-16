@@ -1,0 +1,100 @@
+# PoUB's sessions end to end: the verifier's process (`verifier_process.py`, which runs
+# `verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
+# (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
+# runs both over a loopback socket with the driver's reference as the prover's backend
+# (`uv run tools/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
+# `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are; `run.sh`'s served
+# lines (SERVE=tiny, SERVE=row) run on a node of stubs, with no GPU, in `tests/test_run_serve.py`. `sampling_inputs.py`
+# reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
+# reads a gate run's memory line on the auditor's clock, computed by the Lean verifier (its `line` request) and held
+# exactly to `line.py`'s: each group's coin and last root from the challenger's signed
+# release log, read through the auditor's ledger, the verifier's stamps only a cross-check; it credits a session only when
+# its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
+# log records its pin as main's; every line says it is conditional on NoOutsideCompute and, its store being the
+# developer's choice, on DeveloperStore. The store a checkpoint lays out is PoUB's own
+# (`verity/protocols/resource_accounting/memory/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "test_auditor_line_lean.py",
+    "test_challengers.py",
+    "test_gate.py",
+    "test_gate_lease.py",
+    "test_gate_run.py",
+    "test_gate_whatif.py",
+    "test_host_read_tiers.py",
+    "test_lease.py",
+    "test_live_verifier_host.py",
+    "test_run_serve.py",
+    "test_session.py",
+    "test_store_layout.py",
+]
+inputs = ["verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/__init__.py",
+          # the sessions' harness (PoUB's own tests'), and the verifier host whose run's out/ auditor_line.py reads
+          # (test_live_verifier_host.py: its gate, its stub verifier and the challenger's tunnel client)
+          "tests/verity/protocols/resource_accounting/memory/poub/__init__.py", "tests/verity/protocols/resource_accounting/memory/poub/session_harness.py",
+          "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity/protocols/compose/verifier/live_challenger/serve.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/remote_session/device.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu", "verity/__init__.py",
+          "tools/config/verity_config/verity_settings.py", "verity/errors.py",
+          "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/memory/poub/verifier",
+          "verity/channel.py",
+          "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
+          # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
+          # (lean_verifier.py): what `lake build poub-verifier` reads, PoUB's package and its
+          # path requires
+          "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+          "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
+          "verity/commitments/randomness", "verity/circuits/difftest",
+          # a transcript replayed through both verifiers (PoUB's lean/replay.py, over the difftest)
+          "tools/difftest/python",
+          # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
+          # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
+          # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
+          # test_recorded_texts.py: the plan keys squaring.py writes into its --out record
+          "benchmarks/property_redteam/squaring.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py", "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketching.py",
+          # test_sass_gate.py: sass_gate.py runs the PoUW harness's mma_gate; test_rows.py checks that rows.sh's
+          # paths exist, these two among them
+          "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu",
+          "benchmarks/pouw/harness/jobs/toolkit.sh",
+          # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
+          "tools/research/src/research/pods/sh/gpu_lease.sh",
+          "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py",
+          # sheets.py: the node's figures, read from its node file and cards
+          "verity/device.py", "hardware/cards", "hardware/nodes",
+          # test_sampling_inputs.py: sampling_inputs.py prices an opening with SPOT's one cost fit; and the
+          # ledger and credit checks' Lean verifier, `spot-verifier` (`coins.lean_answer`), with the
+          # interface its package requires
+          "verity/protocols/proofs/spot", "verity/protocols/interface",
+          # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
+          "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json", "verity/protocols/compose/verifier/live_challenger/serve.py",
+          "tests/verity/protocols/compose/verifier/live_challenger/stub_serve.py",
+          "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
+          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/poub",
+          "verity/protocols/__init__.py",
+          # auditor_line.py: a line whose summed error is 1 or more holds no share, by the reporting grid's one rule
+          "verity/protocol.py", "verity/protocols/proofs/__init__.py",
+          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
+          "verity/protocols/compose/__init__.py", "verity/protocols/compose/verifier/__init__.py",
+          "adapters/vllm/verity_vllm/protocols/__init__.py",
+          # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc (rows.sh's, above) is a file of the tree
+          "verity/protocols/compose/verifier/live_challenger/__init__.py",
+          # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
+          # CPU test loads without the adapter
+          "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/remote_session"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["test_gate_whatif.py"]
+paths = ["tests/verity/protocols/compose/verifier/live_challenger"]

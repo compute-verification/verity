@@ -48,7 +48,7 @@ class GateSessions:
     `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and its sampling session on its sample root, and `ended`
     waits for an end entry. ``held`` is each session reserved, as the gate answered it, under the window it was reserved
-    for, its sampling session's (`reserve`, reserved withheld right after it) as its ``sample``; one no window opened says
+    for, its sampling session's (`reserve`, reserved withheld right after it) as its ``draw``; one no window opened says
     why (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`,
     `take`). `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read
     against (tests)."""
@@ -79,26 +79,26 @@ class GateSessions:
             self.held.append({"window": window, **reserved})
         print(f"[serve-h1] window {window}: reserved session {reserved['session']} on {self.peer} "
               f"(period {reserved.get('period')})", flush=True)
-        self.reserve_sample(window, reserved["session"])
+        self.reserve_draw(window, reserved["session"])
         return reserved
 
-    def reserve_sample(self, window: int, session: str) -> dict[str, Any]:
+    def reserve_draw(self, window: int, session: str) -> dict[str, Any]:
         """Window `window`'s sampling session, reserved withheld right after its session `session` (``reserve ...
-        --withhold``, `pouw_h1_window.reserve_sample`) and held as its ``sample``. `CoinError` when the gate refuses, or
+        --withhold``, `pouw_h1_window.reserve_draw`) and held as its ``draw``. `CoinError` when the gate refuses, or
         reserves it plain."""
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
-        reserved = PHW.reserve_sample(self.gate.call, self.peer)
+        reserved = PHW.reserve_draw(self.gate.call, self.peer)
         self.held_of(session)["draw"] = dict(reserved)
         print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
         return reserved
 
-    def sample_session(self, session: str) -> dict[str, Any] | None:
-        """The pouw setting ``sample_session`` of `session`'s window: its sampling session's reserve (`reserve_sample`)."""
+    def draw_session(self, session: str) -> dict[str, Any] | None:
+        """The pouw setting ``draw_session`` of `session`'s window: its sampling session's reserve (`reserve_draw`)."""
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
-        sample = self.held_of(session).get("draw")
-        return None if sample is None else {k: v for k, v in sample.items() if k in ("session", *PHW.RESERVE_FIELDS)}
+        draw = self.held_of(session).get("draw")
+        return None if draw is None else {k: v for k, v in draw.items() if k in ("session", *PHW.RESERVE_FIELDS)}
 
     def ahead_of(self, window: int) -> None:
         """Window `window`'s session reserved on ``ahead``, so its open finds it (`take`); nothing without ``ahead``."""

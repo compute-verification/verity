@@ -22,13 +22,13 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening_twin`
   and Lean's.  In a window of the 336-byte entry rows an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
-* **coin cases** go to `core_check.pass_epoch_twin` and `core_check.sample_twin` and Lean's (`of_record`): ``select`` (the recorded
-  sample from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and sample.json),
+* **coin cases** go to `core_check.pass_epoch_twin` and `core_check.draw_twin` and Lean's (`of_record`): ``select`` (the recorded
+  sample from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
   `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
-  A SAMPLED or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
+  A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
   `COIN_EARLY`).
 * the other checks (coins, the stream's state, the ZK server, Lean's tile verifier, replays, shapes) are not core_check's.
 
@@ -206,17 +206,17 @@ def _variant(man: dict, coins: dict, opening: dict, case: str) -> dict:
 
 
 def selected_stream(ch: Path) -> str | None:
-    """The stream digest the honest select read, from its SAMPLED reply (a window stopped before its outcome has no
+    """The stream digest the honest select read, from its DRAWN reply (a window stopped before its outcome has no
     audit.json); None for a run whose replies don't carry it."""
     for line in (ch / "requests.jsonl").read_text().splitlines():
         r, q = json.loads(line), json.loads(json.loads(line)["request"])
-        if (q.get("op"), q.get("name")) == ("select", "honest") and r["reply"].startswith("SAMPLED "):
+        if (q.get("op"), q.get("name")) == ("select", "honest") and r["reply"].startswith("DRAWN "):
             return json.loads(r["reply"].split(" ", 1)[1]).get("stream")
     return None
 
 
 def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path]) -> list[tuple[str, str, dict, str]]:
-    """(check, ``pass`` or ``sample``, its input, the recorded verdict or ``CONTROL``) of the run's coin checks."""
+    """(check, ``pass`` or ``draw``, its input, the recorded verdict or ``CONTROL``) of the run's coin checks."""
     ch = out / "challenger"
     if not (ch / "coins.json").is_file() or not (out / "draw.json").is_file():
         return []
@@ -289,7 +289,7 @@ class Sides:
     def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
         """Lean's outcome of a pass or sample check, and whether Python's is the same (`of_record`)."""
         try:
-            return (self.record.pass_epoch if kind == "pass" else self.record.sample)(x), True
+            return (self.record.pass_epoch if kind == "pass" else self.record.draw)(x), True
         except OR.Disagree as e:
             return e.lean, False
 
@@ -465,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
                  f"({t['controls_same']} same; {t['controls_by_rule']} refused by a registration rule, "
                  f"{t['controls'] - t['controls_by_rule'] - t['generated_controls'] - t['opening_controls']} by the "
                  f"service or the coin rule, {t['opening_controls']} foreign openings, {t['generated_controls']} "
-                 f"generated sample controls; {t['coin_cases']} coin cases, {t['opened']} openings); Lean = Python on "
+                 f"generated draw controls; {t['coin_cases']} coin cases, {t['opened']} openings); Lean = Python on "
                  f"{t['lean_same']}/{t['compared']} inputs "
                  f"({t['openings']} pre-layout openings, {t['older_cases']} cases of {len(t['older_runs'])} older runs, "
                  f"{t['v2']} v2 registrations apart)")

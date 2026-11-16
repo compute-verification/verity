@@ -34,7 +34,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.reso
   `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the table's, and root(B) is the weight's,
   which compute accounting commits. This module commits neither.
 * **The Commit** (ROOTS1, `pouw_h1_commit`, ``served``'s tap, or what ``commit_record`` names): each round's input-ids
-  table ``ids@<s>`` and A table of each K are the Commit's values, its record bound into `calls_root` before `sample_root`
+  table ``ids@<s>`` and A table of each K are the Commit's values, its record bound into `calls_root` before `draw_root`
   and held to them by core's credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
@@ -45,7 +45,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.reso
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
   The verdict is the serving process's own, so it is only the call's credit bit (`H1Run.credit_bits`, ``credit`` in its
-  manifest row under calls_root, before `sample_root`): credit is the verifier's (core's `credit`).
+  manifest row under calls_root, before `draw_root`): credit is the verifier's (core's `credit`).
 * **Requests and rounds** (`pouw_h1_requests`, `ResourceAccounting.Served`): round s is step s. `admitting` hands each
   step's admitted requests and batch order to `H1Run.admit` before its forward, so each request's entry is a hiding leaf
   under the root of the round that admits it, and each served row's slot names its request, before that round's coin; a
@@ -54,7 +54,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.reso
 * **Round values.** Each call's A table (its slots' s8 rows and f32 scales) and z table (a leaf a proof block, its record) are
   hiding tables of the call (``tables`` in its manifest row), so round s's root commits them, z at its cut, before round s's
   coin (``details.requests.a_roots``: `pouw_h1_requests.tables_reason` at `close`); round s's receipt roots (`H1Run.receipt`, after its coin) go under round s + 1's root, and the window's sampling coin
-  (``sample``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
+  (``draw``) opens at `H1Run.finish`, after the manifest, the last round's receipts and every round's root and coin.
 * **Coins.** Credit needs the window's coins from the auditor device's challenger (``coin_source`` ``challenger``,
   `pouw_h1_challenger`); a window whose coins were held in the serving process credits nothing (`IN_PROCESS`).
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.salt_of` over the weights' root, `weight_root`,
@@ -123,7 +123,7 @@ PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 #: the one origin a credited window's coins may come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
-IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not sampled by the "
+IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
               "auditor device's challenger (the pouw setting 'challenger'), so it credits nothing")
 
 
@@ -289,7 +289,7 @@ class Call:
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 #: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
-#: `LiveRecord`), its sampling coin (`pouw_h1_window.SampleSession`) and what its commitment records (`H1Run.open_window`)
+#: `LiveRecord`), its sampling coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
@@ -307,21 +307,21 @@ class H1Run:
     over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
-    `finish` opens ``sample``'s coin (its own withheld session, `pouw_h1_window.SampleSession`) after the window's `sample_root`.
+    `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, sampled for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
-    served call's A rows, scales and z/y records, so a sampled proof block opens after the close (SAMPLED1); without it their leaves
+    served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor device's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
     as the calls are recorded, their roots in its tables (``registered``) under its round's root; the commitment carries them.
 
     The Program's ``salt`` is given, or None with ``opener``: then `open_window` opens it once round 0's admissions are in
-    (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``sample``."""
+    (or at the first use of the salt), after its request table, and ``opener`` sets ``rounds`` and ``draw``."""
 
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
-                 rounds: Any = None, key: bytes | None = None, sample: Any = None, admission: str = RQ.ROUND0,
+                 rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
                  coins_from: str = "in-process", opener: Opener | None = None, served: Any = None,
                  prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
                  commit_record: CT.CommitRecord | None = None) -> None:
@@ -348,7 +348,7 @@ class H1Run:
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
-        self.sample, self.admission, self.coins_from, self.commit_record = sample, admission, coins_from, commit_record
+        self.draw, self.admission, self.coins_from, self.commit_record = draw, admission, coins_from, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
@@ -418,7 +418,7 @@ class H1Run:
             try:
                 if self._opener is None:
                     raise TypeError(f"{self.entry}: a window with neither a salt nor an opener")
-                salt, self.rounds, self.sample, commits = self._opener(requests)
+                salt, self.rounds, self.draw, commits = self._opener(requests)
             except Exception as e:
                 self._unopened = self.details["unopened"] = str(e)
                 raise
@@ -559,7 +559,7 @@ class H1Run:
 
     def receipt(self, index: int, root: bytes) -> None:
         """Call `index`'s receipt root, computed after its round's coin: it goes under the next round's root (the last
-        round's under `sample_root`), so it is refused before that coin, once the next round has closed, or twice."""
+        round's under `draw_root`), so it is refused before that coin, once the next round has closed, or twice."""
         call = self.call(index)
         if len(self.round_log) <= call.step:
             raise RuntimeError(f"{self.entry}: call {index}'s receipt before round {call.step}'s coin")
@@ -710,7 +710,7 @@ class H1Run:
         return out
 
     def credit_bits(self) -> dict[int, bool]:
-        """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `sample_root`): its
+        """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
         gated = self.gated()
         return {c.index: c.index in gated and gated[c.index]["credit"]
@@ -729,7 +729,7 @@ class H1Run:
         all_served = sum(c.served * c.n * c.k for c in served)
         return {"rule": "gate-pass the served rows of calls whose served y is the credited kernel's own output only, and none "
                         "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
-                        "didn't sample; padded work and refused calls are shown, not gate-passed", "requests": gaps,
+                        "didn't draw; padded work and refused calls are shown, not gate-passed", "requests": gaps,
                 "coins": self.coins_from,
                 "gate_passed": {"rows": sum(c.served for c in ok), "macs": sum(c.served * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.served for c in no), "macs": sum(c.served * c.n * c.k for c in no),
@@ -770,8 +770,8 @@ class H1Run:
         return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(), CT.record_of(self))
 
     def finish(self) -> None:
-        """Close the window, bind its Commit record (`pouw_h1_commit.bind`) and manifest, then open ``sample``'s coin after
-        `pouw_h1_requests.sample_root` over the manifest, the last round's receipts and every round's root and coin."""
+        """Close the window, bind its Commit record (`pouw_h1_commit.bind`) and manifest, then open ``draw``'s coin after
+        `pouw_h1_requests.draw_root` over the manifest, the last round's receipts and every round's root and coin."""
         self.close()
         if not self.commit or self._unopened is not None:
             return
@@ -782,15 +782,15 @@ class H1Run:
             self.commits["served"] = {"entries": self.served.entries(), "refused": list(self.served.refused)}
         if "draw" not in self.commits:
             receipts = self.receipts_of(self.steps - 1)
-            root = RQ.sample_root(calls_root, receipts, self.round_log)
+            root = RQ.draw_root(calls_root, receipts, self.round_log)
             self.commits["draw"] = {"root": root.hex(), "receipts": receipts.hex(), "coin": None, **({"refused": refused} if refused else {})}
             try:
-                coin = self.sample.record(root) if self.sample is not None and refused is None else None
+                coin = self.draw.record(root) if self.draw is not None and refused is None else None
             except CoinError as e:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
-            self.commits.update({"draw_session": s} if (s := getattr(self.sample, "session", None)) is not None else {})
+            self.commits.update({"draw_session": s} if (s := getattr(self.draw, "session", None)) is not None else {})
         if self.transcript_dir:
             (d := Path(self.transcript_dir)).mkdir(parents=True, exist_ok=True)
             (d / CALLS_FILE).write_text(json.dumps({"schema": RECORD, "entry": self.entry, "commitment": self.commits,

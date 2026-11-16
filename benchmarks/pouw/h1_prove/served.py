@@ -1,5 +1,5 @@
 """served.py: the units a served H1 window's own sampling coin selects (vllm's `pouw_h1` window, its z table one leaf a
-unit of its ``tile``), as PoUW's verifier samples them (core's `credit.sampled`).
+unit of its ``tile``), as PoUW's verifier samples them (core's `credit.drawn`).
 
     python served.py --calls CALLS.json --session DIR --draw-session SAMPLE --ledger windows.jsonl [--ledger ...]
                      --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out SAMPLED.json]
@@ -15,11 +15,11 @@ window's period-open signed.
    ends for the window's root, under the pinned key (`remote.trusted_session`), run from a commit the pins log records
    on main's first-parent line (`challenger.pinned_session`: a session the log doesn't record is refused, though this
    sample credits nothing), and the window's one sampling coin from its sampling session SAMPLE, the one the ledger opens
-   withheld on its `sample_root` over its manifest, last receipts and every round's root and coin, opened after that root
-   (`pouw_h1_challenger.sample_session_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
+   withheld on its `draw_root` over its manifest, last receipts and every round's root and coin, opened after that root
+   (`pouw_h1_challenger.draw_session_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
    (`pouw_h1_challenger.manifest_reason`). The window's salt and round coins are its served values' checks (vllm's
    verify), not the sample's.
-2. The sample is core's (`pouw_h1_challenger.sampled_of`, `credit.sampled` on the served window's arguments: stream the window's
+2. The sample is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the served window's arguments: stream the window's
    root, registration its sample root, receipt ``{"receipts": …}``), over the layout of the descriptor its period committed
    (`credit.layout_of`), at the K that period's open committed (`credit.committed_k`): one work stratum a K.
 3. Each sampled proof block is located in the window's calls: unit u is call i's unit u - base_i, its row block b and column block
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_files = remote.session_files(a.draw_session)
     except CoinError as e:
         raise SystemExit(f"REFUSED: the challenger's session is not trusted: {e}") from e
-    if (why := PHC.sample_session_reason(commits, key, lines, pins, main, sample_files, PHC.lms_verify)) is not None:
+    if (why := PHC.draw_session_reason(commits, key, lines, pins, main, sample_files, PHC.lms_verify)) is not None:
         raise SystemExit(f"REFUSED: {why}")
     if (why := PHC.manifest_reason(doc)) is not None:
         raise SystemExit(f"REFUSED: {why}")
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     k, why = CR.committed_k(lines, audited.period)
     units = None
     if why is None:
-        units, why = PHC.sampled_of(doc, {"root": root}, k, descriptor)
+        units, why = PHC.drawn_of(doc, {"root": root}, k, descriptor)
     if why is not None:
         raise SystemExit(f"REFUSED: {why[0]}: {why[1]}")
     layout, _ = CR.layout_of(descriptor)
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     coin = LiveOpening.from_json(commits["draw"]["coin"]).coin
     out = {"window": root, "draw_root": commits["draw"]["root"], "coin": coin.hex(), "session": audited.session,
            "period": audited.period, "circuit": audited.circuit, "k": k,
-           "key": {"stream": "the window's root", "registration": "the sample root",
+           "key": {"stream": "the window's root", "registration": "the draw root",
                    "receipt": {"receipts": commits["draw"].get("receipts")}},
            "strata": [{"template": s["template"], "units": sum(hi - lo for lo, hi in s["units"]), "work": s["work"],
                        "k": s["k"]} for s in strata],

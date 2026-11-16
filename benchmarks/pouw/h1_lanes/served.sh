@@ -103,7 +103,7 @@ else
     --out "$OUT/drawn.json" > "$OUT/drawn.out" 2> "$OUT/drawn.err" \
     || { log "draw FAILED: $(tail -3 "$OUT/drawn.err") $(tail -3 "$OUT/drawn.out")"; exit 1; }
   log "drawn: $(head -c 1500 "$OUT/drawn.out")"
-  PYTHONPATH=$HPP $TIME "$OUT/extract.time" "$H1S_PY" "$H/served.py" extract --calls "$H1S_CALLS" --sampled "$OUT/drawn.json" \
+  PYTHONPATH=$HPP $TIME "$OUT/extract.time" "$H1S_PY" "$H/served.py" extract --calls "$H1S_CALLS" --drawn "$OUT/drawn.json" \
     --descriptor "$H1S_DESCRIPTOR" --prover "${H1S_PROVER:?}" --k "$K" --out "$OP" --public "$OUT/extract.json" \
     > "$OUT/extract.out" 2> "$OUT/extract.err" || { log "extract FAILED: $(tail -3 "$OUT/extract.err")"; exit 1; }
   log "extract: $(tail -1 "$OUT/extract.out" | cut -c1-600) $(cat "$OUT/extract.time")"

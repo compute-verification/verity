@@ -235,12 +235,12 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
         reads |= {f"cap_{i}": (cap, i) for i in range(T)}
         reads |= {"m": (known[0], 0), "s": (known[1], 0), LR.OK_PORT: (ok, s)}
         rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
-        sampled = salts | {r.value: _salts(r) for r in (slots, *known)}
+        drawn = salts | {r.value: _salts(r) for r in (slots, *known)}
         z: dict[str, Any] = {"units": np.array([s])}
         opening = {}
         for p, (reg, i) in reads.items():
             path = reg.path(i).hex()
-            z |= {f"w_{p}": rows[p], f"s_{p}": sampled[reg.value][i], f"v_{p}": np.array([reg.value]),
+            z |= {f"w_{p}": rows[p], f"s_{p}": drawn[reg.value][i], f"v_{p}": np.array([reg.value]),
                   f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([path])}
             opening[p] = {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(), "path": path}
         d = out / str(s)

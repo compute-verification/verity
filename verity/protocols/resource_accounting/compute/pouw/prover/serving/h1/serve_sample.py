@@ -1,6 +1,6 @@
 """serve-openai's PoUW H1 arm's sample (`serve_h1`): how many tile units a window Program holds (`units`), which proof
-blocks a closed window's sampling coin samples (`sampled_blocks`), and what each opens of the server's Commit, as the sample-gated
-release keeps them (`sampled_reads`)."""
+blocks a closed window's sampling coin samples (`drawn_units`), and what each opens of the server's Commit, as the draw-gated
+release keeps them (`drawn_reads`)."""
 from __future__ import annotations
 
 import bisect
@@ -20,27 +20,27 @@ def units(shapes: Any, rows: int, steps: int) -> int:
     return int(steps) * (HW.slot(int(rows), PH.TILE) // r) * sum(int(n) // c for n, _k in shapes)
 
 
-def sampled_blocks(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, stream: str) -> list[int]:
-    """The proof blocks a closed window's sampling coin samples at K ``k`` (`credit.sampled` over the window Program's
+def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, stream: str) -> list[int]:
+    """The proof blocks a closed window's sampling coin samples at K ``k`` (`credit.drawn` over the window Program's
     ``layout``, `credit.layout_of`'s, on stream ``stream``, registration the sample root and receipt its receipts, as
-    `pouw_h1_challenger.sampled_of` samples them), from its commitment ``commits``. ValueError when it opened no sampling coin or
+    `pouw_h1_challenger.drawn_of` samples them), from its commitment ``commits``. ValueError when it opened no sampling coin or
     core refuses the sample."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening
 
-    sample = commits.get("draw")                              # None: the window committed no sample root
-    if sample is None or sample.get("coin") is None:
-        raise ValueError("the window opened no sampling coin" + (f" ({sample['refused']})" if sample and sample.get("refused") else ""))
-    got, why = CR.sampled_twin(LiveOpening.from_json(sample["coin"]).coin.hex(), stream, sample.get("root"),
-                             {"receipts": sample.get("receipts")}, dict(layout), k)
+    draw = commits.get("draw")                              # None: the window committed no sample root
+    if draw is None or draw.get("coin") is None:
+        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
+    got, why = CR.drawn_twin(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
+                             {"receipts": draw.get("receipts")}, dict(layout), k)
     if why is not None:
         raise ValueError(f"{why[0]}: {why[1]}")
     return list(got)
 
 
-def sampled_reads(tap: Any, layout: Mapping[str, Any], sampled: Sequence[int],
+def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int],
                 s_a_bytes: int) -> list[tuple[int, str, int, int]]:
-    """What the proof blocks ``sampled`` of the window ``layout`` open of the server's Commit, as the sample-gated release takes
+    """What the proof blocks ``drawn`` of the window ``layout`` open of the server's Commit, as the draw-gated release takes
     them (`serve_release.Read`: engine step, member, byte lo, hi): unit u, tile t of call c, opens A rows R·I .. R·I + R - 1
     of its call, I = t // (n/C) its row block (`h1window.table_reads`), which are the Commit's x_q (K bytes a row) and s_a
     (``s_a_bytes`` a row) rows of the call's site at the engine step its step maps to, as H1's tap ``tap`` registered them
@@ -58,7 +58,7 @@ def sampled_reads(tap: Any, layout: Mapping[str, Any], sampled: Sequence[int],
             for c, j, s, n in zip(w["calls"], w["steps"], w["sites"], w["rows"]):
                 calls[int(c)] = (j, s, int(n))
     out: set[tuple[int, str, int, int]] = set()
-    for u in sampled:
+    for u in drawn:
         c = bisect.bisect_right(firsts, u) - 1
         if not 0 <= c < len(layout["calls"]):
             raise KeyError(f"unit {u} is no unit of the window's {firsts[-1]}")

@@ -121,13 +121,13 @@ difftest only.
 | The salt | `core_check.salt_of_record` | `saltCheck` (`salt`) | `salt_twin` |
 | A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |
 | The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
-| The sample | `credit.sampled` | `Credit.drawn` (`drawn`) | `sampled_twin` |
+| The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
 | A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
-`opening_twin`, `pass_epoch_twin`, `sample_twin`). Others are guards a device runs before a coin opens: `window`'s
+`opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
 `*_epoch_reason` and `rounds_reason`, `coins.coin_reason`, `salt.unit_reason` and `core_check.recorded_reason`. They
 only refuse to go on, never credit, and the verdict of record checks the same rules again in Lean.
 
@@ -151,7 +151,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/check/suites.py verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
-(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py` runs
+(`tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py`); `verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes
@@ -209,7 +209,7 @@ reads. Proved:
   at those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
   good-tile credit at least as likely to exceed any threshold; the device reading's FP32 price is refuted on the H200,
   so this assumption is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
-  audit tile over that W1 setting, falsification test `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`). They do
+  audit tile over that W1 setting, falsification test `tests/benchmarks/pouw/test_tt_out_tile_h100_rev1.py`). They do
   not cover what is served: `pearl-c-h100-v1-h3` pays by the per-clock record `devH100`, about 1.5% more, and at the
   two-clock reading no statement of this form covers that credit, since the honest program with its first promotion
   skipped falls about 1% under TT_OUT's threshold for it. TT_OUT rev1 is refuted by proofs' red-team rating, so both

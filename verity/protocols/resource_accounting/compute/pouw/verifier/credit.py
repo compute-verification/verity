@@ -54,16 +54,16 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The credited set is fixed before the sample** (`_credited`). Each row of the window's manifest (the serving process's
   call rows, in order, ``index`` 0, 1, …) carries its call's verdict as ``credit`` (true or false), and a credited row
   carries its z table's root (``tables.z``). `calls_root` hashes the rows (and the served trees' digest when the window
-  has them) and the window's Commit record's digest (`commit_of`), and `sample_root` hashes that, the last round's
+  has them) and the window's Commit record's digest (`commit_of`), and `draw_root` hashes that, the last round's
   receipts and every round's root and coin. The challenger's sampling coin must have followed that one root, as its signed
-  log shows, read through the sample's own session (``sample``'s ``session``, `window.SAMPLE_FAMILIES`), the one the
+  log shows, read through the sample's own session (``draw``'s ``session``, `window.DRAW_FAMILIES`), the one the
   auditor's ledger opens on the sample root, run from a commit the host's pins log records on main's first-parent line
   (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover hands in. The
   ledger opens it withheld (`challenger.withheld_on`, else `challenger.WITHHELD`; Lean
-  `Properties.Pouw.Credit.SampleWithheld`): its challenger released its coin root only after the prover's sample root, so
+  `Properties.Pouw.Credit.DrawWithheld`): its challenger released its coin root only after the prover's sample root, so
   the sample rests on no hiding of that root. So a credit bit changed after the sampling coin
   changes the sample root and is refused, and the credited set is the rows whose bit is true.
-* **The sampled proof blocks are the sampling coin's** (`sampled`): `core_check.sample_twin`'s rule under the sampling design ``work:k``
+* **The sampled proof blocks are the sampling coin's** (`drawn`): `core_check.draw_twin`'s rule under the sampling design ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
@@ -187,7 +187,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   int8 checkpoint), and its role and checkpoint are one `PINNED_MODELS` pins (``lean/check/models.json``), else the
   period counts nothing.
 
-`calls_root` and `sample_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.sample_root`, byte for byte. Every
+`calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
 """
 from __future__ import annotations
@@ -228,7 +228,7 @@ from verity.commitments import domains
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
 CALLS_TAG = domains.POUW_H1_CALLS.encode() + b"\0"
-SAMPLE_TAG = domains.POUW_H1_SAMPLING
+DRAW_TAG = domains.POUW_H1_SAMPLING
 ROUND_TAG = domains.POUW_H1_ROUND_A
 #: each manifest row's credit bit
 CREDIT = "credit"
@@ -253,10 +253,10 @@ _FRAME = domains.FRAME_V3.encode() + b"\0"
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 CALLS_FORM = "the window's manifest is not a list of call rows"
 SERVED_FORM = "the served trees' digest is neither null nor a SHA-512 digest (128 lowercase hex)"
-SAMPLE_FORM = "the window's draw is not an object whose receipts are a SHA-512 digest"
-NO_SAMPLE = ("the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its "
+DRAW_FORM = "the window's draw is not an object whose receipts are a SHA-512 digest"
+NO_DRAW = ("the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its "
            "draw root")
-SAMPLE_ROOT = ("the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its "
+DRAW_ROOT = ("the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its "
              "last round's receipts and every round's root and coin")
 CHANGED = ("the draw root over the manifest (each call's credit bit among it), its Commit record, its last round's "
            "receipts and every round's root and coin is not the one root the challenger's log shows its draw coin "
@@ -309,7 +309,7 @@ LAYOUT_FORM = ("the window's layout is not {calls, linears, m, tile}, h1window.p
                "[[linear, A block], ...] in order, its linears [[name, K, n], ...] each once, its A slot m and its tile "
                "[R, C], every number a natural number and R, C at least one")
 COIN_FORM = "the draw coin is not a SHA-512 digest (128 lowercase hex)"
-SAMPLE_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of "
+DRAW_ARGS = ("the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of "
              "printable ASCII strings")
 #: a window's evidence, as `window` reads it, its descriptor the circuit's its proofs were verified against, its
 #: entries the values it registered and its statements each call's proof files
@@ -537,7 +537,7 @@ def _nat(x: Any) -> bool:
 
 
 def _printable(x: Any) -> bool:
-    """A string of printable ASCII but ``"`` and ``\\``, as a receipt's keys and values are (`core_check.sample_key_context`)."""
+    """A string of printable ASCII but ``"`` and ``\\``, as a receipt's keys and values are (`core_check.draw_key_context`)."""
     return type(x) is str and all(" " <= ch <= "~" and ch not in '"\\' for ch in x)
 
 
@@ -580,10 +580,10 @@ def commit_of(commit: Any) -> tuple[tuple[bytes, list[dict]] | None, tuple[str, 
     return (d, rec["registered"]), None
 
 
-def sample_root(calls: bytes, receipts: bytes, rounds: Any) -> bytes:
+def draw_root(calls: bytes, receipts: bytes, rounds: Any) -> bytes:
     """What the sampling coin opens after: the manifest's `calls_root`, the last round's receipts and every round's root and
     coin, so the sample follows every round coin by hash."""
-    return tagged(SAMPLE_TAG, calls, receipts, *(p for x in rounds for p in (
+    return tagged(DRAW_TAG, calls, receipts, *(p for x in rounds for p in (
         bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
 
@@ -625,19 +625,19 @@ def other_served(i: int, first: int, s: int, got: int, want: int) -> str:
 
 
 def _credited(key: Any, ledger: Any, pins: Any, main: Any, salt: Any, calls: Any, served: Any, commit: Any, rounds: Any,
-              sample: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+              draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The credited calls (their indices) of a window whose manifest `calls` (its rows, `served` the served trees'
     digest or None, under the window's Program salt `salt`, and its Commit record `commit`, `commit_of`'s) fixed every
     call's credit bit and the Commit record before the sampling coin, and None; or None and the refusal (``coin``,
-    ``manifest``, ``credit``, ``commit``, ``rounds`` or ``sample``, and why). ``sample``'s ``root`` must be `sample_root` over
-    the manifest and the Commit record's digest (`calls_root`), ``sample``'s ``receipts`` and the round log `rounds` (each
+    ``manifest``, ``credit``, ``commit``, ``rounds`` or ``draw``, and why). ``draw``'s ``root`` must be `draw_root` over
+    the manifest and the Commit record's digest (`calls_root`), ``draw``'s ``receipts`` and the round log `rounds` (each
     round's ``root`` and ``coin``). The sampling coin is read through the sample's own session, the one the auditor's signed
     ledger `ledger` opens on that root under the pinned challenger key `key`, run from a commit the host's pins log
     `pins` records and the verifier's copy of main's first-parent history `main` holds, from that session's files
-    ``sample``'s ``session`` (`challenger.trusted_session_of`, its signatures checked with `verify`). The ledger must open
+    ``draw``'s ``session`` (`challenger.trusted_session_of`, its signatures checked with `verify`). The ledger must open
     it withheld (`challenger.withheld_on`, `challenger.WITHHELD`), so its challenger released no coin root before the
-    prover's sample root; its log must show that root as the one its sampling coin followed, and ``sample``'s ``coin`` must be
-    its sampling coin 0 opened after it. A step of `window`: its indices are no credit until every other step accepts."""
+    prover's sample root; its log must show that root as the one its sampling coin followed, and ``draw``'s ``coin`` must be
+    its draw coin 0 opened after it. A step of `window`: its indices are no credit until every other step accepts."""
     try:
         k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
@@ -679,25 +679,25 @@ def _credited(key: Any, ledger: Any, pins: Any, main: Any, salt: Any, calls: Any
             parts += [root, Ch.LiveOpening.from_json(x.get("coin")).coin]
         except Ch.CoinError as e:
             return None, ("rounds", f"round {r}'s coin: {e}")
-    receipts = _digest(sample.get("receipts")) if isinstance(sample, dict) else None
+    receipts = _digest(draw.get("receipts")) if isinstance(draw, dict) else None
     if receipts is None:
-        return None, ("draw", SAMPLE_FORM)
-    root = tagged(SAMPLE_TAG, calls_root(s, calls, _digest(served), got[0]), receipts, *parts)
-    if sample.get("root") != root.hex():
-        return None, ("draw", SAMPLE_ROOT)
+        return None, ("draw", DRAW_FORM)
+    root = tagged(DRAW_TAG, calls_root(s, calls, _digest(served), got[0]), receipts, *parts)
+    if draw.get("root") != root.hex():
+        return None, ("draw", DRAW_ROOT)
     try:
-        c, received = Ch.trusted_session_of(ledger, {"root": root.hex()}, k, pins, main, sample.get("session"), verify)
+        c, received = Ch.trusted_session_of(ledger, {"root": root.hex()}, k, pins, main, draw.get("session"), verify)
     except Ch.CoinError as e:
         return None, ("coin", f"the draw's session is not trusted: {e}")
     if not Ch.withheld_on(ledger, root.hex()):
         return None, ("coin", Ch.WITHHELD)
-    got = tuple(received.get(Wd.SAMPLE, ()))
+    got = tuple(received.get(Wd.DRAW, ()))
     if not got:
-        return None, ("draw", NO_SAMPLE)
+        return None, ("draw", NO_DRAW)
     if got != (root,):
         return None, ("draw", CHANGED)
     try:
-        why = Ch.live_reason(c, Ch.LiveOpening.from_json(sample.get("coin")), Wd.SAMPLE, 0, root)
+        why = Ch.live_reason(c, Ch.LiveOpening.from_json(draw.get("coin")), Wd.DRAW, 0, root)
     except Ch.CoinError as e:
         why = str(e)
     if why is not None:
@@ -1316,11 +1316,11 @@ def established(layout: dict, credited_calls: list[int], served: list[int], k: i
         return None
 
 
-def _sampled(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
+def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
            ) -> tuple[list[int] | None, tuple[str, str] | None]:
     if not (type(stream) is str and _digest(registration) is not None and isinstance(receipt, dict)
             and all(_printable(x) and _printable(v) for x, v in receipt.items())):
-        return None, ("draw", SAMPLE_ARGS)
+        return None, ("draw", DRAW_ARGS)
     why = sampling_design(ss, k)
     if why is not None:
         return None, why
@@ -1328,16 +1328,16 @@ def _sampled(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
 
-def _window_sampled(window: dict, sample: dict, ss: list[dict], k: Any
+def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
                   ) -> tuple[list[int] | None, tuple[str, str] | None]:
-    """The units the window's sampling coin (`sample`'s ``coin``, a live opening) samples over the strata `ss` at the period's
+    """The units the window's sampling coin (`draw`'s ``coin``, a live opening) samples over the strata `ss` at the period's
     committed K `k`, its stream the window's root, its registration the sample's root and its receipt ``{"receipts": …}``
-    (`_sampled`), and None; or None and the refusal."""
+    (`_drawn`), and None; or None and the refusal."""
     try:
-        coin = Ch.LiveOpening.from_json(sample.get("coin")).coin
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin
     except Ch.CoinError as e:
         return None, ("coin", f"the draw coin: {e}")
-    return _sampled(coin, window.get("root"), sample.get("root"), {"receipts": sample.get("receipts")}, ss, k)
+    return _drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, ss, k)
 
 
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
@@ -1355,11 +1355,11 @@ def _finding(x: Any) -> list[tuple[str, str, str]] | None:
     return out
 
 
-def _proved(sampled: list[int], proofs: Any) -> tuple[str, str] | None:
+def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
     if not isinstance(proofs, list):
         return "outcome", PROOFS_FORM
     seen: dict[int, str] = {}
-    picked = set(sampled)
+    picked = set(drawn)
     for p in proofs:
         if not (isinstance(p, dict) and sorted(p) == list(PROOF_KEYS) and _nat(p["unit"]) and p["verdict"] in VERDICTS
                 and _digest(p["program"]) is not None and _finding(p["registered"]) is not None):
@@ -1371,7 +1371,7 @@ def _proved(sampled: list[int], proofs: Any) -> tuple[str, str] | None:
         if u not in picked:
             return "outcome", f"unit {u} has a proof outcome and was not drawn: only the draw's units are proved"
         seen[u] = p["verdict"]
-    for u in sampled:
+    for u in drawn:
         if u not in seen:
             return "missing", (f"drawn unit {u} has no proof outcome: every drawn unit's proof is verified, and a window "
                                "with one missing is refused whole (no partial credit). Prove and verify every drawn unit")
@@ -1381,11 +1381,11 @@ def _proved(sampled: list[int], proofs: Any) -> tuple[str, str] | None:
     return None
 
 
-def sampled_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
                ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The units the sampling coin `coin` (its value, a SHA-512 digest in hex) samples from the window `layout` (`strata`)
     under `sampling_design` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
-    registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``sample``,
+    registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``draw``,
     ``budget`` or ``sampler``, and why)."""
     ss, why = strata(layout)
     if why is not None:
@@ -1393,14 +1393,14 @@ def sampled_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout
     c = _digest(coin)
     if c is None:
         return None, ("draw", COIN_FORM)
-    return _sampled(c, stream, registration, receipt, ss, k)
+    return _drawn(c, stream, registration, receipt, ss, k)
 
 
-def sampled(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
-    """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.sampled`'s (`verifier.of_record` on
-    ``sampled``), with `sampled_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    got, why = sampled_twin(coin, stream, registration, receipt, layout, k)
+    """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,
                                  "layout": layout, "k": k},
                        {"refused": list(why)} if why is not None else {"drawn": got})
@@ -1411,12 +1411,12 @@ def sampled(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any
 
 def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any, proofs: Any
             ) -> tuple[str, str] | None:
-    """None when every unit the sampling coin samples from the window (`sampled`, never a list the prover hands in) has exactly
+    """None when every unit the sampling coin samples from the window (`drawn`, never a list the prover hands in) has exactly
     one outcome in `proofs` (each of `PROOF_KEYS`, verdict ``accept`` or ``reject``) and it is ``accept``, and no
-    other unit has one; else the refusal (``layout``, ``sample``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
+    other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit. `window`'s rule on the sampling coin it read, the units
     sampled under the served window's arguments."""
-    got, why = sampled_twin(coin, stream, registration, receipt, layout, k)
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
 
 
@@ -1608,7 +1608,7 @@ def no_statement_files(k: Any) -> str:
 
 
 def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
-              steps: int, run: Run, salt: str, sample: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
+              steps: int, run: Run, salt: str, draw: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """Each sampled proof block's proof outcome (`PROOF_KEYS`) from the verifier's own run over the window's
     `statements` (`STATEMENT_KEYS`: one a call with a sampled proof block among `units`, its proof files), and None; or None and
     the refusal. Call c's statement is verified by `run` (`proofs.verify`) on its circuit file, which must hash to
@@ -1630,12 +1630,12 @@ def _verified(statements: Any, files: Any, raw: bytes, layout: dict, entries: li
     circuit file against its leaf Program (the lanes evidence's descriptor, `leaf_of` the window's template and hashing to
     `LEAF_PROGRAMS`' digest), a population of one (`leaf_partition_of`), and its ``--registered`` file credit builds
     (`leaf_registered_file`: the window's tables at the leaf's place, its partials ``<prefix>partials@<u>`` at the
-    produced record's root under the window's sample root `sample`'s, its known rows the verifier's own). Each session is
+    produced record's root under the window's sample root `draw`'s, its known rows the verifier's own). Each session is
     judged by `_leaf_judged`; once all have accepted, the record's values must each have been opened at its root and
     every opened row be the one opening (`_leaf_outcomes`), and each sampled leaf is then one accepted outcome whose
     registered finding is its statements' reads of the window's registered values, which `_proved` and `_registration`
     hold as a tile statement's. The Python reference of the Lean's `PouwCheck.Lanes`."""
-    asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, sample)
+    asks, refused = _asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
     lanes = statements if isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS) else None
     listed = lanes["statements"] if lanes is not None else statements
     out: list[dict] = []
@@ -1685,7 +1685,7 @@ def _proof_files(s: dict) -> bool:
 
 
 def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
-          steps: int, salt: str, sample: Any = None) -> tuple[list[dict], tuple[str, str] | None]:
+          steps: int, salt: str, draw: Any = None) -> tuple[list[dict], tuple[str, str] | None]:
     """The verifier runs `_verified` makes, in statement order, up to the first statement a check before the verifier
     refuses, and that refusal (or None): each ``{statement, circuit_sha512, registered, partition}``, the statement's
     index among `statements` and the verifier's inputs for it. The Python reference of the Lean's
@@ -1694,7 +1694,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
     `statements` is a list of call statements (`STATEMENT_KEYS`), or the lanes evidence (`LANES_KEYS`) whose
     ``statements`` hold call statements and sampled leaves' (`LEAF_STATEMENT_KEYS`); each sampled leaf's runs follow the
     call statements' (`_leaf_asks`, each with its ``leaf`` file name, ``unit``, ``known`` openings and
-    ``window_ports``), under the window's `sample`."""
+    ``window_ports``), under the window's `draw`."""
     why = _files_refusal(files)
     if why is not None:
         return [], why
@@ -1720,7 +1720,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
         return [], ("proof", STATEMENTS_FORM if lanes is None else LANES_FORM)
     leafs = [(i, s) for i, s in enumerate(statements) if leaf_form(s)]
     starts = list(itertools.accumulate(sizes, initial=0))[:-1]
-    sampled = {bisect.bisect_right(starts, u) - 1 for u in units}
+    drawn = {bisect.bisect_right(starts, u) - 1 for u in units}
     program, shape = hashlib.sha512(raw).hexdigest(), shape_of(raw)
     partition = partition_of(program, shape)
     roots: dict[str, list[str]] = {}
@@ -1737,7 +1737,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
             return out, ("outcome", f"call {c} has two statements: a call's drawn units are proved in one statement "
                                     "and verified once, and a retry never reproves them")
         seen.add(c)
-        if c not in sampled:
+        if c not in drawn:
             return out, ("outcome", f"call {c} has a statement and no drawn unit: only the draw's units are proved")
         k = ks[layout["calls"][c][0]]
         if f"k{k}" not in files:
@@ -1746,7 +1746,7 @@ def _asks(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, 
         if why is not None:
             return out, why
         out.append({"statement": i, "circuit_sha512": files[f"k{k}"], "registered": reg, "partition": partition})
-    got, why = _leaf_asks(lanes, leafs, files, raw, layout, shape, roots, window, units, steps, salt, sample)
+    got, why = _leaf_asks(lanes, leafs, files, raw, layout, shape, roots, window, units, steps, salt, draw)
     return out + got, why
 
 
@@ -1911,7 +1911,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     the served `place` (``served``), built from the descriptor alone: each `leaf_lanes.reads` port at its value's table
     and row past the leaf's place (`leaf_place`), each table's entry the verifier's own (a ``row/v2`` value of 16-bit
     leaves under `registered.domain` of its name, rows and width, binding the window's open root `window` but for the
-    weights' ``b/<K>``) at the one root `roots` (``{value: [root, ...]}``) gives it, each after-sample value's entry
+    weights' ``b/<K>``) at the one root `roots` (``{value: [root, ...]}``) gives it, each after-draw value's entry
     `produced.entry` under the window's descriptor digest `program` and its sample root `registration` at the produced
     record's root `produced` (``{value: root}``); its known ports `h1window.leaf_known_ports`' (``pub`` of the window's
     Program salt `salt`, position u and the call's roots root(``a/<K>@<s>``) and root(``b/<K>``), ``admit`` every row and
@@ -1971,11 +1971,11 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
     return ({"format": G.READS, "ports": {**ports, **known}}, openings), None
 
 
-def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, sample: str,
+def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, draw: str,
                   units: list[int]) -> tuple[dict | None, tuple[str, str] | None]:
-    """The produced record's root of each after-sample value of the window's sampled lanes-form leaves `units`, and None,
+    """The produced record's root of each after-draw value of the window's sampled lanes-form leaves `units`, and None,
     when the lanes evidence's record holds (`produced.check` against the sample root `registration`, the sampling coin's value
-    `sample` and the verifier's own entries: each leaf u's ``<prefix>partials@<u>``, (R/4)(C/8) rows of 2·`words`(K) u16
+    `draw` and the verifier's own entries: each leaf u's ``<prefix>partials@<u>``, (R/4)(C/8) rows of 2·`words`(K) u16
     words under `produced.domain` of the window's descriptor digest `program` and the sample root); else None and the
     refusal (``registration``, its P- codes)."""
     (r, c), prefix, mine = layout["tile"], shape["prefix"], {}
@@ -1985,7 +1985,7 @@ def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registra
             name = LL.served(prefix, v, u)
             mine[name] = PR.entry(program, name, leaves, words, registration)
     rec = lanes["produced"]
-    codes = PR.check(rec, registration, sample, mine)
+    codes = PR.check(rec, registration, draw, mine)
     if codes:
         return None, ("registration", f"the window's produced record ({PR.FORMAT}) fails {', '.join(codes)}: it holds "
                                       "each drawn lanes-form leaf's partials@<u> under the window's draw root, fixed "
@@ -1994,7 +1994,7 @@ def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registra
 
 
 def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, raw: bytes, layout: dict, shape: dict,
-               roots: dict, window: str, units: list[int], steps: int, salt: str, sample: Any
+               roots: dict, window: str, units: list[int], steps: int, salt: str, draw: Any
                ) -> tuple[list[dict], tuple[str, str] | None]:
     """`_asks`' runs for the window's sampled lanes-form leaves (the units among `units` whose K `files` commits as lanes,
     `form_of`), from its sampled leaves' statements `leafs` (each its index among the window's statements and the
@@ -2005,18 +2005,18 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
     sampled lanes-form leaf, in `leaf_lanes.statements`, and once (``outcome``), its ``--registered`` file
     (`leaf_registered_file`); and last each sampled lanes-form leaf with every one of its statements (``missing``)."""
     program, (r, c) = hashlib.sha512(raw).hexdigest(), layout["tile"]
-    sampled = [u for u in units if form_of(files, leaf_k(layout, u)) == "lanes"]
-    for u in sampled:
+    drawn = [u for u in units if form_of(files, leaf_k(layout, u)) == "lanes"]
+    for u in drawn:
         why = lanes_shape(layout, shape, leaf_k(layout, u))
         if why is not None:
             return [], ("lanes-shape", f"drawn leaf {u}: {why}")
-    if not sampled and not leafs:
+    if not drawn and not leafs:
         return [], None
     if lanes is None:
-        return [], ("missing", f"drawn leaf {sampled[0]} is at a lanes-form K and the window carries no lanes evidence "
+        return [], ("missing", f"drawn leaf {drawn[0]} is at a lanes-form K and the window carries no lanes evidence "
                                f"({', '.join(LANES_KEYS)}): prove every drawn lanes-form leaf as its lanes and combine")
     progs: dict[str, tuple[bytes, str]] = {}
-    for k in sorted({leaf_k(layout, u) for u in sampled}):
+    for k in sorted({leaf_k(layout, u) for u in drawn}):
         for kind in (LL.LANE, LL.COMBINE):
             name, unit = f"{kind}{k}", leaf_unit_id(shape, k, kind)
             got = lanes["leaf_programs"].get(name)
@@ -2029,21 +2029,21 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
                                        f"the one-call Program of {LEAF_FN[kind]} over the TILE of the window's own "
                                        "template at K")
             progs[name] = (leaf, unit)
-    if not (isinstance(sample, dict) and _digest(sample.get("root")) is not None):
+    if not (isinstance(draw, dict) and _digest(draw.get("root")) is not None):
         return [], ("registration", "the window's draw root, the produced record's registration, is not a SHA-512 "
                                     "digest")
     try:
-        coin = Ch.LiveOpening.from_json(sample.get("coin")).coin.hex()
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin.hex()
     except Ch.CoinError as e:
         return [], ("registration", f"the window's draw coin, the produced record's draw, is not a live opening: {e}")
-    produced, why = _lanes_record(lanes, layout, shape, program, sample["root"], coin, sampled)
+    produced, why = _lanes_record(lanes, layout, shape, program, draw["root"], coin, drawn)
     if why is not None:
         return [], why
     out: list[dict] = []
     seen: dict[int, set[tuple]] = {}
     for i, s in leafs:
         u, st = s["unit"], tuple(s["statement"])
-        if u not in sampled:
+        if u not in drawn:
             return out, ("outcome", f"unit {u} has a leaf statement and is no drawn lanes-form leaf: only the draw's "
                                     "leaves at a K committed as lanes are proved as lanes")
         if st not in LL.statements(r, c):
@@ -2055,7 +2055,7 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
         seen[u].add(st)
         k = leaf_k(layout, u)
         name = f"{st[0]}{k}"
-        got, why = leaf_registered_file(program, layout, shape, u, st, roots, window, steps, salt, sample["root"],
+        got, why = leaf_registered_file(program, layout, shape, u, st, roots, window, steps, salt, draw["root"],
                                         produced)
         if why is not None:
             return out, why
@@ -2065,7 +2065,7 @@ def _leaf_asks(lanes: dict | None, leafs: list[tuple[int, dict]], files: dict, r
                     "partition": leaf_partition_of(hashlib.sha512(leaf).hexdigest(), unit), "leaf": name, "unit": u,
                     "known": known, "window_ports": sorted(p for p, e in reg["ports"].items()
                                                            if e["value"] not in produced and e["value"] not in known)})
-    for u in sampled:
+    for u in drawn:
         left = [list(x) for x in LL.statements(r, c) if x not in seen.get(u, set())]
         if left:
             return out, ("missing", f"drawn leaf {u} has no statement {left[0]}: every drawn leaf's lanes and combine "
@@ -2146,14 +2146,14 @@ def _answer(run: Run, s: dict, ask: dict, raw: bytes) -> dict:
 
 
 def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, window: str, units: list[int], steps: int,
-                   run: Run, salt: str, sample: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
+                   run: Run, salt: str, draw: Any = None) -> tuple[list[dict] | None, tuple[str, str] | None]:
     """`_verified`'s verdict from the Lean verifier (`PouwCheck.Verified.verified`, `verifier.lean`): the Lean
     names the verifier runs (`_asks`), this runs `run` on each in order until an answer the Lean will refuse at
     (an error, a refusal or a rejected session), and the Lean judges the answers. A sampled leaf's run (its ``leaf``) is
     against its leaf Program, the lanes evidence's descriptor. A Lean that can't run leaves the window refused
     (``proof``)."""
     q = {"statements": statements, "files": files, "descriptor": raw.hex(), "entries": entries, "window": window,
-         "units": units, "steps": steps, "salt": salt, "draw": sample, "runs": None}
+         "units": units, "steps": steps, "salt": salt, "draw": draw, "runs": None}
     lanes = isinstance(statements, dict) and sorted(statements) == list(LANES_KEYS)
     listed = statements["statements"] if lanes else statements
     try:
@@ -2485,10 +2485,10 @@ def _live_outcomes(live: dict, *_: Any) -> tuple[Any, None]:
 
 
 def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-            commit: Any, rounds: Any, sample: Any, descriptor: Any, entries: Any, proved: Proved, live: Any, lived: Lived,
+            commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, live: Any, lived: Lived,
             keys: tuple[str, ...], k: Any, t: Any, verify: Ch.Verify
             ) -> tuple[tuple[list[int], dict, list[int]] | None, tuple[str, str] | None]:
-    got, why = _credited(key, ledger, pins, main, salt, calls, served, commit, rounds, sample, verify)
+    got, why = _credited(key, ledger, pins, main, salt, calls, served, commit, rounds, draw, verify)
     if why is not None:
         return None, why
     why = CC.rounds_twin(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
@@ -2526,10 +2526,10 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
         why = _length(max_tokens, rows, layout, len(rounds))
     if why is not None:
         return None, why
-    units, why = _window_sampled(window, sample, ss, k)
+    units, why = _window_drawn(window, draw, ss, k)
     proofs = None
     if why is None:
-        proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds), sample)
+        proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds), draw)
     if why is None:
         why = _proved(units, proofs)
     if why is None:
@@ -2664,7 +2664,7 @@ def _length(max_tokens: list[int], rows: list[int], layout: dict, steps: int) ->
 
 
 def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-           commit: Any, rounds: Any, sample: Any, descriptor: Any, entries: Any, statements: Any, live: Any,
+           commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, statements: Any, live: Any,
            circuit_files: Any, k: Any, rows: Any, verify: Ch.Verify, run: Run = PF.verify
            ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """A served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
@@ -2684,14 +2684,14 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     kept = _Outcomes(_runner(statements, circuit_files, entries, window, salt, run),
                      _live_runner(circuit_files, entries, run))
-    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, sample, descriptor,
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, kept.proved, live, kept.lived, LIVE_STATEMENTS, k, rows, verify)
     python = (None, why) if got is None else (got[0], None)
     if kept.refused is not None or not _live_formed(live):
         return python
     return _of_record("window", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
                                  "session": session, "salt": salt, "calls": calls, "served": served, "commit": commit,
-                                 "rounds": rounds, "draw": sample, "descriptor": descriptor, "entries": entries,
+                                 "rounds": rounds, "draw": draw, "descriptor": descriptor, "entries": entries,
                                  "proofs": kept.proofs, "live": kept.live_of(live), "k": k, "rows": rows}, python)
 
 
@@ -2743,14 +2743,14 @@ def _of_record(fn: str, value: dict, python: tuple[Any, tuple[str, str] | None]
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
     if V.RECORD_VERDICT == "lean":
-        return lambda _layout, raw, units, steps, sample: _lean_verified(statements, files, raw, entries, window["root"],
-                                                                       units, steps, run, salt, sample)
-    return lambda layout, raw, units, steps, sample: _verified(statements, files, raw, layout, entries, window["root"],
-                                                             units, steps, run, salt, sample)
+        return lambda _layout, raw, units, steps, draw: _lean_verified(statements, files, raw, entries, window["root"],
+                                                                       units, steps, run, salt, draw)
+    return lambda layout, raw, units, steps, draw: _verified(statements, files, raw, layout, entries, window["root"],
+                                                             units, steps, run, salt, draw)
 
 
 def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any,
-                     served: Any, commit: Any, rounds: Any, sample: Any, descriptor: Any, entries: Any, proofs: Any,
+                     served: Any, commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any,
                      live: Any, k: Any, rows: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """`window` on each sampled proof block's proof outcome `proofs` in place of its statements: the form the Lean
     `PouwCheck.Credit.window` reads until it runs the verifier itself, which the difftest holds it to. A
@@ -2780,8 +2780,8 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        `_outcome`'s rule on the sampling coin
        `_credited` read, at its period's committed K `k`, under the served window's
        arguments: the stream is the window's root (``window.root``, the root the auditor's ledger opens its session
-       for), the registration its sample root (``sample.root``, the one root the sampling coin followed) and the receipt
-       ``{"receipts": sample.receipts}``, the last round's receipts. Each of `proofs` is the verifier's verdict
+       for), the registration its sample root (``draw.root``, the one root the sampling coin followed) and the receipt
+       ``{"receipts": draw.receipts}``, the last round's receipts. Each of `proofs` is the verifier's verdict
        for a sampled proof block's session (`PROOF_KEYS`);
     7. `_registration`: the `entries` are the window's own registration's, their domains the ones its open root
        (``window.root``) and the descriptor's SHA-512 give them, and each sampled proof block's session was verified against
@@ -2792,7 +2792,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
        s's slot table and round 0's request table at their registered roots, ``m@<s>`` at the manifest's m_s,
        ``round@<s>`` at s, ``caps`` at the max_tokens its period's open committed and the ``live-ok`` rows: each step's
        served rows are proved, each served by a request of the fixed length within its public max_tokens."""
-    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, sample, descriptor,
+    got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, lambda *_: (proofs, None), live, _live_outcomes, LIVE_KEYS, k, rows, verify)
     return (None, why) if got is None else (got[0], None)
 
@@ -3009,7 +3009,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
 
 
 #: what `_pin_hygiene` names a window's sample session by
-SAMPLE_UNIT = "the draw session of window"
+DRAW_UNIT = "the draw session of window"
 CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
 
 
@@ -3217,7 +3217,7 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     first-parent history `main` and the window proves the circuit the period's open committed (``circuit``: the pin
     first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
     `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, commit, descriptor,
-    entries, served, rounds, sample, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
+    entries, served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
     every step of it, sampled at K over the layout of that same descriptor. Each window's session and its sample session,
     each held to the pins log, main and the circuit alike, are also pinned within the period's freshness floor (`committed_floor`, first-parent commits, default 0) of the commit the period's open
     recorded (`committed_pin`), counted from that pin and never from main's head, both optional and refused with ``pin``;
@@ -3284,12 +3284,12 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         if why is not None:
             return None, why
         try:
-            sampled = Ch.credited_session(ledger, {"root": w["draw"]["root"]}, k, pins, main,
+            drawn = Ch.credited_session(ledger, {"root": w["draw"]["root"]}, k, pins, main,
                                         bytes.fromhex(w["descriptor"]), verify)
         except Ch.CoinError as e:
             return None, ("circuit", f"window {i}'s draw session of period {name} doesn't count toward it, so the "
                                      f"period earns nothing: {e}")
-        why = _pin_hygiene(name, i, main, sampled.pinned, period_pin, floor, SAMPLE_UNIT)
+        why = _pin_hygiene(name, i, main, drawn.pinned, period_pin, floor, DRAW_UNIT)
         if why is not None:
             return None, why
         if run is None:
@@ -3645,13 +3645,13 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "SAMPLE_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LANES_FORM", "LANES_KEYS",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LANES_FORM", "LANES_KEYS",
            "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_STATEMENT_KEYS", "LEAF_UNIT", "LENGTH_FIELD",
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "sample_root", "sampled", "sampled_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
            "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",

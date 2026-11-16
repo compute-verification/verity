@@ -21,7 +21,7 @@ many fall outside D-SB's byte range (`device_scales`).
   there: t samples by the records' credit and one tile per excluded row.
 
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
-samples, and on every opened tile (`clear_work.check_sampled`) A's and B's openings against the device's roots, the leaf's
+samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed inert work
 (`pearl_c4.tile_inert_work`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
@@ -128,8 +128,8 @@ def device_scales(fmt: F.Fmt, data: bytes) -> dict:
     return out
 
 
-def sample_beacon(transcript_root: bytes, records_digest: bytes) -> CW.RecordedSample:
-    return CW.RecordedSample(COMMITTED_ROUND + 1, tagged(SAMPLE_BEACON_TAG, transcript_root, records_digest))
+def sample_beacon(transcript_root: bytes, records_digest: bytes) -> CW.RecordedDraw:
+    return CW.RecordedDraw(COMMITTED_ROUND + 1, tagged(SAMPLE_BEACON_TAG, transcript_root, records_digest))
 
 
 def _pool(workers: int, chunksize: int = 1) -> tuple[Callable, Callable[[], None]]:
@@ -201,7 +201,7 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     splits = {unit.weight: W.Split(k)}
     digest = W.records_root(epoch.salt, epoch.weights_root, splits, [record])
     beacon = sample_beacon(tree.commitment.root, digest)
-    picks = (CW.sample(s, [record], CW.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
+    picks = (CW.draw(s, [record], CW.replay_key(beacon, tree.commitment.root, digest, epoch.salt), t)
              + CW.exclusion_tiles(s, [record]))
     ids = {(r.matmul, r.tile.rows[0], r.tile.cols[0]): r.id for r in refs}
     opened = sorted({ids[(pos, tile.rows[0], tile.cols[0])] for pos, tile in picks})
@@ -260,7 +260,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])
     transcript = CA.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
-    beacon = CW.RecordedSample(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
+    beacon = CW.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
     fs = sample_beacon(commitment.root, W.records_root(epoch.salt, epoch.weights_root, splits, records))

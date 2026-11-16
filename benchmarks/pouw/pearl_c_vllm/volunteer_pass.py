@@ -17,7 +17,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   ⌈n/64⌉, `clear_work.check_records`) and the ``records_root`` over them.  The transcript (the tile leaves and tree, A's
   roots, every committed byte) is the pass's.  A pass already given up is left as it is.
 - **The replay** runs on `fast_tile`'s batch forms over J processes: each tile opened from the pass's files
-  (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_sampled` encodes it, and its words' counts taken
+  (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
   (`fast_tile.words_inert_work`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
   each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;

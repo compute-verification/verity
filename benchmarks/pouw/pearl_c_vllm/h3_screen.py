@@ -175,7 +175,7 @@ def check(args) -> int:
         r = {"tiles": _tiles(d, args.jobs)}
         if not graphs and not omit:
             r["calls"] = _calls(d)
-        v = VR.verify(d / "manifest.json", VR.SAMPLES, args.jobs, settings.RESEARCH_SOURCE_SHA or "unknown")
+        v = VR.verify(d / "manifest.json", VR.DRAWS, args.jobs, settings.RESEARCH_SOURCE_SHA or "unknown")
         r["verify_run"] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         res[name] = r
         print(f"{name}: {r['tiles']['tiles']} tiles, {r['tiles']['failed']} failed check_tile; "

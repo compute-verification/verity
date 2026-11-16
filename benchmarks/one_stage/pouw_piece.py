@@ -281,7 +281,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
-                             json.loads(live.read_text()), sample_directory=draw)
+                             json.loads(live.read_text()), draw_directory=draw)
     return ({"key": key.to_json(), "main": lines(main), "name": name, "sessions": listed},
             ledger, lines(pouw / "pins.jsonl"), [ev])
 

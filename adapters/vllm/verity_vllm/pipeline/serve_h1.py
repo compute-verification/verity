@@ -21,7 +21,7 @@ own Commit.
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's
   session is reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and
   window k+1's while window k serves, off the engine loop (`GateSessions.take`), each with its sampling session,
-  reserved withheld, beside it (`pouw_h1_challenger.sample_families`); round 0 opens it on the window's open root
+  reserved withheld, beside it (`pouw_h1_challenger.draw_families`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
   device's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the sampling session opens on the sample root once
   the prover's commitment is in (`pouw_h1_window.DrawSession`), its coin commitment released only at its close; the
@@ -48,11 +48,11 @@ own Commit.
   ``kept`` in its outcome otherwise.
 * **Its sample, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
   window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.drawn`): the proof
-  blocks core samples (`credit.sampled` over the window Program's layout, as `pouw_h1_challenger.sampled_of` samples them), each
-  read as the Commit's values it opens (`sampled_reads`): its call's x_q and s_a rows of its row tile at the engine step its
+  blocks core samples (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` samples them), each
+  read as the Commit's values it opens (`drawn_reads`): its call's x_q and s_a rows of its row tile at the engine step its
   step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
   in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
-  (`pouw_h1_challenger.sample_k`). A window whose sample can't be formed (it never opened, its close failed, no sampling coin,
+  (`pouw_h1_challenger.draw_k`). A window whose sample can't be formed (it never opened, its close failed, no sampling coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
 * **Its Commit record, tied to the audited window** (``--seal --h1-prover --h1-window-commit CMD``, `serve_tie`). Its
   release, once H1 has closed the window and before its sample coin, waits for the window's seal, writes the window's
@@ -93,8 +93,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     GateSessions,
-    sampled_reads,
-    sampled_blocks,
+    drawn_reads,
+    drawn_units,
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     window_units as units,
@@ -587,15 +587,15 @@ class H1Windows:
 
     def drawn(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
         """Window ``window``'s sample put into ``draws`` under `DRAWER` once its sampling coin is open: the units its coin samples
-        (`sampled_blocks`, at `draw_of`'s K and stream) and the Commit's values they open (`sampled_reads`). Its record for the
+        (`drawn_units`, at `draw_of`'s K and stream) and the Commit's values they open (`drawn_reads`). Its record for the
         outcome's ``draw``; ``refused`` when the window's release was refused instead (its close failed, or the sample
         can't be formed or put), naming why."""
         try:
             if error is not None:
                 raise ValueError(f"its close failed ({error})")
             k, stream, source = self.draw_of(run, held)
-            units = sampled_blocks(run.commits, self.layout(), k, stream)
-            reads = sampled_reads(run.served.tap, self.layout(), units, S_A_BYTES)
+            units = drawn_units(run.commits, self.layout(), k, stream)
+            reads = drawn_reads(run.served.tap, self.layout(), units, S_A_BYTES)
             self.draws.put(window, DRAWER, reads)
         except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a sample not coming
             why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]
@@ -621,16 +621,16 @@ class H1Windows:
     def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
         """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
-        window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.sample_k`) and its calls_root.
+        window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period, the ledger commits it no K, or its window commits no gate
         session's open root."""
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             committed_k,
-            sample_k,
+            draw_k,
         )
 
         if held is None:
-            return sample_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
+            return draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
         assert self.sessions is not None, "a held session is a gate session"
         period = held.get("period")
         if period is None:

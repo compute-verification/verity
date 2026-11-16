@@ -29,7 +29,7 @@ report has its length terms' bits as `ChargeCount_v2` charges them and as v1's s
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the fields of the trace-corpus fixture and of sync-crush (`derived.load_trace`;
 its pool evicts, so the derived rules send hits past the bound), and `--fixture PATH` writes them as the vectors the
-certifier's test reads (`verity/protocols/resource_accounting/network/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are
+certifier's test reads (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json`). LABEL=DIR are
 trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the network attester's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-FIXTURES = HERE / "tests" / "fixtures"
+FIXTURES = HERE.parents[2] / "tests" / "benchmarks" / "network_e2e" / "encodings" / "fixtures"
 
 
 def _load(name: str) -> Any:
@@ -75,7 +75,7 @@ WHOLE, SEEDED = (4, 2, 2, 2), (12, 10, 8)
 #: the decisions streams' book caps: v1's table caps, which send no hit, resume or lag bit, with room for them
 CAPS = dataclasses.replace(V.TABLE_CAPS, hits=1 << 20, resumes=1 << 12, lag=1 << 12)
 EOS = 2
-FIXTURE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+FIXTURE = HERE.parents[2] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "arith_encode_vectors.json"
 
 
 def _ae() -> Any:

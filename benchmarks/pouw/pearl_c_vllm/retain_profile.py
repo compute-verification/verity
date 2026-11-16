@@ -248,9 +248,9 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
         from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
-        sample = random.Random(args.seed)
-        verifier.coins = sample.randbytes
-        PPD.new_salt_key = lambda scheme: sample.randbytes(32)
+        draw = random.Random(args.seed)
+        verifier.coins = draw.randbytes
+        PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR

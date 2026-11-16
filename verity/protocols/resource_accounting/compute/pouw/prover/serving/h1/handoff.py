@@ -20,7 +20,7 @@ GPU lease ends only when it exits.
   process would have: the same empty calls, tables, rounds, trees and sampling coin, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
   of the first step past the last served one. The sampling coin is the window's sample session's
-  (`pouw_h1_window.SampleSession`), not yet opened at the hand-off: its reserve answer travels in the file, and the
+  (`pouw_h1_window.DrawSession`), not yet opened at the hand-off: its reserve answer travels in the file, and the
   resuming process opens it through the gate it is given, withheld on the sample root, as the serving process would have.
 * **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a
   run's published directory), and its holder deletes it once the window has closed.
@@ -83,19 +83,19 @@ def _live(state: dict[str, Any] | None, client: Any) -> LiveRecord | None:
     return rec
 
 
-def _sample_state(sample: Any) -> dict[str, Any] | None:
-    if not isinstance(sample, PHW.SampleSession):
-        return _record(sample)
-    if sample._asked:
-        raise ValueError(f"{sample.entry}: a window hands off before its sample session opens")
-    return {"draw_session": {"entry": sample.entry, "at": sample.at, "reserved": sample.reserved}}
+def _draw_state(draw: Any) -> dict[str, Any] | None:
+    if not isinstance(draw, PHW.DrawSession):
+        return _record(draw)
+    if draw._asked:
+        raise ValueError(f"{draw.entry}: a window hands off before its draw session opens")
+    return {"draw_session": {"entry": draw.entry, "at": draw.at, "reserved": draw.reserved}}
 
 
-def _sample_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -> Any:
+def _draw_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -> Any:
     if state is None or "draw_session" not in state:
         return _live(state, client)
     s = state["draw_session"]
-    return PHW.SampleSession(s["entry"], s["at"], s["reserved"], gate)
+    return PHW.DrawSession(s["entry"], s["at"], s["reserved"], gate)
 
 
 class _HostOnly(pickle.Pickler):
@@ -137,7 +137,7 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     codes = {} if served is None else {w: c for w, (t, c) in served._weights.items() if run._weights.get(w, (None,))[0] is t}
     state["weights"] = {w: (codes[w] if w in codes else PH.numpy_of(t), PH.numpy_of(s)) for w, (t, s) in run._weights.items()}
-    state["rounds"], state["draw"] = _record(run.rounds), _sample_state(run.sample)
+    state["rounds"], state["draw"] = _record(run.rounds), _draw_state(run.draw)
     state["request_rounds"], state["slot_rounds"] = sorted(run._tables), sorted(run._slot_tables)
     if served is not None:
         state["served"] = (type(served), {k: v for k, v in served.__dict__.items() if k not in ("_weights", "program")},
@@ -161,7 +161,7 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
         raise ValueError(f"{directory}: not a {SCHEMA} window")
     state = dict(doc["state"])
     weights, tables, slot_tables = state.pop("weights"), state.pop("request_rounds"), state.pop("slot_rounds")
-    rounds, sample, served = state.pop("rounds"), state.pop("draw"), state.pop("served", None)
+    rounds, draw, served = state.pop("rounds"), state.pop("draw"), state.pop("served", None)
     run = doc["type"].__new__(doc["type"])
     run.__dict__.update(state)
     run._tables = {r: RQ.request_table(run.salt, r, run.rows, run.admitted.get(r, []), run._key) for r in tables}
@@ -174,7 +174,7 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
     try:
         client = Resumed(sock, LiveCommitment.from_json(doc["commitment"]))
         run.listeners, run._opener, run._recorded = [], None, None
-        run.rounds, run.sample = _live(rounds, client), _sample_of(sample, client, gate)
+        run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
         ts = tensors()
         run._weights = {w: (ts.put(c), ts.put(s)) for w, (c, s) in weights.items()}
         if served is not None:

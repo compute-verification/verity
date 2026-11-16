@@ -278,7 +278,7 @@ def step_roots(window: str, s: int, cs: list[dict]) -> dict:
 
 
 #: the gate's sample key: the challenger's sampling coin, opened once after the window's receipts root
-GATE_SAMPLE_DOMAIN = "verity/pouw/served-h1-gate-draw/v1"
+GATE_DRAW_DOMAIN = "verity/pouw/served-h1-gate-draw/v1"
 
 
 def receipts_root(window: str, calls: list[dict]) -> bytes:
@@ -292,7 +292,7 @@ def gate_rng(commitment: LiveCommitment, coin: bytes, after: bytes) -> random.Ra
     """The gate's picks from the sampling coin `coin` opened after `after` (`receipts_root`): the harness's self-check of the
     receipts, not the window's sample of record."""
     from verity.commitments.randomness import derive
-    key = derive(coin, GATE_SAMPLE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "receipts": after})
+    key = derive(coin, GATE_DRAW_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "receipts": after})
     return random.Random(key.stream("gate", 64))
 
 
@@ -737,20 +737,20 @@ def run(a: argparse.Namespace) -> dict:
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
         commitment = Ch.LiveCommitment.from_json(cs.commitment.to_json())
         sample_after = receipts_root(window, calls)
-        sample = cs.sample(sample_after)
+        sample = cs.draw(sample_after)
         cs.close()
         rng = gate_rng(commitment, sample.coin, sample_after)
-        gate_picks = {"from": f"the sampling coin ({cs.label}), opened after the receipts root", "domain": GATE_SAMPLE_DOMAIN,
-                      "after": sample_after.hex(), "what": "the harness's self-check of the receipts, not the window's sample"}
+        gate_picks = {"from": f"the draw coin ({cs.label}), opened after the receipts root", "domain": GATE_DRAW_DOMAIN,
+                      "after": sample_after.hex(), "what": "the harness's self-check of the receipts, not the window's draw"}
         recomputed = [steps[r["round"]]["root"] == root and r["a_step"] == steps[r["round"]]["a_step"].hex()
                       and {c["salt"] for c in by_step[r["round"]]}
                       == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
                      draw_coin=sample.to_json(), draw_after=sample_after.hex(),
-                     draw_session=cs.sample_session and cs.sample_session.id, draw_commitment=cs.sample_commitment.to_json(),
-                     draw_reason=Wd.sample_epoch_reason(cs.sample_commitment)
-                     or Ch.live_reason(cs.sample_commitment, sample, Wd.SAMPLE, 0, sample_after),
+                     draw_session=cs.draw_session and cs.draw_session.id, draw_commitment=cs.draw_commitment.to_json(),
+                     draw_reason=Wd.draw_epoch_reason(cs.draw_commitment)
+                     or Ch.live_reason(cs.draw_commitment, sample, Wd.DRAW, 0, sample_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
@@ -768,7 +768,7 @@ def run(a: argparse.Namespace) -> dict:
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
                            "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "
                            "infra published> --main <the verifier's git rev-list --first-parent origin/main> "
-                           "--manifest manifest.json --sample-out <the sample session as the gate publishes it> "
+                           "--manifest manifest.json --draw-out <the draw session as the gate publishes it> "
                            "--key-record <the challenger's "
                            "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
                            "challenger's own record, never this one" if cs.source == "off-node"

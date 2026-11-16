@@ -32,7 +32,7 @@ class FileStager:
     hundreds of GB): its META (its second line), its pin and class digest (`circuit.digest`, `circuit.class_digest`)
     streamed from the file, and each instance's outputs the word reference's, which ``outs`` gives. `circuit.write` reads
     only these of a circuit; the files it writes are the recomposed stager's byte for byte. J10-R's statement's rows are
-    `h1window.statement_rows` of sampled's `template`; a lanes-form leaf's are sampled's `leaf_rows` over its file's template (the
+    `h1window.statement_rows` of drawn's `template`; a lanes-form leaf's are drawn's `leaf_rows` over its file's template (the
     manifest's ``templates``)."""
 
     def __init__(self, path: Path, definition: str, in_rows: Sequence[tuple], out_rows: Sequence[tuple],

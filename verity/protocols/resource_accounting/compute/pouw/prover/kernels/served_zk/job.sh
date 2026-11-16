@@ -231,7 +231,7 @@ stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, open
   cp "$W/$tag/stage.json" "$W/$tag/opening.json" "$W/$tag/pin.txt" "$W/$tag/pub.bin" "$OUT/$tag/"
   log "stage $tag (unit $t): $(jq_ "$OUT/$tag/stage.json" "(d['kind'], d['entry'], d['ands'], d['k_log'], d['seconds'])")"
 }
-opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--unsampled]
+opencheck() {    # opencheck TAG EXPECT SIDE UNIT PUB OPENING [--undrawn]
   local v; v=$("$PY" "$SC" check "$OUT/$3/params.json" "$OUT/$3/registration.json" "$OUT/draw.json" "$4" "$5" "$6" ${7:-} \
     --out "$OUT/$1.json" | tee "$OUT/$1.out" | first)
   expect "$1" "$2" "${v:-ERROR}"
@@ -297,7 +297,7 @@ DRAWN_FILLER=$(for t in $UNITS; do [ "$t" -ge "$FILL" ] && echo "$t"; done | hea
 FU=${DRAWN_FILLER:-$FILL}
 if [ -z "$DRAWN_FILLER" ]; then
   stage_unit filler request "$FU" && prove_unit filler
-  opencheck open-filler ACCEPT request "$FU" "$OUT/filler/pub.bin" "$OUT/filler/opening.json" --unsampled
+  opencheck open-filler ACCEPT request "$FU" "$OUT/filler/pub.bin" "$OUT/filler/opening.json" --undrawn
   FT=filler
 else
   FT=u$FU
@@ -306,7 +306,7 @@ fi
 OU=$(( U0 < $(jq_ "$OUT/other/registration.json" "d['population']") ? U0 : 0 ))
 stage_unit other-tile other "$OU"
 opencheck open-foreign-proof REJECT request "$U0" "$OUT/other-tile/pub.bin" "$OUT/u$U0/opening.json"
-opencheck open-foreign-commit REJECT other "$OU" "$OUT/u$U0/pub.bin" "$OUT/other-tile/opening.json" --unsampled
+opencheck open-foreign-commit REJECT other "$OU" "$OUT/u$U0/pub.bin" "$OUT/other-tile/opening.json" --undrawn
 s=$(ls -d "$W/u$U0"/sessions/*/ 2>/dev/null | tail -1)
 if [ -n "$s" ]; then
   ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $(verifier_env) $LEAN verify --zk --circuit $W/u$U0/circuit.txt \

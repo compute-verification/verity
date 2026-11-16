@@ -26,7 +26,7 @@ nothing: its rows are Flock-committed ports.
 unit opens exactly the rows it reads.
 
 **The layout is the verifier's.** `layout` derives each tile's own unit and its closure from the shape alone (through the
-Program the verifier builds), never from a prover: `Traced.check_layout` refuses any other, and `sample` refuses one whose
+Program the verifier builds), never from a prover: `Traced.check_layout` refuses any other, and `draw` refuses one whose
 tile is not its own closure's first unit.
 
 **The profile** is core's `Stratified` over the tile strata, whose `harm_bound` with each tile's W_ref as its harm bounds
@@ -54,7 +54,7 @@ from .partition import ProofBlock, units
 if TYPE_CHECKING:
     from . import pc8
 
-SAMPLE_DOMAIN = domains.POUW_CLOSURE_SAMPLING
+DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
 
 @dataclass(frozen=True)
@@ -188,7 +188,7 @@ def window_sampling_designs(layouts: Sequence[Layout], k: int = RECORD_K, floors
     not their sum. The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are
     pinned (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
     `audit_executionPhase_split_of_record` (`security/Proofs/Flock/Soundness/Audit/Window.lean`), which takes each call's work
-    in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.sample`'s `Ledger`). It
+    in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`). It
     also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution
     phase with either empty is refused here, so none is ever sampled or accepted."""
     if not layouts:
@@ -236,7 +236,7 @@ class Layout:
     def check(self) -> None:
         """Refuse a layout whose tiles are not the partition's tile units, or whose closure of a tile doesn't hold the tile's
         own unit first: the Layout theorems (`Layout.accountable_compute`) read τ = the tile's own unit, and a tile mapped to
-        its X strip is C1 again.  `sample` runs it; a verifier compares the whole layout with its own (`Traced.check_layout`)."""
+        its X strip is C1 again.  `draw` runs it; a verifier compares the whole layout with its own (`Traced.check_layout`)."""
         tiles = [u for st in self.strata if st.role == "tile" for u in st.units]
         if set(tiles) != set(self.closure):
             raise DomainError("the layout's closures are not its tile stratum's")
@@ -329,31 +329,31 @@ def template_strata(us: Sequence[ProofBlock], per_tile: int) -> tuple[StratumSpe
 class Plan:
     sampling_design: str
     sizes: Mapping[str, int]
-    sampled: tuple[int, ...]                   # the units the sampling design drew (tiles and floor units)
+    drawn: tuple[int, ...]                   # the units the sampling design drew (tiles and floor units)
     proved: tuple[int, ...]                  # the sampled proof blocks and every sampled tile's closure, ascending, each once
     openings: tuple[tuple[str, int], ...]    # the leaves the plan opens: ("a", row), ("b", weight row), ("y", column strip)
     proved_y: tuple[int, ...] = ()           # the weight Program's Y units the sampled tiles read (column strips), each once
     proved_b: tuple[int, ...] = ()           # a tile check's: the weight Program's row units the sampled tiles read, each once
 
 
-def sample(key: Key, lay: Layout, sampling_design: TileSamplingDesign, call: Sequence[int] = ()) -> Plan:
+def draw(key: Key, lay: Layout, sampling_design: TileSamplingDesign, call: Sequence[int] = ()) -> Plan:
     """The plan for one sample: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
-    `SAMPLE_DOMAIN` after the receipt), then every sampled tile's closure.  ``call`` is the call's index (`anchors`'
+    `DRAW_DOMAIN` after the receipt), then every sampled tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template),
     and the calls of an execution phase sampled under one key sample independently.  The verifier samples through
-    `Traced.sample`, over its own layout."""
+    `Traced.draw`, over its own layout."""
     lay.check()
     sizes = sampling_design.sizes(lay.strata)
-    sampled: list[int] = []
+    drawn: list[int] = []
     for s in lay.strata:
         context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
-        sampled += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
-    proved = set(sampled)
-    ys = {lay.y_strip[u] for u in sampled if lay.y_strip and u in lay.y_strip}
-    bs = {b for u in sampled if lay.b_rows and u in lay.b_rows for b in lay.b_rows[u]}
-    for u in sampled:
+        drawn += [s.units[i] for i in key.subset(sizes[s.name], len(s.units), context)]
+    proved = set(drawn)
+    ys = {lay.y_strip[u] for u in drawn if lay.y_strip and u in lay.y_strip}
+    bs = {b for u in drawn if lay.b_rows and u in lay.b_rows for b in lay.b_rows[u]}
+    for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(sampling_design.name, sizes, tuple(sorted(sampled)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
+    return Plan(sampling_design.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
                 tuple(sorted(bs)))
 
 
@@ -404,7 +404,7 @@ def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> f
     return profile(lay, sizes).harm_bound({s.name: s.work / len(s.units) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["SAMPLE_DOMAIN", "RECORD_K", "CountSamplingDesign", "Layout", "Plan", "StratumSpec", "TileSamplingDesign", "WorkSamplingDesign", "check_work_strata",
-           "sample", "design_object",
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountSamplingDesign", "Layout", "Plan", "StratumSpec", "TileSamplingDesign", "WorkSamplingDesign", "check_work_strata",
+           "draw", "design_object",
            "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_sampling_designs",
            "work_table"]

@@ -21,7 +21,7 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 * **Evidence**: the service's answer for that registration, read as `Core.Answer.ofJson` and `Core.Integrity.ofJson`
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's sample as one-stage's
-  `sample.py` writes it (any of its sampling designs; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
+  `draw.py` writes it (any of its sampling designs; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
   coin and the salt it gives (`window_salt`).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
   execution phase's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
@@ -47,10 +47,10 @@ pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's
 salt-only session of the auditor device's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
 reads them (`LIVE`), and the pass passes `live_salt` under them.
-`sample` is the rule on the execution phase's sample (`Challenger.select`'s): the execution phase's sampling coin opens after the registration,
+`draw` is the rule on the execution phase's sample (`Challenger.select`'s): the execution phase's sampling coin opens after the registration,
 and the sampled proof blocks are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded sample `COIN_EARLY` too.  `work_units` is the same rule under the sampling design ``work:k``: each work
-stratum's ``Draw.subset`` on its own stream of that key (`credit.sampled` samples a served H1 execution phase with it).
+stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` samples a served H1 execution phase with it).
 `salt` is the rule on a live execution phase's salt coin, read through the
 same session as `rounds`: S is the session the auditor's signed ledger reserves for the execution phase and R the root its open
 entry opened S on, which the verifier recomputes from the execution phase's record and S (`salt.window_open_root`); the
@@ -411,7 +411,7 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
         raise Refused(f"{ctx}: not in the form toJson writes")
 
 
-def _core_sample(j: Any, ctx: str) -> dict:
+def _core_draw(j: Any, ctx: str) -> dict:
     """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
     if _has(j, "bernoulli"):
         d: dict = {"bernoulli": Wd.ratio_str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
@@ -430,7 +430,7 @@ def _core_sample(j: Any, ctx: str) -> dict:
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work sample")
+        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
     _exactly(d, j, ctx)
     return d
 
@@ -442,18 +442,18 @@ def _level(j: Any, ctx: str) -> dict:
     query = None if q is None else _as_str(q, f"{ctx}.query")
     size = _nat_at(j, "size", ctx)
     d = _get(j, "draw", ctx)
-    lv = {"name": name, "query": query, "size": size, "draw": None if d is None else _core_sample(d, f"{ctx}.draw")}
+    lv = {"name": name, "query": query, "size": size, "draw": None if d is None else _core_draw(d, f"{ctx}.draw")}
     _exactly(lv, j, ctx)
     return lv
 
 
 def integrity(j: Any, ctx: str = "profile") -> dict:
-    """`Core.Integrity.ofJson`: `sampled` as (level, count) pairs in level order, for the levels it names."""
+    """`Core.Integrity.ofJson`: `drawn` as (level, count) pairs in level order, for the levels it names."""
     levels: list[dict] = []
     for lv in _arr_at(j, "levels", ctx):
         levels.append(_level(lv, f"{ctx}.levels[{len(levels)}]"))
     counts = _get(j, "drawn", ctx)
-    sampled = [(lv["name"], _nat_at(counts, lv["name"], f"{ctx}.drawn")) for lv in levels if _has(counts, lv["name"])]
+    drawn = [(lv["name"], _nat_at(counts, lv["name"], f"{ctx}.drawn")) for lv in levels if _has(counts, lv["name"])]
 
     def strs(k: str) -> list[str]:
         return [_as_str(v, f"{ctx}.{k}") for v in _arr_at(j, k, ctx)]
@@ -462,7 +462,7 @@ def integrity(j: Any, ctx: str = "profile") -> dict:
     p["covered"] = strs("covered")
     p["levels"] = levels
     p["delta"] = ratio(_str_at(j, "delta", ctx), f"{ctx}.delta")
-    p["drawn"] = sampled
+    p["drawn"] = drawn
     _exactly(integrity_json(p), j, ctx)
     return p
 
@@ -497,7 +497,7 @@ def answer_of(j: Any, ctx: str = "answer") -> dict:
     return {"protocol": protocol, "verdict": verdict, "reason": reason, "commitment": com, "public": pub, "profile": prof}
 
 
-_SAMPLE_KEYS = {"subset": ["k", "law", "population", "units"], "bernoulli": ["law", "p", "population", "units"],
+_DRAW_KEYS = {"subset": ["k", "law", "population", "units"], "bernoulli": ["law", "p", "population", "units"],
               "stratified": ["k", "law", "population", "strata", "units"],
               "work": ["k", "law", "population", "strata", "units"]}
 
@@ -539,16 +539,16 @@ def _num_den(p: str, ctx: str) -> str:
     raise Refused(f"{ctx}.p: not num/den")
 
 
-def unit_sample(j: Any) -> dict:
-    """The public outputs ``{"draw": d}``, `d` one of one-stage's `sample.py` sampling designs with exactly its keys (`check_sample`'s),
+def unit_draw(j: Any) -> dict:
+    """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` sampling designs with exactly its keys (`check_draw`'s),
     and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")
     d, ctx = j["draw"], "public.draw"
     sampling_design = _str_at(d, "law", ctx)
-    if sampling_design not in _SAMPLE_KEYS:
+    if sampling_design not in _DRAW_KEYS:
         raise Refused(f"{ctx}.law: not subset, bernoulli, stratified or work")
-    _keys_are(d, (["closure"] if sampling_design == "work" and "closure" in d else []) + _SAMPLE_KEYS[sampling_design], ctx)
+    _keys_are(d, (["closure"] if sampling_design == "work" and "closure" in d else []) + _DRAW_KEYS[sampling_design], ctx)
     out: dict[str, Any] = {"law": sampling_design, "population": _nat_at(d, "population", ctx)}
     if sampling_design == "bernoulli":
         out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
@@ -575,7 +575,7 @@ def evidence(b: bytes) -> dict:
     a["salt"] = None
     if a["verdict"] == "accept":
         a["profile"] = integrity(a["profile"])
-        a["draw"] = unit_sample(a["public"])
+        a["draw"] = unit_draw(a["public"])
         a["salt"] = a.pop("public").get("salt")
     return a
 
@@ -653,7 +653,7 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
         return "reject", f"outcome: for registration {e['commitment'] or 'null'}, not this one {d}", None
     if e["verdict"] != "accept":
         return e["verdict"], f"service: {e['reason']}", None
-    prof, sample = e["profile"], e["draw"]
+    prof, draw = e["profile"], e["draw"]
     if prof["programs"] != [rec["program"]]:
         return "reject", f"profile: programs {', '.join(prof['programs'])}, not the registered {rec['program']}", None
     if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
@@ -663,9 +663,9 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
                 None)
     if prof["drawn"] != [(LEVEL, k)]:
         return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
-    if not (sample["law"] == "subset" and sample["k"] == k) or sample["population"] != w.n:
-        return "reject", f"sample: {sampling_design_name(sample)} over {sample['population']}, not subset:{k} over {w.n}", None
-    units = sample["units"]
+    if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:
+        return "reject", f"draw: {sampling_design_name(draw)} over {draw['population']}, not subset:{k} over {w.n}", None
+    units = draw["units"]
     if len(units) != k or any(b <= a for a, b in zip(units, units[1:])) or (units and units[-1] >= w.n):
         return "reject", f"draw: its {len(units)} units are not {k} ascending distinct units below {w.n}", None
     why = window_salt(p, rec, e["salt"])
@@ -966,7 +966,7 @@ COIN_VERSIONS = {Co.SCHEME: (DIGEST_BYTES["sha512"], domains.POUW_WEIGHTS_ROOT),
 #: was then: bound by `tagged_sha256`, and the sample's key and stream `derive_v1`'s.  Only a replay of a recorded sample
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
-SAMPLE_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
+DRAW_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
 _OPENING = "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
 _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, k, n and weight"
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
@@ -1318,7 +1318,7 @@ def _plain(s: Any) -> bool:
     return _str(s) and all(" " <= c <= "~" and c not in '"\\' for c in s)
 
 
-def sample_key_context(stream: str, registration: str, receipt: dict) -> dict:
+def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
     """The sample key's context: the stream, the registration and its receipt (as canonical JSON's SHA-512)."""
     if not all(_plain(x) and _plain(v) for x, v in receipt.items()):
         raise ValueError("a receipt is an object of printable ASCII strings")
@@ -1350,7 +1350,7 @@ SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's co
 def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tuple[str, str] | None]:
     """A live execution phase's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
     execution phase's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
-    commitment a live execution phase's sample session's (`window.SAMPLE_FAMILIES`); else None and the refusal."""
+    commitment a live execution phase's sample session's (`window.DRAW_FAMILIES`); else None and the refusal."""
     if sorted(coins) != ["key", "record"]:
         return None, ("coin", SIGNED_LIVE)
     try:
@@ -1367,18 +1367,18 @@ def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tup
     if why is not None:
         return None, ("coin", why)
     c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
-    return (None, ("coin", why)) if (why := Wd.sample_epoch_reason(c)) is not None else (c, None)
+    return (None, ("coin", why)) if (why := Wd.draw_epoch_reason(c)) is not None else (c, None)
 
 
-def sample_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
+def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
          units: Any, key: Any = None) -> tuple[str, str] | None:
     """None when `units` are the execution phase's sample: the execution phase's sampling coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
-    registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``sample`` or ``sampler``, and why). A
-    seeded commitment (`coins_of`) has its ``sample`` coin, and is refused when the execution phase's parameters pin a challenger
+    registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``draw`` or ``sampler``, and why). A
+    seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the execution phase's parameters pin a challenger
     key. A live one (`window.LIVE_SCHEME`, a certified execution phase's) is read only from its sample session's
-    (`window.SAMPLE_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the execution phase's
+    (`window.DRAW_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the execution phase's
     parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
     refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
     refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""
@@ -1405,13 +1405,13 @@ def sample_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registrat
     except (Refused, Ch.CoinError) as e:
         return "coin", f"the draw's {e}"
     if live:
-        why, old = Ch.live_reason(c, o, Wd.SAMPLE, 0, bytes.fromhex(registration)), False
+        why, old = Ch.live_reason(c, o, Wd.DRAW, 0, bytes.fromhex(registration)), False
     else:
         why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
         return "coin", f"the draw's {why}"
-    ctx, n = sample_key_context(stream, registration, receipt), 2 * k * width(population) + 64
-    src = stream_v1(derive_v1(o.coin, SAMPLE_DOMAIN, ctx), "draw", n) if old else derive(o.coin, SAMPLE_DOMAIN, ctx).stream("draw", n)
+    ctx, n = draw_key_context(stream, registration, receipt), 2 * k * width(population) + 64
+    src = stream_v1(derive_v1(o.coin, DRAW_DOMAIN, ctx), "draw", n) if old else derive(o.coin, DRAW_DOMAIN, ctx).stream("draw", n)
     got = stream_subset(k, population, src)
     if got is None:
         return "sampler", "the draw's stream ran out"
@@ -1427,12 +1427,12 @@ def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
 
 
 def work_units(coin: bytes, stream: str, registration: str, receipt: dict, strata: list[dict]) -> list[int] | None:
-    """`sample`'s rule under the sampling design ``work:k`` (Lean `workUnits`): the units the sampling coin `coin` samples over the work strata
+    """`draw`'s rule under the sampling design ``work:k`` (Lean `workUnits`): the units the sampling coin `coin` samples over the work strata
     `strata` (each ``{template, units, work, floor, k}``, its units ``[lo, hi)`` ranges in order), ascending. Stratum s is
     ``Draw.subset`` of its k_s over its n_s units on the stream ``("draw", template)`` of the key the coin derives under
-    the stream's digest `stream`, the registration `registration` and its `receipt` (`sample_key_context`), its local index
+    the stream's digest `stream`, the registration `registration` and its `receipt` (`draw_key_context`), its local index
     j its j-th unit (`Flock.Draw.stratified`); None when a stream runs out."""
-    key, out = derive(coin, SAMPLE_DOMAIN, sample_key_context(stream, registration, receipt)), []
+    key, out = derive(coin, DRAW_DOMAIN, draw_key_context(stream, registration, receipt)), []
     for s in strata:
         n = sum(hi - lo for lo, hi in s["units"])
         got = stream_subset(s["k"], n, key.stream(("draw", s["template"]), 2 * s["k"] * width(n) + 64))
@@ -1912,8 +1912,8 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "SCHEME", "SIGNED_LIVE",
            "VALUES_TAG", "WINDOW_VALUES", "Refused", "answer", "answer_of", "answer_twin", "canonical", "case",
-           "case_twin", "check_twin", "commitment", "digest", "sample_twin", "evidence", "integrity", "integrity_json",
+           "case_twin", "check_twin", "commitment", "digest", "draw_twin", "evidence", "integrity", "integrity_json",
            "sampling_design_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
            "pass_epoch_twin", "ratio", "recorded_reason", "registered_twin", "rounds", "rounds_twin", "salt_of_record",
-           "salt_twin", "serve_case", "unit_sample", "values_root", "verify_path", "window_anchors", "window_domain",
+           "salt_twin", "serve_case", "unit_draw", "values_root", "verify_path", "window_anchors", "window_domain",
            "window_salt", "work_k", "work_units"]

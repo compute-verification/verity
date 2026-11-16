@@ -96,9 +96,9 @@ domain; a W that states no version, written before W registered the fixed operan
 untied, `verify_run.WEIGHTS_UNTIED`), and with ``--class SLOTS,PROMPT,OUTPUTS`` (the window's class, read only beside
 ``--tie``) refuses passes whose rows by round aren't that class's fixed load (`verify_run.held_to_load`), then
 takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
-set, a sample session's on the auditor device opened on the run's commitment, `bench_arm.LiveSample`, reserved under
+set, a sample session's on the auditor device opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
-session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_sample`; the format is
+session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
 ``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the samples on such tiles, X_O) and rejects the run
@@ -191,7 +191,7 @@ SPEC = HERE.parents[1] / "harness" / "specs" / "llama31-8b-1gpu-pouw-protocol-se
 ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
-SAMPLES = 459
+DRAWS = 459
 #: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
 VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
                   "credit_kept", "device")
@@ -222,7 +222,7 @@ CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
 CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped
-SAMPLED = "the verifier's coin is flipped (DIR/coin.json), so the passes and their records are fixed"
+DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
 #: why ``retain --window-record`` drops a warm-up pass (`pearl_c.window`)
 WARM_UP = "the warm-up's (timed false): a tied run's W lists only the timed call's rounds, so it credits nothing"
 #: why `serve` refuses ``--seeded`` beside retention or a live session's coins
@@ -265,13 +265,13 @@ def seeded(label: str):
     every stream of one label gives the same bytes however they are sampled."""
     buf, count = bytearray(), itertools.count()
 
-    def sample(n: int) -> bytes:
+    def draw(n: int) -> bytes:
         while len(buf) < n:
             buf.extend(hashlib.sha512(f"served-passes seeded {label}".encode() + next(count).to_bytes(8, "big")).digest())
         out = bytes(buf[:n])
         del buf[:n]
         return out
-    return sample
+    return draw
 
 
 def seed_install(pouw: dict) -> None:
@@ -471,7 +471,7 @@ def volunteer(args: argparse.Namespace) -> int:
         print(f"volunteer FAIL: {UNRETAINED[1]}", flush=True)
         return 1
     if (passes / COIN).exists():
-        print(f"volunteer FAIL: {SAMPLED}", flush=True)
+        print(f"volunteer FAIL: {DRAWN}", flush=True)
         return 1
     paths, _ = manifests(passes)
     coins = VR.epoch_coins(passes / "coins.json")
@@ -541,7 +541,7 @@ def retain(args: argparse.Namespace) -> int:
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
     if served.get("retained") is False or (passes / COIN).exists():
-        print(f"retain FAIL: {UNRETAINED[1] if served.get('retained') is False else SAMPLED}", flush=True)
+        print(f"retain FAIL: {UNRETAINED[1] if served.get('retained') is False else DRAWN}", flush=True)
         return 1
     held = [p for p in served["passes"] if p["units"]]
     if bad := [s for s in args.drop if not 0 <= s < len(held)]:
@@ -613,12 +613,12 @@ def verify(args: argparse.Namespace) -> int:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
         period = (((served or {}).get("coins") or {}).get("reserved") or {}).get("period")
-        sample = BA.live_sample(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
-                            settings.PEARLC_CHALLENGER_LANE, period=period) or VR.node_sample
+        draw = BA.live_draw(settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
+                            settings.PEARLC_CHALLENGER_LANE, period=period) or VR.node_draw
         t0 = CLOCK()
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
-                                    dropped=dropped, record=record, sample=sample,
+                                    dropped=dropped, record=record, draw=draw,
                                     over_cap=over_inert_bound_rule(VR.verify_passes, args.over_cap),
                                     test_instance=args.test_instance, window_class=args.cls))
         doc["check_cost"] = check_cost(CLOCK() - t0, jobs=args.jobs)
@@ -660,7 +660,7 @@ def window_class(text: str) -> tuple[int, int, int]:
     return cls
 
 
-def lean_argv(exe: Path, coins: Path, samples: int, record: Path, manifests: list[Path], tie: Path | None,
+def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
               over_cap: str = OVER_INERT_BOUND[1], test_instance: bool = False, of_record: bool = False,
               load: list[int] | None = None) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
@@ -670,7 +670,7 @@ def lean_argv(exe: Path, coins: Path, samples: int, record: Path, manifests: lis
     on a live session's coins), under which the Lean takes only a challenger sample:
     ``--coins COINS --draws T --record RECORD --over-cap RULE [--test-instance] [--tie W [--class S,P,O]] [--of-record]
     MANIFEST...``."""
-    return [str(exe), "--coins", str(coins), "--draws", str(samples), "--record", str(record), "--over-cap", over_cap,
+    return [str(exe), "--coins", str(coins), "--draws", str(draws), "--record", str(record), "--over-cap", over_cap,
             *(["--test-instance"] if test_instance else []), *(["--tie", str(tie)] if tie is not None else []),
             *(["--class", ",".join(map(str, load))] if load is not None else []),
             *(["--of-record"] if of_record else []), *map(str, manifests)]
@@ -970,7 +970,7 @@ def main(argv: list[str] | None = None) -> int:
                         "(verify_run.held_to_load)")
     v.add_argument("--out", required=True)
     v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
-    v.add_argument("--draws", type=int, default=SAMPLES)
+    v.add_argument("--draws", type=int, default=DRAWS)
     v.add_argument("--delta", type=Fraction, default=Fraction(1, 100))
     v.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     v.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
@@ -978,7 +978,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
-    v.add_argument("--over-cap", choices=OVER_INERT_BOUND, help="the rule on a sampled tile over its inert-work bound: uncredited "
+    v.add_argument("--over-cap", choices=OVER_INERT_BOUND, help="the rule on a drawn tile over its inert-work bound: uncredited "
                    "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
     v.add_argument("--test-instance", action="store_true", help="the passes are a test instance's: their tile may be "
                    "other than 64 x 64, and the verdict credits nothing")

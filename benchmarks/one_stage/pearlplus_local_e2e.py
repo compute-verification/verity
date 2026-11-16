@@ -15,7 +15,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
 4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
-   session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveSample`), recorded
+   session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded
    in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
    test instance's, crediting nothing.
 5. ``served_verdicts.py coin`` and ``served_verdicts.py pearlplus``: the coin published and the piece written, each
@@ -229,7 +229,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
-    sys.path[:0] = [str(HERE), str(TREE / "benchmarks" / "pouw" / "tests")]
+    sys.path[:0] = [str(HERE), str(TREE / "tests" / "benchmarks" / "pouw")]
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
@@ -387,7 +387,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
           and report["draw"]["from"] == "challenger" and dsid is not None
           and "one session a root" in str(control["gate_refused"]) and control["row"] == report["row"])
     print(f"E2E {'ok' if ok else 'FAILED'}: row {report['row']['verdict']} ({report['row'].get('protocol')}: "
-          f"{report['row'].get('why')}), its sample "
+          f"{report['row'].get('why')}), its draw "
           f"session {dsid}; a second draw on the run's commitment: {control['gate_refused']}; the row then "
           f"{control['row']['verdict']}", flush=True)
     return 0 if ok else 1

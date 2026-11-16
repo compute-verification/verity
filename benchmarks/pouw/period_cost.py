@@ -322,7 +322,7 @@ LEVERS = [
           "a verifier on main), instead of 439.1 s of launch-bound torch receipts, at any unit size",
           dict(t_window_s=T_WINDOW_DITHER, receipts_per_unit=False)),
     Lever("draws per window", "compute-accounting", 1,
-          "the service challenger's K_d (H1_SAMPLE), the best of 4 to 256: a larger sample means fewer windows and so fewer "
+          "the service challenger's K_d (H1_DRAW), the best of 4 to 256: a larger sample means fewer windows and so fewer "
           "statements' fixed costs, but more sampled proof blocks a period once x = K_d/(r·M) is not small",
           dict(draws=K_D_SCAN)),
     Lever("Lean: one process checks many windows", "proofs", 2,
