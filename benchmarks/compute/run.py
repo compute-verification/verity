@@ -125,7 +125,8 @@ fields every resource's benchmark reports (`amounts`), each stamped with this ru
 recorded run: the metric (the printed number, its unit and target), the two shares it is the product of (`CREDITABLE`,
 `OF_CREDITABLE`: the model's MACs Pearl+ can credit at the load, and the share of those credited, each printed too),
 the verified MACs (the credit), the capacity and
-the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). The metric is
+the free MACs at each data-sheet reading, and beside them the answer's ε_s and the error (its δ_s, a parameter the run
+chose, marked modeled: neither is more than sampling's). The metric is
 named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
 resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
@@ -151,7 +152,7 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
-__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
+__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
@@ -227,7 +228,13 @@ FORMAT = "e4m3"
 NO_SITE = "the run's record holds no registration of its hardware: no site entry naming its devices and their sheets"
 NO_SPAN = ABSENT.removeprefix("absent: ")
 DELTA_S = ("probability that a sample that accepts misses more than the share ε_s of the credited MACs: the answer's δ_s, "
-           "sampling's alone (not a failure of the conjecture or the hash the credit rests on)")
+           "sampling's alone (not a failure of the conjecture or the hash the credit rests on), a parameter the run "
+           "chose (serve.sh's DELTA), not measured")
+#: `DELTA_S`'s mark in result.json: a stated figure no run measured
+DELTA_S_MARK = "modeled"
+EPSILON_S = ("share of the credited MACs a sample that accepts may miss, except with probability δ_s: the answer's ε_s, "
+             "the verifier's from its sample at δ_s, sampling's alone (not a failure of the conjecture or the hash the "
+             "credit rests on)")
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -674,7 +681,9 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     product of (`CREDITABLE`, `OF_CREDITABLE`, the printed line's "Pearl+ credits ..."), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
-    and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
+    the share of the credited MACs the answer's sample may miss (`epsilon_s`, the answer's ε_s), and the probability
+    the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name), a parameter the run
+    chose and marked so (`DELTA_S_MARK`), never measured.
     Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
     the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
@@ -693,9 +702,11 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
         for r, c in capacity(site, span_s).items():
             out += [{"name": f"capacity at clock.{r}", "value": c, "unit": "MAC", "inputs": inputs},
                     {"name": f"free at clock.{r}", "value": c - verified, "unit": "MAC", "inputs": inputs}]
-    delta = doc["delta_s"]
-    out.append({"name": "error", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
-                "inputs": [*inputs, "delta_s"], **({"why": "the answer states no δ_s"} if delta is None else {})})
+    for name, key, unit, said, extra in (("epsilon_s", "epsilon_s", EPSILON_S, "ε_s", {}),
+                                         ("error", "delta_s", DELTA_S, "δ_s", {"mark": DELTA_S_MARK})):
+        v = doc[key]
+        out.append({"name": name, "value": None if v is None else float(Fraction(str(v))), "unit": unit,
+                    "inputs": [*inputs, key], **extra, **({"why": f"the answer states no {said}"} if v is None else {})})
     return out
 
 

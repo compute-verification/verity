@@ -553,7 +553,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "error"]
+    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "epsilon_s", "error"]
     assert C.METRIC == "compute-accounting/verified-compute-share"
     # the number is the product of the two shares the text prints beside it
     assert (got[C.CREDITABLE]["value"], got[C.OF_CREDITABLE]["value"]) == (MACS["linears"] / TOTAL, CREDITED / MACS["linears"])
@@ -564,12 +564,18 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
     for name in ("capacity", "free"):
         assert (got[name]["value"], got[name]["unit"], got[name]["why"]) == (None, "MAC", why)
-    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone
+    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone and a parameter the
+    # run chose, which its mark says no run measured; ε_s, the verifier's from its sample, is measured beside it
     assert (got["error"]["value"], got["error"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["error"]
-    assert "the answer's δ_s, sampling's alone" in C.DELTA_S
+    assert "the answer's δ_s, sampling's alone" in C.DELTA_S and "a parameter the run chose" in C.DELTA_S
+    assert (got["epsilon_s"]["value"], got["epsilon_s"]["unit"]) == (0.01, C.EPSILON_S) and "why" not in got["epsilon_s"]
+    marks = {"error": C.DELTA_S_MARK}
+    assert C.DELTA_S_MARK == "modeled"
     for m in got.values():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
-        assert m["mark"] == "measured" and m["inputs"] == ["measured", RUN, *["delta_s"] * (m["name"] == "error")]
+        mark = marks.get(m["name"], "measured")
+        named = {"error": ["delta_s"], "epsilon_s": ["epsilon_s"]}.get(m["name"], [])
+        assert m["mark"] == mark and m["inputs"] == [mark, RUN, *named]
         assert m["audit"] is False
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's machine")
@@ -595,7 +601,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
     got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
     assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity at clock.tensor",
-                         "free at clock.tensor", "capacity at clock.sm", "free at clock.sm", "error"]
+                         "free at clock.tensor", "capacity at clock.sm", "free at clock.sm", "epsilon_s", "error"]
     assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
         tensor, tensor - CREDITED, sm, sm - CREDITED]
     assert not any("why" in m for m in got.values())
@@ -623,6 +629,7 @@ def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp
     doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
     got = {m["name"]: m for m in C.amounts(doc)}["error"]
     assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
+    assert got["mark"] == C.DELTA_S_MARK
 
 
 #: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split holds every linear of the class

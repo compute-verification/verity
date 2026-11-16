@@ -150,8 +150,8 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
     `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
-    appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` (``"measured"`` where None) to the
-    run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
+    appends each of `measured`, the keywords of a `Writer.measurement`, at its own ``mark`` where it gives one (a chosen
+    parameter's, which no run measured), else at `mark` (``"measured"`` where None), to the run's result (`kit.writer`). An empty variable names no place. With `document` False the place keeps the
     `<name>.json` it holds.
 
     `ran_with` (`ran_with()`'s pair, or None for a record that predates the field, printed as `NOT_STATED`) is printed
@@ -172,7 +172,7 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
             raise ValueError(f"a made-up record's measurements are marked {MADE_UP_MARK!r}, figures no run measured, not "
                              f"{mark!r}: drop mark=")
         mark = MADE_UP_MARK
-        measured = [{**m, "extra": {**(m.get("extra") or {}), "made_up": True}} for m in measured]
+        measured = [{**m, "mark": mark, "extra": {**(m.get("extra") or {}), "made_up": True}} for m in measured]
     if accepted is False:
         if not why:
             raise ValueError("a run the Lean verifier didn't accept prints no number and says why: give why")
@@ -218,5 +218,5 @@ def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapp
 
             w = writer(place)
             for m in measured:
-                w.measurement(**m, mark=mark or "measured")
+                w.measurement(**{"mark": mark or "measured", **m})
     return 1 if accepted is False else 0
