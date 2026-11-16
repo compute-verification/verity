@@ -337,7 +337,7 @@ neither does the total. With e the per-phase sum, a week, a month and a year at 
 - f is the free share: the part of the whole fleet's capacity, unregistered hardware included, not doing correct
   credited work of the registered circuit; ζ̄ is the rate at which work can be done there.
 - q/c is the most of that count one verified inference block of c gates can do, per gate. The canonical form keeps
-  the sum of the blocks' caps; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
+  the sum of the blocks' limits; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
   credited actual computation.
 - With Ω_ref the reference's count in the same convention, ζ_ref = Ω_ref/C_ref and the floor Ω_* ≥ Ω_ref/α, the bound
   is 1/(α[(ζ̄/ζ_ref)·f + y]), y = (q/(c·ζ_ref))(1 − f) the share of the reference's rate inference blocks yield. α
@@ -363,7 +363,7 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 
 The inference-block yield is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
 reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
-premise lets a block hold (not a storage bound), the cap falls to k.
+premise lets a block hold (not a storage bound), the limit falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -371,7 +371,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' caps `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
+- The local bounds' limits `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
   `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
   floor `Slowdown.Guarantees.CapabilityFloor`: **proved**
   (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
@@ -434,7 +434,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
-  - The caps and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
+  - The limits and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
     `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
     fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
     premises on a training circuit.
