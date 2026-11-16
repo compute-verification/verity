@@ -8086,7 +8086,7 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     (store / mk.INDEX).mkdir()
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "lean_slot", lambda repo: None)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(), rw=(): argv)
     moves = tmp_path / "moves.json"
     moves.write_text(json.dumps({"Control.A": "Control.Z"}))
     runs = iter(range(100))
