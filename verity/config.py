@@ -18,8 +18,8 @@ covers, so stating a default changes no hash.
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
 composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
 ``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
-deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run yet, and refuses any other set
-(``composite``), H1's development composite's among them.
+deployment with an id of its own (`UNACCEPTED`), whose verdict `verity run` records as undecided, and refuses any
+other set (``composite``), H1's development composite's among them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
@@ -78,7 +78,7 @@ COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
 #: onsite's two smaller sets, by id (`demos/onsite_network.toml`, `demos/onsite_compute.toml`): each a deployment of its
 #: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
-#: is one, so `check` reads and hashes them and `verity run` runs neither (`NotImplementedError`)
+#: is one, so `check` reads and hashes them and `verity run` records each one's verdict under its id as undecided
 UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
               "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")

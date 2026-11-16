@@ -1,7 +1,7 @@
 # The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory
 # wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,
 # each party on its machine, and the key the auditor pinned for its memory challenger.
-# `verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it.
+# `verity run` records each period's verdict under that id, undecided: no composite takes it.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "certifier", "wipe"]
 
