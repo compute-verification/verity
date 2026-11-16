@@ -45,7 +45,9 @@
 # keeps them for a rerun (one copy of the sealed bundle: sealed/ is hard links); the last line says which, where and how
 # large. $OUT, published as the run's record, keeps the row's records that
 # adapters/vllm/tools/served_run/published.sh lists (each with the reason it holds nothing of a request) and verdicts.txt,
-# the window's public files, the audit's out without its private files or the challenger's key ($OUT/a5) and summary.txt,
+# the window's public files, the audit's out without its private files or the challenger's key ($OUT/a5; of the
+# challenger's directory its ledger, pins and the session's signed release log: releases.jsonl, the verifier's coins and
+# draws with each coin tree, and record.json, challenger.json and key.json, the signatures and the public key) and summary.txt,
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
 # published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
@@ -212,7 +214,8 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
     --zk-server "$leanb/flock-zk-server" --out "$A" > "$OUT/a5/a5.log" 2> "$OUT/a5/audit.err"
   rc=$?
   (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*private*' ! -path './*/archive/*' \
-     ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
+     ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \
+       -o -path './challenger/session/*' \( -name releases.jsonl -o -name record.json -o -name challenger.json -o -name key.json \) \) -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
   [ -z "$A5_PLAIN" ] || return $rc
   # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
