@@ -8,31 +8,32 @@ Its sampled sessions are SPOT[Flock]'s on its own, in its three roles: serving c
 each sampled session's prover runs `flock-circuit prove --zk` itself (the proof server: `a0.DIRECT`, `zk_cost.py`'s `dev` arm, which
 Figure 1 prices); and the challenger's live coins, its signed log and the Lean verifier decide (the verifier). There is no ZK
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
-`--zk-server` on SPOT's `window_audit.py`, its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
+`--zk-server` on SPOT's window audit (`a5.py`), its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
-  `template_audit.py` and `window_audit.py` (`verity/protocols/proofs/spot/prover/audit/`, its README).
-- `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as SPOT's
-  `prover/audit/compose_circuit.py` does.
+  template and window audits, here because they load the adapter, Flock's prover and the benchmarks' scripts
+  (`verity/protocols/proofs/spot/prover/audit/README.md`).
+- `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as
+  `compose_circuit.py` does.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
-  (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
+  (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 workload on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
-  `window_audit.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
-  row's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
-  of a request, and no file of the row's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
-- `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`window_audit.py --tp-commit`), taken as served only under a
+  `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
+  workload's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
+  of a request, and no file of the workload's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
+- `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
-  `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
+  `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every proof block of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
   (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
-  (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
+  (172,200 routed-expert and 21,525 shared-expert proof blocks) is not a member. Each session's `circuit.txt` files and lookup tables
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
   `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
@@ -46,23 +47,23 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_topp.py` (`a5_tp.sh` with `STANDIN=topp` or `topp:slots`): A5 on a window of top-p select rows cut into their stages,
   which no served window has yet: `adapters/vllm/tests/pipeline/test_serving_rows_stages.py`'s rows, each carried row wired
-  to the unit that wrote it, as rank 0 of a one-rank step on a local challenger's coins, run as `a5_sparse_mla.py` runs its
+  to the proof block that wrote it, as rank 0 of a one-rank step on a local challenger's coins, run as `a5_sparse_mla.py` runs its
   window. `topp` names each stage on bits, the form Lean's `verify --zk` takes; `topp:slots` names the stages as words, whose
   table reads go in lookup slots, and Lean refuses each sampled proof block's statement. The window holds the stages whose
   proof blocks are composed: a stats block from 56 lanes a slice, so by default V = 64 and split count 1's stats, probs and
   step blocks, and the select chunks only where every split count's are (`A5_TOPP`, the script's `--v`, `--splits` and
   `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
-  rows they read from the step blocks committed as plain input rows that no unit of the window writes.
+  rows they read from the step blocks committed as plain input rows that no proof block of the window writes.
 - `a5_network_attester.py` (`a5_tp.sh` with `STANDIN=network_attester`, `network_attester:altered`, `network_attester:pad`, `network_attester:pad-named` or `network_attester:swapped`):
-  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy unit whose ports are the
+  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy Definition whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
   salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
-  own. The units' wiring is the Program's (`network_attester_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
+  own. The proof blocks' wiring is the Program's (`network_attester_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
   cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
-  named by the units' value and each unit's read (connection, cell) placed by the wiring the certifier signed
+  named by the proof blocks' value and each proof block's read (connection, cell) placed by the wiring the certifier signed
   (`network_attester_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
-  padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
-  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
+  padding-slot read by name; the altered run, and a statement made for another wiring of the proof blocks (a pad in a data cell's place,
+  its rows under the Program's value, two proof blocks swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `network_attester_replay.py`'s: a served window's requests through the
   network attester, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
@@ -91,7 +92,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   Lean's verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
   clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
   text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
-  `window_audit.py --gpus` hands an audit's proof server the same devices.
+  `a5.py --gpus` hands an audit's proof server the same devices.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -138,19 +139,19 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
   class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
   before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
-  given up, the tiles over a cap before and left after, those replayed on the CPU) and the same counts in
+  given up, the tiles over the inert-work bound before and left after, those replayed on the CPU) and the same counts in
   `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified sampling design, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
-  share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
-  `--gpu` proves each session with `prove --gpu` under `gpu-lease 1`; `--plain` proves every unit with Flock's plain protocol,
-  each statement a window of its own (the Lean verifier's plain scope: one table, sampled whole by its stratified draw).
-- `layers.sh ROW`: the proof system by layer on A6's stand-in values (never served) and one H200, one row a run: `flock`
-  (every unit, plain), `zk` (every unit, `--zk`, one docket), `sampled` (the one-stage audit, `LAYERS_K` units) or `all`,
+  share proved under `--zk` across its template's statements and held by the Lean verifier with the proof blocks it derives itself.
+  `--gpu` proves each session with `prove --gpu` under `gpu-lease 1`; `--plain` proves every proof block with Flock's plain protocol,
+  each statement a window of its own (the Lean verifier's plain scope: one table, sampled whole by its stratified sample).
+- `layers.sh ROW`: the proof system by layer on A6's stand-in values (never served) and one H200, one benchmark result a run: `flock`
+  (every proof block, plain), `zk` (every proof block, `--zk`, one docket), `sampled` (the one-stage audit, `LAYERS_K` proof blocks) or `all`,
   each on a CUDA build of `flock-circuit`, its scratch in `/dev/shm`. `layers.txt` holds its `ran with:` line, coins
   and parameters: a development challenger local to each session, never an auditor's device, so a measurement and not
-  an audit. The served table's rows are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
+  an audit. The served table's benchmark results are `benchmarks/prove_path/run.sh`'s and `a5_llama1b_h200.sh`'s (`verity bench prove
   layers`). Its rules are the three parts at the end of this file.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
@@ -184,40 +185,40 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
-  staged in statements of 1 to 512 units, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
+  staged in statements of 1 to 512 proof blocks, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
   --gpu` in three arms: `dev`, as SPOT[Flock]'s proof server proves (no ZK server, the witness built on the device), and the
   ZK server's send check on (`fw`) and off (`nofw`) over the host's witness. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_SAMPLES=c` proves every
-  staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
+  per-statement and per-proof-block costs with their standard errors, writing `costfit` observations. `ZK_SAMPLES=c` proves every
+  staged proof block: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
-  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit sampled) is proved by
-  `ProofServer(provers=K)` at each K of `--provers` (a templated one, a table read, with its unit placed by
+  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every proof block sampled) is proved by
+  `ProofServer(provers=K)` at each K of `--provers` (a templated one, a table read, with its proof block placed by
   `--tmpl-unit-bin`'s `flock-tmpl-unit`, and verified under `verity/flock-circuit/tmpl`), K streaming provers on the one device, each with a K-th of the job's
   threads (the proof server splits them). Every prover finishes its
-  warm sessions before any timed one starts. Each K's row (`rate.json`) gives the statements a second over the steady
+  warm sessions before any timed one starts. Each K's benchmark result (`rate.json`) gives the statements a second over the steady
   window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
   verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory
   peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
   `e2e_s − prove_total_s`), the load, and the throttling of the cgroup whose `cpu.max` is gpu-lease's CPU quota
-  (`throttled`: its counts, null where it has no `cpu.stat` that counts them, the cgroup and its `cpu.max`). A row also says what prices it: `gpus` (the devices its
+  (`throttled`: its counts, null where it has no `cpu.stat` that counts them, the cgroup and its `cpu.max`). A benchmark result also says what prices it: `gpus` (the devices its
   provers held, so a statement costs `gpus / statements_per_s` GPU-seconds), `stage.blocks` and `stage.full` (the proved
   statement's proof blocks, and the most a statement of its circuit holds), `verify_s` (the verifier's mean seconds a
   statement over the window), `flat`: whether each prover's statement cache had stopped filling, its hit rate over the
   last quarter of its timed sessions within 0.01 of the third's, with the quarters and the rule in `cache`; and `cores`: the
-  CPUs its processes could run on (the script's own affinity, which every process of the row runs within: unplaced, each
+  CPUs its processes could run on (the script's own affinity, which every process of the run runs within: unplaced, each
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. Without
-  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal. With it, the row's
-  Program's descriptor is handed to `verify` (`--program`) and the row keeps what the verdict says of it:
+  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal. With it, the
+  Program's descriptor is handed to `verify` (`--program`) and the benchmark result keeps what the verdict says of it:
   `program_sha512` only when the Program is held to the circuit, else `program_handed_sha512` and `program_note`, which
   on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
   `--wide-leaf` every prover and verifier of the run carries `flock-circuit --wide-leaf`, the wide level-0 leaf's
-  statement version, and its rows say so (`wide_leaf`); the script's docstring has the rest: the two statement names
-  their Lean verdict is asked under, what the Lean verifier takes and refuses under them, and how a row is held to the
-  version its sessions ran. A row with a refused session, a server process that exited nonzero, a prover out of device
-  memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
+  statement version, and its benchmark results say so (`wide_leaf`); the script's docstring has the rest: the two statement names
+  their Lean verdict is asked under, what the Lean verifier takes and refuses under them, and how a benchmark result is held to the
+  version its sessions ran. A benchmark result with a refused session, a server process that exited nonzero, a prover out of device
+  memory, or a session that ran another statement version than its own is void: no rate, its reasons in `void`, a
   `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `benchmarks/prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
@@ -230,23 +231,23 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
 - `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/proofs/flock/prover/tests/test_lean_forged_proofs.py`),
-  on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
+  on hidden_zk's cached builds (`forged_proofs.py`). A small A8 proof block (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
   (`verity/protocols/proofs/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
-  `--zk` sessions of that unit flat, of it as its template, and of a toy whose last stage returns the outputs, with the
+  `--zk` sessions of that proof block flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
-  the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
+  the request Program's root Calls by Definition kind and tries one proof block of each through the circuit prover (a kind whose word proof blocks it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
-  units from those values, one template each, under the stratified sampling design, proved under `--zk` and held by the Lean verifier;
+  proof blocks from those values, one template each, under the stratified sampling design, proved under `--zk` and held by the Lean verifier;
   `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
 - `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow the circuit prover's block into its gather and
-  block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
+  block-coordinate proof blocks, and saves the proof blocks for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
   saved directory without the values stage.
 - `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
   in place of the capture's: `a10.py values` opens rank 0's replay bundle from the Commit (`--replay-deferred`,
@@ -255,26 +256,26 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
   docket window naming the committed values.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
-  deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
+  deferred TP Commit's Build and lists the proof-block families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (table reads counted apart, so not comparable with a
   statement's `ands` with its reads inline: `m1_families.py`'s docstring), against 2^26, and
-  the log2 of Flock's circuit prover's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
-  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
-  each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
+  the log2 of Flock's circuit prover's block for its proof block against `K_MAX` (the hashing of its rows alone bounds that block from below), the
+  same for each of its split proof blocks, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
+  each proof block's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
-  of its split at its coarsest fitting unit, else
+  of its split at its coarsest fitting proof block, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
   `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
-  `census-rank<r>.json`) with this tree's unit templates, sizing and `block_census.py`, for a change to the cut or to a
-  family's units that needs no Commit Build, and writes `compare.json` against the planner's card.
-  `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
+  `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a
+  family's proof blocks that needs no Commit Build, and writes `compare.json` against the planner's card.
+  `m1_unit.py` builds one family's proof block through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
   circuit file's bytes: by default an attention head's first key block and its end as their word Definitions, whose table
@@ -316,9 +317,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
-  verdict rejects a run on a sampled row over its debit cap (over-cap rule `reject`, which `served_passes.py
-  volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
-  coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
+  verdict rejects a run on a sampled row over the inert-work bound (the rule for a tile over it, `reject`, which `served_passes.py
+  volunteer-needed` reports before anything is served) gives up the passes' rows over the inert-work bound before the verifier's
+  coin (`served_passes.py volunteer --device`: every word's counts from the card's inert-work cubin, every
   `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
   far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
   verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
@@ -356,16 +357,16 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 
 ## What you may change
 
-For `layers.sh`'s rows: the prover and how a row drives it, `flock-circuit`'s build, kernels and flags, the chunking of
-units into statements (`--chunk`), the lease and the parallelism of sessions.
+For `layers.sh`'s benchmark results: the prover and how a run drives it, `flock-circuit`'s build, kernels and flags, the chunking of
+proof blocks into statements (`--chunk`), the lease and the parallelism of sessions.
 
 ## What is fixed
 
-For `layers.sh`'s rows: the workload (the members, their template ids and the stand-in rows' seed), the Lean verifier and
-its flags, the coins (each session's own development challenger, Lean's stratified draw) and, in `sampled`, `k` and δ.
+For `layers.sh`'s benchmark results: the workload (the members, their template ids and the stand-in rows' seed), the Lean verifier and
+its flags, the coins (each session's own development challenger, Lean's stratified sample) and, in `sampled`, `k` and δ.
 
 ## How a cheating change is refused
 
-For `layers.sh`'s rows: by the Lean verifier. A row counts only where `verity-verify-proof verify` accepted every session
+For `layers.sh`'s benchmark results: by the Lean verifier. A benchmark result counts only where `verity-verify-proof verify` accepted every session
 against the program and partition the driver derives itself, never the prover's own report; a6.py exits nonzero
 otherwise.
