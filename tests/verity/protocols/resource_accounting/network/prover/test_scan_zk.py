@@ -1087,9 +1087,9 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
         held_c = PC.commitment(bytes.fromhex(held_case["commitment"]))
         assert len(held_c.windows) == 1 and PC._state_tied(PC.params(held_case["params"]), held_c.audits,
                                                            held_c.windows[0])
-        got = PC.reference(held_case)
-        assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
-            "accept", k, E), got
+        held_got = PC.reference(held_case)
+        assert (held_got["verdict"], held_got["public"]["audits"][0]["drawn"],
+                held_got["public"]["audits"][0]["units"]) == ("accept", k, E), held_got
     monkeypatch.setattr(SP, "mirror", lambda path: PC)
     accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
     for name, period, lean, want, rc in (
