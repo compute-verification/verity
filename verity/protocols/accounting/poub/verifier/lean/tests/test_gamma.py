@@ -147,6 +147,8 @@ def test_a_ledger_the_lean_disagrees_with_is_refused_naming_both(server) -> None
     assert V.gamma_held(lean, python) == lean
     with pytest.raises(ValueError, match=r"disagree at \.windows\[0\]\.terms\.chip: the Lean's \""):
         V.gamma_held(lean, off)
+    with pytest.raises(ValueError, match=r"not of `GammaTerms.to_json`'s shape, so they hold nothing: ValueError"):
+        V.gamma_held({**lean, "windows": []}, python)
 
 
 NAMED = [*range(4097), *(1 << e for e in range(13, 41)), *random.Random(0).sample(range(4097, 1 << 40), 64)]

@@ -726,8 +726,9 @@ def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacit
 
 def gamma_held(got: object, python: dict) -> dict:
     """The Lean's γ terms `got` (`Poub.Gamma`'s answer), held to `python`, `GammaTerms.to_json()`: a `ValueError` naming
-    both values where it refuses or they differ (`_gamma_differs`), each of `python`'s worst windows taken as the
-    Lean's where the Lean's γ there is within twice the slack of its largest."""
+    both values where it refuses or they differ (`_gamma_differs`), or naming the fault where `got` is not of that
+    shape, each of `python`'s worst windows taken as the Lean's where the Lean's γ there is within twice the slack of its
+    largest."""
     if not isinstance(got, dict) or "refused" in got:
         raise ValueError(f"the Lean verifier refuses the γ terms the Python ledger computed: "
                          f"{got.get('refused') if isinstance(got, dict) else got!r}")
@@ -739,8 +740,9 @@ def gamma_held(got: object, python: dict) -> dict:
             held["worst"]["window"] = got["worst"]["window"]
         if max(hs) - hs[held["worst"]["horizon"]["window"]] <= max(1, max(hs)) * Fraction(2, 2 ** GAMMA_HELD_LOG2):
             held["worst"]["horizon"]["window"] = got["worst"]["horizon"]["window"]
-    except (KeyError, IndexError, TypeError, ValueError):
-        pass
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise ValueError(f"the Lean verifier's γ terms are not of `GammaTerms.to_json`'s shape, so they hold "
+                         f"nothing: {type(e).__name__}: {e}") from e
     if (d := _gamma_differs(got, held)) is not None:
         at, a, b = d
         raise ValueError(f"the Lean verifier's γ terms and the Python ledger's disagree at {at}: the Lean's "
