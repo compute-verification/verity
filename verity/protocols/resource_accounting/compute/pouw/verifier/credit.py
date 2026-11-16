@@ -255,7 +255,7 @@ CALLS_FORM = "the window's manifest is not a list of call rows"
 SERVED_FORM = "the served trees' digest is neither null nor a SHA-512 digest (128 lowercase hex)"
 SAMPLE_FORM = "the window's draw is not an object whose receipts are a SHA-512 digest"
 NO_SAMPLE = ("the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its "
-           "sample root")
+           "draw root")
 SAMPLE_ROOT = ("the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its "
              "last round's receipts and every round's root and coin")
 CHANGED = ("the draw root over the manifest (each call's credit bit among it), its Commit record, its last round's "
@@ -1249,7 +1249,7 @@ def sampling_design(ss: list[dict], k: Any) -> tuple[str, str] | None:
     sizes = [sum(hi - lo for lo, hi in s["units"]) for s in ss]
     if sum(sizes) < k:
         return "budget", (f"the window's {sum(sizes)} units are fewer than K = {k}, the K its period committed, so its "
-                          f"sample would not be K's: the proof system commits a K at most every window's units "
+                          f"draw would not be K's: the proof system commits a K at most every window's units "
                           f"({K_FIELD} in the period-open)")
     total = sum(s["work"] * n for s, n in zip(ss, sizes))
     for s, n in zip(ss, sizes):
@@ -1497,7 +1497,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
         if p["program"] != program:
             return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
                                     "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
-                                    "verify every sampled proof block's session against the window's committed circuit")
+                                    "verify every drawn unit's session against the window's committed circuit")
         opened, weights = False, False
         for port, v, root in _finding(p["registered"]):
             if pub_call(v) is not None or v == f"{prefix}{OK_VALUE}":
@@ -1526,8 +1526,8 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
                                     "committed: verify each drawn unit's session with the window's A value registered")
         if not weights:
             return "registration", (f"drawn unit {u}'s proof opened no weights {prefix}b/{k} of the window, so nothing "
-                                    "ties the B rows it proved to the ones its period registered: verify each sampled "
-                                    "proof block's session with the window's weights registered")
+                                    "ties the B rows it proved to the ones its period registered: verify each drawn "
+                                    "unit's session with the window's weights registered")
     return None
 
 
@@ -1988,7 +1988,7 @@ def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registra
     codes = PR.check(rec, registration, sample, mine)
     if codes:
         return None, ("registration", f"the window's produced record ({PR.FORMAT}) fails {', '.join(codes)}: it holds "
-                                      "each drawn lanes-form leaf's partials@<u> under the window's sample root, fixed "
+                                      "each drawn lanes-form leaf's partials@<u> under the window's draw root, fixed "
                                       "after the draw coin, and every row's opening once")
     return {e["value"]: e["root"] for e in rec["produced"]}, None
 
@@ -2089,7 +2089,7 @@ def _leaf_judged(ask: dict, got: list[PF.Finding], held: dict) -> tuple[str, str
                               "no retry)")
         if tuple(f.units) != (0,) or f.program != ask["partition"]["program"]:
             return ("proof", f"drawn leaf {u}'s {ask['leaf']} session {f.session} proved units {list(f.units)} of "
-                             "another program than its leaf Program's one unit: a leaf statement's sample is every unit of "
+                             "another program than its leaf Program's one unit: a leaf statement's draw is every unit of "
                              "its population of one (checkFull)")
         if _finding(f.registered) != want:
             return ("registration", f"drawn leaf {u}'s {ask['leaf']} session {f.session} opened its ports at other "
@@ -2856,7 +2856,7 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     k = body.get(K_FIELD)
     if not (type(k) is int and 1 <= k <= MAX_K):
         return None, ("budget", f"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), "
-                                "so its windows have no K to be sampled with: the proof system commits K in the "
+                                "so its windows have no K to be drawn with: the proof system commits K in the "
                                 "period-open, beside its circuit and cap, before any draw")
     return k, None
 

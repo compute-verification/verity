@@ -1249,7 +1249,7 @@ def test_a_period_open_with_no_k_refuses(seed):
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)
-        assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any sample" in refused[1]
+        assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any draw" in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)

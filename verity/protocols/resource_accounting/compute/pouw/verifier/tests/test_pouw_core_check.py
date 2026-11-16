@@ -110,9 +110,9 @@ EXPECT = {
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
     "answer-level-work": "profile: its levels",
     "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
-    "answer-delta": "profile: delta", "answer-drawn": "profile: sampled", "answer-draw-k": "sample: subset:",
-    "answer-draw-population": "sample: subset:", "answer-units-order": "sample: its", "answer-units-range": "sample: its",
-    "answer-units-count": "sample: its", "answer-unsorted-lists": "evidence: profile: not in the form toJson writes",
+    "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "sample: subset:",
+    "answer-draw-population": "sample: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",
+    "answer-units-count": "draw: its", "answer-unsorted-lists": "evidence: profile: not in the form toJson writes",
     "answer-commitment-odd": "evidence: odd-length hex", "answer-commitment-upper": "evidence: not lowercase hex",
     "answer-commitment-empty": "outcome: for registration null", "answer-verdict-type": "evidence: answer.verdict: not a string",
     "answer-verdict-missing": "evidence: answer: verdict missing", "answer-reason-type": "evidence: answer.reason: not a string",
@@ -306,7 +306,7 @@ _FIELDS = "the opening's salt is not 192 bytes, or a path"
 _ORDER = "the proof's header does not list its rows a0, b0 first, in its circuit's port order"
 #: the refusal each opening mutation aims at, by its reason's start or end ("…" before an end); None for an acceptance
 OPENING_EXPECT = {
-    "honest": None, "undrawn": "…is not sampled", "domain": "the registered window domain is not",
+    "honest": None, "undrawn": "…is not drawn", "domain": "the registered window domain is not",
     "context": "the registered window domain is not", "root-hex": "the registered window root is not",
     "root-short": "the registered window root is not", **{n: "the opening names no entry" for n in (
         "entry-missing", "entry-kind", "entry-root", "entry-negative", "entry-huge", "entry-float", "entry-null",
@@ -591,10 +591,10 @@ SAMPLE_EXPECT = {
     "epoch": ("coin", "the draw's coin is epoch"),
     "foreign": ("coin", "the draw's coin does not open"), "tampered": ("coin", "the draw's coin does not open"),
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
-    "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the sampling coin's"),
+    "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
-    "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's sample session's"),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
     "live-bare": ("coin", CC.SIGNED_LIVE),
     "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
     "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),

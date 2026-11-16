@@ -1833,7 +1833,7 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         why = Wd.sample_epoch_reason(commitment) or Ch.live_reason(commitment, opening, Wd.SAMPLE, 0, bytes.fromhex(str(c)))
     except (Ch.CoinError, ValueError, TypeError) as e:
-        return f"the record's sample is malformed: {type(e).__name__}: {e}"
+        return f"the record's draw is malformed: {type(e).__name__}: {e}"
     if why is not None:
         return f"the record's draw coin: {why}"
     if opening.coin.hex() != record.get("source"):

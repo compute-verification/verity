@@ -523,7 +523,7 @@ NODE_CLAIM = "uniform/io-getrandombytes"
 #: asked again
 ASKED = ".asked"
 #: why `verify_passes` refuses passes other than those its recorded coin was flipped on
-AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was flipped on: a "
+AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a "
               "retention change or a give-up after the coin is refused, and a retry never resamples")
 #: why `verify_passes` refuses a run whose sample was asked for and never recorded
 ASKED_ONCE = ("asked-once", "the verifier's sample was asked for and never recorded (a sample that failed or was cut short), "

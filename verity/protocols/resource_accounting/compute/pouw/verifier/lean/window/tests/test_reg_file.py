@@ -211,7 +211,7 @@ def test_the_full_sample_passes(n: int, server) -> None:
 
 
 @pytest.mark.parametrize(("sample", "why"), [
-    (None, "has no sample"),
+    (None, "has no draw"),
     ({"law": "subset", "population": 3, "k": 2, "units": [0, 2]}, "not every unit"),
     ({"law": "subset", "population": 0, "k": 0, "units": []}, "not every unit"),
     ({"law": "bernoulli", "population": 2, "p": "1/1", "units": [0, 1]}, "law is not subset"),

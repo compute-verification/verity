@@ -2375,7 +2375,7 @@ def test_the_live_sample_after_the_runs_pearl_c_period_is_the_lanes_first_reserv
              "lane vllm reserved session s-h1 after its Pearl-C period pc1 closed"),
             ("for the lane", [*salt, closed, reserve("s-for", by="admin", **{"for": "vllm"})], [],
              "reserved session s-for after"),
-            ("raced", [*salt, closed], [reserve("s-h1")], f"sample session {sid} is not lane vllm's first reserve after its "
+            ("raced", [*salt, closed], [reserve("s-h1")], f"draw session {sid} is not lane vllm's first reserve after its "
                                                           "Pearl-C period pc1 closed \\(that is s-h1\\): refused before its "
                                                           "coin is asked")):
         ledger[:], first[:] = held_ledger, race

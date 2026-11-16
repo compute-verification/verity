@@ -461,7 +461,7 @@ def test_a_challenger_sample_that_is_not_the_runs_coin(exe, tmp_path):
              ({**held, "source": "ab" * 64}, "the record's source is not its draw session's coin"),
              ({**held, "draw": {**held["draw"], "commitment": salt_only}},
               "the record's draw coin: the coin commitment's coins are not a live window's sample session's"),
-             ({**held, "draw": {**held["draw"], "opening": {"coin": "00"}}}, "the record's sample is malformed: ")]
+             ({**held, "draw": {**held["draw"], "opening": {"coin": "00"}}}, "the record's draw is malformed: ")]
     for doc, why in cases:
         (bad := tmp_path / "bad.json").write_text(json.dumps(doc))
         for of_record in (False, True):

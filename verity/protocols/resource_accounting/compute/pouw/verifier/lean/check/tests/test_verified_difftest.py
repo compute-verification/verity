@@ -69,7 +69,7 @@ def test_verified(server):
           f"{dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept", "lanes: accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not", "proof: the window's statements are not a list",
-                 "outcome: call # has two statements", "outcome: call # has a statement and no sampled proof block",
+                 "outcome: call # has two statements", "outcome: call # has a statement and no drawn unit",
                  "circuit: the period's open commits no circuit file for K = #",
                  "registration: the window registers ", "which the window registers not", "layout: ",
                  "proof: call #'s statement could not be verified", "'s statement: the statement's public file",
