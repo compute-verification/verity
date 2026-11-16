@@ -10,7 +10,8 @@ public import Proofs.Flock.Recursive.FirewallJson
 `HmOut.parse` at `verify --zk`'s tags reads the circuit file to `cH`, whatever the fixed nets' content: the walk is
 `Proofs.Flock.SessionLoop.Concrete.Fwd`'s, at the hidden-output tags (`Tags.circuit`) and this file's META, with the fixed
 nets as parameters and `Properties.Flock.Nets.fixedNetsBuild` at them. The facts the other pieces read of `cH` are the
-named proposition `CircuitFileFacts`, which is not proved: the pieces that use it take it as a hypothesis.
+named proposition `CircuitFileFacts`, which `HonestSession.CircuitFileProof` proves with no hypothesis
+(`CircuitFileProof.circuitFileFacts`). The pieces that use it take it as a hypothesis, and `Witness` supplies the proof.
 -/
 
 @[expose] public section
@@ -19,7 +20,7 @@ namespace Verity.Sampled.Instance.HonestSession
 
 open Flock
 
-/-- **Facts about the concrete circuit file, not proved**: `HmOut.parse` and `parseCommit` at `verify --zk`'s tags read it
+/-- **Facts about the concrete circuit file** (proved: `CircuitFileProof.circuitFileFacts`): `HmOut.parse` and `parseCommit` at `verify --zk`'s tags read it
 to `cH`, `HmIn.parse` finds no public input port, `cH` has the one 64-word output row, its META is `norm metaJ`, it has one
 unit per VU and pins the dummy row (`dummyBc`, output `0`), and its unit net reads only its leaf group, returns the outputs,
 has at most `2^32` rows and reads only port bits. -/

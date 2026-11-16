@@ -9,8 +9,9 @@ public import CoreProtocol.Protocol
 `Flock.canon` writes a plain value of ASCII strings as its `printJson` text (`canon_plain`; a plain string may hold a
 non-ASCII character, which `canon` escapes and `printJson` does not), the same at its parsed form (`canon_norm`), and a
 canonical text of ASCII parses back to `norm` of its value (`canonicalJson_canon`). These are the canonical-JSON
-reader's facts; this file states them for the honest session as the named proposition `JsonFacts`, which is not proved:
-the pieces that use it take it as a hypothesis.
+reader's facts; this file states them for the honest session as the named proposition `JsonFacts`, which
+`HonestSession.JsonCanonFacts` proves with no hypothesis (`JsonCanon.jsonFacts`). The pieces that use it take it as a
+hypothesis, and `Witness` supplies the proof.
 -/
 
 @[expose] public section
@@ -24,7 +25,7 @@ open FlockSoundness.Discharge.Recursion.FirewallJson
 every other character as `\uXXXX`, so only a value of this kind prints as its own canonical text. -/
 def Printable (j : Json) : Prop := ∀ c ∈ (Flock.Firewall.printJson j).toList, c.toNat < 0x7f
 
-/-- **The canonical-JSON reader's three facts, not proved**: `Flock.canon` writes a plain value of ASCII strings as its
+/-- **The canonical-JSON reader's three facts** (proved: `JsonCanon.jsonFacts`): `Flock.canon` writes a plain value of ASCII strings as its
 `printJson` text, writes a plain value and its parsed form the same, and a canonical text of ASCII parses back to
 `norm` of its value. -/
 structure JsonFacts : Prop where
