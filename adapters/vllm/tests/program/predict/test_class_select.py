@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from verity.commitments.periods import interface as IF
-from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_span as BS
 from verity_vllm.program.predict import class_select as CS
 from verity_vllm.program.predict import class_window as CW
 
@@ -30,10 +30,10 @@ def test_the_ports_are_the_ones_class_window_names():
     assert [p for p, _ in live.signature()[0]][-3:] == [CW.REQUEST, CW.COUNT, CW.LIVE]
     assert [p for p, _ in check.signature()[0]][-4:] == ["ids", CW.REQUEST, CW.COUNT, CW.LIVE]
     assert [f for f, _w in IF.layout(live).outs] == [f for f, _w in IF.layout(first).outs] == [CW.TOKEN, CW.NEXT, CW.AHEAD, CW.KEY]
-    assert [k for k, _ in BR.FIELDS[:4]] == ["lp", "max_tokens", "min_tokens", "ignore_eos"]
-    assert all(t == "u32" for _, t in BR.FIELDS[:4])
+    assert [k for k, _ in BS.FIELDS[:4]] == ["lp", "max_tokens", "min_tokens", "ignore_eos"]
+    assert all(t == "u32" for _, t in BS.FIELDS[:4])
     lo, hi = CW.LIMITS
-    assert (lo, hi - lo) == (0, 2 * 4) == (BR.FIELD_AT["lp"], 2 * BR.FIELD_AT["temperature"])
+    assert (lo, hi - lo) == (0, 2 * 4) == (BS.FIELD_AT["lp"], 2 * BS.FIELD_AT["temperature"])
 
 
 def test_the_count_and_the_bit_are_one_word_of_a_row_each():
