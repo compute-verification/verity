@@ -104,6 +104,10 @@
   }
  },
  "domain": {
+  "SpotFlock.InstanceStmt.Run.Plain": {
+   "owner": "@proofs",
+   "why": "The fixture's completeness is stated for a plain run: its three strings are plain JSON strings, under 2^20 characters in all, so the public file's header parses back (met by `FixtureComplete_honest`)."
+  },
   "Claims.Complete": {
    "owner": "@proofs",
    "digest": "36546a7c38e65c525a4f4b8db6da802965f6664707603f801b0c17145ff31f16",
@@ -4200,6 +4204,10 @@
   }
  },
  "witnesses": {
+  "Flock.SecurityProofs.FixtureComplete": {
+   "honest": ["Flock.SecurityProofs.FixtureComplete_honest"],
+   "nontrivial": "Flock.SecurityProofs.FixtureComplete_nontrivial"
+  },
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
@@ -6773,6 +6781,9 @@
   "Hash"
  ],
  "guarantees": {
+  "Flock.SecurityProofs.FixtureComplete": {"owner": "@proofs"},
+  "Flock.SecurityProofs.FixtureComplete_honest": {"owner": "@proofs"},
+  "Flock.SecurityProofs.FixtureComplete_nontrivial": {"owner": "@proofs"},
   "Bandwidth.SecurityProofs.AuditInteractive": {
    "owner": "@memory-accounting",
    "signature": ["Bandwidth.SecurityProofs.AuditInteractive : Bandwidth.Guarantees.AuditInteractive"],

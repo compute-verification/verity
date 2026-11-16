@@ -119,6 +119,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Scope
 public import Proofs.Flock.SpotFlock.InstanceStmt.ReadyZk
 public import Proofs.Flock.SpotFlock.InstanceStmt.RecordFits
 public import Proofs.Flock.SpotFlock.InstanceStmt.AcceptsFixture
+public import Proofs.Flock.SpotFlock.InstanceStmt.Guarantee
 public import Proofs.Flock.SpotFlock.Honest.Ref
 public import Proofs.Flock.Claims.Complete.ZkTables.RecordGeneral
 public import Proofs.Flock.Encodings
