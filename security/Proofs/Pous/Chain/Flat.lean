@@ -5713,6 +5713,32 @@ theorem card_good :
     omega
 
 
+/-- **`JointClassWeight` is false**, at `N = 2`, `n = 1`, `wc = 24`, `D = 3`, `Q = 2^15`. -/
+theorem not_jointClassWeight : ¬ JointClassWeight := by
+  classical
+  intro h
+  have hok : okLuckyMulti 2 1 24 (2 ^ 15) := ⟨by norm_num, le_rfl, by norm_num⟩
+  have hS := h 2 1 24 3 (2 ^ 15) tagOf G1 W1 pJ hok (by norm_num) tagOf_injective (fun s c => bounded_J s c)
+    {(0, 2), (1, 2)}
+  have hcard : ({(0, 2), (1, 2)} : Finset (ℕ × ℕ)).card = 2 := by decide
+  rw [hcard] at hS
+  obtain ⟨E, hE, hEc⟩ := card_good (wc := 24)
+  have hsub : E ⊆ Finset.univ.filter fun ω => jointLuckySet pJ ω tagOf G1 W1 3 (2 ^ 15) = {(0, 2), (1, 2)} :=
+    fun ω hω => Finset.mem_filter.2 ⟨Finset.mem_univ _, jointLuckySet_J (hE ω hω) _⟩
+  have hlow : E.card * 2 ^ (2 * 24) ≤
+      ∑ ω ∈ Finset.univ.filter (fun ω : (p3ModelT 1 24).Ω =>
+          jointLuckySet pJ ω tagOf G1 W1 3 (2 ^ 15) = {(0, 2), (1, 2)}),
+        2 ^ jointLuckyBits pJ ω tagOf G1 W1 3 := by
+    calc E.card * 2 ^ (2 * 24) = ∑ _ω ∈ E, 2 ^ (2 * 24) := by rw [Finset.sum_const, smul_eq_mul]
+      _ ≤ ∑ ω ∈ E, 2 ^ jointLuckyBits pJ ω tagOf G1 W1 3 :=
+          Finset.sum_le_sum fun ω hω => Nat.pow_le_pow_right (by norm_num) (jointLuckyBits_J (hE ω hω))
+      _ ≤ _ := Finset.sum_le_sum_of_subset hsub
+  have hpos : 0 < Fintype.card (p3ModelT 1 24).Ω := Fintype.card_pos
+  have hfin := hlow.trans hS
+  norm_num at hEc hfin
+  omega
+
+
 end Instance
 
 end PousJointRefute
@@ -28011,6 +28037,9 @@ theorem labelG_seg {ℓ c : ℕ} (f : Bits (ℓ + (ℓ + c)) → Bits (ℓ + (�
     have hd : dom (gIdx s i).val = domS i.val := hdom i
     rw [Pous.BandChain.labelG_eq, Pous.BandChain.labelG_eq (bandDAG B d), habs, hW i, hd]
 
+/-- **`SegFaithful`, proved.** -/
+theorem segFaithful : SegFaithful := fun _ _ _ _ _ f dom Wb s i =>
+  labelG_seg f dom Wb s _ _ (fun _ => rfl) (fun _ => rfl) i
 
 /-- Block `(s, i)` of the store's data is block `i` of segment `s`'s data. -/
 theorem blocks_gIdx {ℓ : ℕ} (W : Bits (N * B * ℓ)) (s : Fin N) (i : Fin B) :
@@ -28019,6 +28048,16 @@ theorem blocks_gIdx {ℓ : ℕ} (W : Bits (N * B * ℓ)) (s : Fin N) (i : Fin B)
   show W ⟨t.val + ℓ * (s.val * B + i.val), _⟩ = W ⟨s.val * (B * ℓ) + (t.val + ℓ * i.val), _⟩
   exact congrArg W (Fin.ext (by ring))
 
+/-- **`SegFaithfulCode`, proved.** -/
+theorem segFaithfulCode : SegFaithfulCode := by
+  intro N B d ℓ _ _ salt W π s i
+  show labelG (bandSegDAG N B d) (fun x => (idealPerm (ℓ + (ℓ + 512))).answer π (.inl x)) (segDom salt B)
+      (Dense.blocks (N * B) ℓ W) (gIdx s i) =
+    labelG (bandDAG B d) (fun x => (idealPerm (ℓ + (ℓ + 512))).answer π (.inl x))
+      (Pous.Sponge.dom (Pous.DenseReCert.tag salt s.val)) (Dense.blocks B ℓ (segData W s)) i
+  refine labelG_seg _ _ _ s _ _ (fun j => ?_) (fun j => blocks_gIdx W s j) i
+  unfold segDom
+  rw [seg_div j.isLt, seg_mod j.isLt]
 
 end Faithful
 
