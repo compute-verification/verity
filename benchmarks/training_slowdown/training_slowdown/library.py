@@ -300,7 +300,7 @@ def records_text(parts: list[dict], refs: dict, root: Path) -> str:
     for p in parts:
         cost = p.get("cost") and (p["cost"] | {"value": p["cost"]["gates"] if p["cost"]["reached"] else None})
         cells = {"C_e, gates": cell(cost, "value", lambda x: bracket(x, 4)),
-                 "C_e / T_ref": cell(p.get("ratio"), "ratio", lambda x: bracket(x, 3)),
+                 f"C_e / T_ref, {score.OVER_REFERENCE}": cell(p.get("ratio"), "ratio", lambda x: bracket(x, 3)),
                  "products-term factor": cell(p["factor"], "factor", lambda x: f"{x:.4g}"),
                  "the paused search's score": cell(p.get("search_score"), "score", lambda x: f"{x:.4g}")}
         read = p.get("read")
@@ -315,7 +315,7 @@ def records_text(parts: list[dict], refs: dict, root: Path) -> str:
                     None) for s in starts_at}
     return "\n".join([
         f"\nwith the runs of record under {root}: {score.UNIT}",
-        table(["entry", "start", "read", "C_e, gates", "C_e / T_ref", "products-term factor",
+        table(["entry", "start", "read", "C_e, gates", f"C_e / T_ref, {score.OVER_REFERENCE}", "products-term factor",
                "the paused search's score"], lines),
         "\nwhy a cell holds no figure, each reason with the entries it holds for",
         *(f"{k}: {w} ({len(es)}): {', '.join(es)}" for (k, w), es in why.items()),
@@ -327,7 +327,8 @@ def records_text(parts: list[dict], refs: dict, root: Path) -> str:
         "",
         "C_e: the gates the record counts to the entry's target, from its last scored checkpoint above the target "
         "to its first at or below; 0 (the start) where no scored checkpoint comes before the first at or below.",
-        "C_e / T_ref: each end of C_e over T_ref, T_ref being the high end of its entry's C_e.",
+        f"C_e / T_ref, the {score.OVER_REFERENCE}: each end of C_e over T_ref, T_ref being the high end of its "
+        "entry's C_e; a ratio of gate counts to the target, not a slowdown.",
         f"{FACTOR}.",
         f"{SEARCH_SCORE}.",
         "None of these is the Glossary's slowdown, and none is combined with another here."])

@@ -1,4 +1,4 @@
-"""An entry's cost to its target from its run of record, the reference cost at its start and their ratio: parts the
+"""An entry's cost to its target from its run of record, the reference cost at its start and the cost over the reference's: parts the
 library prints apart (`library --records`), beside its products-term factor and the paused search's score. None of
 them is the Glossary's slowdown, and nothing here combines any of them into one figure.
 
@@ -8,7 +8,8 @@ them is the Glossary's slowdown, and nothing here combines any of them into one 
   bracket opens at the start, 0 gates, where the first scored checkpoint is already at or below. A record that never
   reaches the target has no cost, and says how far it got.
 - **The reference, T_ref** (`reference`): per start, `REFERENCE`. `reference` is the one place it is chosen.
-- **The ratio, C_e / T_ref** (`ratio`): each end of the bracket over the reference.
+- **The cost to the target over the reference's, C_e / T_ref** (`ratio`, `OVER_REFERENCE`): each end of the bracket
+  over the reference; a ratio of two gate counts to a target, not a slowdown.
 - **The paused search's score** (`search_score`): S as the grade computes it from the record (`grade.grade`), or
   the grade's reason it has none.
 
@@ -28,6 +29,7 @@ HELD = Path(__file__).with_name("of_record.toml")
 UNIT = (f"the unit is gates ({gates.UNIT}), the count the record's checkpoints carry; the Glossary's cost, "
         "GPU-hours, is not computed")
 REFERENCE = "least recorded cost at this start; moves as entries are added; no named reference has a record"
+OVER_REFERENCE = "cost to the target over the reference's"
 SPLIT = "search"
 
 
@@ -87,7 +89,7 @@ def reference(costs: dict[str, tuple[str, dict]]) -> dict[str, dict]:
 
 
 def ratio(cost: dict, ref: dict | None) -> dict:
-    """C_e / T_ref: each end of the cost's bracket over the reference's gates, or why there is none."""
+    """C_e / T_ref, `OVER_REFERENCE`: each end of the cost's bracket over the reference's gates, or why there is none."""
     if not cost.get("reached"):
         return {"ratio": None, "why": cost.get("why")}
     if ref is None:

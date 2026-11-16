@@ -110,7 +110,7 @@ def test_the_records_parts_are_each_a_figure_or_a_reason(records):
     out = library.records_text(parts, refs, root)
     head, *table = out.split("\n\nwhy")[0].splitlines()[2:]
     assert len(table) == 3 and all(len(line.split()) > 6 for line in table)
-    assert "the paused search's score" in head and "slowdown" not in head
+    assert "the paused search's score" in head and score.OVER_REFERENCE in head and "slowdown" not in head
     for said in (score.UNIT, score.REFERENCE, library.FACTOR, library.SEARCH_SCORE, library.TRACED_ONLY,
                  library.CODED, "GPU-hours, is not computed"):
         assert said in out
