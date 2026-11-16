@@ -287,6 +287,22 @@ theorem tyOfJson_a16 (j : Json) (h : j = .arr #[.str "Array", jn 1, v16]) :
   show (do let e ← Ty.ofJson v16; pure (Ty.array 1 e) : V Ty) = _
   rw [tyOfJson_v16 _ rfl]; rfl
 
+/-! The parameters' repeated-name check at the descriptor's parameter lists, none or one parameter: its set of names
+hashes with `String.hash`, which the walk blocks. -/
+
+theorem dup_params_nil (ps : Array (String × Ty)) (n : Nat) (h : ps = #[]) (hn : n = 0) :
+    ((Array.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String) ps 0 n).size != n) = false := by
+  subst h hn; rfl
+
+theorem dup_params_one (ps : Array (String × Ty)) (n : Nat) (h : ps.size = 1) (hn : n = 1) :
+    ((Array.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String) ps 0 n).size != n) = false := by
+  subst hn
+  rcases ps with ⟨_ | ⟨x, _ | ⟨y, l⟩⟩⟩
+  · simp at h
+  · show (((∅ : Std.HashSet String).insert x.1).size != 1) = false
+    simp [Std.HashSet.size_insert]
+  · simp at h
+
 /-! The decoded definitions, named: the walk folds each record into its name as it is decoded (`fold_in16`, …), so the
 state it carries stays small. -/
 
@@ -352,7 +368,7 @@ fwd_def decV decode_V : Program.decodeOf (some (.ok programJ))
       stGet, stSet, stModify, iteApp, domainError_none, mapM_except, tyOfJson_v16, tyOfJson_a16, leaves_eq,
       fold_in16, fold_not16, fold_unit, fold_root, forIn_arr_ex, forIn_range_ex,
       foldl_insert_get, inputId_in16, inputId_not16', qsort_sorted, tyBeq_v16, tyBeq_a16, recordFunctionIds_hs,
-      isInputId_not16, registered_not16, bodyBad_run, mapM_st_nil, canon_bare]
+      isInputId_not16, registered_not16, bodyBad_run, mapM_st_nil, canon_bare, dup_params_nil, dup_params_one]
     block [String.hash, Flock.canon, ZkServer.printJson, Sha512.hash] shallow []
 
 /-! What a consumer reads of `decV`: its definitions by name, its root, and its one unit. -/
