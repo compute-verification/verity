@@ -1,0 +1,7 @@
+{
+ "binding_peaks": {
+  "_model_roots:DsaLatentRow_v2": 5.17,
+  "_model_roots:DsaRMSNorm_v2": 8.22,
+  "_model_roots:TritonBlockRMSNorm_v2": 3.27
+ }
+}

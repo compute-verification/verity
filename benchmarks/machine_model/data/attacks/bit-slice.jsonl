@@ -1,0 +1,42 @@
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each", "program": {"ALU": 0.0078125, "XU": 0.00390625}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each", "program": {"ALU": 0.015625, "XU": 0.0078125}}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each", "program": {"ALU": 0.013671875, "XU": 0.0068359375}}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, integer work on UNI", "program": {"UNI": 0.375}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, integer work on UNI", "program": {"UNI": 0.75}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, integer work on UNI", "program": {"UNI": 0.65625}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI", "program": {"XU": 0.00390625, "UNI": 0.25}, "since": "VF3"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI", "program": {"ALU": 0.0078125, "UNI": 0.125}, "since": "VF3"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI", "program": {"XU": 0.0078125, "UNI": 0.5}, "since": "VF3"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI", "program": {"ALU": 0.015625, "UNI": 0.25}, "since": "VF3"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI", "program": {"XU": 0.0068359375, "UNI": 0.4375}, "since": "VF3"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI", "program": {"ALU": 0.013671875, "UNI": 0.21875}, "since": "VF3"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI64", "program": {"ALU": 0.0078125, "UNI64": 0.0625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64", "program": {"XU": 0.00390625, "ALU64": 0.00390625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI", "program": {"ALU64": 0.00390625, "UNI": 0.125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI64", "program": {"ALU64": 0.00390625, "UNI64": 0.0625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI, XU on UNI64", "program": {"UNI": 0.25, "UNI64": 0.0625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64", "program": {"XU": 0.00390625, "UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI", "program": {"UNI64": 0.125, "UNI": 0.125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI64", "program": {"UNI64": 0.1875}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI64", "program": {"ALU": 0.015625, "UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64", "program": {"XU": 0.0078125, "ALU64": 0.0078125}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI", "program": {"ALU64": 0.0078125, "UNI": 0.25}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI64", "program": {"ALU64": 0.0078125, "UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI, XU on UNI64", "program": {"UNI": 0.5, "UNI64": 0.125}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64", "program": {"XU": 0.0078125, "UNI64": 0.25}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI", "program": {"UNI64": 0.25, "UNI": 0.25}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI64", "program": {"UNI64": 0.375}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, XU on UNI64", "program": {"ALU": 0.013671875, "UNI64": 0.109375}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64", "program": {"XU": 0.0068359375, "ALU64": 0.0068359375}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI", "program": {"ALU64": 0.0068359375, "UNI": 0.21875}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on ALU64, XU on UNI64", "program": {"ALU64": 0.0068359375, "UNI64": 0.109375}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI, XU on UNI64", "program": {"UNI": 0.4375, "UNI64": 0.109375}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64", "program": {"XU": 0.0068359375, "UNI64": 0.21875}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI", "program": {"UNI64": 0.21875, "UNI": 0.21875}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on UNI64, XU on UNI64", "program": {"UNI64": 0.328125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on W2", "program": {"XU": 0.00390625, "W2": 0.00390625}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on W2", "program": {"XU": 0.0078125, "W2": 0.0078125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on W2", "program": {"XU": 0.0068359375, "W2": 0.0068359375}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "bit-slice", "name": "pure: 4 plane pairs, LOP3 + POPC + IADD3 each, ALU on DMUL", "program": {"XU": 0.00390625, "DMUL": 0.00390625}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "bit-slice", "name": "pure: 8 plane pairs, LOP3 + POPC + IADD3 each, ALU on DMUL", "program": {"XU": 0.0078125, "DMUL": 0.0078125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "bit-slice", "name": "pure: 7 plane pairs, LOP3 + POPC + IADD3 each, ALU on DMUL", "program": {"XU": 0.0068359375, "DMUL": 0.0068359375}, "since": "VF3e"}

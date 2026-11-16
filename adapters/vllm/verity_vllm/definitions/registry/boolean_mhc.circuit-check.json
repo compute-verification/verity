@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "HopperTf32WgmmaDot8_v2": {
+   "and": 6524,
+   "type": "48e98b1af3e2961101f300f7d231e867341b69b8991aede60af95d043a75d81ec49d448bfdc1a5e7abb812fda08714b3f725b685de41597c3e7bf0b59107bf98"
+  },
+  "MhcPost_v2{HC=2,N=2}": {
+   "and": 34420,
+   "type": "4476e2073c446e13b52d84d8fa3bb9b9599c9127e9c0c1eb68230bffe3ae80b895998e1f9d19339b43eca9dda853b5ffda1a3a478419c5e829588e994a0fbfb9"
+  },
+  "MhcResidualBroadcast_v2{HC=2,H=8}": {
+   "and": 0,
+   "type": "b748649c1839dd8f952d7a5d104b054a98862af68c5a3b71223c6c4ab65ec81c75acaa70ed0ceba6d66f6db8f5be6bced02b08e18afe9bb5d854fb414b8606c6"
+  },
+  "MhcSigmoid_v2": {
+   "and": 15167,
+   "type": "75a28add527da2eab2beb114dfa6c2aabe5c180ac252e19a70346309a6a09672cbe2cbd5d0130dbd780e7a6e2ae7f118f063db29c95751c05f1ca1f79466690e"
+  }
+ }
+}

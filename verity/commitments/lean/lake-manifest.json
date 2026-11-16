@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "core_base",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../circuits/base",
+   "configFile": "lakefile.toml"}],
+ "name": "core_commitments",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

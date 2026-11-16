@@ -1,0 +1,1321 @@
+# The retired word family DRAW, its compound identifiers in the proof system's own tree (`verity/protocols/proofs/`, the
+# proof system's areas of `security/`, and its scripts under `benchmarks/`), renamed to the Glossary's sample, sampled and
+# sampling wherever each stands: whole words only, each a name whose new spelling stands nowhere, that no quoted token, flag
+# or record key spells, and that stands mostly in those paths. The bare words, the namespaces and the wire keys are not here;
+# [keep] holds every quoted token of the family, the keys a served record or a verifier's input carries.
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
+
+[keep]
+strings = [
+  "\"--draw\"",
+  "\"--draw-dir\"",
+  "\"--draw-file\"",
+  "\"--draw-k\"",
+  "\"--draw-law\"",
+  "\"--draw-out\"",
+  "\"--draw-session\"",
+  "\"--drawn\"",
+  "\"--drawn-only\"",
+  "\"--draws\"",
+  "\"--draws-dir\"",
+  "\"--fresh-draws\"",
+  "\"--lean-refuses-drawn\"",
+  "\"--rec-inner-draw\"",
+  "\"--replay-draw\"",
+  "\"Accounting.Guarantees.Remote.LiveCoinsDrawn\"",
+  "\"Accounting.SecurityProofs.Remote.HeldDrawn\"",
+  "\"Accounting.SecurityProofs.Remote.HeldOverTimeDrawn\"",
+  "\"Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn\"",
+  "\"Accounting.SecurityProofs.Remote.LiveCoinsDrawn\"",
+  "\"Accounting.SecurityProofs.Remote.PooledDraw\"",
+  "\"CR_N2_DRAW\"",
+  "\"CoinIsDrawn\"",
+  "\"Coins.Draw\"",
+  "\"CoinsDraw\"",
+  "\"DRAW\"",
+  "\"DRAWN\"",
+  "\"DRAWN_UNITS\"",
+  "\"DRAW_BYTES\"",
+  "\"DRAW_DIR\"",
+  "\"DRAW_DOMAIN\"",
+  "\"DRAW_EPS\"",
+  "\"DRAW_FAMILIES\"",
+  "\"DRAW_FORM\"",
+  "\"DRAW_TAG\"",
+  "\"Definitions.Accounting.Guarantees.RemoteDraw\"",
+  "\"Draw\"",
+  "\"Draw.Coins\"",
+  "\"Draw.DrawCoins\"",
+  "\"DrawIsCoin\"",
+  "\"DrawSession\"",
+  "\"Drawn\"",
+  "\"Draws\"",
+  "\"FAKE_DRAW\"",
+  "\"FLOCK_DRAW_LAW\"",
+  "\"Flock/Soundness/PlanDraw.lean\"",
+  "\"GateSessions.reserve_draw\"",
+  "\"H1DrawnTestCombine\"",
+  "\"H1DrawnTestLane\"",
+  "\"H1DrawnTestSeed\"",
+  "\"H1DrawnTestTileJ10R\"",
+  "\"H1Windows.draw_of\"",
+  "\"H1_DRAWN_CHECK\"",
+  "\"H1_DRAWN_ONLY\"",
+  "\"H1_DRAWN_WORK\"",
+  "\"Law.X.S.draw\"",
+  "\"NO_DRAW_SESSION\"",
+  "\"OUT/draws\"",
+  "\"P-draw\"",
+  "\"POUW_TILES_DRAWN\"",
+  "\"Proofs.Flock.SpotFlock.AddressFacts.RowDraw\"",
+  "\"Proofs.Properties.Challenger.Drawn\"",
+  "\"Proofs.Properties.Pouw.PearlPlus.Draw\"",
+  "\"Proofs.Properties.Verity.Sampled.Members.Draw\"",
+  "\"Proofs.Properties.Verity.Sampled.RecordDraw\"",
+  "\"Proofs.Properties.Verity.Sampled.Window.Draw\"",
+  "\"Proofs.Properties.Verity.SampledDraw\"",
+  "\"Proofs.Properties.Verity.SampledTwo.DrawRoots\"",
+  "\"Proofs.Properties.Verity.SampledTwo.FormDraw\"",
+  "\"Properties.Pouw.PearlPlusDraw\"",
+  "\"Properties.Spot.Draw\"",
+  "\"Q.Draw\"",
+  "\"Q/Draw.olean\"",
+  "\"REPLAY_DRAW\"",
+  "\"S.DrawIsCoin\"",
+  "\"ToMathlib.MeasureTheory.Measure.IndependentDraws\"",
+  "\"VERITY_DRAWS_POLL_S\"",
+  "\"VERITY_VLLM_H1_DRAWN_J10R\"",
+  "\"a0-challenger-draw\"",
+  "\"adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R\"",
+  "\"adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed\"",
+  "\"advice-root-after-the-draw\"",
+  "\"advice_before_draw\"",
+  "\"after-the-draw\"",
+  "\"after-the-draw-one-missing\"",
+  "\"after_draw\"",
+  "\"altered_draw_refused\"",
+  "\"answer-draw-k\"",
+  "\"answer-draw-population\"",
+  "\"answer-drawn\"",
+  "\"answer-drawn-extra\"",
+  "\"answer-drawn-type\"",
+  "\"answer-level-draw\"",
+  "\"answer-level-draw-two\"",
+  "\"answer-level-null-draw\"",
+  "\"answer-profile-draw\"",
+  "\"before_draw\"",
+  "\"before_draw_checks_pass\"",
+  "\"before_draw_s\"",
+  "\"benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin\"",
+  "\"benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json\"",
+  "\"benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json\"",
+  "\"call_draw\"",
+  "\"challenger_draw_coins\"",
+  "\"checkDraw\"",
+  "\"check_draw\"",
+  "\"checks_after_draw\"",
+  "\"checks_before_draw\"",
+  "\"closure-drawn\"",
+  "\"credit-no-draw\"",
+  "\"draw\"",
+  "\"draw-after\"",
+  "\"draw-after-other\"",
+  "\"draw-coin\"",
+  "\"draw-elsewhere\"",
+  "\"draw-fewer\"",
+  "\"draw-form\"",
+  "\"draw-law\"",
+  "\"draw-moves-a-unit-across-strata\"",
+  "\"draw-outside-the-partition\"",
+  "\"draw-over-another-population\"",
+  "\"draw-receipt\"",
+  "\"draw-session\"",
+  "\"draw-stream\"",
+  "\"draw-test\"",
+  "\"draw-under-another-law\"",
+  "\"draw-unit\"",
+  "\"draw.coins.bin\"",
+  "\"draw.coins.json\"",
+  "\"draw.json\"",
+  "\"draw.log\"",
+  "\"draw/0\"",
+  "\"draw/1\"",
+  "\"draw/68719476752\"",
+  "\"draw/68719476754\"",
+  "\"draw/68719476755\"",
+  "\"draw/second/0\"",
+  "\"draw2.json\"",
+  "\"draw:law\"",
+  "\"draw:live\"",
+  "\"draw:receipt\"",
+  "\"draw:record\"",
+  "\"draw:units\"",
+  "\"drawCoins_ok\"",
+  "\"drawOne\"",
+  "\"drawTwo\"",
+  "\"draw_after\"",
+  "\"draw_after_manifest_root\"",
+  "\"draw_at\"",
+  "\"draw_bytes\"",
+  "\"draw_calls\"",
+  "\"draw_challenger\"",
+  "\"draw_check\"",
+  "\"draw_coin\"",
+  "\"draw_coins\"",
+  "\"draw_commitment\"",
+  "\"draw_counts\"",
+  "\"draw_epoch_reason\"",
+  "\"draw_families\"",
+  "\"draw_fetched\"",
+  "\"draw_files\"",
+  "\"draw_first\"",
+  "\"draw_fits_why\"",
+  "\"draw_indices\"",
+  "\"draw_k\"",
+  "\"draw_law\"",
+  "\"draw_ledger_ok\"",
+  "\"draw_one\"",
+  "\"draw_out\"",
+  "\"draw_partition\"",
+  "\"draw_ran_out\"",
+  "\"draw_reason\"",
+  "\"draw_refused\"",
+  "\"draw_reserved\"",
+  "\"draw_root\"",
+  "\"draw_s\"",
+  "\"draw_salt\"",
+  "\"draw_seed_salt\"",
+  "\"draw_session\"",
+  "\"draw_session_ok\"",
+  "\"draw_session_reason\"",
+  "\"draw_slots\"",
+  "\"draw_t\"",
+  "\"draw_twin\"",
+  "\"draw_unit\"",
+  "\"draw_wait_s\"",
+  "\"drawn\"",
+  "\"drawn-unit-bundle.bin\"",
+  "\"drawn-unit-bundle.json\"",
+  "\"drawn-unit-bundle.v2.schema.json\"",
+  "\"drawn-unit-registration.json\"",
+  "\"drawn-work\"",
+  "\"drawn.json\"",
+  "\"drawn.sh\"",
+  "\"drawn.sh.py\"",
+  "\"drawn_accepted\"",
+  "\"drawn_after\"",
+  "\"drawn_at\"",
+  "\"drawn_at_k\"",
+  "\"drawn_leaves\"",
+  "\"drawn_not_expected\"",
+  "\"drawn_not_released\"",
+  "\"drawn_of\"",
+  "\"drawn_only\"",
+  "\"drawn_rows\"",
+  "\"drawn_s\"",
+  "\"drawn_twin\"",
+  "\"drawn_units\"",
+  "\"drawn_without_it\"",
+  "\"draws\"",
+  "\"draws-dir\"",
+  "\"draws.jsonl\"",
+  "\"draws_\"",
+  "\"draws_after_served_eos\"",
+  "\"draws_dir\"",
+  "\"draws_on_dropped\"",
+  "\"draws_per_coin\"",
+  "\"draws_scan\"",
+  "\"draws_sent_ns\"",
+  "\"draws_t\"",
+  "\"draws_total\"",
+  "\"escaped_the_draw\"",
+  "\"expected_not_drawn\"",
+  "\"first_draw\"",
+  "\"fixed_before_draw\"",
+  "\"forged_unit_drawn\"",
+  "\"frequency_draws\"",
+  "\"fresh_draws\"",
+  "\"full_draw\"",
+  "\"gap_draw\"",
+  "\"honest-paced-drawn-at-k\"",
+  "\"in_process_draw\"",
+  "\"inactive_slots_draw_nothing\"",
+  "\"inner-drawn\"",
+  "\"inner_draw\"",
+  "\"inner_draw-none\"",
+  "\"j2-draw\"",
+  "\"lag_draw_pos\"",
+  "\"lag_draw_slot\"",
+  "\"lanes-draw\"",
+  "\"leak_draws\"",
+  "\"lean-draw\"",
+  "\"lean-draw-u1-u3\"",
+  "\"lean-draw/\"",
+  "\"lean_draw\"",
+  "\"lean_draw_sha512\"",
+  "\"lean_refuses_drawn\"",
+  "\"m0-selftest-unit-draw-session\"",
+  "\"m3-drawn-blocks/v1\"",
+  "\"no-draw\"",
+  "\"not-a-draw\"",
+  "\"not-drawn\"",
+  "\"not_drawn_time_budget\"",
+  "\"one/draw.py\"",
+  "\"one_draw_per_step\"",
+  "\"over_cap_draws\"",
+  "\"own_draw\"",
+  "\"pearl_c_draw_key\"",
+  "\"pearl_draw\"",
+  "\"pearlplus_draw\"",
+  "\"per_drawn_and\"",
+  "\"period-draw\"",
+  "\"pouw/draw\"",
+  "\"power.draw\"",
+  "\"profile.drawn\"",
+  "\"profile.drawn.tile\"",
+  "\"profile.drawn.unit\"",
+  "\"profile.levels.0.draw\"",
+  "\"proved-set-short-of-the-draw\"",
+  "\"proved-unit-not-drawn\"",
+  "\"public.draw\"",
+  "\"public.draw.closure\"",
+  "\"public.draw.k\"",
+  "\"public.draw.law\"",
+  "\"public.draw.population\"",
+  "\"public.draw.units\"",
+  "\"py_draw\"",
+  "\"receive-after-draw\"",
+  "\"refused_after_draw\"",
+  "\"refused_before_draw\"",
+  "\"rejected_draws\"",
+  "\"replay_draw\"",
+  "\"reserve_draw\"",
+  "\"s-draw\"",
+  "\"same_draws\"",
+  "\"secondDraw\"",
+  "\"second_draw_reserved\"",
+  "\"security/Definitions/Accounting/Assumptions/RemoteDraw.lean\"",
+  "\"security/Definitions/Accounting/Gates/Codec.lean::Accounting.Gates.Draw\"",
+  "\"security/Definitions/Accounting/Guarantees/RemoteDraw.lean\"",
+  "\"security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Coins\"",
+  "\"security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session\"",
+  "\"security/Proofs/Flock/Soundness/PlanDraw.lean\"",
+  "\"security/Proofs/Properties/Verity/SampledDraw.lean\"",
+  "\"select_draw\"",
+  "\"served_draw\"",
+  "\"served_is_lean_draw\"",
+  "\"session_draw\"",
+  "\"split-draw.log\"",
+  "\"stage/draw.json\"",
+  "\"tables_unsplittable_draw_refused\"",
+  "\"tests/check/test_stoch_draw_ledger_of_record.py\"",
+  "\"tests/test_drawn.py\"",
+  "\"tests/test_lean_draw_laws.py\"",
+  "\"tile_draws\"",
+  "\"tp_draw\"",
+  "\"tp_partial_identities_drawn\"",
+  "\"tp_window_check_drawn\"",
+  "\"union-draw-outside-the-partition\"",
+  "\"unit_draw\"",
+  "\"unit_draw_from_file\"",
+  "\"unit_draw_ignored_refused\"",
+  "\"unit_draw_session\"",
+  "\"unmeasured_draws\"",
+  "\"verity-network-certifier/period-draw/v1\"",
+  "\"verity-period-draw-\"",
+  "\"verity.protocols.accounting.pouw.prover.serving.h1.drawn\"",
+  "\"verity/commitments/lean/Commitments/Draw.lean\"",
+  "\"verity/drawn-unit-bundle/block/v1\"",
+  "\"verity/drawn-unit-bundle/v2\"",
+  "\"verity/one-stage/a5-draw/v1\"",
+  "\"verity/one-stage/dev-draw/v1\"",
+  "\"verity/pouw/closure-draw/v1\"",
+  "\"verity/pouw/h1-prove-draw/v0\"",
+  "\"verity/pouw/h1/draw/v1\"",
+  "\"verity/pouw/pearl-c-draw/v1\"",
+  "\"verity/pouw/pearl-c/draw-after/v1\"",
+  "\"verity/pouw/pearl-c4-replay/draw-beacon/v0\"",
+  "\"verity/pouw/pearl-plus-run-draw/v1\"",
+  "\"verity/pouw/served-h1-gate-draw/v1\"",
+  "\"verity/pouw/served-zk-draw/v1\"",
+  "\"verity/protocols/accounting/poub/verifier/ledger.py::Draw\"",
+  "\"verity/protocols/accounting/poub/verifier/opening.py::Draw\"",
+  "\"verity/protocols/accounting/pouw/prover/serving/h1/draw.py\"",
+  "\"verity/protocols/accounting/pouw/prover/serving/h1/drawn.py\"",
+  "\"verity/protocols/interface/CoreProtocol/Profile.lean::Core.Draw\"",
+  "\"verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw\"",
+  "\"verity/protocols/proofs/flock/prover/tests/test_rec_full_draw.py\"",
+  "\"verity/protocols/proofs/spot/verifier/one_stage/draw.py\"",
+  "\"verity/protocols/proofs/spot/verifier/service.py::Draw\"",
+  "\"verity_vllm.program.lifting.continuation.compare_draw_positions\"",
+  "\"window-drawn\"",
+  "\"wires_drawn\"",
+  "\"wires_drawn_unrolled\"",
+  "\"work_draws\"",
+  "'FAKE_DRAW'",
+  "'draw.json'",
+  "'draw/0'",
+]
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"AfterDraw" = "AfterSample"
+"AtDraw" = "AtSample"
+"CHECK_DRAW" = "CHECK_SAMPLE"
+"ChallengerDraw" = "ChallengerSample"
+"DRAWN_INPUTS" = "SAMPLED_INPUTS"
+"DRAW_CHANGES" = "SAMPLE_CHANGES"
+"DRAW_COIN" = "SAMPLE_COIN"
+"DRAW_COINS" = "SAMPLE_COINS"
+"DRAW_COINS_NAMES" = "SAMPLE_COINS_NAMES"
+"DRAW_INPUTS" = "SAMPLE_INPUTS"
+"DRAW_MUTATIONS" = "SAMPLE_MUTATIONS"
+"DRAW_ROUNDS" = "SAMPLE_ROUNDS"
+"DrawAtFixed" = "SampleAtFixed"
+"DrawAtZKHJ" = "SampleAtZKHJ"
+"DrawAtZKJ" = "SampleAtZKJ"
+"DrawDesign" = "SampleDesign"
+"DrawExec" = "SampleExec"
+"DrawFileZK" = "SampleFileZK"
+"DrawFixed" = "SampleFixed"
+"DrawGame" = "SampleGame"
+"DrawHeld" = "SampleHeld"
+"DrawHook" = "SampleHook"
+"DrawInv" = "SampleInv"
+"DrawLaw" = "SampleDesign"
+"DrawMatches" = "SampleMatches"
+"DrawMatchesZk" = "SampleMatchesZk"
+"DrawOk" = "SampleOk"
+"DrawOkH" = "SampleOkH"
+"DrawOkJ" = "SampleOkJ"
+"DrawOkJson" = "SampleOkJson"
+"DrawOkPHJ" = "SampleOkPHJ"
+"DrawOkPJ" = "SampleOkPJ"
+"DrawOkZK" = "SampleOkZK"
+"DrawOkZKH" = "SampleOkZKH"
+"DrawOkZKHJ" = "SampleOkZKHJ"
+"DrawOkZKHJP" = "SampleOkZKHJP"
+"DrawOkZKJ" = "SampleOkZKJ"
+"DrawRead" = "SampleRead"
+"DrawReadAll" = "SampleReadAll"
+"DrawRuns" = "SampleRuns"
+"DrawSetup" = "SampleSetup"
+"DrawSetupH" = "SampleSetupH"
+"DrawSetupHP" = "SampleSetupHP"
+"DrawSetupZHJ" = "SampleSetupZHJ"
+"DrawSetupZHJP" = "SampleSetupZHJP"
+"DrawSetupZJ" = "SampleSetupZJ"
+"DrawSetupZK" = "SampleSetupZK"
+"DrawSetupZKH" = "SampleSetupZKH"
+"DrawTied" = "SampleTied"
+"DrawTiedS" = "SampleTiedS"
+"DrawnByDevice" = "SampledByDevice"
+"DrawnByDeviceAt" = "SampledByDeviceAt"
+"DrawnJ" = "SampledJ"
+"DrawnLaw" = "SampledDesign"
+"DrawnOf" = "SampledOf"
+"DrawnRounds" = "SampledRounds"
+"DrawnSamplingDesign" = "SampledDesign"
+"DrawsUnder" = "SamplesUnder"
+"EndToEndDraw" = "EndToEndSample"
+"EndToEndDrawn" = "EndToEndSampled"
+"EndToEndHiddenDrawn" = "EndToEndHiddenSampled"
+"EndToEndRegisteredDrawn" = "EndToEndRegisteredSampled"
+"EndToEndRegisteredDrawnFlat" = "EndToEndRegisteredSampledFlat"
+"Ex_drawCost_le" = "Ex_sampleCost_le"
+"Ex_drawOf" = "Ex_sampleOf"
+"Ex_draws_le" = "Ex_samples_le"
+"Ex_fork_refDraw_le" = "Ex_fork_refSample_le"
+"Ex_refDraw" = "Ex_refSample"
+"ExecDraw" = "ExecSample"
+"ExecDrawOS" = "ExecSampleOS"
+"FULL_DRAW" = "FULL_SAMPLE"
+"FirewallDraws" = "FirewallSamples"
+"FirstDrawn" = "FirstSampled"
+"HiddenDraw" = "HiddenSample"
+"INNER_DRAW" = "INNER_SAMPLE"
+"InnerDrawn" = "InnerSampled"
+"KeyedDraw" = "KeyedSample"
+"LOOPBACK_DRAW" = "LOOPBACK_SAMPLE"
+"LawDraw" = "SamplingDesignSample"
+"MAX_DRAW_FACTOR" = "MAX_SAMPLE_FACTOR"
+"NO_INNER_DRAW" = "NO_INNER_SAMPLE"
+"OfDraws" = "OfSamples"
+"PEARLPLUS_DRAWS" = "PEARLPLUS_SAMPLES"
+"PEARLPLUS_NODE_DRAW" = "PEARLPLUS_NODE_SAMPLE"
+"PEARLPLUS_NODE_DRAWS" = "PEARLPLUS_NODE_SAMPLES"
+"PRODUCED_DRAW" = "PRODUCED_SAMPLE"
+"PlainDraw" = "PlainSample"
+"PlainDrawAcc" = "PlainSampleAcc"
+"PlainDrawAccJK" = "PlainSampleAccJK"
+"PlainDrawAccK" = "PlainSampleAccK"
+"PlainDrawDec" = "PlainSampleDec"
+"PlainDrawDecJK" = "PlainSampleDecJK"
+"PlainDrawDecK" = "PlainSampleDecK"
+"PlainDrawJ" = "PlainSampleJ"
+"PlainDrawJCols" = "PlainSampleJCols"
+"PlainDrawJMove" = "PlainSampleJMove"
+"PlainDrawJRun" = "PlainSampleJRun"
+"PlainDrawK" = "PlainSampleK"
+"PlainDrawKDefs" = "PlainSampleKDefs"
+"PlainDrawRCols" = "PlainSampleRCols"
+"PlainDrawRColsE" = "PlainSampleRColsE"
+"PlainDrawSim" = "PlainSampleSim"
+"Pr_exists_rerun_draws" = "Pr_exists_rerun_samples"
+"Pr_fork_refDraw_le" = "Pr_fork_refSample_le"
+"Pr_refDraw" = "Pr_refSample"
+"RESP_DRAW" = "RESP_SAMPLE"
+"ReadsDraw" = "ReadsSample"
+"ReadsDrawK" = "ReadsSampleK"
+"ReadsDrawZ" = "ReadsSampleZ"
+"RecordDrawEquiv" = "RecordSampleEquiv"
+"ReplayDraws" = "ReplaySamples"
+"RepsDrawn" = "RepsSampled"
+"RowsDrawn" = "RowsSampled"
+"STANDIN_DRAWS" = "STANDIN_SAMPLES"
+"SamplingDesignDraw" = "SamplingDesignSample"
+"SecondDraws" = "SecondSamples"
+"SessionDraws" = "SessionSamples"
+"SetupHiddenDrawn" = "SetupHiddenSampled"
+"ShowsDraw" = "ShowsSample"
+"SoundDrawOk" = "SoundSampleOk"
+"SparseDrawnAt" = "SparseSampledAt"
+"StageDraws" = "StageSamples"
+"UnequalDraws" = "UnequalSamples"
+"UnitDraw" = "UnitSample"
+"WIRES_DRAWN_UNROLLED" = "WIRES_SAMPLED_UNROLLED"
+"WiresDrawn" = "WiresSampled"
+"ZK_DRAWS" = "ZK_SAMPLES"
+"ZkDrawJ" = "ZkSampleJ"
+"_Draw" = "_Sample"
+"_challenger_draw" = "_challenger_sample"
+"_draw_answers" = "_sample_answers"
+"_draw_on" = "_sample_on"
+"_drawn_linked" = "_sampled_linked"
+"_drawn_op" = "_sampled_op"
+"_f1_draw" = "_f1_sample"
+"_inner_drawn" = "_inner_sampled"
+"_lean_draw" = "_lean_sample"
+"_lean_draw_obj" = "_lean_sample_obj"
+"_one_stage_draw" = "_one_stage_sample"
+"a_malformed_law_or_draw_is_refused" = "a_malformed_law_or_sample_is_refused"
+"a_session_on_the_challengers_tree_is_the_session_its_tape_draws_here" = "a_session_on_the_challengers_tree_is_the_session_its_tape_samples_here"
+"a_stratified_draw_takes_each_strata_k_from_its_own_units" = "a_stratified_sample_takes_each_strata_k_from_its_own_units"
+"a_table_draws_its_own_words_and_salts" = "a_table_samples_its_own_words_and_salts"
+"accK_draw" = "accK_sample"
+"accR_draw" = "accR_sample"
+"accRead_drawn" = "accRead_sampled"
+"acc_draw" = "acc_sample"
+"acc_draw_of_setup" = "acc_sample_of_setup"
+"accepted_draw" = "accepted_sample"
+"accepted_drawnWrong_le_at" = "accepted_sampledWrong_le_at"
+"advice_after_draw" = "advice_after_sample"
+"afterDraw_inv" = "afterSample_inv"
+"agrees_drawWith" = "agrees_sampleWith"
+"allInh_drawFin" = "allInh_sampleFin"
+"allInh_drawK" = "allInh_sampleK"
+"allInh_drawKs" = "allInh_sampleKs"
+"answer_draw" = "answer_sample"
+"answer_ofDraws" = "answer_ofSamples"
+"askOf_draws" = "askOf_samples"
+"audit_drawn" = "audit_sampled"
+"bcChunk_drawn" = "bcChunk_sampled"
+"bcChunk_drawnW" = "bcChunk_sampledW"
+"bc_drawn" = "bc_sampled"
+"bc_drawnH" = "bc_sampledH"
+"bc_drawnS" = "bc_sampledS"
+"bc_drawnS_unpin" = "bc_sampledS_unpin"
+"bc_drawnW" = "bc_sampledW"
+"bc_drawnWP" = "bc_sampledWP"
+"bc_drawnW_unpin" = "bc_sampledW_unpin"
+"bern_meanDraws" = "bern_meanSamples"
+"build_of_ofDraws" = "build_of_ofSamples"
+"canon_drawEq" = "canon_sampleEq"
+"cap_of_drawn" = "cap_of_sampled"
+"cfg_tapeOfDraws" = "cfg_tapeOfSamples"
+"challenger_draw" = "challenger_sample"
+"checkBlobsAt_drawn" = "checkBlobsAt_sampled"
+"checkDrawFull" = "checkSampleFull"
+"checkDrawFull_obj_nil" = "checkSampleFull_obj_nil"
+"checkDraw_nil" = "checkSample_nil"
+"checked_ne_nil_of_drawn" = "checked_ne_nil_of_sampled"
+"checksAtJ_drawSome" = "checksAtJ_sampleSome"
+"checksC3_of_recordDraw" = "checksC3_of_recordSample"
+"checks_draw" = "checks_sample"
+"checks_drawEq" = "checks_sampleEq"
+"checks_recordDraw" = "checks_recordSample"
+"coinsReason_draw" = "coinsReason_sample"
+"coins_draw" = "coins_sample"
+"colKeyed_drawn" = "colKeyed_sampled"
+"commitRead_drawn" = "commitRead_sampled"
+"countRule_eq_draw" = "countRule_eq_sample"
+"coupled_draw" = "coupled_sample"
+"coupled_draw_coins" = "coupled_sample_coins"
+"coupled_draw_coins_setsUp" = "coupled_sample_coins_setsUp"
+"coupled_draw_coins_tied" = "coupled_sample_coins_tied"
+"coupled_draw_coins_v2" = "coupled_sample_coins_v2"
+"coupled_draw_setsUp" = "coupled_sample_setsUp"
+"coupled_draw_tied" = "coupled_sample_tied"
+"design_draw_error" = "design_sample_error"
+"design_draw_ok" = "design_sample_ok"
+"div_of_drawWhy" = "div_of_sampleWhy"
+"doc_draw" = "doc_sample"
+"draw0" = "sample0"
+"drawAll" = "sampleAll"
+"drawAll_eq" = "sampleAll_eq"
+"drawAtFixed_of_coins" = "sampleAtFixed_of_coins"
+"drawB" = "sampleB"
+"drawBytes" = "sampleBytes"
+"drawBytes_eq" = "sampleBytes_eq"
+"drawCalls" = "sampleCalls"
+"drawCalls_eq" = "sampleCalls_eq"
+"drawCalls_noCalls" = "sampleCalls_noCalls"
+"drawCalls_pair_true" = "sampleCalls_pair_true"
+"drawCalls_true" = "sampleCalls_true"
+"drawCalls_true_at" = "sampleCalls_true_at"
+"drawChecked" = "sampleChecked"
+"drawCmd" = "sampleCmd"
+"drawCoins" = "sampleCoins"
+"drawCoinsPiece" = "sampleCoinsPiece"
+"drawCoins_challengePhase" = "sampleCoins_challengePhase"
+"drawCoins_ok_of_steps" = "sampleCoins_ok_of_steps"
+"drawCoins_opens" = "sampleCoins_opens"
+"drawCoins_roots" = "sampleCoins_roots"
+"drawCoins_withheld" = "sampleCoins_withheld"
+"drawCost" = "sampleCost"
+"drawDesign" = "sampleDesign"
+"drawDesign_deployOf" = "sampleDesign_deployOf"
+"drawDesign_of_slots" = "sampleDesign_of_slots"
+"drawDesign_ok" = "sampleDesign_ok"
+"drawDivmod" = "sampleDivmod"
+"drawEq" = "sampleEq"
+"drawEq_iff" = "sampleEq_iff"
+"drawEq_map_norm" = "sampleEq_map_norm"
+"drawEq_ne" = "sampleEq_ne"
+"drawEq_refl" = "sampleEq_refl"
+"drawEvent" = "sampleEvent"
+"drawEvery" = "sampleEvery"
+"drawFileZK_of_toJson" = "sampleFileZK_of_toJson"
+"drawFileZK_of_toJson_law" = "sampleFileZK_of_toJson_samplingDesign"
+"drawFileZK_of_toJson_samplingDesign" = "sampleFileZK_of_toJson_samplingDesign"
+"drawFileZK_of_toJson_subset" = "sampleFileZK_of_toJson_subset"
+"drawFileZK_of_toJson_work" = "sampleFileZK_of_toJson_work"
+"drawFileZK_printedDraw" = "sampleFileZK_printedSample"
+"drawFileZK_printedDraw_law" = "sampleFileZK_printedSample_samplingDesign"
+"drawFileZK_printedDraw_samplingDesign" = "sampleFileZK_printedSample_samplingDesign"
+"drawFileZK_proved_size" = "sampleFileZK_proved_size"
+"drawFin" = "sampleFin"
+"drawFin_exact" = "sampleFin_exact"
+"drawFin_plays" = "sampleFin_plays"
+"drawFirst" = "sampleFirst"
+"drawFirstRead" = "sampleFirstRead"
+"drawFirstRead_read" = "sampleFirstRead_read"
+"drawFirstRead_within" = "sampleFirstRead_within"
+"drawFitsWhy" = "sampleFitsWhy"
+"drawFixed" = "sampleFixed"
+"drawFixed_code" = "sampleFixed_code"
+"drawFixed_codeTwo" = "sampleFixed_codeTwo"
+"drawFixed_deployOf" = "sampleFixed_deployOf"
+"drawFixed_of_first" = "sampleFixed_of_first"
+"drawGame" = "sampleGame"
+"drawHeld" = "sampleHeld"
+"drawHeld_of" = "sampleHeld_of"
+"drawHypsZHJ" = "sampleHypsZHJ"
+"drawHypsZJ" = "sampleHypsZJ"
+"drawJ_one" = "sampleJ_one"
+"drawJ_tableDraw" = "sampleJ_tableSample"
+"drawK_eq_drawOn" = "sampleK_eq_sampleOn"
+"drawK_exact" = "sampleK_exact"
+"drawK_productive" = "sampleK_productive"
+"drawKeys" = "sampleKeys"
+"drawKs" = "sampleKs"
+"drawKs_any" = "sampleKs_any"
+"drawKs_exact" = "sampleKs_exact"
+"drawKs_succ" = "sampleKs_succ"
+"drawKs_two" = "sampleKs_two"
+"drawLaw" = "sampleDesign"
+"drawLaw_deployOf" = "sampleDesign_deployOf"
+"drawLaw_of_slots" = "sampleDesign_of_slots"
+"drawLaw_ok" = "sampleDesign_ok"
+"drawMatchesZk_goal" = "sampleMatchesZk_goal"
+"drawMatches_goal" = "sampleMatches_goal"
+"drawMiss" = "sampleMiss"
+"drawMiss_extend" = "sampleMiss_extend"
+"drawMiss_le" = "sampleMiss_le"
+"drawMisses" = "sampleMisses"
+"drawOS" = "sampleOS"
+"drawOS_bernoulli_escape_le" = "sampleOS_bernoulli_escape_le"
+"drawOS_def" = "sampleOS_def"
+"drawOS_stratified_escape_le" = "sampleOS_stratified_escape_le"
+"drawOS_subset_escape_le" = "sampleOS_subset_escape_le"
+"drawOS_work_escape_le" = "sampleOS_work_escape_le"
+"drawOfJ" = "sampleOfJ"
+"drawOfJ_recordObj" = "sampleOfJ_recordObj"
+"drawOfJ_shaSubJ" = "sampleOfJ_shaSubJ"
+"drawOfU" = "sampleOfU"
+"drawOf_filter" = "sampleOf_filter"
+"drawOf_mem" = "sampleOf_mem"
+"drawOf_of" = "sampleOf_of"
+"drawOf_proved" = "sampleOf_proved"
+"drawOf_size" = "sampleOf_size"
+"drawOk" = "sampleOk"
+"drawOkZK" = "sampleOkZK"
+"drawOkZKHJP_of_count" = "sampleOkZKHJP_of_count"
+"drawOkZKHJP_of_size" = "sampleOkZKHJP_of_size"
+"drawOkZKHJ_empty" = "sampleOkZKHJ_empty"
+"drawOkZKHJ_of_accepts" = "sampleOkZKHJ_of_accepts"
+"drawOkZKHJ_of_accepts_stratified" = "sampleOkZKHJ_of_accepts_stratified"
+"drawOkZKHJ_of_accepts_subset" = "sampleOkZKHJ_of_accepts_subset"
+"drawOkZKHJ_of_custodyJS" = "sampleOkZKHJ_of_custodyJS"
+"drawOkZKHJ_of_exec" = "sampleOkZKHJ_of_exec"
+"drawOkZKHJ_of_exec_one" = "sampleOkZKHJ_of_exec_one"
+"drawOkZKHJ_of_file" = "sampleOkZKHJ_of_file"
+"drawOkZKHJ_of_fileG" = "sampleOkZKHJ_of_fileG"
+"drawOkZKHJ_of_fileSt" = "sampleOkZKHJ_of_fileSt"
+"drawOkZKHJ_of_size" = "sampleOkZKHJ_of_size"
+"drawOkZKHJ_of_sizeG" = "sampleOkZKHJ_of_sizeG"
+"drawOkZKHJ_one" = "sampleOkZKHJ_one"
+"drawOkZKH_execOS" = "sampleOkZKH_execOS"
+"drawOkZKH_of_exec" = "sampleOkZKH_of_exec"
+"drawOkZKH_of_execG" = "sampleOkZKH_of_execG"
+"drawOkZKH_of_execSt" = "sampleOkZKH_of_execSt"
+"drawOkZKJ_empty" = "sampleOkZKJ_empty"
+"drawOkZKJ_of_exec" = "sampleOkZKJ_of_exec"
+"drawOkZKJ_of_file" = "sampleOkZKJ_of_file"
+"drawOkZKJ_of_size" = "sampleOkZKJ_of_size"
+"drawOkZK_execOS" = "sampleOkZK_execOS"
+"drawOkZK_of_exec" = "sampleOkZK_of_exec"
+"drawOk_of_okAt" = "sampleOk_of_okAt"
+"drawOn" = "sampleOn"
+"drawOn_congr" = "sampleOn_congr"
+"drawOn_escape_le" = "sampleOn_escape_le"
+"drawOn_units" = "sampleOn_units"
+"drawPos_lt" = "samplePos_lt"
+"drawReadAll_coinsRead" = "sampleReadAll_coinsRead"
+"drawReadAll_logRead" = "sampleReadAll_logRead"
+"drawRead_coinsRead" = "sampleRead_coinsRead"
+"drawRead_deployed" = "sampleRead_deployed"
+"drawRead_logRead" = "sampleRead_logRead"
+"drawSetup" = "sampleSetup"
+"drawSetupHP_of_setupHiddenI" = "sampleSetupHP_of_setupHiddenI"
+"drawSetupH_of_accepts" = "sampleSetupH_of_accepts"
+"drawSetupH_of_acceptsDJK" = "sampleSetupH_of_acceptsDJK"
+"drawSetupH_of_acceptsDK" = "sampleSetupH_of_acceptsDK"
+"drawSetupH_of_acceptsU" = "sampleSetupH_of_acceptsU"
+"drawSetupH_of_setupHidden" = "sampleSetupH_of_setupHidden"
+"drawSetupH_of_setupHiddenI" = "sampleSetupH_of_setupHiddenI"
+"drawSetupH_of_setupHiddenU" = "sampleSetupH_of_setupHiddenU"
+"drawSetupZHJP_of" = "sampleSetupZHJP_of"
+"drawSetupZHJ_of" = "sampleSetupZHJ_of"
+"drawSetupZJ_of" = "sampleSetupZJ_of"
+"drawSetupZKH_of_accepts" = "sampleSetupZKH_of_accepts"
+"drawSetupZKH_of_acceptsI" = "sampleSetupZKH_of_acceptsI"
+"drawSetupZKH_of_acceptsISt" = "sampleSetupZKH_of_acceptsISt"
+"drawSetupZKH_of_acceptsU" = "sampleSetupZKH_of_acceptsU"
+"drawSetupZKH_whole_empty_16_2_1" = "sampleSetupZKH_whole_empty_16_2_1"
+"drawSetupZKH_whole_mPts" = "sampleSetupZKH_whole_mPts"
+"drawSetupZK_of" = "sampleSetupZK_of"
+"drawSetupZK_whole_empty_16_2_1" = "sampleSetupZK_whole_empty_16_2_1"
+"drawSetupZK_whole_mPts" = "sampleSetupZK_whole_mPts"
+"drawSetup_of_accepts" = "sampleSetup_of_accepts"
+"drawSetup_of_acceptsDJK" = "sampleSetup_of_acceptsDJK"
+"drawSetup_of_acceptsDK" = "sampleSetup_of_acceptsDK"
+"drawSetup_of_setupH" = "sampleSetup_of_setupH"
+"drawSetup_of_setupH_g" = "sampleSetup_of_setupH_g"
+"drawSize" = "sampleSize"
+"drawSize_deployed" = "sampleSize_deployed"
+"drawSlot" = "sampleSlot"
+"drawSlots_code" = "sampleSlots_code"
+"drawStrat" = "sampleStrat"
+"drawTest" = "sampleTest"
+"drawTiedB" = "sampleTiedB"
+"drawTiedB_iff" = "sampleTiedB_iff"
+"drawTiedS" = "sampleTiedS"
+"drawTied_of_scope" = "sampleTied_of_scope"
+"drawU" = "sampleU"
+"drawUnits" = "sampleUnits"
+"drawUnits_all" = "sampleUnits_all"
+"drawUnits_append" = "sampleUnits_append"
+"drawUnits_miss_le" = "sampleUnits_miss_le"
+"drawUnits_read" = "sampleUnits_read"
+"drawUnits_seq" = "sampleUnits_seq"
+"drawUnits_size" = "sampleUnits_size"
+"drawUnits_subset_lt" = "sampleUnits_subset_lt"
+"drawUnits_subset_runOS" = "sampleUnits_subset_runOS"
+"drawUnits_within" = "sampleUnits_within"
+"drawUnits_work_size" = "sampleUnits_work_size"
+"drawView" = "sampleView"
+"drawW_asc" = "sampleW_asc"
+"drawW_model" = "sampleW_model"
+"drawW_obj" = "sampleW_obj"
+"drawWhy" = "sampleWhy"
+"drawWhy_none" = "sampleWhy_none"
+"drawWidth_mono" = "sampleWidth_mono"
+"drawWith_append" = "sampleWith_append"
+"drawWith_bernoulli_run" = "sampleWith_bernoulli_run"
+"drawWith_read" = "sampleWith_read"
+"drawWith_stratified_run" = "sampleWith_stratified_run"
+"drawWith_subset_run" = "sampleWith_subset_run"
+"drawWith_within" = "sampleWith_within"
+"drawWith_work_run" = "sampleWith_work_run"
+"drawWits" = "sampleWits"
+"drawWits_of_wits" = "sampleWits_of_wits"
+"drawZ_mass_le" = "sampleZ_mass_le"
+"draw_" = "sample_"
+"draw_altered" = "sample_altered"
+"draw_closure" = "sample_closure"
+"draw_coins_case" = "sample_coins_case"
+"draw_dropped" = "sample_dropped"
+"draw_eq" = "sample_eq"
+"draw_error" = "sample_error"
+"draw_file" = "sample_file"
+"draw_given" = "sample_given"
+"draw_good" = "sample_good"
+"draw_label" = "sample_label"
+"draw_ne_proofKey" = "sample_ne_proofKey"
+"draw_none" = "sample_none"
+"draw_of_drew" = "sample_of_drew"
+"draw_population" = "sample_population"
+"draw_readsBack" = "sample_readsBack"
+"draw_salts" = "sample_salts"
+"draw_split" = "sample_split"
+"draw_strata" = "sample_strata"
+"draw_wf" = "sample_wf"
+"draw_width" = "sample_width"
+"draw_with" = "sample_with"
+"drawnAll" = "sampledAll"
+"drawnBefore" = "sampledBefore"
+"drawnBefore_exists" = "sampledBefore_exists"
+"drawnBefore_le" = "sampledBefore_le"
+"drawnBefore_succ_of_drawn" = "sampledBefore_succ_of_sampled"
+"drawnBefore_succ_of_not" = "sampledBefore_succ_of_not"
+"drawnBefore_zero" = "sampledBefore_zero"
+"drawnByDevice" = "sampledByDevice"
+"drawnByDevice_nontrivial" = "sampledByDevice_nontrivial"
+"drawnExtra" = "sampledExtra"
+"drawnFrom" = "sampledFrom"
+"drawnFrom_designAt" = "sampledFrom_designAt"
+"drawnFrom_drawnLaw" = "sampledFrom_sampledDesign"
+"drawnFrom_drawnSamplingDesign" = "sampledFrom_sampledDesign"
+"drawnFrom_ok" = "sampledFrom_ok"
+"drawnInstance" = "sampledInstance"
+"drawnInts" = "sampledInts"
+"drawnJson" = "sampledJson"
+"drawnLaw" = "sampledDesign"
+"drawnLaw_cases" = "sampledDesign_cases"
+"drawnLaw_ok" = "sampledDesign_ok"
+"drawnNats" = "sampledNats"
+"drawnOk_iff" = "sampledOk_iff"
+"drawnPads" = "sampledPads"
+"drawnPub" = "sampledPub"
+"drawnPub_tables" = "sampledPub_tables"
+"drawnSalts" = "sampledSalts"
+"drawnSamplingDesign" = "sampledDesign"
+"drawnSamplingDesign_cases" = "sampledDesign_cases"
+"drawnSamplingDesign_ok" = "sampledDesign_ok"
+"drawnSpec" = "sampledSpec"
+"drawnSpec_shape" = "sampledSpec_shape"
+"drawnUnits" = "sampledBlocks"
+"drawnWith" = "sampledWith"
+"drawnWith_sim" = "sampledWith_sim"
+"drawnWith_std" = "sampledWith_std"
+"drawnWrong" = "sampledWrong"
+"drawn_contPlay" = "sampled_contPlay"
+"drawn_digest" = "sampled_digest"
+"drawn_digestW" = "sampled_digestW"
+"drawn_facts" = "sampled_facts"
+"drawn_frame" = "sampled_frame"
+"drawn_fresh" = "sampled_fresh"
+"drawn_full" = "sampled_full"
+"drawn_goPlay" = "sampled_goPlay"
+"drawn_header" = "sampled_header"
+"drawn_instances" = "sampled_instances"
+"drawn_law" = "sampled_law"
+"drawn_le_weight" = "sampled_le_weight"
+"drawn_length" = "sampled_length"
+"drawn_lifePlay" = "sampled_lifePlay"
+"drawn_log" = "sampled_log"
+"drawn_n" = "sampled_n"
+"drawn_noPorts" = "sampled_noPorts"
+"drawn_ofBindPlay" = "sampled_ofBindPlay"
+"drawn_of_acceptsZKR" = "sampled_of_acceptsZKR"
+"drawn_of_ok" = "sampled_of_ok"
+"drawn_of_play" = "sampled_of_play"
+"drawn_outputs" = "sampled_outputs"
+"drawn_outputs_nil" = "sampled_outputs_nil"
+"drawn_pop" = "sampled_pop"
+"drawn_population" = "sampled_population"
+"drawn_pubW" = "sampled_pubW"
+"drawn_released" = "sampled_released"
+"drawn_roundPlay" = "sampled_roundPlay"
+"drawn_same" = "sampled_same"
+"drawn_setup" = "sampled_setup"
+"drawn_shown" = "sampled_shown"
+"drawn_shown_after" = "sampled_shown_after"
+"drawn_shown_append" = "sampled_shown_append"
+"drawn_spec" = "sampled_spec"
+"drawn_stacked" = "sampled_stacked"
+"drawn_stagePlay" = "sampled_stagePlay"
+"drawn_term" = "sampled_term"
+"drawn_ties" = "sampled_ties"
+"drawn_unit" = "sampled_block"
+"drawn_unrolledOf" = "sampled_unrolledOf"
+"drawsAt" = "samplesAt"
+"drawsFrom" = "samplesFrom"
+"drawsInFull" = "samplesInFull"
+"drawsInFull_of_checkFull" = "samplesInFull_of_checkFull"
+"drawsInFull_of_checkFull_round" = "samplesInFull_of_checkFull_round"
+"drawsOfBytes_pads" = "samplesOfBytes_pads"
+"drawsPads" = "samplesPads"
+"drawsUnder_of_drawnFrom" = "samplesUnder_of_sampledFrom"
+"drawsWith" = "samplesWith"
+"drawsWith_refuses" = "samplesWith_refuses"
+"draws_full" = "samples_full"
+"draws_lift" = "samples_lift"
+"draws_mapM" = "samples_mapM"
+"draws_ofLoopLink" = "samples_ofLoopLink"
+"draws_salted" = "samples_salted"
+"draws_saltedTop" = "samples_saltedTop"
+"draws_salteds" = "samples_salteds"
+"draws_used" = "samples_used"
+"every_unit_of_a_stratum_is_drawn" = "every_unit_of_a_stratum_is_sampled"
+"exQ_drawOne" = "exQ_sampleOne"
+"exQ_drawVec" = "exQ_sampleVec"
+"ex_drawK" = "ex_sampleK"
+"ex_drawOne" = "ex_sampleOne"
+"ex_drawVec" = "ex_sampleVec"
+"execOS_draw_card" = "execOS_sample_card"
+"execOS_draw_card_or" = "execOS_sample_card_or"
+"execOS_subset_draw_card_le" = "execOS_subset_sample_card_le"
+"execRefinesZK_on_drawn" = "execRefinesZK_on_sampled"
+"execRefinesZK_tables_drawn" = "execRefinesZK_tables_sampled"
+"execRefinesZK_tables_drawnA" = "execRefinesZK_tables_sampledA"
+"exec_le_of_refines_drawn" = "exec_le_of_refines_sampled"
+"exec_recordDraw" = "exec_recordSample"
+"expectN_drawGame" = "expectN_sampleGame"
+"expect_conflictG_drawGame" = "expect_conflictG_sampleGame"
+"expect_draw" = "expect_sample"
+"expect_drawGame" = "expect_sampleGame"
+"expect_runsG_drawGame" = "expect_runsG_sampleGame"
+"extendDraw" = "extendSample"
+"extendDraw_capFork" = "extendSample_capFork"
+"extendDraw_fork" = "extendSample_fork"
+"extend_design_draw" = "extend_design_sample"
+"extend_draw" = "extend_sample"
+"extraction_audit_drawn" = "extraction_audit_sampled"
+"firstDraw_of" = "firstSample_of"
+"firstDrawn_of" = "firstSampled_of"
+"firstDraws" = "firstSamples"
+"firstDraws_window" = "firstSamples_window"
+"fits_of_drawOk" = "fits_of_sampleOk"
+"flock_batched_drawn" = "flock_batched_sampled"
+"flock_batched_drawnE" = "flock_batched_sampledE"
+"flock_batched_drawnEL" = "flock_batched_sampledEL"
+"flock_batched_drawnL" = "flock_batched_sampledL"
+"flock_batched_drawn_linked" = "flock_batched_sampled_linked"
+"flock_batched_drawn_linkedL" = "flock_batched_sampled_linkedL"
+"flock_batched_drawn_placedL" = "flock_batched_sampled_placedL"
+"flock_batched_drawn_public" = "flock_batched_sampled_public"
+"flock_batched_drawn_publicL" = "flock_batched_sampled_publicL"
+"flock_compiled_drawn" = "flock_compiled_sampled"
+"flock_e2e_drawn" = "flock_e2e_sampled"
+"flock_e2e_drawnL" = "flock_e2e_sampledL"
+"flock_e2e_drawn_classes" = "flock_e2e_sampled_classes"
+"flock_e2e_drawn_classes_zero" = "flock_e2e_sampled_classes_zero"
+"flock_e2e_drawn_exec" = "flock_e2e_sampled_exec"
+"flock_e2e_drawn_exec_hm96" = "flock_e2e_sampled_exec_hm96"
+"flock_e2e_drawn_hm96" = "flock_e2e_sampled_hm96"
+"flock_e2e_drawn_hm96L" = "flock_e2e_sampled_hm96L"
+"flock_e2e_drawn_hm96_reads" = "flock_e2e_sampled_hm96_reads"
+"flock_oracle_drawn" = "flock_oracle_sampled"
+"forkDraw" = "forkSample"
+"frame_draws" = "frame_samples"
+"fullDraw" = "fullSample"
+"fullDraw4" = "fullSample4"
+"fullDrawB" = "fullSampleB"
+"fullDrawO" = "fullSampleO"
+"fullDrawO_denseOnly" = "fullSampleO_denseOnly"
+"fullDrawO_fullDraw" = "fullSampleO_fullSample"
+"fullDrawOk" = "fullSampleOk"
+"fullDrawOk_iff" = "fullSampleOk_iff"
+"fullDraw_ok" = "fullSample_ok"
+"fullDraw_some" = "fullSample_some"
+"fullDraw_some_rec" = "fullSample_some_rec"
+"gDraw" = "gSample"
+"getD_draw_closure" = "getD_sample_closure"
+"getD_draw_units" = "getD_sample_units"
+"good_draw" = "good_sample"
+"guardDrawn" = "guardSampled"
+"hDrawn" = "hSampled"
+"hDrawnE" = "hSampledE"
+"held_draw" = "held_sample"
+"hidden_draw" = "hidden_sample"
+"hmInDrawnWith_sim" = "hmInSampledWith_sim"
+"honest_drawJ" = "honest_sampleJ"
+"honest_drawTied" = "honest_sampleTied"
+"ignore_draw" = "ignore_sample"
+"inDrawnWith_std" = "inSampledWith_std"
+"inVal_drawnP" = "inVal_sampledP"
+"innerDraw" = "innerSample"
+"innerDrawn" = "innerSampled"
+"innerDrawn_checked" = "innerSampled_checked"
+"innerDrawn_record" = "innerSampled_record"
+"innerSetup_drawn" = "innerSetup_sampled"
+"insO_draw_norm" = "insO_sample_norm"
+"insOf_draw_norm" = "insOf_sample_norm"
+"ins_draw" = "ins_sample"
+"joint_drawUnits_of_drew" = "joint_sampleUnits_of_drew"
+"joint_draw_eq" = "joint_sample_eq"
+"joint_draw_of_drew" = "joint_sample_of_drew"
+"lanes_drawn_in_parallel_are_the_sequential_draw" = "lanes_sampled_in_parallel_are_the_sequential_sample"
+"lawOn_drawnLaw" = "samplingDesignOn_sampledDesign"
+"lawOn_drawsUnder" = "samplingDesignOn_samplesUnder"
+"lawSized_drawnLaw" = "samplingDesignSized_sampledDesign"
+"lawSized_drawsUnder" = "samplingDesignSized_samplesUnder"
+"lawfulBEqByteArrayDraw" = "lawfulBEqByteArraySample"
+"leaf_drawn" = "leaf_sampled"
+"lean_draw_test" = "lean_sample_test"
+"ligerito_drawn" = "ligerito_sampled"
+"logged_draw" = "logged_sample"
+"logged_draw_v2" = "logged_sample_v2"
+"meanDraws" = "meanSamples"
+"meanDraws_nonneg" = "meanSamples_nonneg"
+"meanDraws_restrict" = "meanSamples_restrict"
+"mem_closure_draw" = "mem_closure_sample"
+"mem_design_draw" = "mem_design_sample"
+"mem_draw_iff" = "mem_sample_iff"
+"memberDrawn" = "memberSampled"
+"memberDrawn_iff" = "memberSampled_iff"
+"member_accepted_drawnWrong_le" = "member_accepted_sampledWrong_le"
+"member_draw_eq" = "member_sample_eq"
+"member_draw_of_drew" = "member_sample_of_drew"
+"miss_eq_zero_of_draw_univ" = "miss_eq_zero_of_sample_univ"
+"nextK_acc_draw" = "nextK_acc_sample"
+"nextR_acc_draw" = "nextR_acc_sample"
+"next_acc_draw" = "next_acc_sample"
+"noInnerDraw" = "noInnerSample"
+"notBernoulli_drawsUnder" = "notBernoulli_samplesUnder"
+"not_nonempty_of_memberDrawn" = "not_nonempty_of_memberSampled"
+"ofDraws" = "ofSamples"
+"ofDraws_gsize" = "ofSamples_gsize"
+"ofDraws_h" = "ofSamples_h"
+"ofDraws_inBytes" = "ofSamples_inBytes"
+"ofDraws_lay" = "ofSamples_lay"
+"ofDraws_lig" = "ofSamples_lig"
+"ofDraws_mask" = "ofSamples_mask"
+"ofDraws_nPiop" = "ofSamples_nPiop"
+"ofDraws_of_sizes" = "ofSamples_of_sizes"
+"ofDraws_ok" = "ofSamples_ok"
+"ofDraws_order" = "ofSamples_order"
+"ofDraws_rowH_size" = "ofSamples_rowH_size"
+"ofDraws_rowMu_size" = "ofSamples_rowMu_size"
+"ofDraws_wideLeaf" = "ofSamples_wideLeaf"
+"ofJson_drawW" = "ofJson_sampleW"
+"ofJson_partDraw" = "ofJson_partSample"
+"ofJson_toJson_drawOf" = "ofJson_toJson_sampleOf"
+"ofJson_toJson_drawOf_subset" = "ofJson_toJson_sampleOf_subset"
+"ofJson_toJson_drawOf_work" = "ofJson_toJson_sampleOf_work"
+"oneRoot_draws" = "oneRoot_samples"
+"oneShot_drawn" = "oneShot_sampled"
+"oneStageZk_drawn" = "oneStageZk_sampled"
+"openKeys_drawn" = "openKeys_sampled"
+"oracle_drawn" = "oracle_sampled"
+"os_draws_are_read_afresh_at_every_address" = "os_samples_are_read_afresh_at_every_address"
+"outVal_drawn" = "outVal_sampled"
+"out_drawn" = "out_sampled"
+"ownDraw" = "ownSample"
+"ownDraw_eq" = "ownSample_eq"
+"padAt_ofDraws" = "padAt_ofSamples"
+"padAt_ofDraws_absPos" = "padAt_ofSamples_absPos"
+"padsOf_drawsAt" = "padsOf_samplesAt"
+"padsOf_tapeOfDraws" = "padsOf_tapeOfSamples"
+"padsRoot_tapeOfDraws" = "padsRoot_tapeOfSamples"
+"parse_drawTiedOne" = "parse_sampleTiedOne"
+"partDraw" = "partSample"
+"pearlplus_live_draw" = "pearlplus_live_sample"
+"pieceDrawn" = "pieceSampled"
+"pieceDrawnRef" = "pieceSampledRef"
+"plain_drawW" = "plain_sampleW"
+"playsT_draw_bind" = "playsT_sample_bind"
+"plays_drawK" = "plays_sampleK"
+"printedDraw" = "printedSample"
+"printedDraw_subset" = "printedSample_subset"
+"prob_auditLive_draw" = "prob_auditLive_sample"
+"prob_drawMiss" = "prob_sampleMiss"
+"productive_draw" = "productive_sample"
+"profileDraw" = "profileSample"
+"prog_e2e_drawn" = "prog_e2e_sampled"
+"proved_of_drawDesign" = "proved_of_sampleDesign"
+"proved_of_drawLaw" = "proved_of_sampleDesign"
+"push_draws" = "push_samples"
+"rankStop_ofDraws" = "rankStop_ofSamples"
+"reach_draw" = "reach_sample"
+"recDraw" = "recSample"
+"recordDrawEquiv" = "recordSampleEquiv"
+"recordDrawOf" = "recordSampleOf"
+"recordDrawZk_ofFields" = "recordSampleZk_ofFields"
+"recordDrawZk_ofFieldsJ" = "recordSampleZk_ofFieldsJ"
+"recordDraw_congr" = "recordSample_congr"
+"recordDraw_eq" = "recordSample_eq"
+"recordDraw_firstStop" = "recordSample_firstStop"
+"recordDraw_norm" = "recordSample_norm"
+"recordDraw_of_canon" = "recordSample_of_canon"
+"recordDraw_of_checks" = "recordSample_of_checks"
+"recordDraw_of_coins" = "recordSample_of_coins"
+"recordDraw_of_decide" = "recordSample_of_decide"
+"recordDraw_of_drew" = "recordSample_of_drew"
+"recordDraw_of_parse" = "recordSample_of_parse"
+"recordDraw_raw" = "recordSample_raw"
+"recordDraw_recordObj" = "recordSample_recordObj"
+"recordDraw_recordObjZk" = "recordSample_recordObjZk"
+"recordDraw_recordObjZkJ" = "recordSample_recordObjZkJ"
+"recordDraw_subset" = "recordSample_subset"
+"recordDraw_tr0" = "recordSample_tr0"
+"recordDrawn" = "recordSampled"
+"recordDrawn_of_subset" = "recordSampled_of_subset"
+"refDraw" = "refSample"
+"reference_draw" = "reference_sample"
+"reference_drawn" = "reference_sampled"
+"replayDraws" = "replaySamples"
+"replayDraws_code" = "replaySamples_code"
+"repsDrawn_holoMapAt" = "repsSampled_holoMapAt"
+"repsDrawn_valsSrc" = "repsSampled_valsSrc"
+"run_draw" = "run_sample"
+"rx_draw" = "rx_sample"
+"samplingDesignOn_drawnSamplingDesign" = "samplingDesignOn_sampledDesign"
+"samplingDesignOn_drawsUnder" = "samplingDesignOn_samplesUnder"
+"samplingDesignSized_drawnSamplingDesign" = "samplingDesignSized_sampledDesign"
+"samplingDesignSized_drawsUnder" = "samplingDesignSized_samplesUnder"
+"secondDrawAt" = "secondSampleAt"
+"secondDraw_of" = "secondSample_of"
+"secondDraw_parts" = "secondSample_parts"
+"secondDraw_read" = "secondSample_read"
+"secondDraws" = "secondSamples"
+"secondDraws_code" = "secondSamples_code"
+"secondDraws_eq" = "secondSamples_eq"
+"secondDraws_le" = "secondSamples_le"
+"secondDraws_parts" = "secondSamples_parts"
+"select_of_secondDraw" = "select_of_secondSample"
+"setupAt_drawDesign" = "setupAt_sampleDesign"
+"setupAt_drawLaw" = "setupAt_sampleDesign"
+"setupH_drawn" = "setupH_sampled"
+"setupH_mPts_drawn" = "setupH_mPts_sampled"
+"setupHidden_drawn" = "setupHidden_sampled"
+"setupHidden_drawnP" = "setupHidden_sampledP"
+"setupHidden_mPts_drawn" = "setupHidden_mPts_sampled"
+"setupHidden_mPts_drawnP" = "setupHidden_mPts_sampledP"
+"setup_drawDesign" = "setup_sampleDesign"
+"setup_drawLaw" = "setup_sampleDesign"
+"side_drawn" = "side_sampled"
+"source_draws" = "source_samples"
+"spDraws" = "spSamples"
+"sparseDrawnAt_holo" = "sparseSampledAt_holo"
+"stageDraws_first" = "stageSamples_first"
+"stageDraws_goodCase" = "stageSamples_goodCase"
+"stageDraws_second" = "stageSamples_second"
+"staged_coinTie_drawn" = "staged_coinTie_sampled"
+"staged_coinTie_drawn_unique" = "staged_coinTie_sampled_unique"
+"staged_rep_drawn" = "staged_rep_sampled"
+"standin_draws" = "standin_samples"
+"step_drawn" = "step_sampled"
+"stmtJsonOf_draw" = "stmtJsonOf_sample"
+"stmtOk_draw" = "stmtOk_sample"
+"strataDraw" = "strataSample"
+"strataDrawn" = "strataSampled"
+"stratified_draw_full" = "stratified_sample_full"
+"tab_of_drawn" = "tab_of_sampled"
+"tableDraw" = "tableSample"
+"tables_draws" = "tables_samples"
+"takeAt_ofDraws" = "takeAt_ofSamples"
+"tapeDraws" = "tapeSamples"
+"tapeDraws_rep" = "tapeSamples_rep"
+"tapeOfDraws" = "tapeOfSamples"
+"tapeSim_drawWith" = "tapeSim_sampleWith"
+"tau_le_drawBytes" = "tau_le_sampleBytes"
+"test_a5_records_a_law_none_of_whose_draws_ends" = "test_a5_records_a_law_none_of_whose_samples_ends"
+"test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins" = "test_a5_records_whether_the_sample_ran_out_of_the_challengers_coins"
+"test_a5s_stream_draws_on_no_coins_of_its_own" = "test_a5s_stream_samples_on_no_coins_of_its_own"
+"test_a_call_names_its_own_streams_registration_and_draw" = "test_a_call_names_its_own_streams_registration_and_sample"
+"test_a_challenger_draws_only_from_the_entropy_it_is_given" = "test_a_challenger_samples_only_from_the_entropy_it_is_given"
+"test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close" = "test_a_coin_tree_is_sampled_and_opened_in_the_windows_session_under_its_signed_close"
+"test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit" = "test_a_sample_given_no_coins_is_refused_unless_it_samples_every_unit"
+"test_a_draw_is_a_unit_draw_object" = "test_a_sample_is_a_unit_sample_object"
+"test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check" = "test_a_sample_is_accepted_and_two_tables_and_m26_pass_every_check"
+"test_a_draw_is_held_to_its_registered_law" = "test_a_sample_is_held_to_its_registered_law"
+"test_a_draw_law_input_it_cannot_read" = "test_a_sample_law_input_it_cannot_read"
+"test_a_draw_over_several_tables_has_a_count_they_split" = "test_a_sample_over_several_tables_has_a_count_they_split"
+"test_a_draw_that_is_not_json" = "test_a_sample_that_is_not_json"
+"test_a_draw_the_setup_refuses_and_the_session_goes_on" = "test_a_sample_the_setup_refuses_and_the_session_goes_on"
+"test_a_drawn_proof_block_with_no_verdict_line_is_a_visible_failure" = "test_a_sampled_proof_block_with_no_verdict_line_is_a_visible_failure"
+"test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full" = "test_a_sampled_session_samples_every_unit_reading_a_rounds_commitment_in_full"
+"test_a_drawn_session_of_two_tables_is_refused" = "test_a_sampled_session_of_two_tables_is_refused"
+"test_a_drawn_wires_piece_agrees" = "test_a_sampled_wires_piece_agrees"
+"test_a_family_is_drawn_once_and_a_read_needs_a_commitment" = "test_a_family_is_sampled_once_and_a_read_needs_a_commitment"
+"test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition" = "test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_sampled_and_off_its_definition"
+"test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit" = "test_a_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit"
+"test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw" = "test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_sample"
+"test_a_level_0_the_loop_cannot_draw" = "test_a_level_0_the_loop_cannot_sample"
+"test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused" = "test_a_level_at_link_points_the_coin_server_did_not_sample_is_refused"
+"test_a_line_at_zero_is_drawn_on_the_floor_and_captioned_and_coincident_lines_plotted_once" = "test_a_line_at_zero_is_sampled_on_the_floor_and_captioned_and_coincident_lines_plotted_once"
+"test_a_live_draw_carries_its_receipt" = "test_a_live_sample_carries_its_receipt"
+"test_a_named_source_draws_its_own_bytes_and_the_challenger_keeps_its_claim" = "test_a_named_source_samples_its_own_bytes_and_the_challenger_keeps_its_claim"
+"test_a_paced_group_is_drawn_as_its_k_th_root_arrives" = "test_a_paced_group_is_sampled_as_its_k_th_root_arrives"
+"test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve" = "test_a_reserve_that_cant_cover_the_samples_is_refused_naming_need_and_reserve"
+"test_a_sampler_draws_instead_and_is_held_to_the_law" = "test_a_sampler_samples_instead_and_is_held_to_the_law"
+"test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not" = "test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not"
+"test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not" = "test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not"
+"test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts" = "test_a_session_sampled_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts"
+"test_a_session_without_a_draw_is_refused_after_every_check" = "test_a_session_without_a_sample_is_refused_after_every_check"
+"test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own" = "test_a_shared_row_readers_flipped_wired_row_is_its_sampled_units_own"
+"test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_draws" = "test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_samples"
+"test_a_stratified_draw_at_the_verifiers_own_k" = "test_a_stratified_sample_at_the_verifiers_own_k"
+"test_a_stream_draws_no_coins_of_its_own" = "test_a_stream_samples_no_coins_of_its_own"
+"test_a_subset_draw_at_hidden_outputs_passes_the_law_in_either_mode" = "test_a_subset_sample_at_hidden_outputs_passes_the_law_in_either_mode"
+"test_a_tampered_wired_window_names_the_drawn_units_its_sessions_refused_before_leans_missing_files" = "test_a_tampered_wired_window_names_the_sampled_units_its_sessions_refused_before_leans_missing_files"
+"test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw" = "test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample"
+"test_a_window_with_no_draws_settles_malformed_whatever_its_batches" = "test_a_window_with_no_samples_settles_malformed_whatever_its_batches"
+"test_a_windows_draw_from_the_challengers_coins_is_held_to_its_evidence_by_the_lean_run" = "test_a_windows_sample_from_the_challengers_coins_is_held_to_its_evidence_by_the_lean_run"
+"test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration" = "test_a_windows_seed_salt_is_sampled_once_before_it_serves_and_named_by_each_registration"
+"test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn_once" = "test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_sampled_once"
+"test_a_work_draw_carries_its_closure" = "test_a_work_sample_carries_its_closure"
+"test_a_work_draws_design_is_cores" = "test_a_work_samples_design_is_cores"
+"test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with" = "test_a_work_laws_need_is_its_sample_under_the_work_table_the_rank_registers_with"
+"test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused" = "test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused"
+"test_an_honest_run_draws_proves_and_audits_each_block_in_order_and_accepts" = "test_an_honest_run_samples_proves_and_audits_each_block_in_order_and_accepts"
+"test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement" = "test_an_inner_record_given_the_full_sample_is_read_at_the_sampled_statement"
+"test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused" = "test_an_inner_record_whose_sample_leaves_a_unit_out_is_refused"
+"test_an_unavailable_draw_ends_the_verifier_refused_draw_with_nothing_proved" = "test_an_unavailable_sample_ends_the_verifier_refused_sample_with_nothing_proved"
+"test_audit_record_holds_the_served_draw_and_the_sessions_roots" = "test_audit_record_holds_the_served_sample_and_the_sessions_roots"
+"test_certify_is_held_to_the_supremum_on_random_draws" = "test_certify_is_held_to_the_supremum_on_random_samples"
+"test_closure_draw_proves_the_verifiers_closure" = "test_closure_sample_proves_the_verifiers_closure"
+"test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_drawn" = "test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_sampled"
+"test_draw_checks" = "test_sample_checks"
+"test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes" = "test_sample_first_is_the_lean_verifiers_sample_on_the_same_bytes"
+"test_draw_first_refuses_what_lean_refuses" = "test_sample_first_refuses_what_lean_refuses"
+"test_each_commit_draws_its_own_session" = "test_each_commit_samples_its_own_session"
+"test_each_reps_frame_draws_its_own" = "test_each_reps_frame_samples_its_own"
+"test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own" = "test_fits_why_names_the_first_field_past_the_limit_and_the_sample_its_own"
+"test_holo_statements_agree_on_drawn_shapes" = "test_holo_statements_agree_on_sampled_shapes"
+"test_in_two_stages_an_unavailable_second_draw_ends_the_verifier_refused_second_with_nothing_proved" = "test_in_two_stages_an_unavailable_second_sample_ends_the_verifier_refused_second_with_nothing_proved"
+"test_in_two_stages_the_proof_server_refuses_a_second_draw_before_its_interior_or_twice" = "test_in_two_stages_the_proof_server_refuses_a_second_sample_before_its_interior_or_twice"
+"test_inner_draw_agrees" = "test_inner_sample_agrees"
+"test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one" = "test_leak_count_is_certified_and_the_leak_law_samples_n_lambda_over_k_plus_one"
+"test_link_points_refuses_a_law_none_of_whose_draws_ends" = "test_link_points_refuses_a_law_none_of_whose_samples_ends"
+"test_no_claim_draws_by_these_laws_in_either_mode" = "test_no_claim_samples_by_these_laws_in_either_mode"
+"test_one_process_serves_every_draw" = "test_one_process_serves_every_sample"
+"test_one_stratified_draw_splits_over_several_tables" = "test_one_stratified_sample_splits_over_several_tables"
+"test_part_1_states_the_guarantee_the_draw_certifies" = "test_part_1_states_the_guarantee_the_sample_certifies"
+"test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units" = "test_per_unit_timing_is_over_the_members_sampled_units_not_c_flocks_virtual_units"
+"test_plain_tables_refuses_a_session_without_a_draw" = "test_plain_tables_refuses_a_session_without_a_sample"
+"test_proved_units_are_the_draw" = "test_proved_units_are_the_sample"
+"test_register_is_answered_with_the_verifiers_draw_and_the_record_keeps_it" = "test_register_is_answered_with_the_verifiers_sample_and_the_record_keeps_it"
+"test_shared_statements_hold_only_the_drawn_units" = "test_shared_statements_hold_only_the_sampled_units"
+"test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_blocks" = "test_sparse_samples_on_huge_populations_still_touch_statements_and_replay_blocks"
+"test_statement_size_moves_to_the_cap_as_the_draw_densifies" = "test_statement_size_moves_to_the_cap_as_the_sample_densifies"
+"test_stratified_draw_agrees_with_core" = "test_stratified_sample_agrees_with_core"
+"test_stratified_draw_checks" = "test_stratified_sample_checks"
+"test_stratified_draw_from_the_verifiers_own_program" = "test_stratified_sample_from_the_verifiers_own_program"
+"test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it" = "test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it"
+"test_the_audit_reads_its_draw_from_the_challengers_coins" = "test_the_audit_reads_its_sample_from_the_challengers_coins"
+"test_the_audit_reserves_a_port_for_every_session_its_draw_can_open" = "test_the_audit_reserves_a_port_for_every_session_its_sample_can_open"
+"test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted" = "test_the_class_closure_map_is_refused_and_the_work_sample_without_it_accepted"
+"test_the_coin_server_draws_no_coin_tree_of_its_own" = "test_the_coin_server_samples_no_coin_tree_of_its_own"
+"test_the_default_draw_is_draw_first_on_the_challengers_bytes" = "test_the_default_sample_is_sample_first_on_the_challengers_bytes"
+"test_the_draw_is_the_challengers_coins_and_nothing_else" = "test_the_sample_is_the_challengers_coins_and_nothing_else"
+"test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read" = "test_the_sample_of_record_is_the_leans_on_the_bytes_the_python_read"
+"test_the_draw_reads_a_challengers_coins_opened_after_the_registration" = "test_the_sample_reads_a_challengers_coins_opened_after_the_registration"
+"test_the_draw_reads_the_coins_opened_after_the_commitment_in_order" = "test_the_sample_reads_the_coins_opened_after_the_commitment_in_order"
+"test_the_drawn_check_reads_only_drawn_units" = "test_the_sampled_check_reads_only_sampled_units"
+"test_the_draws_come_from_the_lean_verifiers_coins" = "test_the_samples_come_from_the_lean_verifiers_coins"
+"test_the_forged_records_lose_the_draw_or_a_unit" = "test_the_forged_records_lose_the_sample_or_a_unit"
+"test_the_frame_commits_the_draws_it_read_and_sets_h_ab_and_w_itself" = "test_the_frame_commits_the_samples_it_read_and_sets_h_ab_and_w_itself"
+"test_the_frame_draws_the_reps_randomness_sends_only_the_pads_root_and_refuses_a_start_that_brings_any" = "test_the_frame_samples_the_reps_randomness_sends_only_the_pads_root_and_refuses_a_start_that_brings_any"
+"test_the_full_draw_is_every_unit_and_each_stratum_whole" = "test_the_full_sample_is_every_unit_and_each_stratum_whole"
+"test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population" = "test_the_full_sample_is_the_lean_verifiers_own_at_k_the_population"
+"test_the_infiltration_panel_draws_its_card" = "test_the_infiltration_panel_samples_its_card"
+"test_the_inner_draw_is_the_records_and_a_record_without_one_is_refused" = "test_the_inner_sample_is_the_records_and_a_record_without_one_is_refused"
+"test_the_lean_firewall_draws_its_own_salts" = "test_the_lean_firewall_samples_its_own_salts"
+"test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames" = "test_the_lean_run_accepts_a_sample_whose_session_released_its_coins_in_several_frames"
+"test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration" = "test_the_lean_run_refuses_a_sample_whose_coins_the_challenger_did_not_release_after_the_registration"
+"test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draws_of_the_record_it_makes" = "test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes"
+"test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds" = "test_the_local_challenger_opens_on_the_needs_reserve_and_the_sample_holds"
+"test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words" = "test_the_loop_samples_level_0_at_the_statement_with_its_own_mask_words"
+"test_the_loop_draws_level_0_only_once_every_tables_witness_is_in" = "test_the_loop_samples_level_0_only_once_every_tables_witness_is_in"
+"test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts" = "test_the_loops_finish_reads_its_level_0_and_samples_each_reps_salts"
+"test_the_parts_come_from_the_sessions_draw" = "test_the_parts_come_from_the_sessions_sample"
+"test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_draw" = "test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_the_sample"
+"test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session" = "test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session"
+"test_the_placement_holds_each_party_to_its_principals_machine_and_the_draws_off_the_developers" = "test_the_placement_holds_each_party_to_its_principals_machine_and_the_samples_off_the_developers"
+"test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted" = "test_the_plain_session_on_the_tree_at_a_subset_sample_is_accepted"
+"test_the_predicted_rate_is_the_draws_chance_to_miss_every_dropped_receipt" = "test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt"
+"test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt" = "test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt"
+"test_the_record_is_held_to_the_registration_the_draw_and_the_verifiers_entries" = "test_the_record_is_held_to_the_registration_the_sample_and_the_verifiers_entries"
+"test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest" = "test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest"
+"test_the_release_agrees_on_drawn_cases" = "test_the_release_agrees_on_sampled_cases"
+"test_the_replay_reads_no_more_than_the_honest_draw" = "test_the_replay_reads_no_more_than_the_honest_sample"
+"test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close" = "test_the_rule_line_reads_whether_the_sample_was_the_lanes_first_reserve_after_the_close"
+"test_the_select_piece_draws_every_rule" = "test_the_select_piece_samples_every_rule"
+"test_the_spot_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps" = "test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_population_or_steps"
+"test_the_verifier_of_record_draws_both_stages" = "test_the_verifier_of_record_samples_both_stages"
+"test_the_window_draw_is_plan_draw_per_call_under_one_key" = "test_the_window_sample_is_plan_sample_per_call_under_one_key"
+"test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not" = "test_todays_reserve_runs_out_on_the_18_family_sample_and_its_need_does_not"
+"test_two_stages_add_the_interior_and_the_second_draw_to_spots_channels" = "test_two_stages_add_the_interior_and_the_second_sample_to_spots_channels"
+"test_two_stages_draw_each_blocks_second_stage_only_once_its_interior_is_in_and_audit_both" = "test_two_stages_sample_each_blocks_second_stage_only_once_its_interior_is_in_and_audit_both"
+"test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held" = "test_under_pearlplus_tie_and_the_gate_the_piece_samples_only_after_a_period_whose_reserves_held"
+"test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw" = "test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample"
+"test_unit_draw_check" = "test_unit_sample_check"
+"test_unit_draw_samplers_are_the_exact_reduction" = "test_unit_sample_samplers_are_the_exact_reduction"
+"test_v2_names_the_public_file_as_it_was_staged_before_the_draw" = "test_v2_names_the_public_file_as_it_was_staged_before_the_sample"
+"test_v2_reads_its_draw_from_the_challengers_coins" = "test_v2_reads_its_sample_from_the_challengers_coins"
+"test_verify_takes_a_stratified_draw_only_at_its_own_k" = "test_verify_takes_a_stratified_sample_only_at_its_own_k"
+"test_verify_takes_a_work_draw_only_from_its_own_table" = "test_verify_takes_a_work_sample_only_from_its_own_table"
+"test_work_draw_checks_and_closures" = "test_work_sample_checks_and_closures"
+"test_work_draw_from_the_verifiers_own_program" = "test_work_sample_from_the_verifiers_own_program"
+"test_work_law_draws_the_plan_sizes" = "test_work_law_samples_the_plan_sizes"
+"the_stand_in_draw_has_every_draws_count" = "the_stand_in_sample_has_every_samples_count"
+"unbound_drawn" = "unbound_sampled"
+"unequalDraws" = "unequalSamples"
+"unifMap_extendDraw" = "unifMap_extendSample"
+"union_draw" = "union_sample"
+"unitDraw" = "unitSample"
+"unitDraw_of" = "unitSample_of"
+"unitDraw_of_setup" = "unitSample_of_setup"
+"unitDraw_one" = "unitSample_one"
+"unitIndices_drawnPub" = "unitIndices_sampledPub"
+"units_pos_of_drawn" = "units_pos_of_sampled"
+"uprog_e2e_drawn" = "uprog_e2e_sampled"
+"uprog_e2e_drawn_classes" = "uprog_e2e_sampled_classes"
+"uprog_e2e_drawn_classes_zero" = "uprog_e2e_sampled_classes_zero"
+"value_drawFin_le" = "value_sampleFin_le"
+"value_drawFin_le_or" = "value_sampleFin_le_or"
+"value_drawK_bind_mono" = "value_sampleK_bind_mono"
+"value_drawK_le" = "value_sampleK_le"
+"value_drawKs_affine_le" = "value_sampleKs_affine_le"
+"value_drawKs_extras_le" = "value_sampleKs_extras_le"
+"value_draw_bind_le" = "value_sample_bind_le"
+"verdictOf_drawn" = "verdictOf_sampled"
+"with_draw" = "with_sample"
+"workRule_eq_draw" = "workRule_eq_sample"
+"zeroCfg_ofDraws" = "zeroCfg_ofSamples"
+"zk_flock_drawnC_cr" = "zk_flock_sampledC_cr"
+"zk_flock_drawnC_reg" = "zk_flock_sampledC_reg"
+"zk_flock_drawnC_regC" = "zk_flock_sampledC_regC"
+"zk_flock_drawnC_reg_at" = "zk_flock_sampledC_reg_at"
+"zk_flock_drawnC_rows" = "zk_flock_sampledC_rows"
+"zk_flock_regDrawnC_cr" = "zk_flock_regSampledC_cr"
+"zk_headline_exec_drawn" = "zk_headline_exec_sampled"
+"zk_headline_exec_drawnJ" = "zk_headline_exec_sampledJ"
+"zk_session_drawnR" = "zk_session_sampledR"
+"zk_session_regDrawnR" = "zk_session_regSampledR"
+"zk_session_soundHJR_custody_drawn_reg" = "zk_session_soundHJR_custody_sampled_reg"
+"zk_session_soundHJR_custody_drawn_regI" = "zk_session_soundHJR_custody_sampled_regI"
+"zk_session_soundHJ_custody_drawn_at" = "zk_session_soundHJ_custody_sampled_at"
+"zk_session_soundHJ_custody_drawn_reg" = "zk_session_soundHJ_custody_sampled_reg"
+"zk_session_soundHJ_custody_drawn_regI" = "zk_session_soundHJ_custody_sampled_regI"
+"zk_session_soundJ_custody_drawn_reg" = "zk_session_soundJ_custody_sampled_reg"

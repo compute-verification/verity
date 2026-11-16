@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-vqueue-token every 20 minutes: a token lasts an hour, and the loop refuses one over 50 minutes old
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=20min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
