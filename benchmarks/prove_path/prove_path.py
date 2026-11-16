@@ -143,9 +143,9 @@ Two kinds of committed run:
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
   (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
-  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
-  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
-  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  only, for the network attester's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network attester's run under the serve dir, slot k is instead the request whose Program
+  the network attester's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
   verifier's own ``window-circuit`` record is the circuit it holds it to. ``--sampling-design`` is the rate that audit states as
   its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
@@ -221,7 +221,7 @@ from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -266,6 +266,8 @@ class I2Compiler:
     compiled: dict = field(default_factory=dict, compare=False, repr=False)
     #: with ``own``, each compiled Program by digest, with its names (`naming.Named`), until `own_builds` writes it
     builds: dict = field(default_factory=dict, compare=False, repr=False)
+    #: each compiled request's unit by its Program's digest, whose trace dir (`steps.trace_dir`) a refusal names
+    units: dict = field(default_factory=dict, compare=False, repr=False)
 
     @functools.cached_property
     def digest(self) -> str:
@@ -289,6 +291,7 @@ class I2Compiler:
                 raise ValueError(f"I2 refuses the advice: {e}") from None
             self.compiled[data] = [{"request_id": u.id, "arrive_step": u.first_step, "prompt_len": u.LP, "max_tokens": u.T + 1,
                                     "digest": u.digest} for u in c.requests]
+            self.units.update({u.digest: u for u in c.requests})
             self.builds.update({d: (c.programs[d], named) for d, named in c.named.items()})
         return [dict(q) for q in self.compiled[data]]
 
@@ -306,8 +309,17 @@ class I2Compiler:
         for q in requests:
             d = by.get(str(q.get("digest")))
             if d is None:
-                raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program "
-                                 f"{str(q.get('digest'))[:16]}")
+                from verity_vllm.program.predict.steps import trace_dir
+
+                dg = str(q.get("digest"))
+                trace = trace_dir(self.units[dg]) if dg in self.units else "?"
+                have = ", ".join(f"{Path(p).name} {k[:16]}" for k, p in sorted(by.items(), key=lambda kv: kv[1])) or "none"
+                raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program {dg[:16]} "
+                                 f"(its trace: {trace}/; the Builds there: {have}). A row dir `verity-vllm row run` "
+                                 f"made (a5_llama1b_h200.sh's among them) cannot be proved by the single-GPU arm: its Commit "
+                                 f"is under the row's declared Programs, and I2's end in their length rule (`steps.stop_of`). "
+                                 f"Prove a serve-openai run's window instead: run.sh's served arm (PP_SERVE_RUN, PP_WINDOW, "
+                                 f"PP_SERVE_ROWS), whose row dir holds the Builds of I2's Programs")
             if (d, q["digest"]) not in held:
                 try:
                     held[d, q["digest"]] = build_of(d, q["digest"])
@@ -337,6 +349,52 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         program, named = i2.builds.pop(dg)
         have[dg] = str(Path(i2.programs_root) / trace_dir({**named.shape, "policy": named.shape["sampling"]}))
         write_build(have[dg], program, named)
+
+
+def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> str:
+    """The line a table's printer reads for a run's coins and parameters, ``ran with: coins C; parameters development|deployed
+    (DETAIL)``. The parameters are those of the LMS key the sample's coins are signed under, the one parameter set the run
+    hands the verifier (Lean's `verify` takes none of its own): a local challenger's key is at
+    `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
+    A gate without its key record states none."""
+    from verity.commitments.crypto import lms
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+
+    dep = lms.DEPLOYED
+    if challenger == "local":
+        at = lms.Params(64, *AC.LOCAL_PARAMS)
+        return (f"ran with: coins local challenger; parameters development (the local challenger's LMS key at W={at.W}, "
+                f"H={at.H}, not the deployed W={dep.W}, H={dep.H})")
+    if not challenger.startswith("gate:"):
+        raise ValueError(f"PP_CHALLENGER {challenger!r}: local, or gate:USER@HOST")
+    coins = f"coins the auditor device's challenger ({challenger})"
+    if key_record is None:
+        return f"ran with: {coins}; parameters not stated (no challenger key record given)"
+    key = Ch.key_of_record(dict(key_record))
+    word = "deployed" if (key.W, key.H) == (dep.W, dep.H) else "development"
+    return f"ran with: {coins}; parameters {word} (the challenger's LMS key at W={key.W}, H={key.H}, its key record's)"
+
+
+def served_forged_partition(honest: Mapping[str, Any], forged: Mapping[str, Any] | None, design: str) -> dict[str, Any]:
+    """The served arm's forged partition. A forgery is the forged run's own commit with one unit's value flipped (``commit
+    --forge``), so it needs that unit in its window and sampled, not other units than the honest run's: by default the honest
+    partition's templates and scope, every unit sampled (``DESIGN:1/1``), at steps the honest run already holds to the window.
+    A given one whose steps fall outside the honest partition's is refused here, before any build, rather than by its commit
+    after the honest arm ran."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+
+    if forged is None:
+        return {"templates": list(honest["templates"]), DESIGN: f"{design}:1/1",
+                **({"scope": dict(honest["scope"])} if "scope" in honest else {})}
+    inside = (honest.get("scope") or {}).get("steps")
+    steps = (forged.get("scope") or {}).get("steps")
+    if inside is not None and (steps is None or steps[0] < inside[0] or steps[1] > inside[1]):
+        raise SystemExit(f"PP_FORGED_PARTITION names steps {steps if steps is not None else 'unscoped'}, outside the honest "
+                         f"partition's {inside}, the steps of the window this run proves: its commit would find no unit "
+                         f"there to forge. Unset PP_FORGED_PARTITION, and the served arm forges a unit of the honest "
+                         f"partition's own steps with every unit sampled ({design}:1/1), or give one inside steps {inside}")
+    return dict(forged)
 
 
 def code_identity() -> str:
@@ -476,11 +534,29 @@ def ingress_of(ctx: Mapping[str, Any]) -> dict[str, dict]:
                                             **{k: sampling.get(k) for k in BODY_SAMPLING if k in sampling}} for q in ctx["requests"]}
 
 
+def workload_hf_config(doc: Mapping[str, Any], hf_config: str | None = None) -> Path:
+    """The checkpoint's ``config.json`` a declared run's φ reads: ``hf_config``, else the config of record of the pin the workload
+    ``doc`` serves (its ``model`` at its engine's revision, `dense_generic.pinned_hf_config`, as `phi_of_serve` reads a served
+    one's), else for a model no manifest pins unsloth/Llama-3.2-1B's. An int8 row's pin carries its ``quantization_config``.
+    A doc with no ``engine.revision`` (the old flat layout among them) is refused by name."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    if hf_config:
+        return Path(hf_config)
+    engine = doc.get("engine")
+    revision = engine.get("revision") if isinstance(engine, Mapping) else None
+    if not revision:
+        raise ValueError(f"the workload of {doc.get('model')!r} names no engine.revision, so no pin's config of record is known: "
+                         f"give a workload file in the engine-block layout (`verity-vllm workload`), or --hf-config")
+    return pinned_hf_config(str(doc["model"]), str(revision)) or LLAMA32_1B_CONFIG
+
+
 def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS,
                  transfer_gates: Sequence[str] = (), programs_root: str | None = None, own: bool = False) -> I2Compiler:
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
-    served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
-    ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``own``, the verifier's own)."""
+    served, refused unless its digest is the record's, and the checkpoint's ``config.json``, `workload_hf_config`), the bodies
+    from the record, listing ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``own``,
+    the verifier's own)."""
     from verity_vllm.program.predict.score import phi_of
     from verity_vllm.program.predict.steps import Registered
 
@@ -489,7 +565,7 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != r.row.get("workload_sha256"):
         raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
-    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
+    phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(workload_hf_config(doc, hf_config)))
     return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(programs_root or row_dir),
                       transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), own=own)
 
@@ -1208,7 +1284,7 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 def audit(a: argparse.Namespace) -> int:
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     world, ranks = ranks_of(a)
@@ -1371,7 +1447,7 @@ def window_class_of(arg: str | None) -> Any:
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
     ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
-    network certifier's scan state rows), written to
+    network attester's scan state rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
@@ -1479,18 +1555,18 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
-#: what a caller passes for the network certifier run a serve kept: serve dir -> None where it kept none, else the run's
+#: what a caller passes for the network attester run a serve kept: serve dir -> None where it kept none, else the run's
 #: deployment parameters, its certified I/O and its certified ingress, each execution phase's number and rows
 KeptIngress = Callable[[Path], tuple[Any, Mapping[str, Any], Sequence[tuple[int, Sequence[Any]]]] | None]
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: KeptIngress | None = None,
               ) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network certifier's scan of its run the certifier front kept under ``serve_dir``, as a window of class
+    """The network attester's scan of its run the certifier front kept under ``serve_dir``, as a window of class
     ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's state rows and slot k's request, the I1 id
     (its id request's ``user``) of the one whose Program starts there, None for a slot no request starts
     (`scan_state.scan_state`). The window is the execution phase, of the class's buckets, whose Programs start its
-    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network certifier's certified ingress rows
+    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network attester's certified ingress rows
     from execution phase 0 and the outputs its egress cells carry. ``kept_ingress`` reads the kept run
     (`KeptIngress`): the caller passes it, since SPOT reads the certifier's record as a certified input and imports
     neither the certifier nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
@@ -1536,7 +1612,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
 
 def scan_state_opening(value: Any, path: Path) -> Path:
     """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole at ``path`` for the network
-    certifier's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
+    attester's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
     `scan_zk.SCAN_STATE_FILE`), prover only, every row (u16 little-endian) and then every salt. The window's
     ``v<j>-private.bin`` holds only the rows its members read."""
     import numpy as np
@@ -1596,8 +1672,8 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
     if not a.window_registration or getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-    from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
     if key and not a.h1_key:
         raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
@@ -1657,7 +1733,7 @@ def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | N
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
+    window's own value. Where the certifier front kept the network attester's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
@@ -1771,12 +1847,12 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     filled = WRS.Rows(low, slots, values)
     previous = None
     if tie is not None:
-        from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
         h1w, meta, _tables = tie
         values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
         previous = R.digest(h1w)
     elif pearl is not None:
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
         pw, manifests, rounds, _tables = pearl
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
@@ -1847,7 +1923,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
-    """The commands (the module docstring). ``kept_ingress`` reads the network certifier run a serve kept
+    """The commands (the module docstring). ``kept_ingress`` reads the network attester run a serve kept
     (`KeptIngress`), which ``window-commit``'s scan needs (`kept_scan`), and ``scan_state_file`` is the name its scan
     reads the window's opened scan state under (`scan_state_opening`): a caller that may import the certifier and
     ``benchmarks/`` passes both."""
@@ -1874,8 +1950,8 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
-        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
-                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
+        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default the config of record "
+                                           "of the pin the serve or the workload serves, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
@@ -1923,6 +1999,13 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
+    p = sub.add_parser("ran-with", help="the line naming the coins and the parameters a run's sessions are sampled under (`ran_with`)")
+    p.add_argument("--challenger", required=True, help="run.sh's PP_CHALLENGER: local, or gate:USER@HOST")
+    p.add_argument("--challenger-key", help="with gate:USER@HOST: the challenger's key record (challenger-key/v1)")
+    p = sub.add_parser("forged-partition", help="the served arm's forged partition, or its refusal (`served_forged_partition`)")
+    p.add_argument("--honest", required=True, help="the honest run's partition file")
+    p.add_argument("--forged", help="run.sh's PP_FORGED_PARTITION, held to the honest partition's steps (default derived)")
+    p.add_argument("--design", required=True, choices=("rate", "stratified-rate"), help="run.sh's sampling design")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve-run")
@@ -2031,6 +2114,13 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     for name in ("compiler", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
+    if a.cmd == "ran-with":
+        print(ran_with(a.challenger, json.loads(Path(a.challenger_key).read_text()) if a.challenger_key else None))
+        return 0
+    if a.cmd == "forged-partition":
+        forged = json.loads(Path(a.forged).read_text()) if a.forged else None
+        print(json.dumps(served_forged_partition(json.loads(Path(a.honest).read_text()), forged, a.design), sort_keys=True))
+        return 0
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))
         return 0

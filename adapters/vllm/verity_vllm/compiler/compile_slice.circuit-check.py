@@ -11,7 +11,7 @@ def _network_compile_slice_roots() -> list[Any]:
     units a request; and at its asynchronous one (`compile_slice.demo_async`): six units at (R 2, W 1, A 2) under async
     scheduling, no prefix cache, the served rows held by request through ``wit``'s map. Each also with its served rows
     in blocks of G = 2 steps (`CompileSliceRowGroups_v1`: two ``srv`` rows on the demo, three on the async one). The corpus
-    slice's class (`verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`) is
+    slice's class (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`) is
     about 7.6M ANDs, past what circuit-check traces."""
     from verity_vllm.compiler.compile_slice import demo, demo_async, unit, with_block
 

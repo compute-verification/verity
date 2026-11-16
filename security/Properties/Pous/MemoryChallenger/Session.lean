@@ -11,7 +11,7 @@ store. This module states what of those answers reaches the auditor from the dev
 `AuditorSeesSkeletonAt`, whose parameter says where the device's messages end, and its instance as PoUS runs a session,
 `AuditorSeesDigests`. No soundness statement takes either as a premise.
 
-**The device** is an auditor party (`Accounting.Assumptions.Parties`), stated as code (`code`) over the record
+**The device** is an auditor party (`ResourceAccounting.Assumptions.Parties`), stated as code (`code`) over the record
 soundness reads of a session (`MemoryChallenger.Properties.Observed`, `Recorded.round`): the party
 `challenger_party.Challenger` driving `memory_challenger.MemoryChallenger`, one session a run. An input is one exchange:
 a warm-up's answer, which the device drops, or a timed round, its clock's two readings and the answer. It sends
@@ -40,7 +40,7 @@ What neither covers is in `AuditorSeesDigests`'s docstring.
 
 namespace MemoryChallenger.Session.Properties
 
-open Accounting.Assumptions
+open ResourceAccounting.Assumptions
 open MemoryChallenger.Properties (Observed Recorded)
 
 /-! ## The device's code in a session -/

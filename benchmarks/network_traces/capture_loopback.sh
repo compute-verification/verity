@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# capture_flows.py on one machine. Not a served run: the stand-in front, the network certifier and the load on one
-# machine's loopback (`network_certifier_serve.py rehearse --fake --watermark`), a capture of the loopback beside them, then the
+# capture_flows.py on one machine. Not a served run: the stand-in front, the network attester and the load on one
+# machine's loopback (`network_attester_serve.py rehearse --fake --watermark`), a capture of the loopback beside them, then the
 # reader on the two. A `research run` job from the tree's root (--cwd source), on a machine where the job may capture:
 # `tcpdump` there, allowed to open the loopback as the job's user. A pool node's job may not.
 #   [PY=PYTHON] [EGRESS=bytes|id] bash benchmarks/network_traces/capture_loopback.sh REHEARSE-FLAG...
-# REHEARSE-FLAG... are `network_certifier_serve.py rehearse`'s own, the traffic and the schedule; the job gives it --fake,
+# REHEARSE-FLAG... are `network_attester_serve.py rehearse`'s own, the traffic and the schedule; the job gives it --fake,
 # --watermark, --out and the egress form. PY is a python with the tree's packages (python3 by default, as under
 # `uv run`). EGRESS is the run's egress form, the launch's to give and no flag's: bytes when it isn't given, text
 # requests answered in vLLM's stock framing; id, `rehearse --ids`, id requests each answered an id event a token, the
-# form a network certifier holds a served run's server to.
+# form a network attester holds a served run's server to.
 # 1. The capture: `tcpdump -i lo -U -s 54 tcp`, started before the rehearsal and stopped once its file has stopped
 #    growing. It keeps each packet's first 54 bytes, the least a TCP packet's headers are over IPv4 in the loopback's
 #    Ethernet frame, so it holds no content byte of any flow. It holds the headers of every TCP flow on the loopback
@@ -45,7 +45,7 @@ for flag in "$@"; do
     --ids|--egress|--egress=*) log "the egress form is EGRESS's, not $flag's: EGRESS=id for the id form"; exit 4 ;;
   esac
 done
-"$PY" -c 'import verity.protocols.accounting.certifier.verifier.network_certifier' 2> /dev/null \
+"$PY" -c 'import verity.protocols.resource_accounting.network.verifier.network_attester' 2> /dev/null \
   || { log "PY has no verity: give a python with the tree's packages, or run this under uv run"; exit 4; }
 command -v tcpdump > /dev/null || { log "no tcpdump on this machine"; exit 4; }
 tcpdump -i lo -U -s 54 -w "$W/lo.pcap" tcp 2> "$W/tcpdump.log" &
@@ -56,7 +56,7 @@ until grep -q "listening on" "$W/tcpdump.log"; do
   sleep 0.2
 done
 
-"$PY" -m verity.protocols.accounting.certifier.device.network_certifier_serve rehearse --fake --watermark --out "$OUT/run" ${form[@]+"${form[@]}"} "$@"
+"$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --watermark --out "$OUT/run" ${form[@]+"${form[@]}"} "$@"
 rehearsed=$?
 
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing

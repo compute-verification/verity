@@ -20,7 +20,7 @@ at most `tableError(fast100 m, shape)`:
 > the verifier accepts both reps, while no codeword within the level-0 proximity radius of the committed table packs a
 > witness that satisfies the statement.
 
-- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2.
+- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`ResourceAccounting.eta`), 0.2879 at rate 1/2.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point
@@ -78,7 +78,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines an incorrect proof block through extracted values, so it pays the table's knowledge error and a
+proof block used. The audit bound defines an incorrect proof block through extracted values, so it pays the table's knowledge error and a
 binding error per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -135,7 +135,7 @@ binding error per audit.
   decoded forms) are restated over `Verifies` (accepted, and in scope) with no hypothesis on the circuit, the public file
   or the statement's form. The old forms, which take those hypotheses, are the lemmas they apply. The zero-knowledge
   views take the statement's avoidance of the mask slot from the setup (`Mask.lean`): `verify --zk` refuses a statement
-  whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is the one theorem: at every statement, with or without `--zk`, the
+  whose Δ or regions meet it (`Zk.maskFree`). `FailClosed.flock_verify_sound` (`One.lean`) is the single soundness theorem: at every statement, with or without `--zk`, the
   headline of its case (public or hidden outputs; under `--zk`, one table or several).
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a sampled proof block's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
@@ -181,7 +181,7 @@ binding error per audit.
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
-| Sampled audits: the integrity profile over any partition and sampling design, minimax and tightness (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
+| Sampled audits: the integrity profile over any partition and sampling design, minimax and tightness (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-proof-block terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
 | The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `GateRows.rows_sound` (`GateRows.lean`) | proved for the rows; not stated for a unit's committed values; the premises per template: the lowering comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |

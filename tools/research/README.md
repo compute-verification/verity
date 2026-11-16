@@ -270,7 +270,7 @@ launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
 (status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
 recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
-`scope_end`; so does a stage timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
+`scope_end`; so does the run's timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
 cancel does. A queued run waits on its machine in `research disk-hold`, then `research cpu-hold` (`disk.py`, `cores.py`: the
 wrappers `infra/cluster` puts ahead of its runner); one still held is withdrawn: its hold ends as a manual cancel and
 refused.json says `Withdrawn` (`withdraw.py`). Never SIGKILL the runner: one killed during
@@ -337,7 +337,7 @@ research.telemetry SUBCOMMAND` (`telemetry/cli.py`, whose docstring lists them).
 `job.json` and `status.json`, its identity and state, with secret-named values redacted (`telemetry/job.py`); `events.jsonl`,
 through one append helper (`events.py`); `resources.jsonl`, the sampler beside the workload (`sample.py`, reading `cgroup.py`
 and `procs.py`); `failure.json`, how it ended (`classify.py`); and `RULES.md`, rendered from a policy file
-(`telemetry/policy.py`). `run.py` is the harness itself: it starts the sampler and the workload, enforces the stage timeout and
+(`telemetry/policy.py`). `run.py` is the harness itself: it starts the sampler and the workload, enforces the run's timeout and
 records the end. `cancel.py` writes a cancel's intent before its signal and its result after, `scope.py` ends a run's processes
 by their cgroup scope (what `research cancel` and a timeout stop), `pyspy.py` dumps a stalled run's Python stacks, and
 `source_identity.py` records which source tree each imported package resolves to. Outside `research`, `infra/ops` reads
@@ -360,6 +360,7 @@ job is added, claimed by a worker under a lease, renewed while it runs and compl
 research jobs add merge-check --commit REF      # or `lean-regen --commit REF --package DIR`, or `audit-main`
 research jobs list [--state S] [--kind K] [--json]    research jobs show ID    research jobs cancel ID
 research worker --dispatch --pods A,B [--once]  # claims jobs and runs each with `research run --on` on one of the pods
+research worker --dispatch --kinds research-run [--slots 4] --name control  # a lead's `research run` line, CPU machines only
 ~~~
 
 `research.jobs.model` is the queue's reference semantics; `vectors.json` beside it pins every rule as request and response

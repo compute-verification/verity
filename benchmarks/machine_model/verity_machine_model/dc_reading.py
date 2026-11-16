@@ -12,7 +12,7 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
 - π* is the certificate that minimises the Lean bound over the Lean menu (`_best`, an LP over `λ`), made exact
   (`certificate`: weights `λ ≥ 0` summing to 1, `IsCert`), and may be mixed. Every price is π*'s: `w*`, `φ*` and
   `χ*` are the cheapest word route's, fold's and filler's prices at π*, each route's demand read facet by facet as
-  `Accounting.TS.Model.demand` reads it (the vector route at the cheapest vector class on each facet), and `B_♭` is
+  `ResourceAccounting.TS.Model.demand` reads it (the vector route at the cheapest vector class on each facet), and `B_♭` is
   ♭'s bound, the facet it sits on. Any certificate gives a valid bound; at a mixed one `1 − Y` holds ε_cert, π*'s
   gap at ♭. The machine model's own certificate doesn't serve: its cheater folds a tensor word on lanes only, where
   the Lean menu prices the fold alone on any route (the uniform datapath's among them, which DS-100's ALU-heavy
@@ -71,7 +71,7 @@ from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
-#: takes the private `_Exact` and `_and`, and two tests in `benchmarks/pouw/tests/` (the data-centre exporter's and
+#: takes the private `_Exact` and `_and`, and two tests in `tests/benchmarks/pouw/` (the data-centre exporter's and
 #: the census cover's).
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]
@@ -357,7 +357,7 @@ def _fold_mix(d: E.Design, z: dict[str, Fraction]) -> str:
 
 def _sheet_check(fam: Family, pi: E.Machine, c: dict) -> dict[str, list]:
     """The data sheet by class (`macs`, `peak`, `pipe`, `smem`), each class's form, peak and pipe the device's
-    sheet.toml, checked to reproduce every DS coefficient on `Accounting.TS.Sheet.machine`'s rows: issue 1, tensor
+    sheet.toml, checked to reproduce every DS coefficient on `ResourceAccounting.TS.Sheet.machine`'s rows: issue 1, tensor
     `macs/(peak/4)`, a pipe `128/width`, shared memory `smem/32`. A class with no form and no pipe (b1, the memory,
     atomic and control classes, the catch-all) is its issue slot alone (A2)."""
     sh = fam.sh
@@ -504,7 +504,7 @@ def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Re
     if d.uniform and E.UNI in pi.c:
         folds.append({E.UNI: min(exact(sum(f.values())) for f in (d.fold, *d.fold_routes.values()))})
     vec = list(pi.cuda) + [k for k in classes if k in CATCH_ALLS and k not in pi.cuda]
-    # Each route's demand on every facet, as `Accounting.TS.Model.demand` reads it: a writer kind 1/ω of its class, the
+    # Each route's demand on every facet, as `ResourceAccounting.TS.Model.demand` reads it: a writer kind 1/ω of its class, the
     # vector route (and the table route, at q_T = q, b_T = 0) q/32 of the cheapest vector class on that facet.
     routes = {k: {r: c[k].get(r, Fraction(0)) / om for r in pi.rows} for k, om in writers}
     routes["vector"] = {r: q / E.LANES * min(c[k].get(r, Fraction(0)) for k in vec) for r in pi.rows}

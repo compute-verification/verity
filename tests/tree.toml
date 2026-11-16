@@ -43,7 +43,7 @@ means = "the remote demo: SPOT, PoUW and the inference-only policy, with no audi
 
 [[tree]]
 path = "demos/onsite_network.toml"
-means = "onsite, network only: the network certifier, SPOT and the memory wipe"
+means = "onsite, network only: the network attester, SPOT and the memory wipe"
 
 [[tree]]
 path = "demos/onsite_compute.toml"
@@ -67,7 +67,7 @@ means = "the `verity` command, the check's steps and the test harnesses"
 
 [[tree]]
 path = "tests/"
-means = "invariants of the whole tree"
+means = "every test: invariants of the whole tree at its top, and the tests of X under tests/X, each suite where its pyproject is"
 
 [[tree]]
 path = "AGENTS.md"
@@ -165,15 +165,7 @@ means = "the package, which re-exports nothing"
 
 [[tree]]
 path = "verity/README.md"
-means = "the distribution's module list"
-
-[[tree]]
-path = "verity/tests/"
-means = "the tests of the flat files, a suite of its own; made with the first of them"
-
-[[tree]]
-path = "verity/pyproject.toml"
-means = "a suite's configuration, where it has one"
+means = "the distribution's outline"
 
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
 
@@ -182,12 +174,24 @@ path = "verity/protocols/proofs/"
 means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
-path = "verity/protocols/accounting/"
-means = "the accounting layer: pouw, pous, poub and certifier, for compute, memory and network, on the proofs"
+path = "verity/protocols/resource_accounting/"
+means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
 
 [[tree]]
-path = "verity/protocols/policy/"
-means = "the policy layer: inference_only, on accounting and the proofs"
+path = "verity/protocols/resource_accounting/compute/"
+means = "the compute protocols: pouw"
+
+[[tree]]
+path = "verity/protocols/resource_accounting/memory/"
+means = "the memory protocols: pous and poub"
+
+[[tree]]
+path = "verity/protocols/workload_classification/"
+means = "the workload classification layer: training_detection/inference_only, on resource accounting and the proofs"
+
+[[tree]]
+path = "verity/protocols/workload_classification/training_detection/"
+means = "the training detection protocols: inference_only"
 
 [[tree]]
 path = "verity/protocols/proofs/flock/"
@@ -198,6 +202,10 @@ protocol = true
 path = "verity/protocols/proofs/spot/"
 means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/proofs/spot/verifier/challenger/"
+means = "the challenger's program, which the auditor's device runs"
 
 [[tree]]
 path = "verity/protocols/proofs/recursion/"
@@ -215,32 +223,32 @@ means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/pouw/"
+path = "verity/protocols/resource_accounting/compute/pouw/"
 means = "proof of useful work"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/pous/"
+path = "verity/protocols/resource_accounting/memory/pous/"
 means = "proof of useful space"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/poub/"
+path = "verity/protocols/resource_accounting/memory/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/certifier/"
-means = "network certification: the network certifier and its guarantee"
+path = "verity/protocols/resource_accounting/network/"
+means = "network certification: the network attester and its guarantee"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/policy/inference_only/"
+path = "verity/protocols/workload_classification/training_detection/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/accounting/registration/"
+path = "verity/protocols/registration/"
 means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
 protocol = true
 
@@ -261,14 +269,6 @@ means = "the shape every protocol's check has in Lean (Core.Protocol, its comman
 path = "verity/protocols/__init__.py"
 means = "the package"
 
-[[tree]]
-path = "verity/protocols/tests/"
-means = "the tests of verity/protocols' own modules, a suite of its own"
-
-[[tree]]
-path = "verity/protocols/pyproject.toml"
-means = "a suite's configuration, where it has one"
-
 # ---- each group's directory, beside its protocols ------------------------------------------------------------------
 
 [[tree]]
@@ -286,8 +286,8 @@ path = "verity/protocols/NAME/prover/"
 means = "what its prover builds and its verifier does not read"
 
 [[tree]]
-path = "verity/protocols/NAME/device/"
-means = "the programs the auditor's devices run"
+path = "verity/protocols/NAME/attester/"
+means = "the programs the auditor's attesters run"
 
 [[tree]]
 path = "verity/protocols/NAME/README.md"
@@ -303,11 +303,7 @@ means = "the package"
 
 [[tree]]
 path = "verity/protocols/NAME/pyproject.toml"
-means = "its distribution or suite"
-
-[[tree]]
-path = "verity/protocols/NAME/tests/"
-means = "its tests, a suite of its own"
+means = "its distribution"
 
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
 
@@ -323,9 +319,4 @@ note = "infra's days, 14 Nov: copied there with its history by 20 Nov, cut from 
 [[open]]
 what = "whether a device with parts gets limits of its own in the Lean"
 answers = "top"
-by = "2026-11-13 10:00 PST"
-
-[[open]]
-what = "verity/commitments/windows/, inside verity/commitments/ and so below the levels the test reads: its name (the Glossary retires the word), its place and its day"
-answers = "vllm"
 by = "2026-11-13 10:00 PST"

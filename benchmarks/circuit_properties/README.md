@@ -9,7 +9,7 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.circuits.program.Program`, or `codec.decode_program`'s result. It is
 the format the inference-only policy's check reads gate by gate
-(`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`) and `Slowdown.Cover.Circuit` formalizes (`security/Definitions/Slowdown/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+(`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`) and `Slowdown.Cover.Circuit` formalizes (`security/Definitions/Slowdown/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -67,7 +67,7 @@ multiply or a divide only where every other argument is one no input reaches, on
 batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
 a multiply by a stated 0 reaches nothing. Each charged operand whose rows these rules show distinct or specific is
 tested at a point (`points.check`): the Program evaluated once, θ's words generic (four binades about 2^-3, every sign)
-and every input's one positive word repeated, as a submitter may choose, and an operand specific and not distinct at a
+and every input's one positive word repeated, as a malicious developer may choose, and an operand specific and not distinct at a
 second point in the same pass, every input's words sampled on their own (an input that reaches a lookup's token,
 found by that use, as a permutation of its least table's rows, and every other as θ's are but positive), its rows
 compared across every activation whose other operand is the same there, and refused (`work.RepeatedRows`) where two
@@ -87,12 +87,12 @@ nonzero; rows the point never makes equal count as distinct: an update that canc
 (W plus z plus -1 times z), one word every member of every batch reads as a multiplier (a learning rate, a decay, an
 input's or computed from inputs, taken as nonzero), inputs fitted to the weights, a circuit that tests its own
 weights against a stated constant, rows equal only where an input's word is negative, and rows equal only at values
-a submitter found by trying circuits against the point's seed, which is public (SHA-512 of the Program's digest); and
+a malicious developer found by trying circuits against the point's seed, which is public (SHA-512 of the Program's digest); and
 two nodes that compute rows from one array's words into two arrays give each
 distinct rows.
 `work.bound(work, c)` hands the charged products (`work.products`: MACs at `keep`, outputs at most 16 bits) to the
 calculator's `min_cut.slowdown_of`, which chooses the sub-work, none from `HEAD_K` on. The module docstring
-has the rules and which way each moves the bound; `benchmarks/training_slowdown/tests/test_program_reading.py` holds a
+has the rules and which way each moves the bound; `tests/benchmarks/training_slowdown/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
 
 ## Interface

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two train slots, Lean slots, lean's
+# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two candidate slots, Lean slots, lean's
 # cache publisher, the merge mirror, research runs at nice 19) goes to vy-nebius-cpu-4/5, and its GPU and Kueue services retire.
 #
 #   n1_replacement.sh [plan] [PATH]     print every live step in order, each command as it is to be run; runs nothing
@@ -9,7 +9,7 @@
 #                                       n1's custody backlog and the data on n1 nothing else holds
 #
 # PATH is where the nodes come from, each a list of nodes below (NODES_<PATH>):
-#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full train slot each), in regions whose quota has room today
+#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full candidate slot each), in regions whose quota has room today
 #   quota     two 256vcpu-1024gb nodes (cpu-2's shape) in us-central1, once Nebius quota request C291564672 is granted
 #   reattach  one 192vcpu-768gb node in uk-south2 that boots on n1's data disk as it is (vy-nebius-1-data: hf, runs, usage, Lean
 #             caches, nothing copied); needs n1's VM and cpu-1's deleted after their stop, for the disk, 192 vCPU and two IPv4s
@@ -52,7 +52,7 @@ launch_env() {  # NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK
        "NEBIUS_IMAGE_FAMILY=ubuntu24.04-driverless NEBIUS_DATA_GIB=$6 NEBIUS_DATA_TYPE=$7 NEBIUS_RATE_USD_PER_HOUR=$5$disk"
 }
 
-slot_line() {  # PRESET: the train slot's line, as on the live node of that shape
+slot_line() {  # PRESET: the candidate slot's line, as on the live node of that shape
   case $1 in
     192vcpu-768gb) echo "b 54-191 only=trains mem=560   # one full check (peak ~584G) in the 700G user slice, as on cpu-1" ;;
     256vcpu-1024gb) echo "t 4-171 only=trains mem=560   # one full check, as on cpu-2; research runs at nice 19 on the rest" ;;
@@ -104,7 +104,7 @@ EOF
     echo "    research run --on $n --project verity --source . --cwd source -- bash tools/check/pod_setup.sh"
   done
   echo
-  echo "L4  (infra, 2 min a node) the slot files, one train slot a node, Lean slots on $first (cpu-1's form):"
+  echo "L4  (infra, 2 min a node) the slot files, one candidate slot a node, Lean slots on $first (cpu-1's form):"
   while read -r n r p pre rate gib typ disk; do
     echo "    research pods ssh $n -- 'printf \"%s\\n\" \"# NAME CPUS [windows=FILE] [lead=MIN] [only=trains] [mem=GB]: check slots slot.py takes (infra)\" \"$(slot_line "$pre")\" > /workspace/research/locks/slots'"
   done <<< "$NODES"
@@ -121,7 +121,7 @@ L6  (ci, 10 min) the merge mirror beside lean's sandbox: seed the bare repositor
 
 L7  (ci, 2 min) the verified queue's machines gain $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
 
-L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running trains end;
+L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running candidates' checks end;
     \`research queue status\` shows nothing on $N1.
 
 L9  (infra, ~20 min, from 14:00Z) n1's custody to backlog 0, then once more after the last run ends:

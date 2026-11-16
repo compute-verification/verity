@@ -47,7 +47,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The join's reading**: the form's reading at the coin map's release of the locator `L`. -/
 noncomputable abbrev joinReading (A : Live₂) (C : CaseOf) (S : SessionReading) (L : CoinMap.Locate) : Reading A :=

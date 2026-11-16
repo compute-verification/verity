@@ -2,8 +2,13 @@
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
-`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
-records and runs on any machine that reaches the store, with no GPU and no node.
+`prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
+runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
+records, with no GPU and no node, on a machine that has the store's client (`research`, in `uv sync`'s dev group) and a
+read key for its remote (`R2_ENDPOINT`, `R2_BUCKET` and their key, or `RESEARCH_STORE_CONFIG`). Without them it refuses
+in one line naming what it needs, exit 2 (`verity_bench/cli.py`'s `_store_missing`, before anything is read);
+`--local-only` needs the client alone. `prove layers` needs neither when every layer is given as a directory.
 
 ```text
 verity bench prove --system flock --workload glm53                  every block proved
@@ -15,6 +20,8 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--steady-rows FILE]                                            also write the steady-state rows the planner reads
     [--local-only]                                                  this machine's catalog alone, not the store's remote
 verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean verifier timed on one kept proof (below)
+verity bench prove layers --flock R --zk R --sampling R --recursion R
+                                                                    the proof benchmark by layer (below)
 ```
 
 ## What it prints
@@ -268,14 +275,192 @@ as the measured one:
 Both figures assume full statements, as the proving time's steady-state rows do. They are a model from one block type
 until more types have runs of their own.
 
+## The proof benchmark by layer
+
+`verity bench prove layers` prints one table of four benchmark results, Flock, Flock with zero knowledge, with sampling
+and with recursion, each read from what its own command wrote (`verity_bench/proof_layers.py`, with a reader a format;
+the table it prints is `verity_bench/proof_layers_print.py`). It runs nothing. Each
+flag takes a run's `out/` directory (or the run directory holding it), read with no store, or a run id, fetched through
+the evidence store where `research` is installed and this machine holds the store's read key. A run id the store can't
+give is refused with why and the fix: give the run's `out/` as a directory. A layer not given is printed as "not run".
+
+```text
+verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
+```
+
+| layer | reads | prover seconds | Lean verifier |
+|---|---|---|---|
+| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines, or under `PP_RECORDS=1` its `RECORDS` line), its `summary.json` and its rank or window `summary.json`, and `ran-with.txt` beside the output; or `a5_llama1b_h200.sh`'s plain out | Flock's prover a sampled proof block, the mean over every rank's sampled proof blocks | every rank accepted, each rank's own audited `A5` line with `lean-verify/m0` true |
+| `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
+| `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
+| `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
+| `--flock`, `--zk`, `--sampling` | `benchmarks/one_stage/layers.sh`'s layer: its `out/layers.txt`, `out/job.log`, `out/a6/summary.json`, each session's `lean-verify.log` and `gpu-lease-usage.jsonl` beside `out/`; the run's directory gives each layer its own (`flock/`, `zk/`, `sampled/`) | Flock's `prove_total_s` a statement | the plain run's every statement accepted, or the audit accepted and complete with every Lean verdict, every check before the sample and every negative case true |
+
+The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
+more than one honest arm is refused: give the arm's directory. A `--flock` benchmark result must state the plain proof,
+and a `--zk` or `--sampling` one the zk proof (the sampling layer is Flock with zero knowledge at the sampling plan):
+one whose output states another proof, or none, prints no number and writes null with why, whichever command wrote it.
+Each printed benchmark result states its proof (`plain`, `zk`, or "not stated"), so a plain run's numbers in the
+sampling layer's say plain.
+
+A `layers.sh` run (`benchmarks/one_stage/layers.sh all`) proves stand-in values, never served. Its benchmark result's
+workload opens with `stand-in values, never served:` where `layers.txt` says so, else `values not stated:`, then its
+statements, each with its proof blocks and template, and the source commit `job.log` states. Its figures are a
+statement's, not a proof block's: each cell gives one figure a statement, `3.0 s a statement of 1,000 proof blocks`, and
+none is divided into a figure a proof block, since a statement's seconds don't grow with its proof blocks (a statement
+of 20 sampled proof blocks can take most of one of 1,000's). Under the three metric ids it writes null, with why. Its
+proof is `zk` only where every session's Lean `verify` line has `--zk`, and `plain` where the summary says `plain` and
+none has it. Its device is the cards gpu-lease's usage record names for each `flock-circuit prove`. Its ε at δ is the
+audit's `wrong_units`: `at most 100 of 1,000 incorrect proof blocks except with probability 2^-20`. Its `ran with:` line
+is `layers.txt`'s first line, where that names its coins and parameters in these words.
+
+Each benchmark result keeps the commit its output states it ran at, and the line `- commits:` under the `ran with:`
+lines names each: a prove_path or a5 result's from its `machine.txt` (`git rev-parse HEAD`, for example `0123456789a
+(machine.txt's git HEAD)`), a `layers.sh` result's from `job.log`'s `source`, recursion's from its `params.commit`. No
+output states a branch. The printer can't know `main` offline, so the line ends with how to check: a benchmark result
+reruns from `main` only where `git merge-base --is-ancestor COMMIT origin/main` holds.
+
+An a5 benchmark result's workload opens with `served values:` where its summary's `source` is `served` and its
+`REGISTERED` line's `kind=served`, `stand-in values (summary.json source stand-in):` where its source is `stand-in` and
+nothing says served, and `values not stated:` otherwise. Its `ran with:` line is its `COINS` line's `draw:` and sessions
+clauses where that says `one local challenger session`: coins `local challenger`, and parameters "not stated", since the
+line says the key is made at the deployed LMS parameters but the challenger is a development stand-in for the auditor's.
+A run made before the `COINS` line has `ran with: not stated`.
+
+A prove_path served-arm run (`flock/out` or `zk/out` under the run's directory) takes its `ran with:` line from
+`ran-with.txt`, which names its coins and parameters in these words. Its workload opens `served per ran-with.txt (...)`
+from that file's `served` line. Where the audit's own `source` field says otherwise (prove_path writes `stand-in` for a
+sealed served window), the two statements disagree, and the workload says so and prints both: `the output disagrees on
+its values: ran-with.txt says served (...), the audit's source field says stand-in:`. Under `PP_RECORDS=1` the arm has a
+`RECORDS` line and no `PROVE-PATH` line: its benchmark result is accepted where `RECORDS` is ok and accepted with its
+negatives refused, and the A5 line's Lean verdicts are true. A `*-forged` arm with no `audit.log` is no forged run: the
+workload says `no forged run`, and the note under the table gives its `commit.log`'s error.
+
+A benchmark result prints its numbers only when its Lean verdict is an accept. Any other prints none, and says why under
+the table. When no benchmark result prints a number, the first line is `prove layers: no number: WHY` (each layer's why)
+and the command exits 1; otherwise it exits 0.
+
+Under the table's title, each benchmark result's coins and parameters are a line of their own, `- LAYER: ran with: coins
+COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed challenger`, `local challenger` or `in-process` and
+PARAMETERS `deployed` or `development`, each only where the output says so outright, "not stated" for a half it doesn't
+say, and `ran with: not stated` where it says neither. DETAIL, the output's own words, is also the JSON's `detail`. No
+output yet states deployed parameters; `layers.txt` and prove_path's `ran-with.txt` state development ones. Unless every
+benchmark result ran with a deployed challenger at deployed parameters, the line under the title is `a measurement, not
+an audit`. The JSON's `audit` is always false, even then: this command checks no challenger's signature, so nothing it
+prints is an audit.
+
+The table's columns, after the layer and its workload:
+
+- **proof:** `plain`, `zk`, or "not stated", the proof the output says it holds.
+- **device:** what the output states it ran on, else "not stated", never a guess. A `layers.sh` benchmark result's is
+  gpu-lease's record (above). Recursion's is CPU where its params
+  say `GPU=0` and `OPROVE_GPU=0` (job.sh's CPU prover); a prove_path or a5 result's is read from its timing's `gpus` and
+  `device` (a5's `proving_of`): `CPU (timing gpus 0)` where every member's `gpus` is 0.
+- **ε at δ:** what the output states. An a5 summary's `epsilon` table gives its first pair (the audit's δ) and its
+  last (the smallest δ): `at most 3 of 500 incorrect proof blocks except with probability 0.5; at most 40 except with
+  probability 1e-9 (summary.json epsilon, the first and last of its 6 pairs)`. Without one, the audit's `wrong_units` (a
+  `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
+  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
+- **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
+  another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
+  block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four
+  benchmark results stay one table: the three a sampled proof block compare cell for cell, and recursion's figures are
+  a whole run's.
+
+The table is followed by its JSON line, and under a research run, or with `$OUT` set, it writes `proof-layers.json`.
+Its schema is `verity-bench/proof-layers/v2`: `{schema, audit, results}`, one object for each layer's benchmark result.
+v1 named that list `rows`; nothing reads either by key.
+
+Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), it also writes three of `metrics.toml`'s metrics through the
+kit's writer, each a figure a sampled proof block:
+
+| id | figure |
+|---|---|
+| `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the sampled proof blocks |
+| `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the sampled proof blocks |
+| `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
+
+Under each id it writes three measurements, in this order:
+
+1. the Flock layer, member `flock`;
+2. the zero-knowledge layer, member `zero knowledge`;
+3. the sampling layer last, with no member. That is the metric's own reading, Flock with zero knowledge at the
+   sampling plan, the system as served, and the one the metric's title, unit and axis are for.
+
+prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
+(`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one
+keyed by its chunk's name) gives no figure, and the benchmark result says so under the table. A layer that was not run,
+was unreadable, has no Lean accept or gives no figure a proof block writes its value as null, with why, and never a
+number. Recursion is no member, because its seconds are a whole recursive run's. Its numbers on the Metrics tab are
+`benchmarks/recursion_e2e/metrics.toml`'s two metrics, which the recursion job writes itself.
+
+## On a machine of your own
+
+The install, from a clone of the tree, with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+`uv sync --all-packages --extra torch-cpu` (the printer and `research`, the store's client, which only a run id needs).
+The runs below build Flock's circuit prover, `flock-circuit` (Rust, `cargo`), and Lean's `verity-verify-proof` (the
+tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its result under `$OUT`, default
+`$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that directory to the
+printer's flag. Each from the tree's root:
+
+1. **The Flock, zero-knowledge and sampling layers**, on one H200 with about 450 GB of memory: the commands of
+   `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table", as written there. They
+   are the vLLM adapter's one bootstrap (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, which makes the vLLM
+   environment, the int8 checkpoint and the sm_90 taps under `WORK`), three partition files, and three runs of
+   `benchmarks/one_stage/a5_llama1b_h200.sh`. Give their three `OUT` directories to `--flock`, `--zk` and `--sampling`.
+2. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
+   K = 4096:
+   `taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=DIR`. Give its `$OUT` to
+   `--recursion`.
+
+Then `verity bench prove layers --flock A --zk B --sampling C --recursion E`, which reads only those directories.
+
+`benchmarks/prove_path/run.sh` is no step here: before any build it refuses, as `PP_LLAMA`, a workload directory
+`a5_llama1b_h200.sh` made, as its header says. What needs a team node today: recursion's launcher, `verity bench
+recursion_e2e run`, starts a `research run` on a team node; `job.sh` as above is the same job without it.
+
+## What you may change
+
+The prover's side of the four runs: its code, its build, the machine, its cores and its device. Each benchmark result's
+figures are then that prover's, read from its own output, and it names its workload, proof, device and coins as the
+output states them.
+
+## What is fixed
+
+The printer's rules, in `verity_bench/proof_layers.py`: a benchmark result prints numbers only on its Lean accept;
+the proof the output states must be the layer's (`plain` for Flock, `zk` for zero knowledge and sampling);
+a prove_path directory must hold one honest arm; a figure a sampled proof block is a member's session timing over its
+proof blocks sampled (`draw_counts`). The Lean verifier is the tree's, built from it by each run, and its verdict is
+what the benchmark result's Lean cell reads. The workload, its partition and its sample are printed in the benchmark
+result, so a changed partition is a different benchmark result.
+
+## How a cheating change is refused
+
+- **prove_path's forged arm.** With `PP_FORGED_PARTITION`, `run.sh` runs a second arm with `--forged`: a proof block's
+  committed value changed and committed consistently, the prover's self-check skipped (`FC_ZK_SELF_CHECK=skip`) so it
+  proves the false witness. That arm passes (its `PROVE-PATH` line has `forged` true and `ok` true) only when every
+  check before the sample passed, the forged proof block was sampled, the audit record rejects and the member holding it
+  was stopped: behind the ZK server, no proof of it was released; with `PP_PLAIN=1`, Lean refused the proof it read
+  (`forged_row`, `records_audit.forged_outcome`). The printer reads the honest arm only, so the forged arm's verdict is
+  in its own `audit.log`, not in the table.
+- **The recursion job's negative runs.** `job.sh`'s `negative` step runs the Lean step again with rep 0's inner coins
+  flipped (`NEG`, default `challenge,query`), each verified under every V* statement. The result's `negative_refused`
+  holds each, and `parts_ok`, which `ok` needs, needs every one refused; the printer's accept needs `ok` and
+  `composed`. With `forge-after` in `STEPS`, coefficient, direction and message forgeries made on the honest releases
+  are put to Lean beside their honest controls (`forged_refused`), which is reported and not part of `ok`.
+- **The Lean verifier's refusal.** A proof Lean refuses gives its benchmark result no number: prove_path's needs every
+  rank's A5 line with each `lean-verify` verdict true, a5's its checks accepted and each verdict true, recursion's
+  Lean's composition accepted.
+
 ## The metrics
 
-`run.py`'s `METRICS` are the five rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
-the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
-workload's sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
-(`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run, `--system spot` writes them into the run's `result.json`
-through the harness kit (`prove_records.record`) and `--system flock` writes nothing; outside one neither writes, and
-what it prints is the same either way:
+`run.py`'s `METRICS` are the first five metrics of `benchmarks/prove/metrics.toml`, and its `LAYER_METRICS` the last
+three (above, "The proof benchmark by layer"). `METRICS` are the prover GPUs a serving GPU needs (the headline), the
+prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the workload's
+sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
+(`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run,
+`--system spot` writes them into the run's `result.json` through the harness kit (`prove_records.record`) and `--system
+flock` writes nothing; outside one neither writes, and what it prints is the same either way:
 
 ```text
 research run --on auto --project verity --source . --cwd source --store-read -- \

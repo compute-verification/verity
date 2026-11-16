@@ -7,7 +7,7 @@ interface (`adapters/vllm/verity_vllm/protocols/interface.py`), and the harness 
 file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
 point is timed, metrics, results, dispatch and resume, a steady-state spec (the second schema `plan`, `run` and `check`
 take), settings, the two tables `served-table` and `breakdown` render, and the kit benchmarks' runners share.
-`benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
+`tests/benchmarks/harness/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
 
@@ -29,6 +29,8 @@ verity-bench prove --system S --workload W  # a proof system's prover on a workl
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
                                                 # reads (`verity bench prove lean-verify`, the same README)
+verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof benchmark by layer, the benchmark result
+                                                # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
 ## Specs
@@ -281,7 +283,11 @@ the harness does whatever its closure: `plan SPEC --again POINT` shows it as `ag
 launched, and the new run labels and supersedes nothing, so the passing run stays the record until a run is labelled
 on purpose. `--cores CPUS` (a booked slot's, `34-43`) runs the slot taker under `taskset -c CPUS`, so it takes that
 slot or waits for it, and `--card INDEX` (a booked card's, with `--cores`) asks the lease for that card alone, which
-the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. On a node whose launcher
+the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. The run waits for its slot,
+`jobs.DIRECT_WAIT_S` at most or until the spec's `max_minutes` and `jobs.SLOT_GRACE_S` (for `slot.py`'s 20 s poll)
+before `--end UTC` (a booked period's end), and then has `max_minutes`; its timeout is the two, so it ends before the
+end whichever `slot.py` the node runs, and `run` refuses a point whose `max_minutes` don't fit before `--end` at
+launch. On a node whose launcher
 takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch. The job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
@@ -304,19 +310,22 @@ the node's disk. A point whose row names its statement in the store is launched 
    `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
    CPUs (gpu-lease's `--on`) where the node says which those are, of the booked card alone where the run names one,
    and of any card where it doesn't; `out/point.json`
-   says which (`lease_on`). The lease declares no cores (gpu-lease's `--cores`): gpu-lease counts a lease that declares
-   none by the CPUs its processes may run on, which are the slot's, and the check `no_throttling` says whether the
-   machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
+   says which (`lease_on`). The lease declares the run's CPUs (gpu-lease's `--cores`), so gpu-lease refuses, or holds
+   until they fit, a lease whose CPUs and the live leases' pass the machine's CPU quota, and the check `no_throttling`
+   says whether the machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
    the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
-   that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
-   row. It keeps one accepted timed session's proof as its verifier filed it, for the Lean verifier
+   that isn't, reads the NUMA node the kernel says the leased card is on (each row's `card_numa_node`, null where it
+   says none, which `one_numa_node` holds to the row's CPUs' node), records what else is on the node before and after
+   the provers run (`steady.card_file`), and times the row. It keeps one accepted timed session's proof as its verifier filed it, for the Lean verifier
    (`out/rate/TYPE-kK/kept-session/`, `steady_node.keep_session`): the newest session whose proofs are the ones it
    recorded and that exactly one verifier's log line and one row of `sessions.jsonl` say was timed, accepted and of the
-   row's `pin`. `out/timed.json` names it with its label and its proofs' digests, or says why none was kept;
+   row's `pin`. `out/timed.json` names it with its label and its proofs' digests, or says why none was kept, and is
+   written however the step ends: a step that raised says what (`error`), and the point is refused with it;
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
    point's rate is the result's one measurement, written with it once, as the kit's writer makes it (`kit.Writer`'s `entry`)
-   under the host stamp the timed step ran under.
+   under the host stamp the timed step ran under, with the point's id as its `member` and the spec and the point's
+   identity as its inputs.
 
 It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
 TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,
@@ -331,7 +340,7 @@ how long things run) or `debug` (refused on a point, which is always a run of re
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
 harness writes one through `verity_vllm.engine.env`, part of the vLLM adapter's public interface.
-`benchmarks/harness/tests/test_settings.py` holds the harness's
+`tests/benchmarks/harness/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table
@@ -388,7 +397,7 @@ the audit's cost (the marks are in the spans arms' time). Then each spans arm's 
 
 ## The kit
 
-`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: four calls, each written once, on the
+`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: eight calls, each written once, on the
 standard library and `verity_bench.settings` alone, so a runner imports it without vLLM or torch.
 
 - **`kit.lease(gpus, minutes)`:** the `gpu-lease` argv a job's command follows: the wait for its GPUs, held for its bound.
@@ -418,6 +427,36 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
   result that uses none holds none. **`kit.writer(out, kind)`** writes a result of that `kind` (`NAME/vN`), the artifact
   kind `research` stores it as (`bench-result/v1` where a result has none), and refuses a result of another kind.
+- **`kit.report(name, text, doc, measured=(), *, document=True, mark=None, out=None, ran_with=..., accepted=None, why=None, made_up=False, withdrawn=())`:** a command's last step,
+  the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write their
+  number. It prints `text`, then `doc` as one line of JSON, whose first keys are `value`, `unit`, `commit` and `run`.
+  Where it has a place to write (`out` where the caller names one, its `--out`; else `$RESEARCH_RUN_DIR/out` under a
+  research run, else `$OUT` where set; an empty variable is no place) it writes that line to `<name>.json` there
+  (unless `document` is false) and each of `measured`, the keyword arguments of one measurement, to the run's result
+  through the writer at `mark` (`"measured"` where None), so under a research run the result is
+  `$RESEARCH_RUN_DIR/result.json` and outside one `result.json` beside the line. With no place it writes nothing.
+  `ran_with`, `accepted`, `why`, `made_up` and `withdrawn` are the core benchmarks' interface (`benchmarks/README.md`):
+  the `ran with` line after the text's first, with `a measurement, not an audit` below it unless the coins are the
+  deployed challenger's, verified, at deployed parameters, and the document's `ran_with` and `audit`; with `made_up`,
+  `a made-up record, not a run's` below those, `made_up: true` in the document, and each measurement marked `modeled`
+  with `made_up: true`; with `accepted` false, `NAME: no number: WHY` in place of the text's headline (a first line opening with `NAME:`),
+  `value` null beside `no_number` and each
+  measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`. Given none of them it
+  prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
+  compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
+  stated policy), and `tests/test_interface.py` the interface's arguments.
+- **`kit.record_dir(arg, *, paths=None)`:** the directory of the run's record `arg` names: a directory as given, with
+  nothing of research's imported; a run id fetched through research's store client where it is installed, refused where
+  it was withdrawn whole or in a part holding a file read, as `benchmarks/compute/run.py`'s `EvidenceStore.files`
+  refuses it. Anything else is refused in one line naming the fix (`kit.NoRecord`, a `ValueError`).
+  **`kit.record(arg, *, paths=None)`** is the same read as a `kit.Record`, its `path` and its `withdrawn`, a withdrawal
+  of only other files of the record, which the command passes to `kit.report(..., withdrawn=...)`.
+- **`kit.ran_with(coins, parameters, detail=None, *, verified=False)`:** the line `ran with: coins COINS; parameters
+  PARAMETERS (DETAIL)` and its object, in the fixed words (`kit.COINS`, `kit.PARAMETERS`); other words are refused.
+  `verified=True` is passed only where the command checked the challenger's signature against a pinned key itself;
+  `deployed challenger` without it is the record's own word (`verified: false`), which `kit.report` states under the
+  audit line (`coins by the record's own word, not checked`) and never takes for an audit. These are in
+  `verity_bench/kit_report.py`, which `kit` re-exports.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, an unknown

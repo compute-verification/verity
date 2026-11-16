@@ -97,7 +97,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
-    && cp "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
+    && cp "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean" "$P/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
     && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
@@ -134,7 +134,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.protocols.accounting.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.protocols.resource_accounting.compute.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }

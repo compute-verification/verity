@@ -21,7 +21,7 @@ The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name th
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
-The network certifier's older name is held in every tracked file but the few that spell it to move or find it
+The network attester's older name is held in every tracked file but the few that spell it to move or find it
 (``CERTIFIER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
 (``CERTIFIER_KEPT``), by count (``CERTIFIER_NAMES``).
 
@@ -58,7 +58,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "tests/verity/protocols/resource_accounting/network/verifier/network/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -83,7 +83,7 @@ DOC_TERMS = {
     "verity example": "verity demo",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
-    "warden, network warden": "the network certifier (what keeps the older name, a format's value or a name a caller "
+    "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
                               "outside the tree gives, stays in backticks: GLOSSARY.md, Older names)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
@@ -118,8 +118,8 @@ DOC_TERMS = {
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
-    "timed verifier": "the memory challenger",
+    "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
+    "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
@@ -218,7 +218,7 @@ _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\
 
 ALLOWED: dict[str, str] = {
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
-    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/accounting/certifier/prover/scan_zk.py`): "
+    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/resource_accounting/network/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
@@ -484,13 +484,11 @@ def test_spot_s_older_name_only_falls():
 
 #: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
 SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
 SLOWDOWN_KEPT: dict[str, str] = {
-    'search(*case)["rho"]': "the board's key (`nci.bracket.search`'s), which the calculator's test reads: renamed with its schema",
-    'the board\'s `"rho"`': "the calculator's README, naming that key",
     'out["rho"]': "the key of the circuit properties' output, renamed with its schema",
     "`ln(1/δ) / ρ(1)` blocks": "SPOT's risk ρ(m), the integrity profile's",
     "`ρ(1) = -ln(1 - q)`": "SPOT's risk ρ(m), the integrity profile's",
@@ -544,7 +542,7 @@ def test_the_slowdown_scan_reads_each_form():
     # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
     old = home.removesuffix("slowdown/") + "rho/"
     toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
-                           'x = search(*case)["rho"]  # a rhombus, a throw\n'),
+                           'x = out["rho"]  # a rhombus, a throw\n'),
            "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
            "c.py": f"# {old.rstrip('/')}_notes is another path\n",
            "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
@@ -552,7 +550,7 @@ def test_the_slowdown_scan_reads_each_form():
     found, used = slowdown_offenders(list(toy), read=toy.get)
     assert found == [("b.py", 1, old.rstrip("/")), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
                      (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
-    assert used == {'search(*case)["rho"]'}
+    assert used == {'out["rho"]'}
 
 
 def test_the_spot_scan_reads_each_form():
@@ -565,15 +563,15 @@ def test_the_spot_scan_reads_each_form():
                                                    "sampled-proofs": 1}
 
 
-#: The network certifier's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
+#: The network attester's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
 #: spellings; `BackwardEntry` holds none of them.
 CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
 #: The files the scan leaves out, each for what it holds the name for today.
 CERTIFIER_LEFT_OUT = {
     MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
     "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
-    "tools/research/tests/test_queue.py": "a test of the words a word map retires spells one in its map",
-    "tools/research/tests/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
+    "tests/tools/research/test_queue.py": "a test of the words a word map retires spells one in its map",
+    "tests/tools/research/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
     LINTS[0]: "this test spells the name to find it",
 }
 #: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
@@ -624,7 +622,7 @@ def certifier_files(files: list[str]) -> list[str]:
 
 
 def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
-    """The network certifier's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
+    """The network attester's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
     name that holds it (`FILE`) and a site none of the kinds spells (`FILE:LINE TEXT`)."""
     kept = {k: re.compile(spelling) for k, (spelling, _) in CERTIFIER_KEPT.items()}
     counts, other = dict.fromkeys(kept, 0), []
@@ -644,8 +642,8 @@ def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[
     return counts, other
 
 
-def test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it():
-    """No file's name holds the network certifier's older name, a file's text holds it only in what a format fixes, a
+def test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it():
+    """No file's name holds the network attester's older name, a file's text holds it only in what a format fixes, a
     caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
     only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""
     counts, other = certifier_names(certifier_files(_tracked()))
@@ -746,7 +744,7 @@ def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/accounting/certifier/verifier/network/tests/a.py"
+    net = "tests/verity/protocols/resource_accounting/network/verifier/network/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -838,7 +836,7 @@ def test_the_doc_scan_reads_poub_s_older_names():
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():
-    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    """The network attester's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
     a trusted host stay."""
     docs = {
         "a.md": "The uplink\ntap and the auditor's tap.\n"

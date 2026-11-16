@@ -1,7 +1,7 @@
 """The compile slice (`compile_slice_v7.CompileSlice_v7`: CompileSlice_v1 that also charges each certified arrival's
 length term) proved in zero knowledge: one window of a few steps as one unit, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
-(`network_certifier_zk._one_stage`: its stager, ZK server and received-pieces scan).
+(`network_attester_zk._one_stage`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
@@ -9,7 +9,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,613 ANDs a
   unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
-  steps (`verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
+  steps (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
   corpus-smallkv: the arrivals, the decisions and the replay's rows; `cache_vectors`' tokens of each arrival); or
   ``w212``, window 212 of vLLM's served run (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine
@@ -98,20 +98,20 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO))
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, network_certifier_zk as WZ  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, network_attester_zk as WZ  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC  # noqa: E402
 from verity_vllm.compiler import compile_slice as CS  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity.commitments import advice as ADV  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
-from verity.protocols.accounting.certifier.prover import window_charge as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import window_charge as WC  # noqa: E402
 
-FIXTURES = REPO / "verity/protocols/accounting/certifier/verifier/tests/fixtures"
+FIXTURES = REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
-TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
+TRACE_8EB1 = REPO / "tests/benchmarks/network_e2e/encodings/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
 WINDOW = 212
 #: counts fitted to w212, from which its decisions charge 25 bits in place of the session's 27
 FITTED = WC.WindowCarry(((1, 0), (16, 0), (64, 16)))
@@ -279,12 +279,12 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
 
 def _corpus(tmp: Path) -> Path:
     """corpus-smallkv unpacked as the derived rules' tests read it
-    (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
+    (`tests/benchmarks/network_e2e/encodings/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
     V2's order, each stop-id finish marked `eos`."""
     import gzip
     import shutil
 
-    src = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/corpus-smallkv"
+    src = REPO / "tests/benchmarks/network_e2e/encodings/fixtures/corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp / f)
     out = []

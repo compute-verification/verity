@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.TS
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's facet guarantees
@@ -11,12 +11,12 @@ Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- Lemma 1. -/
-theorem TimeBound : Accounting.Guarantees.TS.TimeBound := by
+theorem TimeBound : ResourceAccounting.Guarantees.TS.TimeBound := by
   intro K R _ _ _ G P h
   obtain ⟨-, hcyc, hclk, hfmax, hr⟩ := h
   rw [div_le_iff₀ (hclk.trans_le hfmax), Machine.bound]
@@ -34,21 +34,21 @@ theorem price_onFacet {K R : Type} [Fintype K] [Fintype R] [DecidableEq R] (G : 
   simp [Machine.price, onFacet]
 
 /-- Corollary D1, one binding facet. -/
-theorem BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1 := by
+theorem BindingFacetD1 : ResourceAccounting.Guarantees.TS.BindingFacetD1 := by
   intro K R T L U F X _ _ _ _ _ _ _ _ Z H r hload hpos hw hphi hchi
   unfold Model.epsMachine Model.epsCert Model.epsRoute
   rw [hw, hphi, hchi, price_onFacet, hload, div_self hpos.ne']
   simp
 
 /-- Corollary D1, the vector route's threshold. -/
-theorem VectorThresholdD1 : Accounting.Guarantees.TS.VectorThresholdD1 := by
+theorem VectorThresholdD1 : ResourceAccounting.Guarantees.TS.VectorThresholdD1 := by
   intro K R T L U F X _ _ _ _ _ _ _ Z t phiDel r hβ hω
   simp only [Model.tensorDemandDel, Model.demand]
   rw [div_le_iff₀ hω, div_le_iff₀ (mul_pos hβ hω)]
   constructor <;> intro h <;> linarith
 
 /-- Corollary D2. -/
-theorem RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2 := by
+theorem RoutesOffD2 : ResourceAccounting.Guarantees.TS.RoutesOffD2 := by
   intro K R ι _ _ _ G n rs cap N s κ B₀ _ hs hκ hB₀ hN
   have hle : ∀ r, G.load n r ≤ G.bound n := fun r => le_ciSup (Set.finite_range _).bddAbove r
   have hD : 0 < 1 + ∑ u, κ u * s u := by
@@ -61,4 +61,4 @@ theorem RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2 := by
   rw [div_le_iff₀ hD]
   linarith [hle rs]
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

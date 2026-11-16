@@ -46,7 +46,7 @@ launcher() {  # the `verity-vllm` launcher pod_bootstrap.sh writes beside $PY; b
   local vv=${PY%/*}/verity-vllm
   [ -x "$vv" ] && { echo "$vv"; return; }
   vv=$(dirname "$SWEEP_DIR")/bin/verity-vllm; mkdir -p "${vv%/*}"
-  printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$(command -v python3)" > "$vv" && chmod +x "$vv"
+  printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$(command -v python3)" > "$vv" && chmod +x "$vv"
   echo "$vv"
 }
 export VV; VV=$(launcher)
@@ -177,7 +177,7 @@ say "commit verdict=${OUTCOME/#-/none} manifest_verify=${MANIFEST_VERIFY/#-/none
 # ---- 5 store, then the regression record ------------------------------------------------------------------------------------------------
 small; store
 VERITY_REGRESSION_CANDIDATE=$SWEEP_DIR run_stage record "$EV/rebaseline_run.log" \
-  "$PY" -m tests.regression.rebaseline run --record "$EV/record" --tier T0,T1,T2 -- -k "r$ROWNUM" -ra
+  env -C "$T/tests/adapters/vllm" "$PY" -m tests.regression.rebaseline run --record "$EV/record" --tier T0,T1,T2 -- -k "r$ROWNUM" -ra
 say "rebaseline run rc=$? $(grep -E 'passed|failed|error' "$EV/rebaseline_run.log" | tail -n 1 | cut -c1-200)"
 finish
 [ "$src" = 0 ] || exit 30

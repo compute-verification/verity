@@ -5,7 +5,8 @@
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research.merge` reads the attempt by
 that commit.  A merge that changes verity/protocols/proofs/flock/ (the Lean verifier's package verity/protocols/proofs/flock/verifier/ included) or a
 package the verifier requires by path (verity/circuits/base/, verity/circuits/lean/ and verity/commitments/lean/), other than a
-README.md or PROTOCOL.md (which nothing the agreement runs reads), needs an attempt whose `lean-agreement` step passed
+README.md or PROTOCOL.md (which nothing the agreement runs reads) or the verifier's sigma/ (the σ-lift check's difftest, a
+Lake package nested in the verifier's that requires it, which Lake doesn't read to build the verifier), needs an attempt whose `lean-agreement` step passed
 (`merge_requires`; the step runs when the run has the pinned upstream build's URLs, which `check.py --record` sends then).  A merge
 that changes V*'s stager (`rec_vstage`, `rec_outer`, `rec_open`, `rec_residuals`, `rec_cap`, `circuit`, `one_stage.registered`)
 or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose vstar suite holds one to the other.
@@ -24,7 +25,8 @@ CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all
              merge_requires={"lean-agreement": ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
                                                  "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
                                                  "verity/circuits/base/", "verity/circuits/lean/",
-                                                 "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"],
+                                                 "verity/commitments/lean/", "!README.md", "!PROTOCOL.md",
+                                                 "!verity/protocols/proofs/flock/verifier/sigma/*"],
                              "lean-suites": ["verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/rec_open.py",

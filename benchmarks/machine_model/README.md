@@ -56,7 +56,7 @@ own and changes with it.
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
   `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
-  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  outside this directory, `tests/benchmarks/pouw/test_census_cover.py`, also reads every table of class counts the
   data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
@@ -221,7 +221,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -321,7 +321,7 @@ Beside its names, a design file has these keys:
 - `honest`, `L`, `work` (folded MMAs) and `plain` (unfolded MMAs beside them).
 - `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes. It states `p`, the probability a
   deficient block of it passes its check, and `luck`, the theorem that proves it: 0 for a receipt the check recomputes
-  (`Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells (`FillerBlocksDeficit`), or `p =
+  (`ResourceAccounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells (`FillerBlocksDeficit`), or `p =
   1` with no `luck`, no luck credit.
 - `[operands]`: the noise's operand-delivery floor φ_del.
 - `unit`: a proof block of `data/adapt.toml`, whole dot products by default.
@@ -340,7 +340,7 @@ for the design's noise, an arm that isn't a spec, and a filler off lanes.
 ## ε in the tensor–scalar model
 
 `eps` reports two layers that are never mixed. The protocol with 100% checking, every word and operand verified, has the
-core ε (`--checking full`, the default), Corollary D3's (`Accounting.Guarantees.TS.FloorCreditD3`):
+core ε (`--checking full`, the default), Corollary D3's (`ResourceAccounting.Guarantees.TS.FloorCreditD3`):
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck)(1 − ε_sched)(1 − ε_clock)
 
@@ -368,7 +368,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
   kernel, else the measured kernel's time plus the model's difference between the design and that kernel, else the
   model's alone.
 - **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose computation reads no
-  data-dependent address. Assumed, never measured (`ScalarRoute`, `Accounting.Assumptions.TS`). `--q`, default 8.
+  data-dependent address. Assumed, never measured (`ScalarRoute`, `ResourceAccounting.Assumptions.TS`). `--q`, default 8.
 - **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level. `data/table.toml`,
   `--lookup-q`, `--lookup-bytes`.
 - **q*_U**: q* on the uniform datapath, in uniform instructions. `--q-uniform`, default q*.
@@ -405,7 +405,7 @@ The other options:
 ## The headline is per node
 
 `machine-model headline`'s ε, and the Lean headline guarantees exported from this data
-(`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node: an accepted
+(`ResourceAccounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node: an accepted
 window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the work the window credits. The
 device that did it is left to the attribution layer. The floor argument places no work: every credited word is a fresh
 function of the post-coin noise, so it was computed after the coin, but nothing ties a committed tile to the GPU that

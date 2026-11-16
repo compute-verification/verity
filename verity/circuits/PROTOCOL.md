@@ -8,11 +8,11 @@ implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot
   `definition_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
-- Vectors: `verity/circuits/tests/format_vectors.json`, written by
-  `uv run python tools/check/pins.py --write verity/circuits/tests/format_vectors.json`.
-- Conformance: `verity/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
+- Vectors: `tests/verity/circuits/format_vectors.json`, written by
+  `uv run python tools/check/pins.py --write tests/verity/circuits/format_vectors.json`.
+- Conformance: `tests/verity/circuits/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
-  names its vector keys. `verity/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
+  names its vector keys. `tests/verity/circuits/partition_vectors.json` pins `Q_word` v1 on top of this format.
 - Scope: schema v1; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries, and
   §4.8 the definition digest.
 
@@ -429,7 +429,7 @@ changing any of them is a new version of the query.
   This is v1 behaviour, not a property of the circuit. `cut.WIDE_FAN_IN` is the
   query's own constant, not the layout's lazy-operand threshold (`layout.WIDE_FAN_IN`, which has no effect on operands).
 
-`WIRING` and `WIDE_FAN_IN` are pinned as data in `verity/circuits/tests/qword_vectors.json`, with vectors for every step of the algorithm, every
+`WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/verity/circuits/qword_vectors.json`, with vectors for every step of the algorithm, every
 refusal and a seeded random corpus.
 
 Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39, and `evaluate` refuses it; a
@@ -474,7 +474,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is metadata
 (`verity/metadata/v0`), outside every digest; the word view does not read it.
 
-Vectors (`verity/circuits/tests/boolean_vectors.json`, written by `uv run python tools/check/pins.py --write` on it): `gates` (id,
+Vectors (`tests/verity/circuits/boolean_vectors.json`, written by `uv run python tools/check/pins.py --write` on it): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
 its width and value, or null), `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
@@ -677,7 +677,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/accounting/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
@@ -686,7 +686,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   a noise instance has at most one reader. So each coin bit feeds one noise of one instance, no receipt key shares a noise
   bit's coin, and no noise has two copies or is shared across rows, matmuls, batch members or scan steps. A coin only
   receipt folds read may key any number of them. With coin flow this gives the
-  view independence of `Accounting.Guarantees.CoinFlow` (`security/`): every value outside a noise's forward cone is a
+  view independence of `ResourceAccounting.Guarantees.CoinFlow` (`security/`): every value outside a noise's forward cone is a
   function of the coins it does not read. Also refused (seeds): an input leaf of origin `coin` that a seed reads is read by
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
   coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct
@@ -698,7 +698,7 @@ as declared, so a composite over exact steps declares the intervals its operands
 ports, or none but certified marks, is refused by none of the rules, and nothing is computed for it (`ports.check` returns
 None).
 
-Vectors: `verity/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
+Vectors: `tests/verity/circuits/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls,

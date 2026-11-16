@@ -244,14 +244,17 @@ class Facts:
         return ids
 
     def circuit_closure(self) -> list[str]:
-        s = next((s for s in self.suites.values() if s.path == "tools/verity/circuit_check"), None)
+        s = next((s for s in self.suites.values() if "tools/verity/circuit_check" in (s.path, *S.LAYOUT.tested(s.path))), None)
         return sorted({s.path, *S.closure(s, self.pkgs), "uv.lock"}) if s else ["."]
 
 
 def lean_cover(pkg: str) -> list[str]:
-    """The directories and files that hold everything an audit of ``pkg`` reads (`lean_audit.inputs`)."""
+    """The directories and files that hold everything an audit of ``pkg`` reads (`lean_audit.inputs`), with the controls'
+    packages every Lean check run builds (`check.FIXTURES`) where they aren't under the Lean tool."""
     pkgs = [pkg, *LA.path_deps(pkg), *(d for q in LA.provers(pkg) for d in (q, *LA.path_deps(q)))]
-    return [*dict.fromkeys(pkgs), LA.LEAN_TOOL.rstrip("/"), "tools/check/common.py"]
+    fixtures = (c := LA.lean_check()).FIXTURES.relative_to(c.ROOT).as_posix()
+    return [*dict.fromkeys(pkgs), LA.LEAN_TOOL.rstrip("/"), *([] if covers(fixtures, [LA.LEAN_TOOL]) else [fixtures]),
+            "tools/check/common.py"]
 
 
 def lean_slot(pkg: str) -> dict:

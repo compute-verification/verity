@@ -65,10 +65,10 @@ On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.HeadlineDc
+namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Accounting.SecurityProofs.TS
-  Accounting.SecurityProofs.TS.Headline
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS ResourceAccounting.SecurityProofs.TS
+  ResourceAccounting.SecurityProofs.TS.Headline
 
 /-- A `SheetDataQ` sheet's rows as rationals, by class index: `Sheet.machine`'s, at `SheetDataQ.sheet`'s lists. -/
 def sheetCoefQ {P : Type} [DecidableEq P] (D : SheetDataQ P) : SheetRow P → ℕ → ℚ
@@ -245,4 +245,4 @@ theorem fillOpt_of_zero {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
   rw [hμX, sub_zero, one_mul]
   exact hchi.trans hprice
 
-end Accounting.SecurityProofs.TS.HeadlineDc
+end ResourceAccounting.SecurityProofs.TS.HeadlineDc

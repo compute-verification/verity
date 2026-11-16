@@ -32,7 +32,7 @@ graph/v2 on a worker, puts it in the store (`verity-graph/v2`) and labels `commi
 (`vocab.VERITY_GRAPH`), and each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is
 never a result, so only pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others
 has none there, and `settle` computes it by the contract's key rule (`task_key`, held to
-`tools/verity/graph/tests/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
+`tests/tools/verity/graph/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
 run, once one of them failed or is blocked.  The loop reads them as a candidate's verdict (`vqueue_loop`)."""
 from __future__ import annotations
 

@@ -4,7 +4,7 @@ The kernels take a setup's key prefix, so the arm runs the registered scheme's f
 audited one of two ways:
 
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/accounting/pous/device/timed_audit.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover, and judged by `pous-timed-audit` (`--pous-timed-audit`,
   else `pous_check`'s, built once a run: `timed_audit_exe`), whose verdict is the record's: where it can't run, every
   audit is undecided.  Its extra gate (`codec`) decodes segment 0 of the device's `C` with the scheme's own codec back
@@ -56,7 +56,7 @@ from typing import Any
 
 from band_gpu import harness as H
 
-from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
+from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference as R
 
 HERE = Path(__file__).resolve().parent
 SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
@@ -70,9 +70,9 @@ RECOMPUTE_EVERY = 10
 
 
 class V3:
-    """`p2-16448/v4` (`verity.protocols.accounting.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    """`p2-16448/v4` (`verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.sample_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
@@ -87,8 +87,8 @@ class V3:
         return self.impl
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        from verity.protocols.accounting.pous.verifier import protocol, schemes
-        from verity.protocols.accounting.pous.verifier.schemes import p2
+        from verity.protocols.resource_accounting.memory.pous.verifier import protocol, schemes
+        from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
         self.P, self.p2 = P, p2
         self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
@@ -108,7 +108,7 @@ class V3:
         return self.p2.block_keys(self.params, self.salt, *divmod(i, self.P.blocks_per_segment))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.protocols.accounting.pous.verifier.verifier import leaf_hash
+        from verity.protocols.resource_accounting.memory.pous.verifier.verifier import leaf_hash
         return leaf_hash(self.params, self.salt, i, block)
 
     def ready(self) -> dict[str, Any]:
@@ -152,14 +152,14 @@ class MC(V3):
                                          else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.protocols.accounting.pous.device.memory_challenger import block_digest
+        from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import block_digest
         return block_digest(block)
 
 
 FRAMINGS = {f.impl: f for f in (V3, MC)}
 TAMPER_EVERY = 10
 """The tampered control flips the top bit of the last byte of one block in this many."""
-TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "check"
+TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check"
 
 
 def timed_audit_exe(out: Path) -> Path:
@@ -199,7 +199,7 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
 
     from band_gpu import native
 
-    sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py").parents[1]))
     from p2_store.gpu import Kernels
 
     device = torch.device("cuda", torch.cuda.current_device())
@@ -246,8 +246,8 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/verifier/tests/fixtures/p2-v4-keys.json"
-"""The pinned v4 keys (`verity.protocols.accounting.pous.verifier.p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+KEYS = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/pous/verifier/fixtures/p2-v4-keys.json"
+"""The pinned v4 keys (`verity.protocols.resource_accounting.memory.pous.verifier.p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 
 def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,

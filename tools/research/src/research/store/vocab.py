@@ -157,7 +157,7 @@ VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERAB
 COMMIT_MAP_VALUES = ("accepted", "retracted")
 #: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + `COMPONENT`, the frozen ledger's
 #: (a bucket measured alone is no proof class).  The store imports no bench package (the `research` rule), so the spelling is copied
-#: here; `benchmarks/numerical/tests/bench/test_bench_contract.py` checks the copy.
+#: here; `tests/benchmarks/numerical/bench/test_bench_contract.py` checks the copy.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
@@ -208,7 +208,7 @@ ANCHOR = "anchor"
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
-#: asks for; a train member needs none, since the train's own check is the gate.
+#: asks for; a candidate's member needs none, since the candidate's own check is the gate.
 READY = "ready"
 #: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
 #: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
@@ -382,7 +382,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
-       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the certifiers' record) or ProviderLockdown (the provider's "
+       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the network attesters' record) or ProviderLockdown (the provider's "
        "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
        "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
        pattern=MEMORY_LINE_OF_RECORD_PATTERN),
@@ -423,7 +423,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again unless its own change is the same, or, in the verified queue's loop, an older head's carried across the moves "
-       "`main` landed since (`StoreLabels`); a train member needs none (Q14)"),
+       "`main` landed since (`StoreLabels`); a candidate's member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
        "whose own change is the same (in the verified queue's loop, or an older head's carried across the moves `main` landed "

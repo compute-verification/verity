@@ -42,7 +42,8 @@ PROVENANCE = {
     "record": _CAPTURE["record"],
     "record_served_default": _CAPTURE["record_served_default"],
     "art": _CAPTURE["art"],
-    "scan": f"{EVIDENCE['cublas_route_scan']['run_record']} (cublas_routes.json, its conditions bf16_gemm_check.ROUTE_CONDITIONS)",
+    "scan": f"{EVIDENCE['cublas_route_scan']['run_record']} (cublas_routes.json, its conditions bf16_gemm_check.ROUTE_CONDITIONS; "
+            "a shape in its route_records, that record's scan)",
     "device": "the capture node, cc 9.0 with 132 SMs, driver 580.173.02, torch 2.13.0+cu129 on the venv's libcublas.so.12, vLLM "
               "0.28.1rc1.dev472+gd9105ea80",
     "captured_utc": _CAPTURE["captured_utc"],

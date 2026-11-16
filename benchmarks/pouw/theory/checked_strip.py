@@ -54,7 +54,7 @@ Parts:
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/checked_strip.py --mutations` (`--full` adds the 2×2
 block's SAT case: 12 products, model checked, and 11 under a conflict budget, which so far leaves it undecided).
-`benchmarks/pouw/tests/test_theory_checked_strip.py` runs it in the pouw suite.
+`tests/benchmarks/pouw/test_theory_checked_strip.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 
@@ -86,8 +86,7 @@ def _load(name: str, path: Path):
 
 
 #: the words the checked kernels commit, kept beside their CPU references (by file: this script runs with --no-project)
-_W = _load("checked_strip_co_words", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw"
-           / "prover" / "kernels" / "edited_gemm" / "co_words.py")
+_W = _load("checked_strip_co_words", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "edited_gemm" / "co_words.py")
 M32, MASK, W_RE = _W.M32, _W.MASK, _W.W_RE
 s32, n_digits, digits, honest_words = _W.s32, _W.n_digits, _W.digits, _W.honest_words
 co32c_words, pv_words, pv_served = _W.co32c_words, _W.pv_words, _W.pv_served

@@ -24,7 +24,7 @@ Beside the order:
     scalar references (``STDLIB_ONLY``) no dependency;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
     imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
-    a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
+    a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network attester, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``);  a module the tree imports from the repository's root as
     ``benchmarks.network_traces.NAME`` is imported by its bare name nowhere (``ONE_NAME``).
 
@@ -64,6 +64,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
+#: where a directory's tests are, mirrored by path: `X/tests/REST` at `tests/X/REST`
+MIRROR = ROOT / "tests"
 
 
 def _integration_sites() -> frozenset[tuple[str, str]]:
@@ -95,34 +97,34 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
 NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
                 "verity/circuits/word.py")
-#: and the network certifier's load relay, whose `generate` lays a weight's generation rows with numpy
+#: and the network attester's load relay, whose `generate` lays a weight's generation rows with numpy
 #: (Mon 16 Nov 6 PM PST, network-accounting, whether `load_relay` keeps numpy)
-NUMPY_USERS += ("verity/protocols/accounting/certifier/device/load_relay.py",)
+NUMPY_USERS += ("verity/protocols/resource_accounting/network/attester/load_relay.py",)
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
-NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",
-                     "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
+NO_DATE_OR_REASON = ("verity/protocols/compose/verifier/live_challenger", "verity/protocols/resource_accounting/memory/poub/attester/live_verifier",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",
-                  "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/verifier/receipts")
-#: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
+HELD_AS_VERITY = ("verity/protocols/compose/verifier/live_challenger", "verity/protocols/resource_accounting/memory/poub/attester/live_verifier",
+                  "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts")
+#: SPOT[Flock] stands on its own, and the network attester is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
 #: and its analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's modules and Lean
 #: (its packages and its Security areas).
 SPOT_ROW = "verity/protocols/proofs/spot"
-CERTIFIER_ROW = "verity/protocols/accounting/certifier"
+CERTIFIER_ROW = "verity/protocols/resource_accounting/network"
 SPOT_TREES = ("verity/protocols/proofs/spot", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/flock/verifier",
               "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py")
 SPOT_LEAN = ("verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/flock/verifier")
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
-CERTIFIER_MODULES = ("verity.protocols.accounting.certifier.verifier", "verity.protocols.accounting.certifier.prover", "verity.protocols.accounting.certifier.device")
-CERTIFIER_LEAN = ("verity/protocols/accounting/certifier/device/program/lean",
-                  "verity/protocols/accounting/certifier/verifier/lean", "security/*/Certifier", "security/*/Certifier.lean")
+CERTIFIER_MODULES = ("verity.protocols.resource_accounting.network.verifier", "verity.protocols.resource_accounting.network.prover", "verity.protocols.resource_accounting.network.attester")
+CERTIFIER_LEAN = ("verity/protocols/resource_accounting/network/attester/program/lean",
+                  "verity/protocols/resource_accounting/network/verifier/lean", "security/*/Certifier", "security/*/Certifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Flock's Lean verifier, by its Lake package's name, and the Lake packages that may require it: those whose Lean reads the
@@ -147,17 +149,17 @@ BENCHMARKS_IMPORTERS = {
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
-        "verity/protocols/proofs/flock/prover/tests/test_backend_bench.py", "verity/protocols/proofs/flock/prover/tests/test_class_statement.py",
-        "verity/protocols/proofs/flock/prover/tests/test_gemm_hill.py", "verity/protocols/proofs/flock/prover/tests/test_ir_lowering_bench.py",
+        "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
-    **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
+    **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tests/tools/research/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
-    "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
+    "tests/verity/circuits/ops/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
@@ -204,6 +206,18 @@ MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
+def _with_tests(paths) -> list[tuple[Path, str]]:
+    """``(file, the path it stands for)`` for each ``.py`` under ``paths`` (root-relative trees or files) and under their
+    mirror in ``tests/``, whose files stand where their tests' directory was (``tests/X/REST`` for ``X/REST``)."""
+    out = []
+    for tree in paths:
+        for base, strip in ((ROOT / tree, ""), (MIRROR / tree, "tests/")):
+            files = [base] if base.is_file() else sorted(base.rglob("*.py")) if base.is_dir() else []
+            out += [(f, f.relative_to(ROOT).as_posix().removeprefix(strip)) for f in files
+                    if not {".lake", "__pycache__"} & set(f.relative_to(ROOT).parts)]
+    return out
+
+
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
     directory (a Lean package builds in its ``.lake``) or a distribution of its own (the listing's ``distribution``), and
@@ -227,6 +241,8 @@ def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)
     """``(module, line, imported)`` for every module ``path`` (or its parsed ``nodes``) names.  Statements and import-call
     strings are ``imported``; a ``"module:attr"`` string is not, since any ``word:word`` constant matches: only the
     forbidden and direction rules apply to it."""
+    if src == SRC and path.is_relative_to(MIRROR / "verity"):          # a test, where its directory's tests are mirrored
+        src = MIRROR / "verity"
     package = [*package, *path.relative_to(src).parts[:-1]]
     out = []
     for node in nodes if nodes is not None else ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
@@ -272,16 +288,14 @@ def test_verity_reads_no_other_distribution_at_run_time() -> None:
     data or names one of its modules for an import call, so ``verity`` alone evaluates its Definitions and no suite of
     it takes another distribution as an input."""
     offenders, listing, held = [], _listing(), set()
-    for path in sorted(SRC.rglob("*.py")):
-        rel = path.relative_to(ROOT).as_posix()
-        if {".lake", "__pycache__"} & set(path.parts):
-            continue
+    for path, rel in _with_tests(["verity"]):
         if _distribution(rel, listing) is not None:
             kept = {p for p in HELD_AS_VERITY if _under(rel, [p])}
             held |= kept
             if not kept:
                 continue
-        offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
+        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}"
+                      for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
     assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
                            "reverse: move the data or code into verity beside what reads it (as `bf16_gemm_check`'s device pins "
                            "sit in its `device_pins/`), or take it as a parameter the caller supplies\n" + "\n".join(offenders))
@@ -355,16 +369,13 @@ def _spot_python_offenders() -> list[str]:
     """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
     tests included."""
     out = []
-    files = {p for tree in SPOT_TREES for p in ([ROOT / tree] if (ROOT / tree).is_file() else (ROOT / tree).rglob("*.py"))}
-    for path in sorted(files):
-        if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
-            continue
+    for path, _ in _with_tests(SPOT_TREES):
         out += [f"{path.relative_to(ROOT)}:{line}: {name}" for line, name in _certifier_imports(path)]
     return out
 
 
-def test_spot_never_imports_the_network_certifier_in_python() -> None:
-    """SPOT[Flock]'s Python imports none of the network certifier.  The listing puts the certifier's row
+def test_spot_never_imports_the_network_attester_in_python() -> None:
+    """SPOT[Flock]'s Python imports none of the network attester.  The listing puts the certifier's row
     (``CERTIFIER_ROW``) after SPOT's (``SPOT_ROW``) and lists no tie out of the rows up to SPOT's into
     a later one, so nothing SPOT's Python loads, directly or through another file, is the certifier's; and no
     file of ``SPOT_TREES``, Flock's and their tests among them, imports one of ``CERTIFIER_MODULES``."""
@@ -438,8 +449,8 @@ def _load_tool(name: str, path: Path) -> Any:
     return module
 
 
-def test_spot_never_imports_the_network_certifier_in_lean() -> None:
-    """SPOT[Flock]'s Lean imports none of the network certifier's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
+def test_spot_never_imports_the_network_attester_in_lean() -> None:
+    """SPOT[Flock]'s Lean imports none of the network attester's (``CERTIFIER_LEAN``): its packages (``SPOT_LEAN``)
     require no certifier package by path, directly or through another, and no module of those packages or of its analysis
     (``SPOT_SECURITY``) imports a certifier module, directly or through any other module."""
     pkgs = sorted(p for p in _lake_closure(SPOT_LEAN) if _covered(p, CERTIFIER_LEAN))
@@ -459,16 +470,16 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
     """The check above isn't vacuous: a certifier module that a SPOT root reaches through another module is found with the
     chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules.
     In Python, the certifier's package imported from the package above it is found as its module is."""
-    src = ("from verity.protocols.accounting.certifier import verifier\nimport verity.protocols.accounting.certifier.prover.egress as e\n"
-           "from verity.protocols.accounting.certifier.device import x\nfrom verity.protocols import certifier, spot\n")
+    src = ("from verity.protocols.resource_accounting.network import verifier\nimport verity.protocols.resource_accounting.network.prover.egress as e\n"
+           "from verity.protocols.resource_accounting.network.attester import x\nfrom verity.protocols import certifier, spot\n")
     found = _certifier_imports(SRC / "protocols/spot/tests/test_x.py", ast.walk(ast.parse(src)))
-    assert found == [(1, "verity.protocols.accounting.certifier.verifier"), (2, "verity.protocols.accounting.certifier.prover.egress"),
-                     (3, "verity.protocols.accounting.certifier.device")], found
-    files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/accounting/certifier/device/program/lean/C.lean"]}
+    assert found == [(1, "verity.protocols.resource_accounting.network.verifier"), (2, "verity.protocols.resource_accounting.network.prover.egress"),
+                     (3, "verity.protocols.resource_accounting.network.attester")], found
+    files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/resource_accounting/network/attester/program/lean/C.lean"]}
     imports = {"s/A.lean": ["Mathlib.X", "B"], "s/B.lean": ["C"]}
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
-    assert found == ["verity/protocols/accounting/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
+    assert found == ["verity/protocols/resource_accounting/network/attester/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
     assert _covered("security/Proofs/Properties/Certifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
     modules = _lean_modules(["security/Proofs/Flock/Bytes.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean"],
@@ -713,7 +724,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
+    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
     owners: dict[str, set[str]] = {}
@@ -1064,13 +1075,12 @@ def test_only_its_own_package_names_a_prover_only_module() -> None:
     homes = {name: _below(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
     word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
     offenders = []
-    for path in sorted(SRC.rglob("*.py")):
-        if {".lake", "__pycache__"} & set(path.parts) or not word.search(text := path.read_text(encoding="utf-8")):
+    for path, rel in _with_tests(["verity"]):
+        if not word.search(text := path.read_text(encoding="utf-8")):
             continue
-        rel = path.relative_to(ROOT).as_posix()
         hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
         hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{rel}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
+        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
     assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
                            "one:\n" + "\n".join(offenders))
     missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
@@ -1166,7 +1176,10 @@ def _listing(text: str | None = None) -> Listing:
 
 def _row(path: str, steps: dict[str, int]) -> str:
     """The row entry ``path`` belongs to: itself where the order lists it, else the deepest listed directory above it,
-    ``.`` for the rest."""
+    ``.`` for the rest.  A file at ``tests/X/REST``, where the tests of ``X`` are, is in ``X/REST``'s row unless that is
+    ``.``."""
+    if path.startswith("tests/") and (mirrored := _row(path.removeprefix("tests/"), steps)) != ".":
+        return mirrored
     d = path if path in steps else posixpath.dirname(path)
     while d and d not in steps:
         d = posixpath.dirname(d)
@@ -1177,6 +1190,8 @@ def _below(path: str, steps: dict[str, int]) -> str:
     """Where a file in no place is, as a place's lists name it: the directory one level below its row that holds it, or
     its row for a file directly in it."""
     row = _row(path, steps)
+    if row != "." and not path.startswith(f"{row}/"):
+        path = path.removeprefix("tests/")
     below = posixpath.dirname(path)[0 if row == "." else len(row) + 1:].split("/")[0]
     return row if not below else below if row == "." else f"{row}/{below}"
 
@@ -1199,7 +1214,7 @@ def _trusted(path: str) -> str | None:
     """The verifier's or the device's directory ``path`` is in: the outermost ``verifier/`` or ``device/`` directory above
     it under ``verity/``, or None."""
     parts = path.split("/")
-    at = next((i for i, part in enumerate(parts[:-1]) if part in ("verifier", "device")), None)
+    at = next((i for i, part in enumerate(parts[:-1]) if part in ("verifier", "device", "attester")), None)
     return None if at is None or parts[0] != "verity" else "/".join(parts[:at + 1])
 
 
@@ -1528,7 +1543,7 @@ def _hold_places(loads: Iterable[Load], files: Set[str], listing: Listing) -> No
     stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.places.items())
              for kind, now in zip(LISTS, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
     stale += [f"{d}: no Python is at {p}" for d, lists in sorted(listing.places.items()) for p in lists["paths"]
-              if not any(f.endswith(".py") and (f == p or f.startswith(p + "/")) for f in files)]
+              if not any(f.endswith(".py") and (f == p or f.startswith((p + "/", f"tests/{p}/"))) for f in files)]
     assert not stale, (f"lines of `place` (tests/import_order.toml) the tree no longer has; delete them ({REGENERATE} "
                        f"does): {stale}")
 
@@ -1736,7 +1751,7 @@ ORDER_TREE = {
     "verity/runtime/__init__.py": "",
     "verity/runtime/toy.py": "import verity.circuits.at_load\n",
     "verity/protocols/proofs/flock/__init__.py": "",
-    "verity/protocols/proofs/flock/prover/stage.py": "import verity.protocols.accounting.pouw.verifier.check\n",
+    "verity/protocols/proofs/flock/prover/stage.py": "import verity.protocols.resource_accounting.compute.pouw.verifier.check\n",
     "verity/protocols/proofs/flock/verifier/__init__.py": "",
     "verity/protocols/proofs/flock/verifier/interface.py": "",
     "verity/protocols/proofs/flock/verifier/lakefile.toml": ('name = "flock"\n[[lean_lib]]\nname = "Flock"\n'
@@ -1757,19 +1772,19 @@ ORDER_TREE = {
     "infra/ops/src/verity_ops/__init__.py": "",
     "tools/tests/test_console.py": "import verity_ops.no_such_module\n",
     "verity/protocols/__init__.py": "",
-    "verity/protocols/accounting/pouw/__init__.py": "",
-    "verity/protocols/accounting/pouw/verifier/__init__.py": "",
-    "verity/protocols/accounting/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
-                                                "def f():\n    from verity.protocols.accounting.pouw.prover import build\n"),
-    "verity/protocols/accounting/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.accounting.pouw.prover.build\n",
-    "verity/protocols/accounting/pouw/verifier/tests/test_check.py": "import verity.protocols.accounting.pouw.prover.build\n",
-    "verity/protocols/accounting/pouw/verifier/check/interop.py": "import verity.protocols.proofs.flock.prover.stage\n",
-    "verity/protocols/accounting/pouw/device/__init__.py": "",
-    "verity/protocols/accounting/pouw/device/serve.py": "from verity.protocols.accounting.pouw.verifier import check\n",
-    "verity/protocols/accounting/pouw/device/party.py": "from verity.protocols.accounting.pouw.device import serve\n",
-    "verity/protocols/accounting/pouw/prover/__init__.py": "",
-    "verity/protocols/accounting/pouw/prover/build.py": "from verity.protocols.accounting.pouw.verifier import check\n",
-    "verity/protocols/accounting/pouw/prover/tests/test_build.py": "from verity.protocols.accounting.pouw.device import serve\n",
+    "verity/protocols/resource_accounting/compute/pouw/__init__.py": "",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py": "",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
+                                                "def f():\n    from verity.protocols.resource_accounting.compute.pouw.prover import build\n"),
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_check.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/check/interop.py": "import verity.protocols.proofs.flock.prover.stage\n",
+    "verity/protocols/resource_accounting/compute/pouw/device/__init__.py": "",
+    "verity/protocols/resource_accounting/compute/pouw/device/serve.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
+    "verity/protocols/resource_accounting/compute/pouw/device/party.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
+    "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py": "",
+    "verity/protocols/resource_accounting/compute/pouw/prover/build.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
+    "verity/protocols/resource_accounting/compute/pouw/prover/tests/test_build.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
 }
 
 
@@ -1795,7 +1810,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         (tmp_path / f).write_text(text, encoding="utf-8")
     tree = _tracked_tree().Tree(tmp_path, files=ORDER_TREE)
     loads = _all_loads(tree)
-    verifier, prover, device, check = (f"verity/protocols/accounting/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
+    verifier, prover, device, check = (f"verity/protocols/resource_accounting/compute/pouw/{d}" for d in ("verifier", "prover", "device", "verifier/check"))
     own = {"verity/protocols/proofs/flock": {"owner": "proofs", "reason": "Flock's distribution"}, check: {"owner": "memory-accounting"}}
     steps = _listing().steps
     places = _places([{"paths": ["verity/circuits"]}, {"paths": ["verity/runtime"]}, {"paths": ["verity/commitments/crypto"]},
@@ -1807,7 +1822,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("verity/circuits", "verity/runtime"): [f"verity/circuits/{f}.py" for f in ("at_load", "in_function", "in_string")],
         ("verity/commitments/periods", "verity/protocols/proofs/flock"): ["verity/commitments/periods/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
-        ("verity/protocols/proofs/flock", "verity/protocols/accounting/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
+        ("verity/protocols/proofs/flock", "verity/protocols/resource_accounting/compute/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
         ("verity/protocols/proofs/spot", "demos"): ["verity/protocols/proofs/spot/by_path.py"],
         ("tools", "benchmarks"): ["tools/lazy.py"],
         ("tools", "infra"): ["tools/tests/test_console.py"],

@@ -14,7 +14,7 @@ correct on the boundary values the commitment opens.
   proof block (`Claims.Sampling.incorrectIn`). `incorrectIn` reads every value the replay block's boundary doesn't commit from
   the interiors, and every other from what the witness opens, none where it opens none; `Prog.Correct` asks every value
   a proof block reads from outside it and every value its boundary commits to be opened. So a replay block whose
-  boundary the witness leaves unopened at any position is not correct, as `Accounting.unbound` counts a unit with an
+  boundary the witness leaves unopened at any position is not correct, as `ResourceAccounting.unbound` counts a unit with an
   unopened value.
 * **The design's cap at a count** (`CapsAt`): every footprint that marks more than `m` replay blocks incorrect is
   accepted with probability at most `δ` (`Design.Two.Pa`).
@@ -34,7 +34,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Replay block `ρ` is correct at the witness `w`**: at some interiors, no cell of `ρ` in a stratum of `Pt` has an
 incorrect proof block. -/
@@ -99,7 +99,7 @@ def UnitsAreReplay (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : 
     (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
   ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Claims.Sampling.Wit) (u : Fin (V.units θ F)),
-    u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectReplay H Cm s Pt dd w
+    u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ incorrectReplay H Cm s Pt dd w
 
 /-- **The claim holds on a witness the relation takes**: where the units are the replay blocks and the design caps the
 claim's share `ε · n` at `δ`, a witness in the two-stage relation at `δ` makes the claim hold on its transcript. -/
@@ -111,20 +111,20 @@ theorem holds_of_rTwo (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c
     (hU : UnitsAreReplay V θ F c H Cm s Pt dd readX)
     (hcap : CapsAt dd Pt ((V.certOf θ).ε * V.units θ F) δ) (w : Claims.Sampling.Wit)
     (hR : Claims.Sampling.RTwo H Cm parse partition two δ x w) :
-    Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε := by
+    ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε := by
   classical
   obtain ⟨e, he⟩ := hU
   have hle : ((incorrectReplay H Cm s Pt dd w).card : ℝ) ≤ (V.certOf θ).ε * V.units θ F := by
     by_contra hlt
     exact not_rTwo_of_incorrect H Cm parse partition two δ _ x s Pt dd hs hP hd hcap w (not_le.1 hlt) hR
-  have hmap : (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)).map e ⊆
+  have hmap : (ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)).map e ⊆
       incorrectReplay H Cm s Pt dd w := by
     intro ρ hρ
     obtain ⟨u, hu, rfl⟩ := Finset.mem_map.1 hρ
     exact he w u hu
   have hc := Finset.card_le_card hmap
   rw [Finset.card_map] at hc
-  unfold Accounting.IntegrityHolds
+  unfold ResourceAccounting.IntegrityHolds
   exact le_trans (by exact_mod_cast hc) hle
 
 end Verity.SampledTwo

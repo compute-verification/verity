@@ -9,7 +9,7 @@ rows at the registered stop ids and length, with no stop id for a span whose row
 n is a function of committed values and no number the serve states. Every other span is filed by its size class with no
 `b.stop` and no stop block (`filed`, ``p<P>-o<O>-nostop``): an abort, an error, a request still running, one the rule
 runs past T (finish 0), an end the rule doesn't read (a body's own stop strings), a ``min_tokens`` other than 0, and,
-where the serve knows its requests' releases, a request the network certifier didn't release. A failure the engine
+where the serve knows its requests' releases, a request the network attester didn't release. A failure the engine
 doesn't see (the certifier's, after the engine's last step for the request) is not known here: such a span is filed as
 the engine ended it.
 
@@ -23,7 +23,7 @@ under as the window closes.
 `boundary_rows.layout_of` does, and a ``commit.json`` that names another rule is refused, so the block a stop record
 proves is the one the verifier holds and never one the serve chose.
 
-**What the block reads.** What holds `b.request` to the request the network certifier took in is the ingress tie's:
+**What the block reads.** What holds `b.request` to the request the network attester took in is the ingress tie's:
 until it does, its ``max_tokens`` is the engine's word, and a serve that writes any length there has a correct stop
 block.
 """
@@ -43,7 +43,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
-    FIELD_AT,
     REQUEST,
     SCHEMA,
     Span,
@@ -51,6 +50,7 @@ from verity_vllm.pipeline.boundary_rows import (
     layout_of,
     row_type,
 )
+from verity_vllm.pipeline.boundary_span import FIELD_AT
 from verity_vllm.records.boundary_commit import FILE as COMMIT
 from verity_vllm.records.boundary_commit import BoundaryCommit
 

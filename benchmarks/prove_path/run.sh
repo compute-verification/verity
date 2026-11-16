@@ -11,18 +11,31 @@
 #     from adapters/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified-rate:4/678); the forged one SiluMul_v2{I=1536} at step 16, all 3 units sampled (rate:3/3), on ranks
 #     PP_FORGED_RANKS (default 0).
-#   PP_LLAMA=DIR: a single-GPU (TP1) Commit's row dir on this node: Llama-3.2-1B's Commit ($LROW, the sealed bundle
-#     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
+#   PP_LLAMA=DIR: a single-GPU (TP1) Commit's row dir on this node: Llama-3.2-1B's Commit of row LROW (default the bf16
+#     RTX PRO 6000 B4 row below; LROW=llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager for the int8 H200
+#     B4 row), the sealed bundle commit/replay_bundle_p0 and the Builds of I2's Programs (build_request_<shape>_<policy>*). A row
+#     dir `verity-vllm row run` made (benchmarks/one_stage/a5_llama1b_h200.sh's among them) holds the row's declared Programs,
+#     without I2's length rule, and is refused before any build: prove such a row's serve with PP_SERVE_RUN. Its workload is the stored one of that name, the served run's (adapters/vllm/tools/served_run/workloads/)
+#     or the integration's (adapters/vllm/workloads/), whichever SHA256SUMS lists it, fetched by its art id where absent; a
+#     name neither lists is refused before anything is written, and a workload that isn't the one the Commit's record served
+#     is refused by its digest. φ reads the config.json of record of the workload's pin (prove_path.workload_hf_config: an
+#     int8 row's carries its quantization config). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
 #     --row-dir, the verifier's from its own compile of each, and the Build manifest falls back to
 #     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, rate:2/4); the forged one layer 0's at step 24, the
-#     one unit only r0 decodes there, sampled (rate:1/1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
+#     one unit only r0 decodes there, sampled (rate:1/1), forged at PP_FORGE (default 0:0). Every unit of step 1 proved:
+#     PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json (rate:1/1); with PP_PLAIN=1, whose
+#     sample is stratified, ..._step1_all_stratified.json and PP_FORGED_PARTITION=..._step24_stratified.json (stratified-rate:1/1).
+#     With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
-#     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
-#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
+#     serving device's target profile where serve.json records none. The honest partition is PP_PARTITION (default the Llama
+#     one above); the forged one PP_FORGED_PARTITION, by default the honest one's templates and steps with every unit
+#     sampled (prove_path.py forged-partition, kept as $OUT/forged-partition.json), forged at PP_FORGE (default 0:0). One
+#     outside the honest partition's steps is refused before any build, since its commit would find no unit to forge.
+#     PP_ONLY=honest prints a PROVE-PATH line saying "no forged run". The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
@@ -58,7 +71,7 @@
 #     and PP_SERVE_STANDIN), each the rate that samples its window as its text reads at the proof blocks its scope has under
 #     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION or PP_FORGED_PARTITION that still
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
-#     either audit, by name. benchmarks/prove_path/tests/test_run_rules.py holds the stand-in's rules to what a stream takes
+#     either audit, by name. tests/benchmarks/prove_path/test_run_rules.py holds the stand-in's rules to what a stream takes
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
 #     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
@@ -78,7 +91,8 @@
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
 #   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY). PP_MAIN (a
 #   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
-# From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out):
+# From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
+# out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
@@ -88,15 +102,45 @@ for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
   case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
     "directory on this node (a DIR)"; exit 2;; esac
 done
-REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
+LROW=${LROW:-llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager}
+LWL=
+for d in adapters/vllm/tools/served_run/workloads adapters/vllm/workloads; do
+  awk -v f="$LROW.json" '{ sub(/^\*/, "", $2) } $2 == f { found = 1 } END { exit !found }' $d/SHA256SUMS 2>/dev/null \
+    && { LWL=$d/$LROW.json; break; }
+done
+if [ -n "${PP_LLAMA:-}" ] && [ -z "${PP_TP:-}${PP_SERVE_RUN:-}" ] && [ -z "$LWL" ]; then
+  echo "LROW=$LROW: no stored workload of that name (adapters/vllm/tools/served_run/workloads/SHA256SUMS or" \
+    "adapters/vllm/workloads/SHA256SUMS lists it); give LROW the row id of PP_LLAMA's Commit"; exit 2
+fi
+if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}" ]; then
+  [ -d "$PP_SERVE_RUN" ] || { echo "PP_SERVE_RUN=$PP_SERVE_RUN: no serve-openai run directory on this node"; exit 8; }
+  [ -d "${PP_SERVE_ROWS:-}" ] || { echo "PP_SERVE_ROWS=${PP_SERVE_ROWS:-}: no sealed window row dir on this node (the serve run's" \
+    "windows/w<K>)"; exit 8; }
+elif [ -z "${PP_TP:-}" ] && [ -n "${PP_LLAMA:-}" ]; then
+  [ -d "$PP_LLAMA" ] || { echo "PP_LLAMA=$PP_LLAMA: no row dir on this node: give the Commit's row dir"; exit 8; }
+  [ -n "${PP_SERVE_STANDIN:-}" ] || ls -d "$PP_LLAMA"/build_request_LP*_T*_* > /dev/null 2>&1 || {
+    echo "PP_LLAMA=$PP_LLAMA holds no Build of I2's Programs (build_request_<shape>_<policy>*): a row dir \`verity-vllm row run\`" \
+      "made (a5_llama1b_h200.sh's among them) cannot be proved by the single-GPU arm, since its Commit is under the row's declared" \
+      "Programs and I2's end in their length rule. Prove a serve-openai run's window with the served arm instead (PP_SERVE_RUN," \
+      "PP_WINDOW, PP_SERVE_ROWS; README.md)"; exit 8; }
+fi
+REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/out}}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
+[ -n "$O" ] || { O=$REPO/out/prove_path; echo "OUT unset outside a research run: the outputs go to $O"; }
+mkdir -p $O
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
-LROW=llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
+PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
+STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
+if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}${PP_LLAMA:+${PP_SERVE_STANDIN:-}}" ] && [ "${PP_ONLY:-}" != honest ]; then
+  # the served arm's forged partition, derived from the honest one or held to its steps, before any build
+  $PY benchmarks/prove_path/prove_path.py forged-partition --honest ${PP_PARTITION:-$STEP1} --design $SAMPLING_DESIGN \
+    ${PP_FORGED_PARTITION:+--forged $PP_FORGED_PARTITION} > $O/forged-partition.json || exit 8
+fi
 
 (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -110,6 +154,8 @@ LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-
 (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
+$PY benchmarks/prove_path/prove_path.py ran-with --challenger "$PP_CHALLENGER" ${PP_CHALLENGER_KEY:+--challenger-key "$PP_CHALLENGER_KEY"} \
+  | tee $O/ran_with.txt || exit 4
 
 for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
   case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
@@ -134,7 +180,6 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
-PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
@@ -162,8 +207,10 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
          # --window K --row-dir DIR, whose advice and opening are the server's: ADVICE -)
   local name=$1 src=$2 advice=$3 part=$4 ranks=$5; shift 5
-  local forged=; [ $# -gt 0 ] && forged=--forged
-  case "${PP_ONLY:-}:${forged:+forged}" in honest:forged|forged:) return 0;; esac
+  local forged= arm=honest; [ $# -gt 0 ] && forged=--forged arm=forged
+  case "${PP_ONLY:-}:$arm" in honest:forged|forged:honest)
+    echo "PROVE-PATH {\"name\": \"$name\", \"ran\": false, \"why\": \"PP_ONLY=$PP_ONLY: no $arm run\"}"
+    return 0;; esac
   local adv="--advice $advice" op="--opening $W/$name-opening.json"
   case "$src" in *--serve-run*) adv=; op=;; esac
   mkdir -p $O/$name
@@ -226,7 +273,6 @@ if [ -n "${PP_TP:-}" ]; then
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   D=${PP_SERVE_ROWS:-${PP_LLAMA:-}}
   [ -d "$D" ] || { echo "no row dir ${D:-(PP_SERVE_ROWS or PP_LLAMA)}: give the Commit's row dir on this node"; exit 8; }
-  STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
   served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
     mkdir -p $O/$1-records
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
@@ -234,25 +280,25 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     REC_NAME=$1 REC_RUN=$2 REC_K=$3
     run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
-    run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+    run $1-forged "$src" - $O/forged-partition.json "" --forge ${PP_FORGE:-0:0} || rc=1
     REC_RUN=
   }
   if [ -n "${PP_SERVE_RUN:-}" ]; then
     served served $PP_SERVE_RUN ${PP_WINDOW:-0} || rc=1
   else
-    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload adapters/vllm/tools/served_run/workloads/$LROW.json"
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload $LWL"
     if [ -n "${PP_SERVE_STANDIN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload adapters/vllm/tools/served_run/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload $LWL --out $W/advice.bin | tee $O/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
 elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
-  (cd adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
+  (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
     || { tail -20 $O/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
@@ -296,7 +342,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
-  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
+  (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
@@ -305,4 +351,5 @@ else
   run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1
   run standin-forged "$SI" $W/advice.bin $W/all.json "${PP_FORGED_RANKS:-0}" --forge $FORGE || rc=1
 fi
+cat $O/ran_with.txt
 exit $rc

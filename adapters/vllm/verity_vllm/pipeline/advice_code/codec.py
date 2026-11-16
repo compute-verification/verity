@@ -1,4 +1,4 @@
-"""The advice code (advice v1): I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`) sent as only what the certified record,
+"""The advice code (advice v1): I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`) sent as only what the certified record,
 the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a prefix-free, self-delimiting code
 (`window_code`) under the registered codebook. A registration that selects it has the compiler
 (`verity_vllm.program.predict.steps`) read these bits, decoded here, and its cap ℓ bound them.
@@ -7,21 +7,21 @@ the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a pr
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`AdviceCodeError`),
 deterministically. A string longer than ℓ (`Registered.cap_bits`) is refused unread, and `encode` writes none.
 
-**Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile slice's proof block holds them as witness):
-- the network certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
+**Certified, 0 bits** (`Record`, from the network attester's signed records; the compile slice's proof block holds them as witness):
+- the network attester's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the network certifier's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
-The reference order is the network certifier's release order, the requests by (a, ordinal) (`release_order`).
+  which the network attester's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
+The reference order is the network attester's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
 comes after the release and overtakes it under load. So the engine's arrival order (`arrival_order`, recovered from the
 advice) is sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest
 released request not yet arrived, its position and its rank among those, in `window_code`'s `order` field as (position,
 (rank,)). `streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's
-network certifier ordinal.
+network attester ordinal.
 
 **Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
 registered engine (`Registered.engine`, its KV pool `num_gpu_blocks` included), and gives every step's rows (request,
@@ -91,7 +91,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from typing import Any, NamedTuple, TypeVar
 
-from verity.protocols.accounting.certifier.verifier import advice as I1
+from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm.pipeline.advice_code import arith as C
 from verity_vllm.pipeline.advice_code import derived as D
 from verity_vllm.pipeline.advice_code import kept as KP
@@ -146,7 +146,7 @@ class Request:
 
 @dataclass(frozen=True)
 class Record:
-    """The certified record: the requests in the network certifier's admission order."""
+    """The certified record: the requests in the network attester's admission order."""
 
     requests: tuple[Request, ...]
 
@@ -159,7 +159,7 @@ class Record:
 
 
 def release_order(record: Record) -> list[int]:
-    """The certified reference order: the network certifier's release order, each request's last ingress cell landing, by
+    """The certified reference order: the network attester's release order, each request's last ingress cell landing, by
     (`end`, ordinal)."""
     return sorted(range(len(record.requests)), key=lambda k: (record.requests[k].end, k))
 
@@ -241,13 +241,13 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
 
 def streams(advice: I1.Advice, record: Record) -> tuple[int, ...]:
     """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
-    request q, the network certifier's ingress ordinal of the stream that carries it."""
+    request q, the network attester's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
     return tuple(ordinal[q.id] for q in advice.requests)
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's network certifier ordinal (the I/O tie's
+    """What a string carries under the record: the advice; `streams`, each I1 request's network attester ordinal (the I/O tie's
     egress side checks each cell's stream against its request q through it); and the arrival order, the ordinals in the
     order the engine took them."""
 
