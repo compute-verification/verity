@@ -190,7 +190,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
         kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="doesn't serve the network certifier at these parameters"):
         kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
-    with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
+    with pytest.raises(ValueError, match="refuses the network attester's ingress rows"):
         kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
     assert kept_scan(tmp_path, CLASS, USERS) is None
 
