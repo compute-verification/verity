@@ -47,12 +47,12 @@ def specText (spec : SessionSpec) : ℕ :=
     (spec.tables.getD 0 "").utf8ByteSize + (spec.domain (spec.tables.getD 0 "") 0).utf8ByteSize +
     (spec.domain (spec.tables.getD 0 "") 1).utf8ByteSize
 
-theorem length_rep (t : String) (n : ℕ) (hn : n < 2) : (s!"{t}/rep{n}").length = t.length + 5 := by
+theorem length_rep (t : String) (n : ℕ) (hn : n < 2) : (s!"{t}/rep{n}").length ≤ t.length + 5 := by
   have h : (s!"{t}/rep{n}") = t ++ "/rep" ++ toString n := rfl
   rw [h, String.length_append, String.length_append]
   have h4 : ("/rep" : String).length = 4 := by decide +kernel
-  have h1 : (toString n).length = 1 := by
-    interval_cases n <;> decide +kernel
+  have h1 : (toString n).length ≤ 1 :=
+    (Nat.length_repr_le_iff (n := n) (k := 1) (by decide)).2 (by interval_cases n <;> norm_num)
   omega
 
 /-- A one-table session's two streams are named by the table and read their domains. -/
@@ -81,7 +81,7 @@ theorem recBound_le_text {spec : SessionSpec} {t : String} (ht : spec.tables = #
       (t.length + 5 + (spec.domain t 0).length + (spec.domain t 1).length) ≤ 2 ^ 8 * specText spec + 2 ^ 40 := by
   have hrs : spec.repStreams.size = 2 := by rw [JsonRT.repStreams_one ht]; rfl
   have hT : spec.tables.getD 0 "" = t := by rw [ht]; rfl
-  have hhz : helloLen spec = hz.length := by simp [helloLen, hct, hown, hc]
+  have hhz : helloLen spec = hz.length := by simp only [helloLen, hct, hown, Except.toOption, hc]
   have hp : spec.points * (579 * Q + 2 + 1) ≤ 2 * (579 * 64 + 2 + 1) := Nat.mul_le_mul hpt (by omega)
   have h1 := JsonRT.length_le_size t
   have h2 := JsonRT.length_le_size (spec.domain t 0)

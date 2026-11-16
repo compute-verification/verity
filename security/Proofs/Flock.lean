@@ -116,6 +116,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 public import Proofs.Flock.SpotFlock.InstanceStmt.InsSetup
 public import Proofs.Flock.SpotFlock.InstanceStmt.Scope
 public import Proofs.Flock.SpotFlock.InstanceStmt.ReadyZk
+public import Proofs.Flock.SpotFlock.InstanceStmt.RecordFits
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsOpen
