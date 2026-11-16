@@ -1,5 +1,5 @@
 """demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
-a network certifier's rehearsal, writing the records a `verity-vllm serve-openai` endpoint writes, so network-e2e's
+a network attester's rehearsal, writing the records a `verity-vllm serve-openai` endpoint writes, so network-e2e's
 endpoint binding reads it unchanged.
 
     python demo_endpoint.py --out DIR [--engine hash|seeded:SHAPE|MODULE:FACTORY] [--seed 0] [--host 127.0.0.1]
@@ -23,14 +23,14 @@ Commit window and writes ``summary.json``.
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
-  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `verity.protocols.accounting.pous.prover.served_weights`'s
+  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `verity.protocols.resource_accounting.memory.pous.prover.served_weights`'s
   SHAPE, ``tiny`` or ``phase1``, through this module's own W8A8 forward on CPU, not the H200 loop's kernels), or
   ``MODULE:FACTORY``, a factory the serving loop provides, called with ``seed`` and returning an `Engine`.
 * **The records**, in serve-openai's formats under ``--out``: ``serve.json`` (the engine, its context as
   ``engine.engine_kwargs.max_model_len``, the address, the run id), ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`'s
   schema: the scheduler's configuration, each request's arrival, each step's rows, emitted tokens and finishes, each
   Commit window's open and close, with unix clock readings), ``requests.jsonl`` (one line a finished request: its
-  engine id, ``user``, the network certifier's release headers on it when it has them, prompt and streamed ids, finish,
+  engine id, ``user``, the network attester's release headers on it when it has them, prompt and streamed ids, finish,
   and the clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run
   id and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again
   or after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run
@@ -92,14 +92,14 @@ def _bf16(words: np.ndarray) -> np.ndarray:
 
 
 class SeededDecoder:
-    """The seeded weights (`verity.protocols.accounting.pous.prover.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
+    """The seeded weights (`verity.protocols.resource_accounting.memory.pous.prover.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
     numpy: embeddings and positions added, per layer RMSNorm, the query, key and value projections (``kv_heads`` KV heads),
     causal softmax attention, the output projection and the residual, RMSNorm, the ReLU MLP and the residual, then the
     final norm and the head, greedy. A W8A8 linear quantizes its input row to s8 codes at max|x|/127 and scales the s8 dot by
     that and its output channel's scale. The whole sequence is recomputed each step (the context is at most 32)."""
 
     def __init__(self, shape: str, seed: int = 0) -> None:
-        from verity.protocols.accounting.pous.prover import served_weights as W
+        from verity.protocols.resource_accounting.memory.pous.prover import served_weights as W
 
         self.shape = s = W.ALIASES.get(shape) or W.SHAPES[shape]
         self.vocab, self.context, self.name = s.vocab, s.context, f"demo-endpoint/seeded-{s.name}"
@@ -170,7 +170,7 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
-    release: list | None = None                 # the network certifier's release headers on it (N, run hex), when it has them
+    release: list | None = None                 # the network attester's release headers on it (N, run hex), when it has them
     times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
 
     @property
