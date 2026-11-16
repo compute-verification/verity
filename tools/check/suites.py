@@ -1084,15 +1084,19 @@ def slot_caches() -> list[Path]:
 
 def cached(k: str) -> dict | None:
     """The pass kept under ``k``: here, else in another slot's cache on this machine (`slot_caches`), read and never written
-    there; a pass file that is being written or is gone reads as none."""
+    there; a pass file there that its slot is writing, or deleted since it was seen, reads as none, and stderr says which."""
     f = CACHE / f"{k}.json"
     if f.exists():
         return json.loads(f.read_text())
     for d in slot_caches():
-        try:
-            return json.loads((d / f"{k}.json").read_text())
-        except (OSError, ValueError):
+        other = d / f"{k}.json"
+        if not other.exists():
             continue
+        try:
+            return json.loads(other.read_text())
+        except (OSError, ValueError) as e:
+            print(f"suites: {other} is no pass ({type(e).__name__}: {e}): being written or gone, so it is read as none",
+                  file=sys.stderr)
     return None
 
 
