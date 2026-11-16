@@ -13,19 +13,20 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
-    `spot` and `recursion` on it and `spot_flock` on those, what the other protocols call to prove; `resource_accounting/`
+    `spot` and `recursion` on it, `spot_flock` on those and `spot_flock_recursion` on top, what the other protocols call
+    to prove; `resource_accounting/`
     holds `compute/pouw`, `memory/pous`, `memory/poub` and `network` (compute, memory and network), and `registration/` (the
-    registration log, checked once, before any challenge; its Lean is still in `interface/`) sits beside the layers;
-    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is an eleventh
+    registration log, checked once, before any challenge; its site log's types are still in `interface/`) sits beside the layers;
+    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is a twelfth
     protocol. Its `verifier/` holds its Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an
     auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its
-    `verifier/live_challenger/` holds the auditor device's challenger service. Target, not yet: `experimental/NAME/` for a whole directory
-    no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
+    `verifier/live_challenger/` holds the auditor device's challenger service. `experimental/` holds the protocols being
+    tried that no configuration lists (`dither/`, `pearl_c4/`). Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `attester/` is the
     auditor's device (the network attester, the memory challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
+    (`flock/prover/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
     for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/lean/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
@@ -36,32 +37,33 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
-    sampling of units). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
+    sampling of proof blocks). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
     Definitions), `silicon` (the GPUs' exact semantics), `kernels`, `private_circuits` (the universal circuit), and the
     evaluator and a circuit's requirement in Lean (`evaluate`, `requirement`). The served kernels' circuits are the vLLM
     adapter's (`adapters/vllm/verity_vllm/definitions/`). Target, not yet: `verity/circuits/` also holds the circuits a
     protocol names.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
-    and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
+    and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `periods` (what an adapter hands
     the prover for each execution phase).
-  - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
-    directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
-    reads a configuration) and `verity/runtime/`, which runs parties over channels.
-  - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
+  - Six files directly under `verity/` (`party.py`, `channel.py` for the messages every party speaks, `device.py`,
+    `protocol.py`, `config.py`, which reads a configuration, and `errors.py`) and `verity/runtime/`, which runs parties
+    over channels. `verity_config`, its own distribution, is `tools/config/`.
+  - `tools/difftest/`: the differential tests that hold the Python to each Lean (`verity_difftest`).
     `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
-  commits its values while serving. Target, not yet: a torch adapter beside it, which the vLLM adapter sits on.
+  commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
+  circuits, which also traces a training step.
 - `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
-- `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
+- `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
+  (the Lean check); `tools/check/`: the one check.
+- `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -127,7 +129,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
-  verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
+  verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
@@ -154,7 +156,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
-- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the network attester's record of
   every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
   configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks: given those, at most
   one y is self-consistent (else the bound adds log₂ of how many are). Explanation: the circuit C = B(x, y, a) outputs y's
