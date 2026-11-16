@@ -1,8 +1,26 @@
 # Live-console panels
 
-`verity_console.py` builds Verity's panels for the site's live console (`/admin/live` and `/console` on website-docs) and PUTs
-them with the `panels:write` key. This is the master copy. The hosts run copies of it, so deploy from here rather than editing
-on a host.
+The site's live console (`/admin/live` and `/console` on website-docs) shows the team's machines and the store as panels:
+each node's GPUs and queues, the pools' hours, the last day's checks. `verity_console.py` builds Verity's panels and PUTs
+them with the `panels:write` key, from two places: node 1 builds the machines' panels, and the control pod the store's.
+This directory is the master copy. The hosts run copies of it, so deploy from here rather than editing on a host.
+
+`status_export.py`, beside it, writes the docs site's status document, `verity/status/v0`: every guarantee the tree's
+`lean-audit.json` locks list, proved outright or resting on named assumptions, and the results of record its tables and
+demos name.
+
+## Try it
+
+~~~sh
+python3 tools/research/console/status_export.py --root . --rev HEAD --out /tmp/status.json
+~~~
+
+This reads the tree at one commit through git and writes the status document, then prints one line: the commit, the
+guarantees counted by state, and the document's size and digest. It needs nothing. Without `--facts`, a Lean audit's
+output directory (a `check` run's `lean-audit/`), a guarantee whose facts it doesn't hold is `unknown`, never `proved`;
+run it at the commit those facts were built from.
+
+## The two groups
 
 - **`--group node1`** runs on vy-nebius-1 every 5 minutes, via `infra/nebius/verity-console.{service,timer}`. It builds:
   - the node's Prometheus and Kueue panels (`verity/node1-*`), node 2's hours (`verity/node2-hours`) and the held-idle table
@@ -19,11 +37,7 @@ on a host.
   other store result from the store's index. It needs the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
   `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
 
-- **`status_export.py`** writes the docs site's status document, `verity/status/v0`: every guarantee the tree's
-  `lean-audit.json` locks list, proved outright or resting on named assumptions, and the results of record its tables and
-  demos name. `--facts` takes a Lean audit's output directory (a `check` run's `lean-audit/`); a guarantee whose facts it
-  doesn't hold is `unknown`, never `proved`. Run it at the commit those facts were built from:
-  `python3 status_export.py --root REPO --rev COMMIT --facts DIR --out status.json`.
+## Deploying
 
 Deploy to vy-nebius-1 with `research deploy` (`tools/research/src/research/pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
 units; it reloads systemd after a unit changes, and the timer's next pass runs the new files):
