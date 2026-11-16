@@ -122,7 +122,7 @@ safe to pass. Never `cat`, `sed` or `cut` these files, which the shell hook refu
 ## Deploy
 
 A wrapper reads its script once: after a copy restart its loop; a file read each pass needs none. A watchers deploy
-needs no restart of the agent watch, which imports `research` from that tree at its start:
+needs no restart of the agent watch, which imports `research` from that tree at start:
 
 ~~~sh
 CP="research pods ssh p1ugdh9hfgqe5d --"
