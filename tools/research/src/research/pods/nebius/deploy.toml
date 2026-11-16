@@ -92,7 +92,7 @@ admin = true
 record = "/data/infra/deploy/record.jsonl"
 managed = ["/data/infra/vy-control-*", "/usr/local/sbin/vy-control-*", "/etc/sudoers.d/*vy*"]
 
-# cpu-2 and cpu-3 (train slots): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting, so
+# cpu-2 and cpu-3 (candidate slots): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting, so
 # only those can be strays there. Each entry that lists a node is read on it whatever its `managed` names
 [nodes.vy-nebius-cpu-2]
 record = "/workspace/research/deploy/record.jsonl"
@@ -108,7 +108,7 @@ managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# n1's replacement: cpu-d3 VMs of cpu-1's or cpu-2's shape, each one train slot and research runs at nice 19 beside it
+# n1's replacement: cpu-d3 VMs of cpu-1's or cpu-2's shape, each one candidate slot and research runs at nice 19 beside it
 # (vy-direct-nice); cpu-4 also holds the Lean slots, lean's cache publisher, the merge mirror and the custody tree (node 2's relay,
 # if node 2 is renewed). pods/nebius/n1_replacement.sh prints their creates, installs and n1's state moves for each path (now,
 # quota, reattach: cpu-4 alone). cpu-4 is in uk-south1, cpu-5 in eu-west2 (path now).
@@ -130,7 +130,7 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-mon
            "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools): `managed` names just the OOM
+# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and candidate pools): `managed` names just the OOM
 # order, the memory drop-ins and the user-namespace setting
 [nodes.vy-nebius-cpu-7]
 record = "/workspace/research/deploy/record.jsonl"
@@ -174,7 +174,7 @@ managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-13 (a train slot and a proofs pool): beside what cpu-12 gets, the verified queue's loop and the lock-out's files
+# cpu-13 (a candidate slot and a proofs pool): beside what cpu-12 gets, the verified queue's loop and the lock-out's files
 # (pods/nebius/lockout) are deploy's there, and `managed` names just the loop's, the lock-out's, the drop-ins, the OOM
 # order's and the setting's
 [nodes.vy-nebius-cpu-13]
@@ -188,7 +188,7 @@ managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/lo
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-14 to cpu-17 (uk-south2, train slots; the nightly check runs in cpu-14's nightly pool): cpu-12's entries; cpu-17 is
+# cpu-14 to cpu-17 (uk-south2, candidate slots; the nightly check runs in cpu-14's nightly pool): cpu-12's entries; cpu-17 is
 # staged. pods/nebius/launch.sh creates one
 # with NEBIUS_VM_NAME, cpu-13's shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk of a multiple of 93 GiB
 [nodes.vy-nebius-cpu-14]
@@ -421,7 +421,7 @@ src = "tools/research/src/research/pods/nebius/tool_rules.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
-# ---- node 1 (and cpu-4/5, its replacement): a research run that did not come through a check slot runs at nice 19, so the train
+# ---- node 1 (and cpu-4/5, its replacement): a research run that did not come through a check slot runs at nice 19, so the candidates'
 # checks win the cores; after installing, `sudo systemctl enable --now vy-direct-nice.timer`
 
 [[file]]

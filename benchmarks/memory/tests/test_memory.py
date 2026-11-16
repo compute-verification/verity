@@ -400,18 +400,21 @@ def test_a_local_run_that_died_before_its_document_is_not_printed_as_a_node_sess
 @pytest.mark.parametrize("researched", [True, False])
 def test_from_reads_back_the_directory_a_local_run_names_and_the_run_directory_around_it(
         store, capsys, work, monkeypatch, tmp_path, researched):
-    """The records' place `--local` names on stderr, `DIR/out`, and the `--from DIR` it names beside it both print the
-    session back as the `--local` measurement it was, under a research run (`$RESEARCH_RUN_DIR/out`) and outside
-    one (a directory of LOCAL_WORK/runs/, where the command leaves its document for `--from`)."""
+    """The records' place `--local` names on stderr, `DIR/out` on a line of its own with no punctuation touching it,
+    and the run's directory `DIR` around it both print the session back as the `--local` measurement it was, under a
+    research run (`$RESEARCH_RUN_DIR/out`) and outside one (a directory of LOCAL_WORK/runs/, where the command leaves
+    its document for `--from`)."""
     held = a_run(monkeypatch, tmp_path) if researched else None
     assert bench(store, "--local", run=Machine()) == 0
     _, doc, err = printed(capsys)
-    named = re.search(r"its records go to (\S+), which `verity bench memory --from (\S+)` reads back", err)
-    assert named and Path(named[1]) == Path(named[2]) / "out"
-    assert (Path(named[2]) == held) if researched else (Path(named[2]).parent == work / "runs")
+    named = re.search(r"its records go to the directory on the next line, which `verity bench memory --from` reads "
+                      r"back\n  (.+)\n", err)
+    assert named and Path(named[1]).name == "out" and named[1] == named[1].strip()
+    place = Path(named[1]).parent
+    assert (place == held) if researched else (place.parent == work / "runs")
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
-    for given in named[1], named[2]:
+    for given in named[1], str(place):
         assert M.main(["--from", given], store_of=lambda: store) == 0, capsys.readouterr().err
         text, again, _ = printed(capsys)
         assert text[1] == f"  {M.LOCAL}" and (again["value"], again["local"]) == (doc["value"], M.LOCAL)

@@ -26,7 +26,7 @@ The dedupe key makes adding idempotent, and a deliberate re-run names a new one 
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
 Lake packages nested in them, `tools/verity/lean/`, and the controls' packages every Lean check run builds, wherever
-`check.FIXTURES` puts them; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So trains
+`check.FIXTURES` puts them; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So candidates
 whose Lean inputs are the same share one regeneration, and the second add answers with the first job and its run.  The site
 is `$JOBS_URL`.  Exit 1 when the Job queue refuses, 4 when it can't be reached.
 """

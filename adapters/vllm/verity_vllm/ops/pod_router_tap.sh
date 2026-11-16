@@ -29,10 +29,11 @@ command -v verity-vllm >/dev/null || fail "no verity-vllm on PATH ($VENV/bin)"
 command -v ninja >/dev/null || "$VENV/bin/pip" install -q ninja || fail "ninja"
 mkdir -p "$RT/build" "$RT/logs"
 
-# (1) the pinned sources
+# (1) the pinned sources, fetched only when absent. GitHub answers 429 when many pods fetch from one address: curl retries
+# each file up to 5 times, backing off 1 s doubling or as long as Retry-After says.
 for f in $FILES; do
   mkdir -p "$RT/vllm/$(dirname "$f")"
-  [ -s "$RT/vllm/$f" ] || curl -fsSL "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
+  [ -s "$RT/vllm/$f" ] || curl -fsSL --retry 5 --retry-all-errors "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
 done
 
 # (2) build when the inputs changed
