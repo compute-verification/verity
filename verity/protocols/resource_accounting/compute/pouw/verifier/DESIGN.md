@@ -88,7 +88,7 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
 
-Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/verity/protocols/resource_accounting/compute/pouw/verifier/vectors`.
 ## Security assumptions and guarantees
 
 PoUW's security property is stated at the adversary's advantage ε, with failure probability δ: what an adversary
@@ -187,5 +187,5 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/vectors`.
+- `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/verity/protocols/resource_accounting/compute/pouw/verifier/vectors`.
   `benchmarks/pouw/` is the measuring side; nothing here imports it.
