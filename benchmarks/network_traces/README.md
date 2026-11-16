@@ -20,10 +20,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 - **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and
   the network attester's `attester/stall_probe.py` finds what makes a tick late.
-- **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
+- **Endpoints besides vLLM.** `demo_stub.py` stands in for the gate's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The network attester as a relay.** Its `attester/network_attester_serve.py` runs
-  `verity.protocols.resource_accounting.network.verifier.network_attester`, the network attester as a relay in front of any
+  `verity.protocols.resource_accounting.network.verifier.network_attester` in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
   run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags, the publisher's keep of each
@@ -53,9 +53,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
   it against the relay's record of that run (below).
 
-## The demo's load
+## The gate's load
 
-The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
+The gate's `--shape h200` serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
 (`verity.protocols.resource_accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
@@ -117,10 +117,10 @@ network attester run's witness never go on the developer's machine. Without the 
 (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network attester's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
-(`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
+(`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the execution phase circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
 network attester at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
-`scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
+`scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest execution phase, the one it audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
 4000 ms (108 s). Under that runner's `LOAD=session` the load is the caller's own, and neither the runner nor the gate
@@ -132,30 +132,30 @@ records cover the connections that crossed the relay; that no other route reache
 Its `piece` (`CERTIFIER_CMD`) runs the chain's network attester path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network attester's
-records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
-which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of the
-audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
+records pass `network-rows check` (each record held to its certified head, then the network attester's program's rows audit,
+which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request the run
+audits is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
 never in the piece's directory, which the run publishes. The certificates of its evidence, the execution phase's three
 records' and its two row registrations', which the network attester signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
-rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
+rejecting the served execution phase is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the piece missing. An accept's
 profile names its placement, as labels read from the run: the machine the network attester ran on, and the machine that ran
 each of the piece's steps; the piece establishes no `trusted-device` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
-other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
+other keys and the steps' summaries count the execution phase's requests and outputs and the advice's bits, and the scan's
 answers are the case's evidence less its certificates. The leak guard (`--public`) moves any file the piece doesn't
 declare out of its directory. `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of
 none of the four public kinds and no certificate of the network attester's, a case or a scan's answers left there
 among them; `--received OUT` does so for what a verifier on another machine reads of a served run's OUT. Split in two
 around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
-committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
+committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. The check reads an audit's state entry among its `roots` and its
-`registered` alone, and a served window's registration holds its `SCAN_STATE` in its window's `activations.values`
+`registered` alone, and a served execution phase's registration holds its `SCAN_STATE` in its `window`'s `activations.values`
 alone, so a served period's answer is a reject at the state tie.
 
 ## A cheating server
@@ -436,7 +436,7 @@ It scales K in two ways. By requests, `verity bench certifier_term` prints the n
 load of a node, a datacenter and the world, all a scope serves counted by each check's own rule (`leak_bounds.table`;
 its rows, columns and inputs are in `benchmarks/certifier_term/README.md`). By links, the rest of this section: `per_link` gives K for
 one link, one network attester on one uplink, certifying a request rate of one scan class (an `ingress_scan.Class`,
-or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
+or a `WindowClass`'s `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`, proved in
@@ -491,7 +491,7 @@ state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVER
 one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
 then names them (`rests_on_period_check`); the check refuses, after that, by name, an execution phase whose scan's
 answer names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other
-Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the start's state, leaf t S_{t−1}),
+Input. scan_zk's state tree is the execution phase's state (`ingress_scan.window_state`: leaf 0 the start's state, leaf t S_{t−1}),
 each leaf but the first the o1 of the proof block that computes it and the sin of the next, both registered reads, so
 a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
 names it as `scan/state`.
@@ -541,12 +541,11 @@ record's number.
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
   That reading is a claim, not yet a locked guarantee.
-- Each connection's cap is its lane's egress_cells, which the network attester holds a lane to and
+- Each connection's limit is its lane's egress_cells, which the network attester holds a lane to and
   `NetworkCheck.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
-- The jitter term is T bits an execution phase, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
-  host-state channel).
+- J at D_j = 2, which the jitter term assumes (above).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 

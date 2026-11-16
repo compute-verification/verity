@@ -13,7 +13,7 @@ refactor item that changes it, and what has landed since.
 | SPOT / Flock | `--zk` | Proved. `sampling_assembled` is not a lock guarantee | item 1, landed: `sampling_assembled` holds at any Flock record, and `sampling_deployed_of` gives one deployed record over any Flock record |
 | | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, landed: `sampling_assembled`, at the trimmed record. Flock's KS at the untrimmed record is on main, without a sampling instance there yet. The game-to-claims link is the broken shared row |
 | | recursive | Effectively none: proved, but near-vacuous. No KS-to-sampling for recursion | item 12, after the `vcalls` escape (the compiled verifier's own evaluations in the V* parts' collision escape). Item 1's recursive instance follows it |
-| PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, after FinishIs: `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances. `AcceptedLive` on a served path needs FinishIs and a served window whose lanes all verify (the first pass verified 9 of 32) |
+| PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, after FinishIs: `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances. `AcceptedLive` on a served path needs FinishIs and a served execution phase whose lanes all verify (the first pass verified 9 of 32) |
 | | plain, recursive | none | none posted |
 | PoUS | all | none (ideal model only) | item 11, over item 1 as a hypothesis |
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11 |
