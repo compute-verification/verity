@@ -25,5 +25,4 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
   -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh
 ~~~
 
-It exits 4 when the build fails and 5 when a gate fails. [`DESIGN.md`](DESIGN.md) says what each stage does, the
-runner's variables and what a run writes, the other jobs, the fold dial `EG_ROUNDS`, and which code reads these files.
+It exits 4 when the build fails and 5 when a gate fails.

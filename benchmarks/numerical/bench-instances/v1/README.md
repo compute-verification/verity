@@ -14,6 +14,4 @@ Check the committed files against the manifest:
 uv run python -m verity_numerical.bench.instances verify --root benchmarks/numerical/bench-instances/v1
 ~~~
 
-It ends with `OK`; the recheck of the built arrays is skipped until they are built. [`DESIGN.md`](DESIGN.md) has the
-relation in full, each file's layout, the index files, the composition, how to rebuild the arrays and what was checked
-while building them.
+It ends with `OK`; the recheck of the built arrays is skipped until they are built.

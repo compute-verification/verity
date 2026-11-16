@@ -55,13 +55,10 @@ Two columns of the finite-domain step are read here: Python `verity.circuits.sil
 Finding: the two columns are one derivation -- the simulator's `group_sum`, ported once into Python and, by the Lean's header,
 transcribed from there. Agreement between them shows transcription fidelity, not an independent confirmation of the hardware
 semantics. The independent evidence for the target is (i) the hardware captures (`tests/verity/circuits/ops/fixtures`, and the
-probe's recorded runs, by stage in [`DESIGN.md`](DESIGN.md)), (ii) the compiled pinned simulator itself, driven on the same cases by
+probe's recorded runs), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/benchmarks/numerical/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/benchmarks/numerical/reference/test_normalisation_d3.py`).
 
 Two facts about the simulator noted on the way, neither used by the mma path: `utils.cpp::bfloat16_to_gfloat_tensor` decodes a
 BF16 subnormal with exponent `-127` and no forced `exp = 1` (unlike `multiply_bfloat16_to_gfloat`), and `Gfloat`'s default
 constructor carries Hopper's `-133`.
-
-[`DESIGN.md`](DESIGN.md) has the package's three parts, the subcircuit catalog, the reference's files, commands and
-recorded runs, the wrapper's finalisation, where the simulator is not one, and the FP8 checker.

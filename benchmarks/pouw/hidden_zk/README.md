@@ -39,5 +39,3 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 
 `job` keeps its builds and staged configs under `HZ_CACHE`, keyed by their inputs, so a later run with the same key
 proves the kept files. Jobs in `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/`, `h1_prove/` and `h1_lanes/` source `job.sh` for those builds.
-
-[`DESIGN.md`](DESIGN.md) says what each Python module is and who reads it.

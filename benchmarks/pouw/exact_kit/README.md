@@ -15,6 +15,3 @@ uv run python -c "from exact_kit.f2 import rank, from_matrix; print(rank(from_ma
 ~~~
 
 It prints `2`: the third row is the sum of the first two.
-
-[`DESIGN.md`](DESIGN.md) has what a caller may import, what the kit never does, its API, its tests, and how a script on
-it runs as a recorded run.

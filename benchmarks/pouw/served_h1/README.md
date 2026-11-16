@@ -49,5 +49,3 @@ the list of periods run, the gate's ledger, pins and key (`gate-*`), `builds.txt
 
 The verifier's check of a window's live coins, from the challenger's own run, is `coins.py check` (its command is in
 `serve.sh`'s header).
-
-[`DESIGN.md`](DESIGN.md) says what each Python module is and who reads it.

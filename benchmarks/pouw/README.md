@@ -5,7 +5,7 @@ on real GPUs. Most of them are about Pearl-C's kernels on the RTX PRO 6000: a ke
 the verifier recomputes, and only then timed. Beside them are the served vLLM path with its audits, probes of what a
 card's instructions really do, and calculators that run on a CPU.
 
-Nothing here is part of PoUW. No code outside `benchmarks/pouw/` imports it, and it decides no verdict.
+Nothing here is part of PoUW.
 How a kernel is designed, gated, timed and landed is the kernel-engineering skill
 (`.agents/skills/kernel-engineering/SKILL.md`).
 
@@ -23,5 +23,4 @@ A new benchmark adds its own entry under `contents/` and edits nothing else, whi
 runner that needs a GPU or a whole node is the command of a `research run`, as its header says.
 
 Served results (`pearl_c_vllm/`) are measured against stock vLLM's FP8 with its CUDA graphs. The ACCEL model and the ε
-vocabulary these benchmarks use are [`machine_model/`](../machine_model/README.md)'s. [`DESIGN.md`](DESIGN.md) says what
-a caller may import here, which files write what, and where the filler's tools and the GEMM kernels live.
+vocabulary these benchmarks use are [`machine_model/`](../machine_model/README.md)'s.

@@ -25,8 +25,7 @@ ported function to `window.py` on generated inputs, is a suite of the check:
 uv run tools/check/suites.py verity-pouw-window-difftest
 ~~~
 
-Each Lean module's docstring names the part of `window.py` it ports. [`DESIGN.md`](DESIGN.md) says what the difftest
-covers.
+Each Lean module's docstring names the part of `window.py` it ports.
 
 Its properties are stated in `security/Properties/Pouw.lean` (the package `security_properties`), and the proved ones
 are in `security/Proofs/Properties/Pouw.lean`.

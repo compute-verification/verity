@@ -64,6 +64,5 @@ Every reference verifier an arm names today is a replay: it opens the run's rows
 clear. So an accepted result is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck). The
 records and `panel.py`'s arguments keep the name `verifier`.
 
-[`DESIGN.md`](DESIGN.md) has how to run it on a GPU and as a timed run, the verify step, the decode chain, the SASS gate
-and the reference verifier an arm names, the poisoned transcripts, the ledger and the exit codes. Each module's docstring
+Each module's docstring
 says what the module is.

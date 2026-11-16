@@ -36,5 +36,4 @@ Run `sass_gate.py` on the binary in the same job, before the timed run. Write th
 the same names and compare with `python compare.py DEVICE_DIR TWIN_DIR` (exit 9 on a difference).
 
 `python sass_gate.py BINARY --kernels K... --expect OP=N[,OP=N...]... [--smem FILE] [--numeric]` exits 0 when every
-kernel passes and 8 when one is refused, naming the kernel, the check and the fix. [`DESIGN.md`](DESIGN.md) has each
-file, what a caller may import, what the kit never does and each refusal of the gate.
+kernel passes and 8 when one is refused, naming the kernel, the check and the fix.

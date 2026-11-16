@@ -20,5 +20,4 @@ module's docstring says what it holds.
 | Pearl-C | `pearl_c/` |
 | NCP (`ncp-v1`, `ncp-v2`) | `ncp.py` |
 
-There is nothing here to run on its own: the vLLM adapter drives it while serving. [`DESIGN.md`](DESIGN.md) says what
-the package exports, who loads it, and what it loads.
+There is nothing here to run on its own: the vLLM adapter drives it while serving.

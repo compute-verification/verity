@@ -15,7 +15,7 @@ Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler i
 On any machine, run an arm's contract and record checks without a GPU:
 
 ~~~sh
-python3 benchmarks/pouw/filler/score.py check fill-v1
+uv run python3 benchmarks/pouw/filler/score.py check fill-v1
 ~~~
 
 It prints `fill-v1: the contract and the record's limits hold`.
@@ -34,6 +34,3 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   -- python3 benchmarks/pouw/filler/score.py ARM           # the same job
 ~~~
-
-[`DESIGN.md`](DESIGN.md) has what a run reads and scores, every job and what it writes, the arms, the commands that read
-a run, and what the directory offers other code.

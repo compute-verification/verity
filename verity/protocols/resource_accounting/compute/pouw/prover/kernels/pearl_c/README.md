@@ -13,4 +13,4 @@ uv run pytest tests/benchmarks/pouw/test_pearl_c_hash_host.py -q
 This builds the hashing for the host with g++ and holds it to the scheme's bytes. It prints `48 passed`.
 
 A change to `sha512.cuh` or `hash_h3.cuh` changes the build of every kernel that includes it, so it changes only with
-those kernels' gates. [`DESIGN.md`](DESIGN.md) says what each file is and who includes it.
+those kernels' gates.

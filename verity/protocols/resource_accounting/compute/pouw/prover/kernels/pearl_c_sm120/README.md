@@ -26,5 +26,4 @@ bash benchmarks/pouw/pearl_c_sm120/card.sh          # under research run, with O
 python3 run.py [check.json]                         # in the built tree, on the card
 ~~~
 
-`run.py` exits 3 on a GPU other than the expected one and 4 on a failed check. [`DESIGN.md`](DESIGN.md) says what the
-build's gate refuses, what a run writes, what each other file is, and who reads this directory.
+`run.py` exits 3 on a GPU other than the expected one and 4 on a failed check.

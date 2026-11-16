@@ -26,6 +26,3 @@ bash benchmarks/pouw/pearl_c_sm90/ship.sh [OUT]    # off the card, nvcc 12.8 or 
 bash benchmarks/pouw/pearl_c_sm90/h200.sh          # under research run, with OUT sent as ship.tar
 python3 run.py [check.json]                        # in the built tree, on the card
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says what the build's gate refuses, what each GLM-5.3 job does and where it runs, and who
-reads this directory.

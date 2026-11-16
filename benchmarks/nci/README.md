@@ -63,7 +63,3 @@ python benchmarks/nci/bracket.py --calibration kimi-k2-1m-raw
 ~~~
 
 `render.py` reads `sources/`, a fetched fixture: `research data fetch-fixtures benchmarks/nci/sources` brings it.
-
-[`DESIGN.md`](DESIGN.md) has the theorem it cites, the files, what loads them, the rules for adding to them, how
-estimates merge findings, how slowdown is measured, the bracket, the argument map, what the literature says now, the
-algorithm library, and what is not yet here.

@@ -19,4 +19,3 @@ grep -o '{"verity_[a-z0-9_]*"' benchmarks/pouw/nvfp4_sm120/nvf4_plain.cu
 ~~~
 
 It prints ten names, six NVFP4 (`verity_nvf4_256x128...`) and four FP8 (`verity_fp8_256x128...`).
-[`DESIGN.md`](DESIGN.md) has each file and who reads it.

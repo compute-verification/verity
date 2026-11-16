@@ -34,5 +34,4 @@ registers it.
 | `sass_gate.py` | The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay. |
 
 A caller imports a module by its own name and takes what its `__all__` lists. Not yet true: some modules read by other
-files still lack a full `__all__`. [`DESIGN.md`](DESIGN.md) says which, what this package may import, and what each
-kernel directory holds.
+files still lack a full `__all__`.

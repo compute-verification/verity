@@ -79,6 +79,3 @@ The adopted design (dither, w64 peel, psink, kc, SmoothQuant α 0.5, weights ±6
 SmoothQuant, and the plain int8 arms, locked in `baseline.json` per point the bench has run. The lock's `tonight` is the
 same arm as the harnesses the bench replaced measured it on the same windows (a layer-wise `linears_layerwise.py` on C4,
 `attention.py` on WikiText-2), read from their runs' `results.jsonl`.
-
-[`DESIGN.md`](DESIGN.md) has what a caller may import, the methodology, the spec, the gates, the models, what a run
-writes, how the baseline is checked, and the tests.

@@ -32,5 +32,4 @@ research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEAS
   --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 ~~~
 
-It exits 4 when the build fails. [`DESIGN.md`](DESIGN.md) says what it measures for each way, the runner's variables
-and what a run writes, the other jobs, and which code reads these files.
+It exits 4 when the build fails.

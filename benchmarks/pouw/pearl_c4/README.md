@@ -29,5 +29,4 @@ bash run.sh time [MxNxK ...]
 ~~~
 
 It exits 3 when the GPU's identity is refused, 5 when the tree does not match its manifest and 4 when a buffer differs,
-in which case nothing is timed. [`DESIGN.md`](DESIGN.md) has what each step checks and writes, the replay's scripts and
-who reads them.
+in which case nothing is timed.

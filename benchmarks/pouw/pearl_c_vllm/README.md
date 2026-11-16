@@ -46,6 +46,3 @@ before.
 
 `flashinfer_env.sh` is sourced by `setup`, `window` and `served_profile`, and by `benchmarks/vllm_encoded/stack.sh`;
 it is not a job.
-
-[`DESIGN.md`](DESIGN.md) has the kernels each card runs, the scripts with no job of their own, and who reads the
-directory.

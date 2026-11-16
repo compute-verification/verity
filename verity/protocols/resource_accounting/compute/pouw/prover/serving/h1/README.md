@@ -7,4 +7,3 @@ coins sample it. Its receipts and the device halves of its registered rows, call
 
 The package's docstring states the scheme, and each module's docstring says what the module holds. An adapter reaches
 it through [the serving package](../README.md)'s exports, never directly. There is nothing here to run on its own.
-[`DESIGN.md`](DESIGN.md) lists what each module exports, who loads the package, and what it loads.

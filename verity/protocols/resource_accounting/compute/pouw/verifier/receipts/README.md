@@ -23,8 +23,7 @@ receipt_folds.cuh (g++): 397 operations agree
 
 The header's line needs g++.
 
-The folds are duo, xin13, li, ram and the retired xin7. [`DESIGN.md`](DESIGN.md) gives each one's step, key rule and
-what is proved about it, each schedule's start state and keys, and how the files and modules here fit together.
+The folds are duo, xin13, li, ram and the retired xin7.
 
 ## Conforming
 

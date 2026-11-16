@@ -12,7 +12,7 @@ premises are retired, their scripts are deleted with them.
 The directory is scripts run by their paths, and no package. Eight are imported by another script here, under their
 bare names: `checked_strip.py`, `cpw_sass_count.py`, `egemm_depthr_check.py`, `fold_kernel_check.py`, `fold_opt_fx.py`,
 `fold_root_sweep.py`, `fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take,
-and every other name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
+and every other name is the script's own. Outside the directory and its own tests (`tests/benchmarks/pouw/test_theory_*.py`) only
 `checked_strip.py` is read, by `../../../tests/benchmarks/pouw/test_segment_h1.py`; it loads by file the words the checked kernels commit,
 `co_words.py` of `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/`, which that
 directory's references recompute. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
@@ -43,7 +43,7 @@ where its command says (`--verdict`, `--json`, `--out`).
   for `duo_kernel.c`). Its header comment gives its arguments and output, and `duo_proj.c` runs on its own.
 - **An sm_120 probe** (`*.sh` beside its `*.cu`) runs from a pushed commit through `research run` on an RTX PRO 6000.
   Its header has the command; the `*_count.py` beside it counts the SASS and sets the device's timings beside the count.
-- **The tests** are `../tests/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
+- **The tests** are `tests/benchmarks/pouw/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
   `uv run tools/check/suites.py` runs them when their inputs change.
 
 ## The scripts
@@ -83,8 +83,7 @@ What each one checks, and the Lean or the test that reads it.
 ### The receipt's binding
 
 - `duo_kernel.c`, driven by `duo_kernel_sweep.py`: duo's all-state kernel at small widths, the word runs that leave a
-  committed value unchanged on every start state
-  (`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/DESIGN.md`).
+  committed value unchanged on every start state.
 - `duo_proj.c`: word runs whose served receipts differ by one constant on every start state. Cited by `Receipt.lean`,
   for the three-word constant kernel beside `DuoWordProjNoKernel`.
 - `fold_kernel.c`, driven by `fold_kernel_check.py`: the whole all-state kernel K_R of the same-word R-round XOR-in fold

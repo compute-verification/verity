@@ -39,5 +39,3 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 
 `job` is started through `hidden_zk/scope.sh` with `HZ_JOB=verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh`, which gives it a systemd
 scope of its own on the node's CPUs; its header has the full command. `job` reads `hidden_zk/job.sh` for its builds.
-
-[`DESIGN.md`](DESIGN.md) has the replay commands and what each Python module is.

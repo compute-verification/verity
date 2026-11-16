@@ -25,6 +25,4 @@ research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEAS
   --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 ~~~
 
-It exits 4 when the build fails, 5 when the binary holds no IMMA and 6 when the gate fails. [`DESIGN.md`](DESIGN.md)
-says what it measures for each arm, the runner's variables and what a run writes, the other job, and which code reads
-these files.
+It exits 4 when the build fails, 5 when the binary holds no IMMA and 6 when the gate fails.

@@ -41,7 +41,4 @@ its k_log is at most 27. The tile is bound to `{"partition": "0"*128, "program":
 | target | ≤ 16 GiB, ≤ 15 min, k_log ≤ 27 | the same |
 | stretch | lanes at K 8192 and K 14336 in ≤ 64 GiB, ≤ 60 min and 2^27 | |
 
-Main's lowering (the approach `baseline`) and every approach since are on the leaderboard ([`DESIGN.md`](DESIGN.md)).
-
-[`DESIGN.md`](DESIGN.md) has the three statements in full, what a caller may import, every command and flag, and the
-leaderboard.
+Main's lowering (the approach `baseline`) and every approach since are on the leaderboard.

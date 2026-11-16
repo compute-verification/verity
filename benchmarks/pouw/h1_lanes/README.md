@@ -36,5 +36,3 @@ research run --on MACHINE --pool proofs --project verity --source . --cwd source
 | `zk_cost` | what the ZK server adds to one lane statement: `served` on a stand-in window (`ZC_K`, 2048), lane 0 alone and no negatives, once under the ZK server and once without it (`ZC_ARMS`), each lane checked by the Lean verifier | `out/arms.txt` (each arm's exit code and the job cgroup's CPU seconds), a text file beside it with a line an arm (the ZK server's processes' CPU seconds, how many they were and their summed peak RSS), and each arm's log and `served` outputs under `out/` |
 
 `leaf.py` is a step of `job` (its `prepare`, `summarize` and `cost`), and `run.sh` never starts it.
-
-[`DESIGN.md`](DESIGN.md) says what each Python module is and who reads it.

@@ -46,10 +46,7 @@ It needs no GPU.
 | Pearl-C | Pearl's FP8 (E4M3) proof of useful work, on the H100 and the RTX PRO 6000. |
 | Pearl-C4 | Pearl-C on sm_120's NVFP4. Experimental. |
 | NCP | Noise-cancelling polarization over int7 activations. |
-| Dither | A design over the ACCEL model. Experimental, with its own `dither/PROTOCOL.md`. |
-
-[`DESIGN.md`](DESIGN.md) has each party's messages, each scheme in full, one execution phase step by step, the Python
-API, and every guarantee and assumption.
+| Dither | A design over the ACCEL model. Experimental, with its own `verity/protocols/experimental/dither/PROTOCOL.md`. |
 
 ## What is proved
 
@@ -73,9 +70,6 @@ API, and every guarantee and assumption.
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
      e^{−D/4}. No assumption.
 
-The rest of what is proved, what is open and every named assumption: [`DESIGN.md`](DESIGN.md)'s "Security
-assumptions and guarantees".
-
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: SPOT's
@@ -87,7 +81,7 @@ record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); an
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/verifier/lean/README.md`). H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
-Commit record (`Core.Remote.windows`). In the vLLM served run, on that development executable
+Commit record (`Core.Remote.executionPhases`). In the vLLM served run, on that development executable
 (`adapters/vllm/tools/served_run/`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
@@ -95,13 +89,12 @@ protocol's front door is
 
 ## What runs
 
-The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
+The verifier is Lean, the source of truth for what PoUW checks: four Lake packages under `lean/`: the three below and `lean/pearlplus` (`pouw_pearlplus`).
 
 - `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
   onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
   which neither composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
-  system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period
-  ([`DESIGN.md`](DESIGN.md)), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
+  system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period, credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
   fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Sample`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
