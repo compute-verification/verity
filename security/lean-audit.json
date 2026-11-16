@@ -3002,18 +3002,6 @@
    "issue": "TRN-168",
    "due": "2026-11-30"
   },
-  "Slowdown.Assumptions.ParameterHard": {
-   "owner": "@compute-accounting",
-   "digest": "58ce8ba960f2911eb1fe192c8a5bf3a5441db1a90522c9731399422c8185b9ca",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Assumptions.ParameterHardAt": {
-   "owner": "@compute-accounting",
-   "digest": "e10d2aedbb182bfcd092888a91f20e1091a840e5d9d71371982f4534f6feca86",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Slowdown.Assumptions.PouwPerExecutionPhase": {
    "owner": "@training",
    "digest": "f82343b4f7ef920a833f26b96afd90b125a89ee3e5d7e053e0016f43c82d56ba",
@@ -3162,12 +3150,6 @@
    "owner": "@training",
    "digest": "56a4eaf3bd6d46fab7599fd8370ce2f50d8f2473f007100a30dc08103aa537c8",
    "issue": "TRN-167",
-   "due": "2026-11-30"
-  },
-  "Slowdown.Covering.Covers": {
-   "owner": "@compute-accounting",
-   "digest": "69dd86aea0c7081406c15b337e9b0a651f5f6da40b74bbd42cd8ce4ee7c724cd",
-   "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Slowdown.Small": {
@@ -5633,14 +5615,6 @@
   "ResourceAccounting.SecurityProofs.TS.TileSessionSound": {
    "type_hash": "ba8a4fe27cf9dc6ea8e4668efe944f3b319ac61d81998cd2d18885babe1428e3",
    "unfolded_hash": "23686e4c3d696f7c504b77d3e4175e053d5d18c3c62f4b3fe701654ab521795f"
-  },
-  "Slowdown.SecurityProofs.CoveringBound": {
-   "type_hash": "881f61b192a3573747f1f6094fe4cde517f006f9cddf5ace14ad81b65fa7b555",
-   "unfolded_hash": "2350401816d057a411ee7870fa1e8e36e8640bb8cefbc2b90b01115b005175ff"
-  },
-  "Slowdown.SecurityProofs.CoveringBoundTwoCosts": {
-   "type_hash": "c6217a501bc64308ffcb206fafa650ba1d47a20166bc066b1dc8407affda4013",
-   "unfolded_hash": "276cfc3a76c8a6e01c17d8971df51f3ab328c6fc362220e6391d82f6b266d353"
   },
   "Slowdown.SecurityProofs.FitBound": {
    "type_hash": "d99f0ada5dfa53649eca4a511954f52df9838dcddcefb8692cea9f159828e6f9",
@@ -24700,32 +24674,6 @@
    "type_hash": "bf5a6ff429b47c198a4af7702deb262d3b7082eb7cfaa4567bcb2c69ffc166f9",
    "unfolded_hash": "0ef74840e65d858dca6edcef3d0e7dbaff371fa87919b819c0ed24544925873a"
   },
-  "Slowdown.SecurityProofs.CoveringBound": {
-   "owner": "@compute-accounting",
-   "signature": ["Slowdown.SecurityProofs.CoveringBound : Slowdown.Guarantees.CoveringBound"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Assumptions.ParameterHard", "Slowdown.Covering.Covers"],
-    "reads": ["Slowdown.Assumptions.ActivationChained", "Slowdown.Assumptions.chainedBlocks"]
-   },
-   "type_hash": "881f61b192a3573747f1f6094fe4cde517f006f9cddf5ace14ad81b65fa7b555",
-   "unfolded_hash": "2350401816d057a411ee7870fa1e8e36e8640bb8cefbc2b90b01115b005175ff"
-  },
-  "Slowdown.SecurityProofs.CoveringBoundTwoCosts": {
-   "owner": "@compute-accounting",
-   "signature": ["Slowdown.SecurityProofs.CoveringBoundTwoCosts : Slowdown.Guarantees.CoveringBoundTwoCosts"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Slowdown.Assumptions.ParameterHardAt", "Slowdown.Covering.Covers"],
-    "reads": ["Slowdown.Assumptions.ActivationChainedAt", "Slowdown.Assumptions.chainedBlocksAt"]
-   },
-   "type_hash": "c6217a501bc64308ffcb206fafa650ba1d47a20166bc066b1dc8407affda4013",
-   "unfolded_hash": "276cfc3a76c8a6e01c17d8971df51f3ab328c6fc362220e6391d82f6b266d353"
-  },
   "Slowdown.SecurityProofs.FitBound": {
    "owner": "@lean",
    "signature": ["Slowdown.SecurityProofs.FitBound : Slowdown.Guarantees.FitBound"],
@@ -28434,8 +28382,6 @@
    "Slowdown.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (security/Definitions/Slowdown/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Slowdown.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
    "Slowdown.SecurityProofs.SlowdownRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (InferenceOnly.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/Slowdown/Assumptions/Remote.lean) and (H) and (E) (Slowdown.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Slowdown.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (security/Definitions/Slowdown/Assumptions/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Slowdown.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Slowdown.Covering.MulBlocks) and a covering by inference blocks (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (security/Definitions/Slowdown/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Slowdown.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, security/Definitions/Slowdown/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named ThetaRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named UpdateHardness on the bit view (security/Definitions/Slowdown/Assumptions/Cover.lean), not about the NCI check's code; security/Proofs/InferenceOnly/Cover/Checked.lean joins it to a verdict (coverTrained, from InferenceOnlyCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Slowdown.Covering.Covers, security/Definitions/Slowdown/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "InferenceOnly.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; InferenceOnlyCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
@@ -29827,12 +29773,6 @@
    },
    "Slowdown.SecurityProofs.CertificateSlack": {
     "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.CoveringBound": {
-    "Real.instLT.lt k.cast (instHMul.hMul (instHMul.hMul r b) D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Slowdown.SecurityProofs.CoveringBoundTwoCosts": {
-    "Real.instLT.lt k.cast (instHMul.hMul cw D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Slowdown.SecurityProofs.FitBound": {
     "Real.instLT.lt S (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -40943,22 +40883,6 @@
     "Slowdown.Assumptions.CoversEfficientMethods": "31434d1d96fba03501675e23b856036bf46703007954325e7d695059f52cb538"
    }
   },
-  "Definitions.Slowdown.Assumptions.Covering": {
-   "digest": "1f849a805be80e8ee61a6297455f3d235b8c70cafbca6ae387544c10f3dcdd12",
-   "definitions": {
-    "Slowdown.Assumptions.ActivationChained": "09085d8f0770e6cf2cfdf397b030b4e11a857837e701c5eca27fd76d6ae39f49",
-    "Slowdown.Assumptions.ParameterHard": "58ce8ba960f2911eb1fe192c8a5bf3a5441db1a90522c9731399422c8185b9ca",
-    "Slowdown.Assumptions.chainedBlocks": "3d82113ed80f13db1fb478811aef5486bb64939ccd5702312d8e75fafe95f98a"
-   }
-  },
-  "Definitions.Slowdown.Assumptions.CoveringTwoCosts": {
-   "digest": "f0cf091e167c9741b86d7597e7c3bf8968f71d22c5552df84a003d77f003d5d0",
-   "definitions": {
-    "Slowdown.Assumptions.ActivationChainedAt": "134a4cb6eb39bcc99eb1f18eaa1fdb0aab0e219afedc92045d5bbf2380cffb79",
-    "Slowdown.Assumptions.ParameterHardAt": "e10d2aedbb182bfcd092888a91f20e1091a840e5d9d71371982f4534f6feca86",
-    "Slowdown.Assumptions.chainedBlocksAt": "a1d6f68af3c3e7d7cb0b22beda6ee539e0d8fb1bd0b996167f32fa607b9e9560"
-   }
-  },
   "Definitions.Slowdown.Assumptions.Fit": {
    "digest": "25031bdb95efacf9f71041d08fe538fd4ef9c3819831584dec15ed194f99f248",
    "definitions": {
@@ -41358,18 +41282,6 @@
     "Slowdown.Guarantees.CapabilityFloor": "ed51aeaca4a4ab99370b820d2759dc8f052f372fee227964861c5cd41e11768c",
     "Slowdown.Guarantees.CapabilityFloorHonest": "a70b2bea8a72a6207fde408b1f13b94dbb4c275e436a7f3ef843c52ad5cac333",
     "Slowdown.Guarantees.CapabilityFloorNontrivial": "44e392c08eba2e6547b87d58cfce53e802050d1f5794eef38a4c726ed52bbc7f"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.Covering": {
-   "digest": "d4b09d89cf978a815fe683b8aac85581a8e865088c9044de9525dd775d6388ba",
-   "definitions": {
-    "Slowdown.Guarantees.CoveringBound": "52d3e2e06fc3e05d2c9f266157e760677f1442e3fb27bab624bb941eb6194fa3"
-   }
-  },
-  "Definitions.Slowdown.Guarantees.CoveringTwoCosts": {
-   "digest": "450d87e020f3c37e386a1900e9da15010a4429ea3b226f5178734783276981d9",
-   "definitions": {
-    "Slowdown.Guarantees.CoveringBoundTwoCosts": "c2967b390492da99c36275021e6f169e64e11348b054eb1d8aade06f7e7b09d2"
    }
   },
   "Definitions.Slowdown.Guarantees.Cut": {
