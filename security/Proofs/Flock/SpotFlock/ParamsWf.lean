@@ -5,6 +5,7 @@ public import Proofs.Flock.SpotFlock.DoWalk
 public import Proofs.Flock.Claims.JsonField
 public import Proofs.Core.CanonicalJson
 public import Batteries.Tactic.OpenPrivate
+import all Lean.Data.Json.Basic
 
 /-!
 # What the parameters' readers hand on of a well-formed tree
@@ -352,9 +353,7 @@ open Properties.Spot.Units (wf_getD)
 
 /-- `field?` of an object at `k` is its map's entry at `k`. -/
 theorem field?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) : Spot.field? (.obj m) k = m[k]? := by
-  cases hk : m[k]? <;>
-    simp [Spot.field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?, hk, Except.toOption, pure, Except.pure,
-      throw, throwThe, MonadExceptOf.throw]
+  rw [Properties.Spot.Units.field?_obj, Std.TreeMap.Raw.get?_eq_getElem?]
 
 /-- **`Json.mkObj l` has a field at `k` exactly where an entry of `l` has the key `k`.** -/
 theorem field?_mkObj_isSome (l : List (String × Json)) (k : String) :
@@ -378,6 +377,7 @@ theorem field?_none_same {a b : Json} (h : Same a b) {k : String} (ha : Spot.fie
   all_goals first
     | exact ha
     | rfl
+    | simp [Spot.field?, Json.getObjVal?, Except.toOption, throw, throwThe, MonadExceptOf.throw]
 
 /-- **Parameters `OneStage.paramsOfJson` returns name no `certified`** (`CERTIFIED_REFUSED`). -/
 theorem paramsOfJson_field {x : Json} {b : Spot.OneStage.Params} (h : Spot.OneStage.paramsOfJson x = .ok b) :
