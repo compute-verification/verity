@@ -11,7 +11,21 @@ verity bench ppl report DIR/results.json...                                     
 verity bench ppl baseline [DIR/results.json...]                                   # the locked baseline (and a check)
 verity bench ppl steps | specs                                                    # what an arm can be made of
 verity bench ppl tables [steps|arms|windows|models|baseline]...                   # this file's tables, as Markdown
+verity bench ppl metrics DIR/results.json                                         # its metrics, through the kit
 ~~~
+
+**On one H200**, from a clone, Llama 3.2 1B (the compute benchmark's model) on C4 at 2048, as shipped and with its
+linears as Pearl-C's served kernel computes them (`pearl-c-linears`), reported as `metrics.toml`'s three metrics:
+
+~~~text
+research run --on NODE --gpus 1 --project verity --source . --cwd source --max-min 90 -- env WORK=/workspace bash benchmarks/ppl/h200.sh
+~~~
+
+`h200.sh` takes an idle H100 or H200 (under `gpu-lease` where the node has it), the venv and HF cache
+`benchmarks/compute/serve.sh` uses (`$WORK/venv312`, bootstrapped as serve.sh does when absent; `$WORK/hf`, where the
+checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
+C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
+and then `run.py metrics`.
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,
@@ -121,6 +135,15 @@ their parameters and docs.
 the plain int8 arm it is reported against, and its `description`. A new arm is its file, and its `description` says
 what it is.
 
+`pearl-c-linears` is the compute benchmark's served arithmetic (`pearl-c-h100-v1-h3` in
+`benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`): its one step, `linear.pearl_c`, calls the
+served engine's own kernel, `verity_torch.pouw.PearlCDeviceRun.gemm` on the sm_90a cubin, with x and W in BF16, so
+every decoder linear is the FP8 E4M3 forming with Pearl's noise, the K32 chain and the noise peeled off that serving
+runs; `lm_head` and attention stay bf16, as served (PoUW's executor sits at vLLM's `LinearBase` only). The bench keeps
+q, k and v, and gate and up, as separate products, where vLLM fuses them: each output column's arithmetic is the same,
+and the noise's seeds differ. No quantizer here is reused for it: the `fp` and `pc-fp8-*` arms scale by amax / 448 with
+no noise and no peel, which is not Pearl-C.
+
 `specs/` holds the three plain int8 arms, the adopted design (`adopted`) with its halves (`adopted-linears`,
 `adopted-attention`) and `adopted-no-smooth`, and the variants measured against them. A design in the design registry
 (`benchmarks/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
@@ -189,6 +212,7 @@ exits 1.
 - `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`), each peel
   identity. The served product, peeled, must
   equal the direct one exactly.
+- `pearl_c`: every call of `linear.pearl_c`: the served kernel's y finite.
 - `lut`: for the integer softmax, on every call, A within uint32 and m − S within 32 bits (fattn.cu's `umulhi`).
 - `hf_reference`: on the check window's batch, every layer, the engine's bf16 layer output and RoPE tables bit-equal
   to HF transformers' own decoder layer on the same input. A run where this never ran fails.
@@ -197,6 +221,7 @@ exits 1.
 ## Models
 
 `models.py` pins each snapshot by revision under the node's HF cache (`run.py tables models` lists them).
+`llama-3.2-1b` is `benchmarks/compute/load.toml`'s model at its revision, which a test holds it to.
 
 GLM-5.3 (`glm.py`) is read from its block-FP8 checkpoint, streamed: `pins/glm-5.3.json` pins every file's sha256, and
 each safetensors shard is pulled from the hub when a layer needs it, checked and deleted once read (`stream.py`), so
@@ -222,6 +247,12 @@ reading clocks and never setting them. The run's `out/` holds `results.json` (sc
 the perplexity, mean NLL and per-window NLLs, the gates, divergence from the reference), `nll.npz` (every scored
 token's NLL), `table.md`, the shard logs and `gpu.txt`. The run publishes itself as an Attempt; cite it by run id, and
 put findings about it on labels (`research data label`).
+
+`run.py metrics RESULTS.json` (`report.metrics`) reports a passed run of `pearl-c-linears` through the benchmark kit:
+`ppl.json`, and in the run's `result.json` `compute-accounting/perplexity-shipped` (the bf16 reference),
+`compute-accounting/perplexity-pearl-c` (the mean over its seeds) and `compute-accounting/perplexity-cost-pearl-c`
+(their difference in percent of bf16's), each with the model, its revision, the card, the set and the context as
+fields. A run whose gates failed reports none, and a results file of another run is a reprint, which writes none.
 
 ## Baseline
 
