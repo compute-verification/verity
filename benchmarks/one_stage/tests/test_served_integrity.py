@@ -143,7 +143,7 @@ def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, 
 
 
 #: why a5 writes no case for the compiled check on a sample of two members, and on plain sessions (`a5.v2_proof`)
-TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"
+TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit sampled 2 members"
 PLAIN = "ValueError: v2 verifies --zk sessions; this audit's are plain"
 
 
