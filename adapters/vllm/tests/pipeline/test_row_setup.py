@@ -60,6 +60,16 @@ def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_pat
     assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
 
 
+def test_a_rows_stages_import_the_torch_adapter_and_the_settings_package_from_its_own_tree(tmp_path):
+    r = _row(tmp_path)
+    r.setup({})
+    core = r.child_env["VERITY_CORE"]
+    path = r.child_env["PYTHONPATH"].split(":")
+    assert {f"{core}/adapters/torch", f"{core}/tools/config"} <= set(path)
+    for package, under in (("verity_torch", "adapters/torch"), ("verity_config", "tools/config")):
+        assert (Path(core, under, package) / "__init__.py").is_file()
+
+
 @pytest.mark.parametrize("doc, label", [
     ({"execution": "eager", "sweep": {"execution": "compiled"}}, "eager"),      # the file's own label first
     ({"execution": "", "sweep": {"execution": "compiled"}}, "compiled"),        # then its sweep block's

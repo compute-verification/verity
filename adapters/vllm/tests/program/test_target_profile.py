@@ -7,18 +7,20 @@ under other applicability conditions is refused with every differing field named
 import json
 
 import pytest
-from verity_vllm.program.frontend.target_profile import (
+from verity_vllm.program.frontend.artifact import (
     ApplicabilityError,
     ArtifactIdentity,
+    check_reuse,
+    load_artifact,
+    reuse_mismatches,
+)
+from verity_vllm.program.frontend.target_profile import (
     TargetProfile,
     _json_default,
     canonical_bytes,
-    check_reuse,
-    load_artifact,
     moe_experts_class_of,
     parse_target_arg,
     profile_mismatches,
-    reuse_mismatches,
 )
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)

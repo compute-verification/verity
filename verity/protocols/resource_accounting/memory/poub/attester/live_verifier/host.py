@@ -42,7 +42,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
-  (`verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/replay.py transcript --record verifier.json`), or the record
+  (`verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
@@ -121,7 +121,7 @@ from typing import Any, BinaryIO, Callable, Iterator, Sequence
 HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[7]
 VERIFIER = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
-REPLAY = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean" / "tests"
+REPLAY = TREE / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier" / "lean"
 DIFFTEST = TREE / "tools" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
@@ -1187,7 +1187,8 @@ def execute(host: Host, run: str, *, pinned: str, now: Callable[[], datetime],
 
 
 def replay_module():
-    """`replay.py`, imported from this tree as the host's python3 (no site packages, `-I`) reaches it."""
+    """`replay.py`, imported from this tree as the host's python3 (no site packages, `-I`) reaches it: by path, beside
+    the Lake package it serves, since it imports the difftest, which is no part of `verity`."""
     for p in (str(TREE), str(REPLAY), str(DIFFTEST)):
         if p not in sys.path:
             sys.path.insert(0, p)
