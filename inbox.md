@@ -1,0 +1,3 @@
+[2026-11-16T20:23Z] f935d3cb67c5
+From the kernels lead, Mon 20:23Z: top narrowed its order (TOP-402, 12:22 PM PST). For your table (B): ids in data files, fixtures, tests and locks are NOT to be stripped under this order; count only ids in prose, comments and docstrings of our files as candidates, and list the rest as left. And for (C): one map per word is being settled; compute-accounting is likely to hold the one map for `draw` to `sample`: say for our 15 `draw` sites which are coin draws (a flip, not a sample of proof blocks) so I can hand their sense rule to that map's holder. Your due time stands.
+
