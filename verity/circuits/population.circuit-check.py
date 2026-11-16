@@ -11,13 +11,20 @@ from typing import Any
 def _population_roots() -> list[Any]:
     """`TemplateInstances_v1` of the sharded plan unit (S = 32, two gaps) at N = 2, and `TemplatePopulations_v1` of it and the
     plan unit (P = 4, 16 registered blocks) at counts 1 and 2, without values and with two (a round's A table and input-ids
-    table, in 16-bit words, as a window registers them): populations of templates with no coin, whose programs declare no
-    ports."""
+    table, in 16-bit words, as a window registers them), and `WiredPopulations_v1` of them wiring the shard's output into
+    both plan units' ``count``: populations of templates with no coin, whose programs declare no ports."""
+    from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.circuits.population import mixed_population_program, population_program
+    from verity.circuits.population import mixed_population_program, population_program, wired_population_program
     from verity.circuits.requirement_units import PlanMatch, PlanShard
 
     shard, match = bind(PlanShard, S=32, GAPS=2), bind(PlanMatch, P=4, NR=16, V=16, G=2, TB=8, RPB=2)
     values = (("row-table/0/k2048", 6, 16), ("input-ids/0", 4, 16))
+    s, m = descriptor_id(shard), descriptor_id(match)
+    wired = {"templates": [[s, 1], [m, 2]],
+             "wires": [{"reader": m, "port": "count", "writer": s, "out": "o0", "at": 0, "radix": [2], "base": 0, "step": [0]}],
+             "external": [f"{t}/{p}" for t, f in ((s, shard), (m, match)) for p, _ in f.signature()[0]
+                          if (t, p) != (m, "count")]}
     return [population_program(shard, 2).fn, mixed_population_program([(shard, 1), (match, 2)]).fn,
-            mixed_population_program([(shard, 1), (match, 2)], values=values).fn]
+            mixed_population_program([(shard, 1), (match, 2)], values=values).fn,
+            wired_population_program([(shard, 1), (match, 2)], wired)[0].fn]
