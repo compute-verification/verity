@@ -20,7 +20,7 @@ takes everything; otherwise, or with none, live-coins is open by name (each chai
 record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
 so is the sampled-proofs verdict where its draw is the one open. While certifier-key is open an accepted network
 verdict is not established and its bound conditional on it. It closes only where the lock holds PeriodLeakRegistered
-at its pinned statement taking hA, hr and hkey as auditor-record and the run's check of the auditor's inputs holds:
+at its guarantee taking hA, hr and hkey as auditor-record and the run's check of the auditor's inputs holds:
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
 holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
@@ -31,7 +31,7 @@ commits the scan's state in its activations, the network verdict and the composi
 registered reads opened that state at the entry's value, root and domain (its published summary's registered.own), the
 audit accepted and its record reported each member's reads; otherwise, its evidence missing included, neither is
 established and there is no bound. The figure of record says which charge K applied each tied audit: stateFree only
-where the lock holds RowsStateHeld at its pinned statement over stateHeldIn and auditStateEntries, else free, with no
+where the lock holds RowsStateHeld at its guarantee over stateHeldIn and auditStateEntries, else free, with no
 figure where it is free and a tied audit states its circuit record. SPOT credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
@@ -1021,7 +1021,7 @@ def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_st
         tmp_path, lock, monkeypatch, how, unpinned):
     """The rows form charges a tied audit its stateFree where its reads of the scan's state are the scan's own, over the
     entries auditStateEntries reads, its window's activations entry among them. The figure of record says that charge
-    applied only where the lock holds RowsStateHeld at its pinned statement reading stateHeldIn, auditStateEntries and
+    applied only where the lock holds RowsStateHeld at its guarantee reading stateHeldIn, auditStateEntries and
     the stateEntries both call at theirs, and free otherwise, naming each digest the lock gives that isn't pinned: not
     in the lock, restated, read over the registered entries alone (no auditStateEntries), another stateHeldIn or another
     stateEntries, or those definitions read by another guarantee. An audit with no circuit record has stateFree its
@@ -1693,7 +1693,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
     certifier's verdict is not established, its Lean answer's accept beside it, never cited as an accept with an open
     condition, so the run isn't of record; its bound stands, the figure of record charging ℓ_a + 1 for the tied audit,
     and it, its cells, the composite's error and the run's being of record are conditional on certifier-key by name.
-    It is open where the lock doesn't hold PeriodLeakRegistered at its pinned statement (unlisted or restated, each
+    It is open where the lock doesn't hold PeriodLeakRegistered at its guarantee (unlisted or restated, each
     open too), and where the run's check of the auditor's record fails: a record of another key than the period's, no
     registration of the auditor's, or a case whose key was rewritten after the composite of record composed it, the
     auditor's record and registration stating the rewritten key. A network verdict that didn't accept stays what it
