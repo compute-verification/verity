@@ -1,9 +1,13 @@
-"""The fixture the tests of `verity bench exfiltration` share."""
+"""The tests' shared stand-ins are modules beside them, whose asserts pytest rewrites as it rewrites a test's, and the
+fixture the tests of `verity bench exfiltration` share."""
 
 from __future__ import annotations
 
 import pytest
-from exfiltration_helpers import reader
+
+pytest.register_assert_rewrite("kit_standins", "overhead_standins", "steady_standins")
+
+from exfiltration_helpers import reader  # noqa: E402
 
 
 @pytest.fixture

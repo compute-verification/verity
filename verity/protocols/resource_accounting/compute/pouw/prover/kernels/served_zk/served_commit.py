@@ -698,21 +698,26 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
 
 def _session_digest(session: Any) -> str | None:
-    """A session record's SHA-512 (its directory's ``session.json``, the bytes `deliver` hashes); None when unreadable."""
-    try:
-        return hashlib.sha512((Path(session) / "session.json").read_bytes()).hexdigest()
-    except (OSError, TypeError):
+    """A session record's SHA-512 (its directory's ``session.json``, the bytes `deliver` hashes); None when the verdict
+    names no session or this process can't read its record."""
+    if not isinstance(session, str):
         return None
+    record = Path(session) / "session.json"
+    if not (record.is_file() and os.access(record, os.R_OK)):
+        return None
+    return hashlib.sha512(record.read_bytes()).hexdigest()
 
 
 def lean_verdict(path_: Path) -> dict:
     """The Lean verifier's verdict from its output (one `VERDICT {…}` line per session it verified), of record: accepted
     when every session's is, null when it printed none; ``sessions`` the SHA-512 of each session record it covers, in
-    order (None for one it names but this process can't read), which `service.Stream.outcome` holds to the delivery."""
+    order (None for one it names but this process can't read), which `service.Stream.outcome` holds to the delivery; null
+    too, saying why, when its output doesn't read."""
     try:
         lines = [json.loads(x[8:]) for x in path_.read_text().splitlines() if x.startswith("VERDICT ")]
-    except (OSError, ValueError):
-        lines = []
+    except (OSError, ValueError) as e:
+        return {"of_record": True, "accepted": None, "why": f"its output does not read ({type(e).__name__}: {e})",
+                "verifier": "lean verity-verify-proof verify --zk", "sessions": []}
     if not lines:
         return {"of_record": True, "accepted": None, "verifier": "lean verity-verify-proof verify --zk", "sessions": []}
     v = lines[0] if len(lines) == 1 else lines
@@ -727,8 +732,9 @@ def rust_verdict(path_: Path | None) -> dict | None:
         return None
     try:
         lines = [json.loads(x[5:]) for x in path_.read_text().splitlines() if x.startswith("LIVE\t")]
-    except (OSError, ValueError):
-        lines = []
+    except (OSError, ValueError) as e:
+        return {"of_record": False, "accepted": None, "why": f"its output does not read ({type(e).__name__}: {e})",
+                "verifier": "rust flock-circuit --zk (live)"}
     v = lines[0].get("verdict", lines[0]) if lines else None
     return {"of_record": False, "accepted": None if v is None else bool(v.get("accepted")), "why": (v or {}).get("why", ""),
             "verifier": "rust flock-circuit --zk (live)"}
@@ -1462,12 +1468,19 @@ def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     return sample
 
 
+def _request(line: str) -> Any:
+    """A request line's JSON, or the ValueError that makes it no request."""
+    try:
+        return json.loads(line)
+    except ValueError as e:
+        return e
+
+
 def answer(ch: Challenger, line: str) -> str | None:
     """The reply line to one request line; None for ``{"op": "quit"}``."""
-    try:
-        cmd = json.loads(line)
-    except ValueError as e:
-        word, body = "REFUSED", {"codes": ["request"], "detail": {"request": str(e)}}
+    cmd = _request(line)
+    if isinstance(cmd, ValueError):
+        word, body = "REFUSED", {"codes": ["request"], "detail": {"request": str(cmd)}}
     else:
         if isinstance(cmd, dict) and cmd.get("op") == "quit":
             return None
@@ -1538,10 +1551,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
     for i, x in enumerate((log / "requests.jsonl").read_text().splitlines()):
         entry = json.loads(x)
         line, was, wrote = entry["request"], entry["reply"], None
-        try:
-            cmd = json.loads(line)
-        except ValueError:
-            cmd = None
+        cmd = _request(line)
         if isinstance(cmd, dict) and cmd.get("out"):
             wrote, cmd["out"] = Path(cmd["out"]), str(out / f"{i:04d}" / Path(cmd["out"]).name)
             line = json.dumps(cmd)

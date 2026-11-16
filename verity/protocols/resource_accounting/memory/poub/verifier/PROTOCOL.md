@@ -13,7 +13,7 @@ The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (s
 input from serving), `store.py` (the store a pinned checkpoint lays out and its payload salts, §3), `timing.py` (the honest schedule,
 and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
 pinned by
-`tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
+`vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`Poub`: `verifyWindow`, a window's sample and its openings' checks, and
 `Poub.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by

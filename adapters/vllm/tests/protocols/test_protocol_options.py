@@ -24,11 +24,13 @@ from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli, row_stages
 from verity_vllm.pipeline import row as ROW
 from verity_vllm.pipeline import row_records as R
-from verity_vllm.program.frontend.target_profile import (
+from verity_vllm.program.frontend.artifact import (
     ApplicabilityError,
     ArtifactIdentity,
-    TargetProfile,
     check_reuse,
+)
+from verity_vllm.program.frontend.target_profile import (
+    TargetProfile,
 )
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
