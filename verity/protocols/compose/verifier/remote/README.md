@@ -129,9 +129,8 @@ what it establishes, what it assumes, its Lean and that Lean's status:
 Flock's guarantee statements (`Flock.Guarantees.*`) are in `security/Proofs/Flock/`, not `Definitions/`: its spec
 isn't extracted yet.
 
-The derivations are in `security/README.md`'s security argument, whose own four parts are cited as "`security/README.md`,
-part N". Assumptions, by name, below, lists the named `Prop`s these statements read; each theorem's full hypotheses
-are its Lean.
+Training's slowdown is stated in `security/Definitions/Slowdown/README.md`. Assumptions, by name, below, lists the
+named `Prop`s these statements read; each theorem's full hypotheses are its Lean.
 
 ### The assumptions, in plain words
 
@@ -318,7 +317,7 @@ $$ \mathrm{slowdown}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\m
 times the fleet-time the reference training algorithm takes with no protocol (fleet-time: elapsed time times the whole
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
-endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
+endpoint.** No Lean states it: it is derived in prose (`security/Definitions/Slowdown/README.md`) from the local bounds,
 `Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
 older formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
 
@@ -368,8 +367,7 @@ reconstructing that computation would expose updated weights priced above h, the
 assumption lets a block hold (not a storage bound), the yield falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
-the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
-`security/README.md`, part 2, lists them.
+the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn.
 
 **Lean.**
 
@@ -446,7 +444,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
 update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
 coverage tested directly. Each is in `security/Definitions/Slowdown/Capability/README.md` ("How to test each premise", "The
-frontier"); how the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
+frontier"); what a block's c and k count is in `security/Definitions/Slowdown/README.md` ("Inference circuits").
 
 ## Assumptions, by name
 
