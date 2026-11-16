@@ -2423,6 +2423,31 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
 
+@pytest.mark.parametrize("law", ["stratified-rate:1/977", "rate:1/1000000000", None])
+def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
+        tmp_path, monkeypatch, capsys, live, law):
+    """The tied audit's rule (its summary's ``law``) decides what PoUW's accept of record covers: at a stratified rate
+    every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none stated, the
+    row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied guarantee."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"law": law} if law else {})}
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps(summary))
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
+    weaker = None if law and law.startswith("stratified-rate:") else S.WEAKER_TIE.format(law=law)
+    assert row["verdict"] == "accept" and row["answer"]["profile"].get("weaker_tie") == weaker, row
+    (tmp_path / "serve").mkdir()
+    assert S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+                   str(audit), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+                   "--product", "remote", "--key-sha512", pin, "--lane", lane]) == 2
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert line["verdicts"]["PoUW"] == "accept"
+    assert (f"{S.PEARLPLUS_SAID}, {weaker}" in line["reason"]) if weaker else ("weaker tie" not in line["reason"]), line
+    assert weaker is None or f"sampled {law}, not a stratified rate" in weaker
+
+
 def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_its_exact_credit(tmp_path, monkeypatch, live):
     """A run held to its class's fixed load publishes its work in the grid form, and the answer of record's work is the
     Lean's with that form's ``give_up``; the exact credit the form replaces (``exact_work``) is not in the row."""
@@ -4421,6 +4446,19 @@ def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_state
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
     assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
+    assert not any("weaker tie" in x for x in lines), lines
+
+
+def test_under_pearlplus_tie_a_uniform_rate_goes_on_where_pearlplus_tie_uniform_admits_it_saying_the_weaker_tie(tmp_path):
+    """PEARLPLUS_TIE_UNIFORM=1 admits a uniform rate under PEARLPLUS_TIE: the audit states it to its stream on the
+    default ports (R has no strata to size them by), and V3C-TIE says the tie is weaker, not the tied guarantee."""
+    stated = "rate:1/1000000000"
+    _pearl_tied_commit(tmp_path)
+    rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": "1"})
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
+    assert _audited(tmp_path, ("--sampling-design", "--ports")) == {"--sampling-design": stated, "--ports": "16"}
+    assert (f"V3C-TIE: sampled at {stated}, no stratified rate (PEARLPLUS_TIE_UNIFORM=1): a weaker tie, not the tied "
+            "guarantee") in lines
 
 
 @pytest.mark.parametrize("design, held", [
@@ -4440,6 +4478,17 @@ def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_strati
             f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
             "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
             "proof block of each template while none holds more than DEN"]), (rc, said, err)
+
+
+@pytest.mark.parametrize("design, held", [
+    (RULE, True), ("rate:1/1000000000", True), ("stratified-rate:1/977", True), ("rate:0/977", False),
+    ("rate:978/977", False), ("subset:1", False)])
+def test_the_rehearsals_settings_hold_a_uniform_rate_where_pearlplus_tie_uniform_admits_it(tmp_path, design, held):
+    """With PEARLPLUS_TIE_UNIFORM=1 the rehearsal's settings hold a tied window's ``rate:NUM/DEN`` (0 < NUM <= DEN)
+    beside a stratified rate, as the harness's preflight does, and refuse any other design as without it."""
+    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design, PEARLPLUS_TIE_UNIFORM="1")
+    assert (rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: ")) is held, (rc, said, err)
+    assert held or (rc, said[0].startswith(f"SETTINGS refused: the sampling design is {design}: ")) == (3, True), said
 
 
 HELD_FORM = {"HELD_ALPHA": "the record form's alpha is a positive number P/Q or P, each a whole number with no sign or "
@@ -4693,6 +4742,7 @@ def _no_reader(sampling_design: str) -> str:
     ((), {**TIES, "V3C_LAW": RULE}, FAKE_RECORDS_AUDIT, _no_reader(RULE)),
     (("v3c",), {"H1_TIE": "1", "V3C_LAW": "work-rate:1/4"}, FAKE_RECORDS_AUDIT, _no_reader("work-rate:1/4")),
     (("v3c",), {"H1_TIE": "1", "V3C_LAW": "stratified:1"}, FAKE_RECORDS_AUDIT, _no_reader("stratified:1")),
+    ((), {**TIES, "V3C_LAW": RULE, "PEARLPLUS_TIE_UNIFORM": "1"}, FAKE_RECORDS_AUDIT, _no_reader(RULE)),
 ])
 def test_the_preflight_refuses_h1_tie_on_a_tree_whose_audit_takes_no_tie_or_at_a_rule_other_than_a_stratified_rate(
         tmp_path, args, extra, records_audit, line):

@@ -363,6 +363,9 @@ PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdi
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
+WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {law}, not a stratified "
+              "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
+              "values at W's roots, not that every table W registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -2025,12 +2028,15 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
+    law = summary.get("law")
+    weaker = {} if str(law).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(law=law)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,
-                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")}}}, None
+                        "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")},
+                        **weaker}}, None
 
 
 def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
@@ -2171,6 +2177,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
             if r.get("answer_from") == PEARLPLUS_FROM:
                 s += f", {PEARLPLUS_SAID}"
+                if weaker := ((r.get("answer") or {}).get("profile") or {}).get("weaker_tie"):
+                    s += f", {weaker}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
