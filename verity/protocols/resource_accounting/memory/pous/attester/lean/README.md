@@ -24,4 +24,3 @@ uv run tools/check/suites.py verity/protocols/resource_accounting/memory/pous/at
 | `wipe-protocol` | The streamed-label wipe, as the core protocol `verity/wipe/v0`. |
 
 Both take the core protocols' command line: `id`, `check PARAMS COMMITMENT EVIDENCE`, or `serve`.
-[`DESIGN.md`](DESIGN.md) gives every entry point, what each publishes, and the Python callers.

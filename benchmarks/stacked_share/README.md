@@ -33,5 +33,3 @@ It prints its progress, then the graph and β at each E and L, and writes the wh
 | `beta.py` | a Build's Program, or a modeled request (`--decoder`) | the min-cut bound (`--out`) |
 | `atoms.py`, then `frontier.py` | where `verity_vllm` imports, without torch | the same sampling design for frontier models no Program has been built for, and its tables as `frontier.md` |
 | `job.sh`, `beta_job.sh`, `frontier_job.sh` | one GPU (`job.sh`), a CPU node (the other two) | the scripts above as jobs |
-
-[`DESIGN.md`](DESIGN.md) says what each script computes, and which quantities are measured and which modeled.

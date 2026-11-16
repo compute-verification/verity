@@ -22,5 +22,3 @@ On the CPU, it checks `wide.py`, `sketch_receipt.py` and `sketching.py` against 
 | --- | --- | --- |
 | `bench.py` | one GPU, and `wt.cu`'s libraries (`--lib PATH`, one per field) | `codec-tensor.json` and `bench.log` |
 | `step.py` | one GPU, and builds of `wt.cu`, `step.cu` and the prover's `reader.cu` | `step.json` and `step.log` |
-
-[`DESIGN.md`](DESIGN.md) holds `step.cu`'s build flags, what each file is, and which benchmarks build or read this one.

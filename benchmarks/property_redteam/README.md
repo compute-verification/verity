@@ -21,5 +21,3 @@ It prints each case's outcome (`ok`, `sound`, `unsound`, ...) and a count of eac
 exits 1, since some attacks pass a check that refuses nothing. A check of your own is `--check MODULE:FUNCTION`;
 `run.py`'s docstring says what it returns and what each outcome means. `uv run tools/check/suites.py
 benchmarks/property_redteam` runs every attack and the cases on the CPU.
-
-[`DESIGN.md`](DESIGN.md) says what each file attacks and what in the tree reads it.

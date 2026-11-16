@@ -23,5 +23,3 @@ It turns the measured rates into x₁ and γ, one row per squaring form and host
 | `uv run tools/check/suites.py benchmarks/rate_squaring` | the CPU, with `gcc` | nothing: the GPU forms' CPU twins, the IFMA build's gate, and `gamma.py` |
 | `sq.sh` | one GPU | `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's CSVs and the build logs |
 | `ifma.sh` | an AVX-512 IFMA host | the same |
-
-[`DESIGN.md`](DESIGN.md) says what each file measures and what in the tree reads it.

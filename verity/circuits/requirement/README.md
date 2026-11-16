@@ -18,6 +18,3 @@ cd verity/circuits/requirement && lake build                 # .lake/build/bin/r
 python3 tools/verity/lean/check.py verity/circuits/requirement  # the Lean check, from the repository root
 uv run tools/check/suites.py verity/circuits/requirement # the difftest against the Python
 ~~~
-
-[`DESIGN.md`](DESIGN.md) says what each function computes, gives the difftest's instance format, and says what the
-tests hold.

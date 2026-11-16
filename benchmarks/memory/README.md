@@ -170,5 +170,4 @@ which sample, as ``the verifier refused session 0 at pass group T: its check `re
   result whose digests are not `main`'s is not a result.
 
 The team's own runs (the node run through both auditor devices, `--from` a run in the evidence store, and
-`--loopback`) need our machines, our evidence store or `research run`. [`DESIGN.md`](DESIGN.md) describes them, with
-the five fields of the result a run writes.
+`--loopback`) need our machines, our evidence store or `research run`.

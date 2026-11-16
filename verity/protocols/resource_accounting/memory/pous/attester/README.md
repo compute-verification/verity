@@ -10,8 +10,7 @@ against the commitment released with it and publishes the verdict, and for a wip
 
 This directory holds the device's Python, which is the reference, and its verdicts as executable Lean in
 [`lean/`](lean/README.md), difftested against that Python. A deployment starts the device's processes on the auditor's
-host; there is nothing here to run by hand. [`DESIGN.md`](DESIGN.md) lists its entry points, what leaves its host, and
-where each part is.
+host; there is nothing here to run by hand.
 
 ## Top statements
 

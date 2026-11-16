@@ -18,5 +18,3 @@ probe is one Attempt on a GPU node, and its records are its result: no code redu
 Each script's header lists its files, beside the build's and the device's logs. `node.py` reads what a node file
 (`hardware/nodes/`) states and no card states: its interfaces off the node, its disks' links, and what each card's
 firmware says it gives a program; its docstring has the command line.
-
-[`DESIGN.md`](DESIGN.md) says what each probe measures and how it is gated.

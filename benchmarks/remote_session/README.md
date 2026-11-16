@@ -26,6 +26,3 @@ the Lean line test where `lake` is. It writes no result.
 | `bash benchmarks/remote_session/run.sh` | GPUs, one side a machine: `ROLE=verifier` on a machine the developer doesn't control and `ROLE=prover` on the developer's, with no default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing); its header lists `PLAN`, `GIB`, `GPUS` and the sessions' parameters | `verifier.json`, `prover.json` and their logs |
 | `bash benchmarks/remote_session/rows.sh` | under `research run --cwd clone`; `BUILD_ONLY=1` needs no card | `rows.json`, `same_sass.json` and `sass_gate.json` |
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | an agent's VM: a gate run in one command, each step a recorded job | the jobs' ids, to `~/.research/gate-runs/PERIOD.env` |
-
-[`DESIGN.md`](DESIGN.md) says what code outside this directory may use, where each process is, and what each run
-reads and writes.

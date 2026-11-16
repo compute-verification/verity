@@ -30,5 +30,3 @@ host comes from:
 ~~~json
 "peers": {"NODE": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9, "addresses": ["ADDRESS"]}}
 ~~~
-
-[`DESIGN.md`](DESIGN.md) lists the gate's verbs, the parameters a run may name, and the compose gate.

@@ -56,6 +56,3 @@ own GPU (`--id`): `GPU_LEASE_UUID`, else `CUDA_VISIBLE_DEVICES`' first, else the
 else the CUDA device's UUID). `pod.sh` refuses a GPU run on a node with several GPUs and neither. `bench-result.json`'s
 `device` records the id queried (`nvidia_smi_id`), the `index`, `uuid` and `pci.bus_id` that answered, and the CUDA device's
 own index and UUID. Each `clocks-*.txt` starts with the same id and answer.
-
-[`DESIGN.md`](DESIGN.md) says what each implementation's run does step by step, and holds the untimed runs, the wipe's
-and the served run's pieces, and what code outside this directory uses.

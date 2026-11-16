@@ -18,6 +18,3 @@ On the CPU, it checks the references against their vectors (`tests/vectors.json`
 prover's `kv_vectors.json`) and the twins against the references. It writes no result. On one GPU,
 `bash benchmarks/word_codec/run.sh` builds `kv.cu` at each width, runs its tests, then its benchmark, and writes the
 gates, timings and profiles as JSON to `$RESEARCH_RUN_DIR/out`; its header lists `KV_FIELDS`, `KV_SCRIPT` and `KV_ARGS`.
-
-[`DESIGN.md`](DESIGN.md) says what each file is, how memory accounting's benchmarks load a CUDA library, and what in
-the tree reads this directory.
