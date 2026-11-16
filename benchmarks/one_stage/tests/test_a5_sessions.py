@@ -80,6 +80,27 @@ def test_on_the_windows_challenger_session_the_proof_servers_verifiers_take_thei
     own.close()
 
 
+@pytest.mark.parametrize("flag", [None, "1", "0"])
+def test_a_window_on_the_auditors_coins_takes_its_sessions_trees_from_that_session_unless_flock_challenger_is_0(
+        monkeypatch, flag):
+    """A streamed `--zk` audit of one rank takes its sessions' coin trees from the challenger session its sample's coins
+    came from by default, since the auditor's verifier refuses a session whose tree that session's release log doesn't
+    show (`Challenger.NO_TREE`); only FLOCK_CHALLENGER=0, a development run's, keeps each on a tree of its own. A plain
+    audit, one of several ranks or one not on the auditor's coins never takes them there."""
+    if flag is None:
+        monkeypatch.delenv("FLOCK_CHALLENGER", raising=False)
+    else:
+        monkeypatch.setenv("FLOCK_CHALLENGER", flag)
+
+    def a(ranks=(0,), plain=False, coins=True):
+        return argparse.Namespace(coins=SimpleNamespace(ranks=lambda: list(ranks)) if coins else None, plain=plain)
+
+    assert a5.window_trees(a(), [{}]) is (flag != "0")
+    assert not a5.window_trees(a(plain=True), [{}])
+    assert not a5.window_trees(a(ranks=(0, 1)), [{}])
+    assert not a5.window_trees(a(coins=False), [{}])
+
+
 @pytest.mark.parametrize("word", ["window", "own"])
 def test_a_tp_ranks_row_carries_the_audits_word_for_where_its_sessions_coin_trees_came_from(tmp_path, monkeypatch, word):
     """`a5.tp_rank`'s row of the step's summary copies the audit's ``coin_trees``. The rank's window of record and its

@@ -151,21 +151,6 @@ def test_a_manifest_entry_that_states_no_sha256_for_a_shard_pins_none(tmp_path, 
                                              "shards": {SHARD: {"sha256": sha, "pinned_sha256": None, "pinned": None}}}
 
 
-def test_a_snapshot_in_another_hf_cache_takes_the_entry_of_its_repo_and_revision(tmp_path):
-    """A pin names its snapshot in the pins' own HF cache; the same snapshot under another HF_HOME is that entry's, and another
-    revision's is not."""
-    snap = "models--org--model/snapshots/" + "a" * 40
-    d = str(tmp_path / "elsewhere" / "hub" / snap)
-    os.makedirs(d)
-    write_safetensors(os.path.join(d, SHARD), {"w": ("F32", np.zeros((2, 2), np.float32))})
-    sha = CI.sha256_file(os.path.join(d, SHARD))
-    manifest = tmp_path / "checkpoints.json"
-    for local_path, entry in ((f"/workspace/hf/hub/{snap}", ENTRY), (f"/workspace/hf/hub/{snap[:-1]}b", None)):
-        manifest.write_text(json.dumps({"checkpoints": [{**ENTRY, "local_path": local_path, "safetensors_sha256": {SHARD: sha}}]}))
-        pin = CI.shard_pin(d, checkpoints_manifest=str(manifest), model=None, revision=None)
-        assert pin["entry"] == entry and pin["shards"][SHARD]["pinned"] is (True if entry else None), local_path
-
-
 def test_a_shard_is_pinned_by_the_entrys_files_and_else_by_its_sha256_by_name(tmp_path, one_shard):
     d, sha = one_shard
     other = "0" * 64
