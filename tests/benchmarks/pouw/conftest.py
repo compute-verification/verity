@@ -44,8 +44,10 @@ def scripts() -> list[Path]:
 
 
 def rel(path: Path) -> Path:
-    """`path` as `load` names it: under ``benchmarks/pouw/``, or under `KERNELS` for a directory of `MOVED`."""
-    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else POUW)
+    """`path` as `load` names it: under ``benchmarks/pouw/``, or under `KERNELS` for a directory of `MOVED`; a file of
+    this suite's own, under ``tests/benchmarks/pouw/``, from there."""
+    here = Path(__file__).resolve().parent
+    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else here if path.is_relative_to(here) else POUW)
 
 
 def place(file: str | Path) -> Path:

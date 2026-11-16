@@ -34,7 +34,7 @@ def _lean_driver(flag: str = "") -> str:
     killed extraction leaves nothing at the key and of two racing calls one's rename wins and both run that copy; the two
     newest stay.  Where origin/main resolves and no copy of it extracts, the file is left to git's conflict."""
     return ("m=tools/verity/lean/merge.py; f=$m; d=; x() { git archive -o \"$1.tar\" \"$s\" -- tools/verity/lean "
-            "':(exclude)tests/tools/verity/lean' 2>/dev/null && "
+            "':(exclude)tools/verity/lean/tests' 2>/dev/null && "
             "tar -x -C \"$1\" -f \"$1.tar\" 2>/dev/null && [ -f \"$1/$m\" ]; r=$?; rm -f \"$1.tar\"; return $r; }; "
             "case $m in /*) ;; *) if s=$(git rev-parse -q --verify 'origin/main^{commit}'); then f=; "
             "if g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && mkdir -p \"$b\"; then c=$b/$s; "
