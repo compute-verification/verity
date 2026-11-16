@@ -58,7 +58,7 @@ directory holds the served run's own: its placement and its commands.
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
+(`verity/remote-bandwidth/v0`) and network attestation. The memory wipe has its piece on the same run too, and
 isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
@@ -66,10 +66,11 @@ gets no verdict.
 ## The auditor's parties
 
 The auditor's parties are the verifier, the challenger, the network attester and the memory attester. The
-challenger is an auditor device reached through its gate, and its live coins are PoUW's always and SPOT's when
-`PP_CHALLENGER` names it, V3c's audit, the SPOT audit of record, among them. Otherwise a local development
-challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
-`served_verdicts.sh` takes it only in a development run, which `placement.toml` says it is (`DEVELOPMENT=1`).
+challenger is an auditor device reached through its gate, and its live coins are PoUW's and, by default, SPOT's,
+V3c's audit, the SPOT audit of record, among them (`placement.toml`'s `[run.window.coins.gate]`; the launch sends the
+deployment's challenger key record, `challenger-key.json` at the tree's root). Only `run.sh window --development`
+takes development coins instead: a local challenger session on the endpoint's node samples the proof blocks, which
+shows the path but is no auditor's coins, and the run is a development run (`DEVELOPMENT=1`), which its record says.
 The verifier flips no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network attester and the memory
 attester, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
@@ -96,9 +97,9 @@ doesn't control.
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [FLAG...]`). It starts the run with
+`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`). It starts the run with
 the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
-recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
+recorder (`--env MAIN_SHA=SHA`); `--dry-run` prints the command, and `--development` takes development coins.
 
 1. `run.sh commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle. The workload dir stays on the node, the only copy: the bundle and the Commit's records
