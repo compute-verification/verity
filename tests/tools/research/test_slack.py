@@ -355,9 +355,9 @@ def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
     assert [line.split()[0] for line in out.splitlines()] == ["@infra", "@top"]
-    rc, out, _ = run(capsys, "owners", "tests/benchmarks/hash/test_x.py", "tests/infra/slack-events/test_app.py",
+    rc, out, _ = run(capsys, "owners", "tests/verity/circuits/ops/test_tc.py", "tests/infra/slack-events/test_app.py",
                      "tests/tools/research/test_slack.py", "tests/tools/research/test_cli.py", "tests/test_boundaries.py")
-    assert [line.split()[0] for line in out.splitlines()] == ["@kernels", "@comms", "@comms", "@infra", "@top"]
+    assert [line.split()[0] for line in out.splitlines()] == ["@circuits", "@comms", "@comms", "@infra", "@top"]
 
 
 def test_registry_refuses_a_path_two_handles_own(registry, capsys):
