@@ -1810,8 +1810,9 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
             mem = r.get("ledger", {}).get("memory", {})
             lines = r.get("ledger", {}).get("declared", {}).get("memory", {})
             if (pl := r.get("ledger", {}).get("paced")) is not None:
-                line = f"refused: {pl['refused']}" if "refused" in pl else \
-                    f"snapshot {pl['snapshot']['share']:.4%} time {pl['time']['share']:.4%}"
+                line = f"refused: {pl['refused']}" if "refused" in pl else "; ".join(
+                    f"{form} credited weights {pl[form]['share']:.4%} hbm {pl[form]['hbm_share']:.4%} filler "
+                    f"{pl[form]['filler_share']:.4%}" for form in ("snapshot", "time"))
                 print(f"verifier: session {k} paced {json.dumps(r['pace'])}: {line} "
                       f"gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
             passes = [w["passes"] for w in r["windows_seen"]]
