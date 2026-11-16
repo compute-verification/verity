@@ -32,7 +32,8 @@ it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-trac
 --blockers. A parked goal is one nobody works toward for now: it is neither on track nor off, and its --blockers say who
 parked it, when and why. The site checks every write and answers which field is wrong. --url points the command at
 another server; the token's audience stays the route's. With $GOALS_KEY set (a site key with `goals:write`, which the
-page's editor holds on the agents platform) every call carries that key, not a Cursor identity.
+page's editor holds on the agents platform) every call carries that key, not a Cursor identity, and --url is refused:
+the key goes to the console's route only.
 """
 from __future__ import annotations
 
@@ -59,6 +60,9 @@ class Route:
     identity."""
 
     def __init__(self, url: str = GOALS, key: str | None = None, writes: bool = False) -> None:
+        if writes and url != GOALS:
+            raise SlackError(f"$GOALS_KEY writes the page, so it goes only to {GOALS}, not to {url}. "
+                             "Fix: unset GOALS_KEY to use --url, or drop --url")
         self.base, self.key, self.writes = url, key, writes
         self._oidc = _Identity(GOALS)
 
@@ -212,8 +216,8 @@ def main(argv: list[str], route: Route | None = None) -> int:
     bl.add_argument("--json", action="store_true", help="the rows in full, with the tier-1 goals above each")
     ns = p.parse_args(argv)
     key = os.environ.get("GOALS_KEY") or None
-    route = route or Route(ns.url, key, writes=bool(key))
     try:
+        route = route or Route(ns.url, key, writes=bool(key))
         if ns.cmd == "show":
             goals = route.call()
             print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals))
