@@ -19,7 +19,7 @@ constant:
 
 A constant gate is no input gate, so neither statement is the flattening of a Program whose gate 0 is an input gate
 (`not_flattens_of_const_zero`, and so `not_flattens_bitsProgs` and `not_flattens_stmtA`). Nothing here says which
-Programs have an input at gate 0: `NetworkCheck.Period.scanOf` checks no property of the root's node 0.
+Programs have an input at gate 0: the network check's `scanOf` checks no property of the root's node 0.
 -/
 
 @[expose] public section
