@@ -15,6 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -1220,6 +1221,13 @@ def test_the_plan_has_every_step_with_its_rollback():
     assert steps == ["1. deploy", "2. vy-admin", "3. seal", "4. harden", "5. sudoers", "6. watch"], "no loop to switch, no cluster"
     assert cpu.count("   rollback: ") == 6 and not [w for w in ("tmux", "kubeconfig", "root.env") if w in cpu]
     assert f"vy-lockout sudoers --node {CPU13} --apply" in cpu and "--login vy-admin" in cpu and f"audit --since=-24h --node {CPU13}" in cpu
+    assert f"`research deploy install {CPU13} --only lockout --by WHO`" in cpu, "a whole install leaves deploy.toml's step lockout out"
+    manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
+    staged = [f["path"] for f in manifest["file"] if f.get("step") == "lockout"]
+    undo = cpu.split("1. deploy")[1].split("2. vy-admin")[0].split("rollback: ")[1]
+    removed = undo.split("`")[1].split("&&")[0].split()[2:]
+    assert staged and "attic" not in undo and all(any(p == r or p.startswith(r + "/") for r in removed) for p in staged), \
+        "attic moves only what the manifest dropped: a CPU node's undo of the deploy names every file step lockout stages"
     assert "sudo sshd -t && sudo systemctl reload ssh" in cpu and f"{LO.SSHD_ADMIN}; sshd -t && systemctl reload ssh" in cpu
 
 

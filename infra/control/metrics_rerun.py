@@ -87,7 +87,7 @@ from pathlib import Path
 from typing import Callable
 
 from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
-from research.jobs import dispatch
+from research.jobs import dispatch, runline
 from research.metrics import REGISTRY_ROOTS
 from research.remote import timeout_seconds
 from research.runs import ENDED
@@ -257,30 +257,11 @@ def options(command: str) -> tuple[list[tuple[str, str | None]], list[str], bool
     if "--" not in tokens:
         raise Refused("its `research run` has no `--` before its workload")
     i = tokens.index("--")
-    raw, out, seen = tokens[2:i], [], set()
-    while raw:
-        tok = raw.pop(0)
-        name, eq, value = tok.partition("=")
-        if name not in ALLOWED:
-            raise Refused(f"its `research run` takes {name}, which a declared command may not carry (allowed: "
-                          f"{', '.join(ALLOWED)})")
-        if name in seen:
-            raise Refused(f"its `research run` gives {name} twice")
-        seen.add(name)
-        form = ALLOWED[name]
-        if form is None:
-            if eq:
-                raise Refused(f"its `research run` gives the flag {name} a value")
-            out.append((name, None))
-            continue
-        if not eq:
-            if not raw:
-                raise Refused(f"its `research run` gives {name} no value")
-            value = raw.pop(0)
-        if not (value in form if isinstance(form, frozenset) else form.match(value)):
-            raise Refused(f"its `research run` gives {name} {value!r}, which isn't "
-                          + (" or ".join(sorted(form)) if isinstance(form, frozenset) else f"of the form {form.pattern}"))
-        out.append((name, value))
+    try:
+        out = runline.options(tokens[2:i], ALLOWED, unknown=lambda name: f"takes {name}, which a declared command may not "
+                                                                         f"carry (allowed: {', '.join(ALLOWED)})")
+    except runline.Refused as e:
+        raise Refused(f"its `research run` {e}") from None
     return out, tokens[i + 1:], True
 
 
