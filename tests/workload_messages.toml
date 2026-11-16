@@ -240,7 +240,7 @@ type = "BoundaryCommitment"
 today = "the run commit (`v3c-w<K>-<class>/window/`: `circuit.json`, `registration.json`, `index.json` and the rows, `verity.commitments.periods`' four records)"
 writers = [
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "^def window_commit_of_advice|\\\"window-commit\\\": window_commit_of_advice" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py window-commit --serve-run" },
+    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "window_commit\\.py window-commit --serve-run" },
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/prove_path/records_audit.py", find = "window / \"registration\\.json\"|window / \"circuit\\.json\"|IF\\.of_records\\(window_dir" },
@@ -385,8 +385,8 @@ readers = [
 type = "PoUWValues"
 today = "the adapter calls PoUW's prover package (`verity.protocols.resource_accounting.compute.pouw.prover`: `schemes.pearl_c`, `circuit.h1window`, `circuit.ncp2`, ...)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
-    { lane = "compute-accounting", file = "adapters/vllm/verity_vllm/protocols/pouw/__init__.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "verity\\.protocols\\.resource_accounting\\.compute\\.pouw\\.prover" },
+    { lane = "compute-accounting", file = "adapters/vllm/verity_vllm/protocols/pouw/__init__.py", find = "verity\\.protocols\\.resource_accounting\\.compute\\.pouw\\.prover" },
 ]
 readers = [
     { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py", find = "^SCHEMES|^def get\\(" },
@@ -428,9 +428,9 @@ readers = [
 type = "ReportedAdvice"
 today = "the adapter calls the certifier's prover package (`ingress_scan`, `window_charge.Advice`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "certifier\\.prover\\.window_charge" },
-    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "certifier\\.prover" },
-    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "certifier\\.prover" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", find = "network\\.prover\\.window_charge" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/scan_state.py", find = "network\\.prover import ingress_scan" },
+    { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "network\\.prover import ingress_scan" },
 ]
 readers = [
     { lane = "network-accounting", file = "verity/protocols/resource_accounting/network/prover/window_charge.py", find = "^class Advice" },
