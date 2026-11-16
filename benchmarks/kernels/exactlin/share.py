@@ -27,132 +27,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sqlite3
 import statistics
-import sys
-import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from types import ModuleType
-
-    from transformers import PreTrainedTokenizerBase
-    from vllm import LLM, LLMEngine
-
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 RANGE = "verity/exactlin/share/"
-B, WARM, STEPS, PAD, PREFILL, REPS = 32, 8, 32, 2000, 2048, 4
-T, MAX_LEN = 8192, 4096
 EPILOGUE = 4    # int8_exact.dequantize's torch kernels: to(f32), * s_a, * s_w, to(bf16)
 QUANT_BODY = 10  # int8_exact.quantize_rows' torch kernels: to(f32), full, abs, amax, clamp, /, /, round, clamp_, to(int8)
-
-
-def build(arm: str, scratch: Path, gpu_mem: float) -> tuple[LLM, ModuleType]:
-    sys.path.insert(0, str(ROOT / "benchmarks" / "hash" / "dither"))
-    import sbench
-    os.environ["SBENCH_T"] = str(T)
-    base = sbench.engine_args
-    sbench.engine_args = lambda g: {**base(g), "max_model_len": MAX_LEN}
-    return sbench.build(arm, scratch, gpu_mem), sbench
-
-
-def scenarios(tok: PreTrainedTokenizerBase, sbench: ModuleType) -> dict[str, list[list[int]]]:
-    short = [tok.encode(p) for p in sbench.prompts(B)]
-    filler = tok.encode(" ".join(sbench.prompts(64)), add_special_tokens=False)
-    while len(filler) < 4 * PREFILL:
-        filler = filler + filler
-    bos = short[0][:1]
-    return {"decode-short": short,
-            "decode-2k": [bos + filler[i:i + PAD - len(s)] + s[1:] for i, s in enumerate(short)],
-            "prefill-2k": [bos + filler[:PREFILL - 1]],
-            "prefill-2k-b4": [bos + filler[i * 7:i * 7 + PREFILL - 1] for i in range(4)]}
-
-
-def drive(eng: LLMEngine, tag: str, reqs: list[list[int]], decode: bool, nvtx: ModuleType | None,
-          sync: Callable[[], None]) -> dict:
-    """Add REQS; for decode, step until each has its first token, then WARM steps, then time STEPS steps; for a prefill,
-    time the steps until it's done."""
-    from vllm import SamplingParams
-    sp = SamplingParams(temperature=0.0, max_tokens=(1 + WARM + STEPS + 16) if decode else 1, ignore_eos=True, seed=0)
-    ids = [f"{tag}-{i}" for i in range(len(reqs))]
-    toks: dict[str, list[int]] = {}
-
-    def step() -> None:
-        for o in eng.step():
-            toks[o.request_id] = list(o.outputs[0].token_ids)
-
-    sync()
-    for rid, p in zip(ids, reqs):
-        eng.add_request(request_id=rid, prompt={"prompt_token_ids": list(p)}, params=sp)
-    if decode:
-        while not all(toks.get(r) for r in ids):
-            step()
-        for _ in range(WARM):
-            step()
-    ctx0 = [len(p) + len(toks.get(r, [])) for r, p in zip(ids, reqs)]
-    sync()
-    if nvtx:
-        nvtx.range_push(RANGE + tag)
-    t0 = time.perf_counter()
-    n = 0
-    while (n < STEPS) if decode else eng.has_unfinished_requests():
-        if nvtx:
-            nvtx.range_push(f"{RANGE}{tag}/s{n}")
-        step()
-        if nvtx:
-            nvtx.range_pop()
-        n += 1
-    sync()
-    wall = time.perf_counter() - t0
-    if nvtx:
-        nvtx.range_pop()
-    ctx1 = [len(p) + len(toks.get(r, [])) for r, p in zip(ids, reqs)]
-    if decode:
-        eng.abort_request(ids)
-    while eng.has_unfinished_requests():
-        step()
-    return {"steps": n, "wall_ms": round(1e3 * wall, 4), "requests": len(reqs), "prompt_tokens": [len(p) for p in reqs],
-            "context_before": ctx0, "context_after": ctx1, "tokens": [toks.get(r, []) for r in ids]}
-
-
-def run(a: argparse.Namespace) -> int:
-    # the engine in this process: --analyse assigns kernels to ranges by the process that launched them
-    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
-    import torch
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    t0 = time.perf_counter()
-    llm, sbench = build(a.arm, Path(a.scratch), a.gpu_mem)
-    doc: dict = {"arm": a.arm, "build_s": round(time.perf_counter() - t0, 1), "kernels": sbench.kernels_of(llm),
-                 "config": json.loads((Path(sbench.PIN) / "config.json").read_text()),
-                 "constants": {"B": B, "WARM": WARM, "STEPS": STEPS, "PAD": PAD, "PREFILL": PREFILL, "REPS": REPS, "T": T,
-                               "MAX_LEN": MAX_LEN}, "untraced": {}, "traced": {}}
-    eng = llm.llm_engine
-    reqs = scenarios(llm.get_tokenizer(), sbench)
-    sync = torch.cuda.synchronize
-    for tag, rs in reqs.items():          # warm: every scenario's shapes compiled and tuned before anything is timed
-        drive(eng, f"warm-{tag}", rs, tag.startswith("decode"), None, sync)
-    for traced in (False, True):
-        if traced:
-            sync()
-            torch.cuda.profiler.start()
-        for tag, rs in reqs.items():
-            reps = 1 if tag.startswith("decode") else REPS
-            doc["traced" if traced else "untraced"][tag] = [
-                drive(eng, f"{tag}#{k}", rs, tag.startswith("decode"), torch.cuda.nvtx if traced else None, sync)
-                for k in range(reps)]
-        if traced:
-            sync()
-            torch.cuda.profiler.stop()
-    (out / "share.json").write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({"arm": a.arm, "build_s": doc["build_s"],
-                      **{f"{k}_{t}_ms": [r["wall_ms"] for r in v] for k in ("untraced", "traced") for t, v in doc[k].items()}}))
-    return 0
 
 
 GEMM_I8 = re.compile(r"exactlin_scaled_mm|(gemm|xmma|nvjet|cutlass|cublas|imma).*(i8|s8|int8|imma|i16832)|"
@@ -370,17 +252,11 @@ def summary(out: Path) -> dict:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm")
-    ap.add_argument("--out")
-    ap.add_argument("--scratch", default="/tmp")
-    ap.add_argument("--gpu-mem", type=float, default=0.5)
     ap.add_argument("--analyse")
     ap.add_argument("--meta")
     ap.add_argument("--summary")
     a = ap.parse_args()
     if a.analyse:
         print(json.dumps(analyse(a.analyse, json.loads(Path(a.meta).read_text())), indent=1))
-    elif a.summary:
-        print(json.dumps(summary(Path(a.summary)), indent=1))
     else:
-        sys.exit(run(a))
+        print(json.dumps(summary(Path(a.summary)), indent=1))
