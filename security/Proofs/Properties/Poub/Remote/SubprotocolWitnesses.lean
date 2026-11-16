@@ -855,7 +855,7 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
 
 /-- A node's sample term is positive at a positive δ. -/
 theorem sampleTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
-    0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
+    0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 256 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
 
 /-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one

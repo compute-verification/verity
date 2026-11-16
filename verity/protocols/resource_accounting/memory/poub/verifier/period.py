@@ -21,8 +21,8 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `Poub.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s `q_bytes` is the
 receipts not shown wrong, the receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a
-`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^64`, the session's openings coins at its `samples` s each, as
-the Lean's `certify` computes them: at least the sample term of the bound
+`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^256`, the session's openings coins at its `samples` s each, as
+the Lean's `certify` computes them: the sample term of the bound
 `Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the openings a session made,
 min(s, U) of a sample's U receipts, which can be fewer.
 """
@@ -66,8 +66,8 @@ def payloads(store: bytes) -> list[bytes]:
 
 
 def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
-    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
-    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
+    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^256 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 256)
 
 
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:

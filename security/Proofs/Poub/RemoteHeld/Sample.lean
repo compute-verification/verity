@@ -1020,7 +1020,7 @@ theorem mul_coinWeight_le {δ P ρ : ℝ} (hδ : 0 ≤ δ) (hP : 0 ≤ P) (hρ0 
       _ = δ / P := by field_simp
       _ ≤ coinWeight δ P + 1 / 2 ^ 512 := (lt_coinWeight_add (h'.trans_le hPρ)).le
 
-/-- **One window's step**: `coinWeight(Pρ)·(k(2^-64 − 2^-512) + ρ) ≤ coinWeight(P) + s/2^64`. -/
+/-- **One window's step**: `coinWeight(Pρ)·(k(2^-256 − 2^-512) + ρ) ≤ coinWeight(P) + s/2^256`. -/
 theorem window_step_le {δ P ρ : ℝ} {k s : ℕ} (hδ : 0 ≤ δ) (hP : 0 ≤ P) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (hks : k ≤ s)
     (h0 : k = 0 → ρ = 1) :
     coinWeight δ (P * ρ) * (k * (1 / 2 ^ 256 - 1 / 2 ^ 512) + ρ) ≤ coinWeight δ P + s / 2 ^ 256 := by
@@ -1145,7 +1145,7 @@ theorem pr_potential_succ [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m
         exact propext (distinguisher_swap_iff D prf δ t hS x).symm
 
 /-- **The ideal side**: on uniform blocks, window `t`'s distinguisher outputs true with probability at most the
-potential after `t` windows plus `s_t/2^64`. -/
+potential after `t` windows plus `s_t/2^256`. -/
 theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ}
     (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (t : Fin n) :
     pr (D.distinguisher prf δ t) ≤ pr (D.potential prf δ t) + ENNReal.ofReal (s t / 2 ^ 256) := by
@@ -1265,7 +1265,7 @@ theorem hide_le [Fintype X] (com : SampleCoins n κ X → Cm) (prf : Fin n → P
   unfold Committed.hide
   exact add_le_add (tsub_le_self.trans (pr_le_one _)) (tsub_le_self.trans (pr_le_one _))
 
-/-- One window of the hybrid: the potential gains at most `s_t/2^64`, window `t`'s distinguisher's advantage at the
+/-- One window of the hybrid: the potential gains at most `s_t/2^256`, window `t`'s distinguisher's advantage at the
 junk commitment, and window `t`'s hiding term. -/
 theorem pr_potential_succ_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoins n κ X → Cm)
     (prf : Fin n → Pous.Bits κ → Blocks m) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 64) (t : Fin n) {β : ℝ≥0∞}
@@ -1326,7 +1326,7 @@ theorem pr_landed_le [Fintype X] (hL : ∀ c, Live (F.view c)) (com : SampleCoin
 
 end Committed
 
-/-- The hybrid's error as the guarantees state it: `δ`, the windows' `s_t/2^64`, and the advantages, hiding terms and
+/-- The hybrid's error as the guarantees state it: `δ`, the windows' `s_t/2^256`, and the advantages, hiding terms and
 binding term summed apart. -/
 theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (a h : Fin n → ℝ≥0∞) (ha : ∀ t, a t ≤ 1)
     (hh : ∀ t, h t ≤ 1 + 1) (b : ℝ≥0∞) (hb : b ≤ 1) {p : ℝ≥0∞}
