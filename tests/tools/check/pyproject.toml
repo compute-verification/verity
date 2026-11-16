@@ -65,8 +65,8 @@ untraced = [
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
 # fetch and the run tooling import beyond its `exports` (with `research run --pool`'s placement, which `--record --pool`
 # reuses, the check view whose circuit-check reader the live record shares, the executor's keys and labels, which
-# `tasks.py costs` reads, and `jobuser`, which names the job unit `clone.not_over` asks for a run's processes before a
-# machine's clone is made), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
+# `tasks.py costs` reads, `jobuser`, which names the job unit `clone.not_over` asks for a run's processes before a
+# machine's clone is made, and the queue loop's key of what lean-agreement reads, which test_check holds to what it opens), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
 # which the ratchet-gate step runs on a toy train, the `verity` command, whose `verity check` the cold-start smoke runs, and
 # the test files of the one-stage audit's two longest tests (benchmarks/one_stage's and the vLLM adapter's), which ci.toml's
 # plans place by their parts.
@@ -85,10 +85,10 @@ inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
           "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
-          "tools/research/src/research/jobuser.py",
+          "tools/research/src/research/jobuser.py", "tools/research/src/research/vqueue_slim.py",
           "tools/research/src/research/pods/nebius/slot_only.py", "adapters/vllm/tools/ratchet_gate.py",
           "tests/lint/test_repo_env_reads.py",
-          "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
           "tools/verity/circuit_check/src/circuit_check/cli.py", "tools/verity/cli/verity_cli/__init__.py",
           "tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/one_stage/test_two_stage_driver.py"]
 

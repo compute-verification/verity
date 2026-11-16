@@ -1,8 +1,7 @@
-"""The run beside each candidate of the verified queue (`research.vqueue`) of what its graph2 check doesn't check: no graph/v2
-task runs lean-agreement or the preflights.  It is `train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement
+"""The run beside each candidate of the verified queue (`research.vqueue`), and the check that gates it.  The run beside is
+`train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement
 left out when a run of every step would skip it (`Landing.beside_args`), whose check runs the preflights before any step.  It
-is judged on the merge gate: the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.  A candidate passes only once its
-graph2 check's gating tasks and this run both passed (`combine`).
+is judged on the merge gate: the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.
 
 What the loop does.  It starts the run with each candidate's build, beside each candidate's check, so up to its `--depth`
 of them at once take the queue's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until
@@ -15,7 +14,7 @@ removes its directory).  On
 `vqueue.Retry` with this run's verdict infra, or a fail with an infra error (`vqueue._erred`: a failure the machine made), it
 calls `start` again, avoiding the machines its runs failed on (``erred_on``), and keeps the new record in place of the old.  It gives
 the `Landing` the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a `Landing` without machines.  Under `--dry-run` it
-calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
+calls neither `start` nor `judge`.  The
 loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.  Where the check gates, a candidate
 sharing a member with one whose check the loop cancelled in the last `CARRY_WAIT_S` (`replaced`) launches only once those
 runs' records are in the store or that long has passed since their cancel, and names them to its launch, so its check reuses
@@ -23,8 +22,7 @@ every pass they left (`start`'s ``after``).
 
 A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-512 over the step's name and the files it
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
-tree, with no run.  An equal key means the base fails the step too, as graph2's keys of its tasks by their inputs do, so
-`vqueue.decide` takes the failure as inherited.  A step whose reads can't be bounded is keyed on the whole tree, so its
+tree, with no run.  An equal key means the base fails the step too, so `vqueue.decide` takes the failure as inherited.  A step whose reads can't be bounded is keyed on the whole tree, so its
 failure is never inherited by its key: preflight-lints (its lints read every file, `check.lints_key`) and ratchet-gate (it
 judges the merges above the base, not a tree).  Each failed step's one test (`Failed.tests`) is the step's (`step_test`), so
 the run beside the base's own check, which the loop keeps beside `main` (started on `main` against itself, so lean-agreement
@@ -62,7 +60,6 @@ it leaves out still runs: `failures` reads what it failed once every run has end
 it, but what the run beside the base's check failed too (`Loop._off_gate`), its candidate landed or dropped by then or not."""
 from __future__ import annotations
 
-import ast
 import contextlib
 import functools
 import hashlib
@@ -86,17 +83,22 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, 
 from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
-from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
+from .vqueue import FAIL, INFRA, KINDS, MACHINE_KINDS, PASS, PENDING, Failed, Verdict, meets
 from .vqueue_records import FAULT_RE
 
-#: a candidate's state from its two verdicts' (`combine`): the first of these either has
-ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
-#: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
-#: `CHECK_READS` (check.py, the modules it loads as it starts, and what they read), and the lean-build of `LEAN`, read from its
-#: source at the commit keyed (`_declared`), never run
-BUILD = "tools/verity/graph/verity_graph/families/build.py"
+#: lean-agreement's reads beside check's: the agreement code and the Lean verifier's package, whose lean-build it reads
+LEAN = "verity/protocols/proofs/flock/verifier"
+VERIFIER = "verity/protocols/proofs/flock/prover/agreement"
+#: what every step run under check.py reads of the tree: check.py, the modules it loads as it starts (suites.py's suite layout
+#: rule among them) and the job declaration and policy they read, with the Slack registry the declaration checks its handles
+#: against (`test_check` holds this list to what an audit hook sees `check.py --lean-agreement` open)
+CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
+                                                     "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
+                                                     "spans.py", "suites.py", "verdicts.py")),
+               "tools/research/src/research/suite_layout.py",
+               ".agents/skills/using-slack/registry.json")
 #: the environment every step runs in: the lock `uv run --locked` installs, and the interpreter it pins
 ENV = ("uv.lock", ".python-version")
 #: what `uv lock --check` (preflight-lock) reads: the lock and every file the workspace's metadata can come from
@@ -1205,17 +1207,6 @@ def _text(path: Path) -> str:
     return path.read_text(errors="replace") if path.exists() else ""
 
 
-def combine(graph: Verdict, slim: Verdict) -> Verdict:
-    """A candidate's verdict from its graph2 check's (``graph``: its gating tasks) and the run beside it's (``slim``,
-    `judge`): fail when either failed; else infra when either ended in infra errors; else pending while either is; else
-    list-failed when graph2's check failed to list; else pass, both passed.  It holds both verdicts' failures and infra
-    errors."""
-    if bad := sorted({graph.state, slim.state} - set(STATES)):
-        raise ValueError(f"no verdict has state {', '.join(map(repr, bad))}: a state is one of {', '.join(STATES)}")
-    state = next(s for s in ORDER if s in (graph.state, slim.state))
-    return Verdict(state, graph.failed + slim.failed, graph.infra + slim.infra)
-
-
 #: the steps whose reads can't be bounded, each keyed on the whole tree, and why
 WHOLE = {"preflight-lints": "its lints read every file (`check.lints_key`)",
          "ratchet-gate": "it judges the merges above the base, not a tree"}
@@ -1223,11 +1214,11 @@ WHOLE = {"preflight-lints": "its lints read every file (`check.lints_key`)",
 
 def reads(repo: Path, commit: str, step: str) -> frozenset[str] | str:
     """What ``step`` reads of ``commit``'s tree, as `vqueue.meets` reads paths, directories and globs; for a step read whole,
-    why: one whose reads can't be bounded (`WHOLE`, or a step this doesn't know), or whose declaration ``commit`` doesn't hold
-    as plain data.  Each runs under check.py, so each bounded one holds check's reads (`CHECK_READS` at ``commit``) and `ENV`:
+    why: one whose reads can't be bounded (`WHOLE`, or a step this doesn't know).  Each runs under check.py, so each bounded one
+    holds check's reads (`CHECK_READS`) and `ENV`:
 
-    - lean-agreement: the graph build family's lean-agreement task's inputs, `VERIFIER`'s files beside check's, and the
-      Lean package `LEAN` whose lean-build it reads, whole (its lock and nested packages too, which `package` cuts);
+    - lean-agreement: `VERIFIER`'s files beside check's, and the Lean package `LEAN` whose lean-build it reads, whole (its lock
+      and nested packages too, which `package` cuts);
     - preflight-lock: `LOCK_READS`;
     - preflight-fixtures: the replica map (`MAP`), each path it registers (`research.store.fixtures.entries`), and the code
       its check imports (`FIXTURES_CODE`)."""
@@ -1235,11 +1226,9 @@ def reads(repo: Path, commit: str, step: str) -> frozenset[str] | str:
         return WHOLE[step]
     if step not in ("lean-agreement", "preflight-lock", "preflight-fixtures"):
         return f"nothing declares what {step} reads"
-    if isinstance(got := _declared(repo, commit), str):
-        return got
-    check = (*got["CHECK_READS"], *ENV)
+    check = (*CHECK_READS, *ENV)
     if step == "lean-agreement":
-        return frozenset((got["VERIFIER"], got["LEAN"], *check))
+        return frozenset((VERIFIER, LEAN, *check))
     if step == "preflight-lock":
         return frozenset((*LOCK_READS, *check))
     if isinstance(doc := _map(repo, commit), str):
@@ -1290,30 +1279,6 @@ def _files(repo: Path, tree: str) -> tuple[tuple[str, str], ...]:
     return tuple((path, entry) for entry, _, path in (line.partition("\t") for line in out.split("\0") if line))
 
 
-#: the names `_declared` reads of `BUILD`
-DECLARED = ("CHECK_READS", "VERIFIER", "LEAN")
-
-
-def _declared(repo: Path, commit: str) -> dict | str:
-    """`BUILD`'s `DECLARED` at ``commit``, read from its source without running it (`_data`): `VERIFIER` and `LEAN` strings,
-    `CHECK_READS` a tuple of them; else why not."""
-    r = _git(repo, "show", f"{commit}:{BUILD}", check=False)
-    if r.returncode:
-        return f"{commit[:12]} has no {BUILD}"
-    try:
-        body = ast.parse(r.stdout).body
-    except SyntaxError as e:
-        return f"{BUILD} at {commit[:12]} doesn't parse: {e}"
-    got = {node.targets[0].id: _data(node.value, {}) for node in body
-           if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
-           and node.targets[0].id in DECLARED}
-    check = got.get("CHECK_READS")
-    if (isinstance(got.get("VERIFIER"), str) and isinstance(got.get("LEAN"), str) and isinstance(check, tuple)
-            and all(isinstance(p, str) for p in check)):
-        return got
-    return f"{BUILD} at {commit[:12]} doesn't declare {', '.join(DECLARED)} as plain data"
-
-
 def _map(repo: Path, commit: str) -> dict | str:
     """The replica map at ``commit``, else why not."""
     r = _git(repo, "show", f"{commit}:{MAP}", check=False)
@@ -1324,37 +1289,6 @@ def _map(repo: Path, commit: str) -> dict | str:
     except ValueError as e:
         return f"{MAP} at {commit[:12]} isn't JSON: {e}"
     return doc if isinstance(doc, dict) else f"{MAP} at {commit[:12]} isn't a JSON object"
-
-
-def _data(node: ast.AST, names: dict[str, str]) -> str | tuple | None:
-    """The value of ``node``, an expression of string literals, f-strings of the names a comprehension binds (``names``),
-    tuples and lists with starred items, and comprehensions over those: what `BUILD` writes its declarations in.  None for
-    anything else, which is never run."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.Name):
-        return names.get(node.id)
-    if isinstance(node, ast.JoinedStr):
-        parts = [_data(v.value if isinstance(v, ast.FormattedValue) and v.conversion == -1 and v.format_spec is None else v,
-                       names) for v in node.values]
-        return "".join(parts) if all(isinstance(p, str) for p in parts) else None
-    if isinstance(node, (ast.Tuple, ast.List)):
-        out: list = []
-        for e in node.elts:
-            got = _data(e.value if isinstance(e, ast.Starred) else e, names)
-            if not isinstance(e, ast.Starred):
-                out.append(got)
-            elif isinstance(got, tuple):
-                out.extend(got)
-            else:
-                return None
-        return None if None in out else tuple(out)
-    if isinstance(node, (ast.GeneratorExp, ast.ListComp)) and len(node.generators) == 1:
-        g = node.generators[0]
-        if isinstance(g.target, ast.Name) and not g.ifs and not g.is_async and isinstance(over := _data(g.iter, names), tuple):
-            items = tuple(_data(node.elt, {**names, g.target.id: x}) for x in over)
-            return None if None in items else items
-    return None
 
 
 def _failure(step: str, k: str, base_key: str | None, parts: list[Read]) -> Failed:

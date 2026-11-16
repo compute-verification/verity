@@ -1,9 +1,9 @@
-"""`research.vqueue_slim`: the run beside each candidate of the verified queue of what graph2 doesn't check, launched and read
+"""`research.vqueue_slim`: the run beside each candidate of the verified queue, launched and read
 through `research.landing`, on its fakes (`test_landing`): `Harness`'s launches, run states, evidence and clock, `_slim`'s
 ended run, and a lint log whose failure names its paths.  Pending while it launches or runs, infra when it registered no run,
 never ran, was lost or was killed, fail on a step on the gate it failed, pass on every one it passed; each failure keyed by
 the content the step reads at the candidate and at its base, so `vqueue.decide` takes one its base fails too as inherited;
-`combine`'s table; and the check that gates: the after-landing run as shards, judged on the steps `main` waits for at the
+and the check that gates: the after-landing run as shards, judged on the steps `main` waits for at the
 base, each failure by the tests it names."""
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ from research import merge
 from research.merge import REPAIRED
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
+from research.vqueue import (FAIL, INFRA, PASS, PENDING, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+from research.vqueue_slim import (CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
-                                  audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
+                                  audits, based, borrowed, failures, judge, key, lean_inputs, lean_reads, left,
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
                                   step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
@@ -39,13 +39,9 @@ from test_vqueue_loop import _row as _loop_row
 OFF = ("circuit-check", "ratchet-gate")
 #: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
-#: a graph build family declaring lean-agreement's reads in the shape the tree's does
-BUILD_SRC = ('VERIFIER = "verity/protocols/proofs/flock/prover/agreement"\nLEAN = "verity/protocols/proofs/flock/verifier"\n'
-             'CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "settings.py")),\n'
-             '               ".agents/skills/using-slack/registry.json")\n')
 ART = "art:" + "ab" * 32
 #: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
-KEYED = {BUILD: BUILD_SRC, "tools/check/check.py": "# check\n", "tools/check/settings.py": "# settings\n",
+KEYED = {"tools/check/check.py": "# check\n", "tools/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
          "tools/x/pyproject.toml": "[project]\n", "verity/protocols/proofs/flock/prover/agreement/ci.py": "# ci\n",
          "verity/protocols/proofs/flock/verifier/Main.lean": "-- main\n", "artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
@@ -272,7 +268,7 @@ def test_a_run_that_passed_every_step_it_judges_passes(world, monkeypatch, tmp_p
 
 
 def test_a_failed_preflight_fails_the_candidate_with_the_paths_its_failure_names(world, monkeypatch, tmp_path):
-    """No graph/v2 task runs the preflights: a failed one fails the candidate, its `Failed` holding the paths its failure names
+    """A failed preflight fails the candidate, its `Failed` holding the paths its failure names
     (`step_paths`), the paths the suspects are the members whose changes meet."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
@@ -707,7 +703,7 @@ def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_t
 
 
 def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
-    """The run beside a check under graph2 (no shards) runs no lean-audit, nor does a check taking lean-audit's verdict from a
+    """The run beside with no shards runs no lean-audit, nor does a check taking lean-audit's verdict from a
     candidate below (``audit_from``): ``heavy_on`` moves neither."""
     h, base, sha, _ = _harness(world, monkeypatch, change={"tools/check/ci.toml": _plans(HEAVY_PLAN)})
     h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_after_landing
@@ -924,7 +920,7 @@ def test_a_check_leaves_no_suite_to_its_base_s_under_a_deselect_list(world, monk
 
 def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite_steps(world, monkeypatch, tmp_path):
     """`lends_suites`: the check that gates, judged on pytest and lean-suites, lends them while the check of `main` keeps a
-    verdict that passed both.  Not the run beside a graph2 check, not a check launched under a deselect list, not where a
+    verdict that passed both.  Not the run beside with no shards, not a check launched under a deselect list, not where a
     suite step gates nothing or the candidate's policy isn't its base's (an allowance its check is judged without), and
     not while `main`'s check keeps no verdict or one that failed a suite step: a candidate above lands on that failure
     as inherited, and a check that left the suite out would record the step passed."""
@@ -1655,7 +1651,7 @@ def test_a_check_taking_lean_audit_from_its_base_s_runs_every_step_but_it_and_it
     """``audit_from``, the candidate the check is built on: every step of `AFTER_LANDING` but lean-audit is sent, to each
     shard alike and to an auto plan's making, and the record says whose verdict on lean-audit it takes (``lean_audit_from``).
     Judged on no lean-audit, it lends none to a check above it (`audits`), where the check of its base, which ran it, does.
-    The run beside a graph2 check runs no lean-audit, so it takes none."""
+    The run beside with no shards runs no lean-audit, so it takes none."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
     rec_base = start(h.d, base, base, shards=1)
@@ -1870,7 +1866,7 @@ def test_failures_of_a_sharded_run_are_those_of_each_shard_that_failed_the_step_
 
 @pytest.mark.parametrize("step", sorted(BOUNDED))
 def test_a_steps_key_changes_with_each_file_it_reads_and_with_no_other(world, step):
-    """Each bounded step's reads, as `BUILD`, the replica map and `uv lock --check` declare them at the commit keyed: a change
+    """Each bounded step's reads, as `CHECK_READS`, the replica map and `uv lock --check` declare them at the commit keyed: a change
     to any of them changes the key, a change elsewhere keeps it."""
     _move_main(world, KEYED)
     base = _main(world)
@@ -1882,7 +1878,7 @@ def test_a_steps_key_changes_with_each_file_it_reads_and_with_no_other(world, st
 
 def _decided(sha: str, base: str, files: set[str], v: Verdict) -> list:
     """`vqueue.decide`'s actions on candidate ``sha`` of one member, #1 touching ``files``, on ``base``, `main`, its verdict
-    ``v`` as the loop reads it once both checks ended (`Verdict.ended`, which the loop carries past `combine`), its failures
+    ``v`` as the loop reads it once both checks ended (`Verdict.ended`), its failures
     rerun afresh once already (`vqueue.Rerun`), so a failure of its own is blamed on it."""
     return decide(Snapshot(base, (Ready(1, "h1", frozenset(files)),),
                            (Candidate(sha, base, (1,), ("h1",), replace(v, ended=True), reruns=1),)))
@@ -1952,51 +1948,8 @@ def test_a_step_read_whole_is_inherited_only_when_the_run_beside_the_base_s_chec
     (drop,) = [a for a in _decided(sha, base, {"docs/notes.md"}, v) if isinstance(a, Drop) and a.sha == sha]
     assert (drop.outcome.inherited, drop.outcome.suspects) == (((f,), ()) if below == "failed" else ((), (1,)))
 
-@pytest.mark.parametrize("build", [None, BUILD_SRC.replace("CHECK_READS = (", "CHECK_READS = tuple(sorted(") + "))\n",
-                                   BUILD_SRC.replace('"settings.py"', "SETTINGS"), "VERIFIER = (\n"])
-def test_a_tree_not_declaring_lean_agreements_reads_as_plain_data_keys_every_step_on_the_whole_tree(world, build):
-    """Without `BUILD`'s declarations as plain data (none, a call, a name, a syntax error), what lean-agreement and check read
-    can't be bounded: each step is keyed on the whole tree, and nothing in the declaration is run."""
-    _move_main(world, {k: v for k, v in KEYED.items() if k != BUILD} | ({BUILD: build} if build else {}))
-    base = _main(world)
-    sha = world.change({"docs/notes.md": "more\n"})
-    for step in BOUNDED:
-        assert BUILD in reads(world.origin, base, step)
-        assert key(world.origin, sha, step) != key(world.origin, base, step)
-
-
 def test_a_key_is_none_for_a_commit_git_cant_read(world):
     assert key(world.origin, "0" * 40, "preflight-lock") is None is key(world.origin, "0" * 40, "preflight-lints")
-
-
-# -- combine
-
-#: combine's table: graph2's verdict -> the candidate's, for each of the run's in `COLUMNS`
-COLUMNS = (PENDING, PASS, FAIL, INFRA)
-TABLE = {PENDING: (PENDING, PENDING, FAIL, INFRA),
-         PASS: (PENDING, PASS, FAIL, INFRA),
-         FAIL: (FAIL, FAIL, FAIL, FAIL),
-         INFRA: (INFRA, INFRA, FAIL, INFRA),
-         LIST_FAILED: (PENDING, LIST_FAILED, FAIL, INFRA)}
-
-
-def _verdict(state: str, who: str) -> Verdict:
-    """A verdict of ``state``, with a failure and an infra error named for ``who`` where it has them (a fail can hold both)."""
-    failed = (Failed(f"{who} task", f"{who} key", frozenset({who})),) if state == FAIL else ()
-    infra = (Failed(f"{who} infra", f"{who} infra key", frozenset()),) if state in (FAIL, INFRA) else ()
-    return Verdict(state, failed, infra)
-
-
-@pytest.mark.parametrize("graph", STATES)
-@pytest.mark.parametrize("slim", COLUMNS)
-def test_combine_takes_the_candidates_state_from_its_table_with_both_verdicts_failures(graph, slim):
-    g, s = _verdict(graph, "graph"), _verdict(slim, "slim")
-    assert combine(g, s) == Verdict(TABLE[graph][COLUMNS.index(slim)], g.failed + s.failed, g.infra + s.infra)
-
-
-def test_combine_refuses_a_state_it_has_no_rule_for():
-    with pytest.raises(ValueError, match="no verdict has state 'passed'"):
-        combine(Verdict(PASS), Verdict("passed"))
 
 
 def test_a_suite_may_read_the_tests_of_each_path_it_reads_where_they_mirror_the_tree(world):

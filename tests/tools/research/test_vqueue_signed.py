@@ -10,7 +10,6 @@ import pytest
 
 import research.queue as Q
 from research import labelauth
-from research.executor import GRAPH_V2
 from research.queue import DRIVE_FLAGS, StoreLabels, label_target
 from research.store import vocab
 from test_labelauth import HOLDER, OTHER, READER, T, TS, _jwks, _mint
@@ -24,12 +23,11 @@ NO_DELEGATION = (f"its token is {READER!r}'s, which doesn't hold review-36 in ma
 
 def _main(env: Env, mode: str, registry: str = json.dumps(REGISTRY)) -> str:
     """`main` moved to a commit whose drive.toml sets `signed_verdicts` to ``mode`` with the low-risk lane off, so every PR
-    needs a land verdict, and whose registry is ``registry``; its check listed with no task.  The origin's store gets its
+    needs a land verdict, and whose registry is ``registry``.  The origin's store gets its
     remote, which `StoreLabels` and a signer's read of its delegation pull from."""
     env.o.with_store_remote()
     main = env.o.change({DRIVE_FLAGS: f"signed_verdicts = {FLAG[mode]}\nlowrisk_lane = false\n", str(Q.REGISTRY): registry})
     _git(env.o.origin, "update-ref", "refs/heads/main", main)
-    env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
     return main
 
 

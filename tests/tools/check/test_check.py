@@ -1,6 +1,7 @@
 """`tools/check/check.py`: its steps in order, the Lean hook with and without the verifier, and the result a recorded run publishes."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import re
@@ -2683,3 +2684,44 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     git("add", "-A")
     git("commit", "-q", "-m", "b")
     assert CHECK.lints_key(e) not in (None, one)
+
+
+AUDIT = """
+import os, runpy, sys
+from pathlib import Path
+root, seen = Path(sys.argv[1]), set()
+def hook(event, args):
+    if event == "open" and isinstance(args[0], str) and not (isinstance(args[2], int) and args[2] & os.O_ACCMODE == os.O_WRONLY):
+        p = Path(args[0]).resolve()
+        if p.is_relative_to(root) and not p.is_relative_to(Path(sys.prefix).resolve()):
+            seen.add(p.relative_to(root).as_posix())
+sys.addaudithook(hook)
+sys.argv = sys.argv[2:]
+try:
+    runpy.run_path(sys.argv[0], run_name="__main__")
+except SystemExit:
+    pass
+print("\\n".join(sorted(seen)))
+"""
+
+
+def _slim(name: str):
+    """`research.vqueue_slim`'s constant ``name``, evaluated from its source: the loop keys lean-agreement's failures on it."""
+    tree = ast.parse((ROOT / "tools/research/src/research/vqueue_slim.py").read_text())
+    (node,) = [n.value for n in tree.body if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == [name]]
+    return eval(compile(ast.Expression(node), name, "eval"), {})   # noqa: S307 -- a constant of the tree's own source
+
+
+def test_check_reads_are_all_the_agreement_reads_of_the_tree_outside_the_verifier(tmp_path):
+    """check.py's own reads end at its first look at the upstream build: everything after is under the verifier's directory, so
+    the loop's key of lean-agreement (`vqueue_slim.CHECK_READS` beside `VERIFIER`) covers every file it reads."""
+    (tmp_path / "up").write_bytes(b"not the pin")
+    (tmp_path / "in").write_bytes(b"not the pin")
+    p = subprocess.run([sys.executable, "-c", AUDIT, str(ROOT), str(ROOT / "tools/check/check.py"), "--lean-agreement",
+                        str(tmp_path / "out"), str(tmp_path / "up"), str(tmp_path / "in"), str(tmp_path / "fv")],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert "is not the pinned upstream" in p.stderr, p.stderr
+    opened = {f"{Path(f).parent.parent}/{Path(f).name.split('.')[0]}.py" if "/__pycache__/" in f else f
+              for f in p.stdout.split()}
+    verifier = _slim("VERIFIER")
+    assert opened and not {f for f in opened if not f.startswith(verifier + "/")} - set(_slim("CHECK_READS"))

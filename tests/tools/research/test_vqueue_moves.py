@@ -17,7 +17,6 @@ import research.queue as Q
 from research.queue import path_rows
 from research.vqueue import PASS, Advance, Build, Commit, Drop, Ready, RecordsRun, Snapshot, _moves_last, decide
 from test_vqueue import MAIN, SEEDS, World, cand, lean, pr, snap, ticks, waiting
-from research.executor import Executor
 from test_vqueue_loop import Env, Fake, _acts, _git, _main_to, _move, env, policy  # noqa: F401 -- env is a fixture
 
 MAP = "tools/move/x_map.toml"
@@ -405,11 +404,7 @@ class Moved:
 
 def _cached(env: Env, cache: Path):
     """``env``'s loop with its world keeping its caches in ``cache``, as the loop's process keeps them beside its log."""
-    loop = env.loop(policy)
-    loop.world = w = Fake(loop.world.q, env.labels, Executor(env.graph2), post=lambda text, to=(): env.posts.append(text) or True,
-                          now=lambda: env.clock, cache=cache)
-    w.withdrawn, w.cancelled = env.withdrawn, env.cancelled
-    return loop
+    return env.loop(policy, cache=cache)
 
 
 def _passes(env: Env, sha: str) -> None:
