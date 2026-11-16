@@ -56,7 +56,7 @@ env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW =
 [run.window.coins.gate]
 main_line = true
 # CHALLENGER_ENV: the node's mode-600 env file that sets VY_CHALLENGER_1_HOST, the gate's address
-env = { PP_CHALLENGER = "gate", CHALLENGER_ENV = "", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "~/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
+env = { PP_CHALLENGER = "gate", CHALLENGER_ENV = "/root/.config/verity/challenger-1.env", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "~/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.window.coins.development]
 env = { PP_CHALLENGER = "local", PEARLC_CHALLENGER_GATE = "", DEVELOPMENT = "1" }
