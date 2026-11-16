@@ -12,7 +12,7 @@
 #      PROMPT seeded random tokens and OUTPUTS outputs each, every engine step one pass retained under PASSES;
 #   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
 #      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
-#   4. verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
+#   4. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
 #      fixed load, DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
 #   5. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
 #      written only where it is the Python's;
@@ -107,7 +107,7 @@ export TMPDIR=$W/tmp
 umask 077
 failed=0
 #: each long step's minutes in the measured run (r20261115-200421-8c63: one H200, 96 cores), printed as it starts
-declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [verify]=15 [lean]=32 [policy]=2 [circuit]=2)
+declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [python-verify]=15 [lean]=32 [policy]=2 [circuit]=2)
 step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
   local name=$1 t rc
   shift
@@ -258,12 +258,12 @@ if [ "$failed" = 0 ]; then
     echo "serve.sh: the verdict needs a give-up before its coin, and this runs none" >&2; fail volunteer-needed; }
   step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || fail retain
   cp "$WR" "$REC/window-record.json"
-  step verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
+  step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "${LEAN_TIMEOUT:-3600}" || failed=1
   if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1
-  else echo "serve.sh: the verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
+  else echo "serve.sh: the python-verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
 fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '

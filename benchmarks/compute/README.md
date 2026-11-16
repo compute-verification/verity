@@ -244,14 +244,14 @@ A run takes about an hour. Our run `r20261115-200421-8c63`, on one H200 of a 96-
 | the kernel's cubin (`cubin`) | 136 |
 | the local challenger's gate, its Lean spot-verifier built (`gate`) | 293 |
 | serving the load (`serve`) | 60 |
-| the Python verdict (`verify`) | 868 |
+| the Python verdict (`python-verify`) | 868 |
 | the Lean verdict, `pouw-pearlplus` built (`lean`) | 1,917 |
 | the policy (`policy`) | 126 |
 | the class's circuit (`circuit`) | 118 |
 | the rest (`retain`, `publish`, `piece`, `verdicts`, `registered`, `share`) | 5 |
 
 The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
-but for the first few minutes of `verify` another run's Lean verdict was also running on the same machine.
+but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
 
 ## A record directory
 

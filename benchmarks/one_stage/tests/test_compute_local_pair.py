@@ -1,6 +1,6 @@
 """`benchmarks/compute/serve.sh`'s local pair on a toy pass: its challenger (``COINS=local``), the scratch auditor gate
 `pearlplus_local_e2e.py init` starts (serve.sh's ``gate_up``), each opened session's challenger its own ``serve.py`` on
-127.0.0.1, and its verifier, serve.sh's ``retain``, ``verify`` and ``lean`` steps (`served_passes.py`, ``lean --exe
+127.0.0.1, and its verifier, serve.sh's ``retain``, ``python-verify`` and ``lean`` steps (`served_passes.py`, ``lean --exe
 build``) run as processes of their own under the gate's ``PEARLC_CHALLENGER_*``; then `pearlplus_local_e2e.py stop`
 (serve.sh's ``gate_down``).
 
