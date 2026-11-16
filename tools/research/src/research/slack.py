@@ -3908,6 +3908,8 @@ def cmd_slack_app(ns: argparse.Namespace, reg: dict) -> int:
     if ns.acmd == "diff":
         return 1 if lines else 0
     if not lines:
+        print("apply: sent nothing to Slack, and an unchanged manifest doesn't make Slack verify the Request URL again: "
+              f"Retry it at https://api.slack.com/apps/{app}/event-subscriptions")
         return 0
     api.call("apps.manifest.validate", app_id=app, manifest=repo)
     print("validate: Slack accepts the repo's manifest")
