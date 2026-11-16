@@ -1,4 +1,9 @@
-# research.store — the evidence store
+# research.store: the evidence store
+
+The evidence store is where the team's runs and what they produce live, outside the repository. A run is recorded as an
+attempt, and each file it writes becomes an artifact: immutable, typed, and named by the hash of its content. A claim
+about one, such as a verdict or a status, is a label on it that says who asserted it, never a field inside it.
+A result is cited by its `art:` id and fetched from the store, never copied into the tree.
 
 Four objects, two relations. Everything else is a typed use of them.
 
@@ -17,6 +22,18 @@ Fixture = `fixture/v1`. Proof = `proof/v1`. Probe capture = `tc-evidence/v1`. Th
 
 CLI: `research data …`. Package: `research.store`. Id prefixes: `art:`, `drv:`. Attempt id = run id as-is.
 Stdlib only (the `research` rule); the S3 client is hand-rolled SigV4.
+
+## Try it
+
+Take any `art:` id from the repository's `artifacts.json`, and ask where its bytes are:
+
+~~~sh
+research data where ART
+~~~
+
+This prints a line for each replica, the local store, the repository and the remote, with whether it holds the
+artifact and when that was last verified. Without the store's credentials in the environment, the remote's line says
+`UNUSABLE` and why. `research data --help` lists the commands.
 
 ## 1. Canonical JSON and identity (`canon.py`, `ids.py`)
 
@@ -480,42 +497,14 @@ module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
 
+`research data --help` lists every command with its flags but the three `cli_prov.py` adds, each of which has its own
+`--help`:
+
 ~~~text
-research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
-research data show ART|ATTEMPT|DRV [--json]   manifest (+ producing attempts) / attempt / attempts with that derivation
-research data where ART [--json]              replicas: local / repo / remote (+ verified_utc)
-research data fetch ART [--to DIR]            materialise payload (file or tree); prints path
-research data verify ART [--json]             PRESERVED check against the remote (exit 1 unless PRESERVED)
-research data push [ART|RUN ...] [--pending] [--jobs N] [--verify head|readback] [--json]
-                                              preserve on the remote (§7, §7.2): a run id pushes its attempt and every artifact it names
 research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [-- ARGV...]
                                               -> attempts with that reuse_key (or --any-source: that derivation); ARGV is parsed as `run` would
-research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
-research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
-                                              --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
-research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
-research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the parts that fail;
-                                              exit 4: WITHDRAWN (§7.4)
-research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
-research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
-research data evict --target-free-gb N [--runs] [--dry-run] [--json]   free local disk of copies PRESERVED on the remote (`evict.py`, `sealed.py`)
-research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
-                                              re-register every artifacts.json entry whose bytes changed (§7)
-research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
-                                              make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
-research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
-research data doctor [--clean] [--runs-dir D] [--json]
-                                              run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
 research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs; a run with run custody: `research data custody RUN --publish`)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
-research data reindex [--remote]
-research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
-research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
-research data mint-credential --job push|fetch [--ttl 6h] [--env]   a cluster job's key: custody's actions (§7.1)
 ~~~
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a
