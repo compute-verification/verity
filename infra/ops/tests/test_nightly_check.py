@@ -105,7 +105,7 @@ class Fx:
         self.cleaned.append(tree)
         self._may_fail("cleanup")
 
-    def read(self, run):
+    def read(self, run, commit, now):
         got = self.reads.pop(0) if self.reads else N.Read(None, "running")
         if isinstance(got, Exception):
             raise got
@@ -277,8 +277,9 @@ RECORDS = {
 }
 
 
-def records(root, status=None, result=None, suites=None, lean=None, failure=None, refused=None, remote=None):
-    """A launched run's local dir as a fetch leaves it."""
+def records(root, status=None, result=None, suites=None, lean=None, failure=None, refused=None, remote=None, steps=None,
+            log=None):
+    """A launched run's local dir as a fetch leaves it: ``steps`` its steps.jsonl's records, ``log`` circuit-check's log."""
     d = root / RUN
     d.mkdir(parents=True)
     docs = {"remote.json": {"machine": "node-a", "host": "node-a.test", "port": 22, "phase": "launched",
@@ -288,14 +289,20 @@ def records(root, status=None, result=None, suites=None, lean=None, failure=None
     for name, doc in docs.items():
         if doc is not None:
             (d / name).write_text(json.dumps(doc))
+    if steps is not None:
+        (d / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
+    if log is not None:
+        (d / "circuit-check.log").write_text(log)
     return d
 
 
-def read(tmp_path, name, rec=None):
+def read(tmp_path, name, rec=None, **at):
     cfg, asked = settings(tmp_path), []
     d = records(tmp_path / "runs", **RECORDS[name])
-    got = N.read(RUN, cfg, fetch=lambda run_dir, also=(): asked.append((run_dir, also)) or (rec or {}), root=tmp_path / "runs")
-    assert asked == [(d, ("suites.json", "suites-lean.json"))], "the run's records are fetched, with check's suite reports"
+    got = N.read(RUN, cfg, fetch=lambda run_dir, also=(): asked.append((run_dir, also)) or (rec or {}), root=tmp_path / "runs",
+                 **at)
+    assert asked == [(d, ("suites.json", "suites-lean.json", "steps.jsonl", "circuit-check.log"))], (
+        "the run's records are fetched, with check's suite reports, its steps and circuit-check's log")
     return got
 
 
@@ -307,6 +314,92 @@ def test_a_failed_check_names_each_failed_step_and_suite(tmp_path):
     got = read(tmp_path, "failed")
     assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `tools/research`, "
                          "`verity/protocols/proofs/flock/verifier`. Its result names no cached pass it contradicts.", 95)
+
+
+CREDIT = "tests/protocols/test_credit_gate.py::test_a_period_open_without_draw_k_is_refused"
+GATE = "circuit-check gemm/BAD_SHAPE ops.gemm"
+NOON = utc(12)
+
+
+def allowance(id_, expires="2026-10-21T07:59:00Z"):
+    return N.policy.Allowance(id_, "compute-accounting", expires, "a test a later PR fixes")
+
+
+ALLOWED = N.policy.Policy(allow=(allowance(f"suite verity-vllm::{CREDIT}"), allowance(GATE)))
+#: a check that failed `lean-suites` in one test of `verity-vllm` and circuit-check on one failure, both allowed by `ALLOWED`
+ALLOWED_RED = dict(
+    status={"state": "failed", "rc": 1, "wall_s": 5700},
+    result=result("failed", [("pytest", "passed"), ("lean-suites", "failed"), ("circuit-check", "failed")]),
+    suites=[suite("tools/research", "passed")],
+    lean=[{"suite": "adapters/vllm", "name": "verity-vllm", "status": "failed", "failed_tests": [CREDIT],
+           "beyond_tests": False}],
+    steps=[{"step": "pytest", "status": "passed"}, {"step": "lean-suites", "status": "failed", "log": "lean-suites.log"},
+           {"step": "circuit-check", "status": "failed", "log": "circuit-check.log"}],
+    log="PASS gemm/OK ops.add\nFAIL gemm/BAD_SHAPE ops.gemm{n=4}\n")
+RECORDS["allowed-red"] = ALLOWED_RED
+FAILED_RED = ("failed steps: `lean-suites`, `circuit-check`; failed suites: `adapters/vllm`. Its result names no cached pass "
+              "it contradicts.")
+
+
+def test_a_check_that_failed_only_where_an_unexpired_allowance_covers_it_passes_and_says_what_failed(tmp_path):
+    """An unexpired allowance's failure is no red (AGENTS.md, "Checking and merging"): the night passes, as the verified queue
+    lands such a candidate, and its post names the failures, ringing nobody."""
+    got = read(tmp_path, "allowed-red", pol=ALLOWED, now=NOON)
+    assert got == N.Read("passed", "It failed only where an unexpired allowance of this commit's `tools/check/policy.toml` "
+                         f"covers the failure, which is no red: {FAILED_RED}", 95)
+    night = {"commit": COMMIT, "run": RUN, "outcome": got.outcome, "detail": got.detail, "minutes": got.minutes}
+    assert N.rung(night) == [] and N.text(night, {}) == (
+        f"Nightly check of `main` passed: `{COMMIT[:12]}`, run `{RUN}`, 95 min. {got.detail}")
+
+
+@pytest.mark.parametrize("pol, now, more", [
+    (ALLOWED, utc(8, day=21), ""),                                                        # both allowances expired
+    (N.policy.Policy(allow=ALLOWED.allow[:1]), NOON, ""),                                 # circuit-check's failure has none
+    (N.policy.Policy(allow=(allowance("suite verity-vllm::tests/test_other.py::test_x"), ALLOWED.allow[1])), NOON, ""),
+    ("deadbeef0000 isn't a commit here, so its tools/check/policy.toml can't be read", NOON,
+     " No allowance was read: deadbeef0000 isn't a commit here, so its tools/check/policy.toml can't be read."),
+])
+def test_a_failure_no_live_allowance_covers_still_fails_the_night(tmp_path, pol, now, more):
+    got = read(tmp_path, "allowed-red", pol=pol, now=now)
+    assert got == N.Read("failed", FAILED_RED + more, 95)
+
+
+def test_a_suite_that_failed_beyond_its_allowed_tests_still_fails_the_night(tmp_path):
+    beyond = {**ALLOWED_RED, "lean": [{**ALLOWED_RED["lean"][0], "beyond_tests": True}]}
+    d = records(tmp_path / "runs", **beyond)
+    assert not N.only_allowed(d, ALLOWED, NOON)
+    (d / "suites-lean.json").write_text(json.dumps(ALLOWED_RED["lean"]))
+    assert N.only_allowed(d, ALLOWED, NOON), "the same suite failing only in its allowed test is covered"
+
+
+def test_a_check_that_passed_is_no_allowed_failure(tmp_path):
+    d = records(tmp_path / "runs", **RECORDS["passed"], steps=[{"step": "pytest", "status": "passed"}])
+    assert not N.only_allowed(d, ALLOWED, NOON)
+
+
+def test_a_contradiction_outranks_an_allowance(tmp_path):
+    cfg = settings(tmp_path)
+    got = N.judge({"state": "failed", "rc": 1, "validation": "failed", "result_valid": True},
+                  result("failed", STEPS_RED, cache_contradictions=CONTRADICTS), [], cfg, allowed=True)
+    assert got.outcome == "contradicted"
+
+
+def test_the_pod_judges_a_night_under_its_commits_policy_from_its_clone(tmp_path, monkeypatch):
+    p, _ = pod(tmp_path)
+    p.repo.mkdir(parents=True)
+    git("init", "-q", "-b", "main", cwd=p.repo)
+    (p.repo / "tools" / "check").mkdir(parents=True)
+    (p.repo / "tools" / "check" / "policy.toml").write_text(
+        f'schema = "policy/v0"\n\n[[allow]]\nid = "{GATE}"\nowner = "compute-accounting"\nexpires = "2026-10-21T07:59:00Z"\n'
+        'reason = "a test a later PR fixes"\n')
+    git("add", "-A", cwd=p.repo)
+    subprocess.run(["git", "commit", "-q", "-m", "first"], cwd=p.repo, check=True, capture_output=True)
+    commit, asked = git("rev-parse", "HEAD", cwd=p.repo), []
+    monkeypatch.setattr(N, "read", lambda run, cfg, pol=None, now=None: asked.append((run, pol, now)) or N.Read(None, "running"))
+    p.read(RUN, commit, NOON)
+    p.read(RUN, "deadbeef" * 5, NOON)
+    assert asked == [(RUN, N.policy.Policy(allow=(allowance(GATE),)), NOON),
+                     (RUN, "deadbeefdead isn't a commit here, so its tools/check/policy.toml can't be read", NOON)]
 
 
 def test_a_cached_pass_the_run_contradicts_outranks_the_verdict(tmp_path):
