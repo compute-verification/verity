@@ -87,4 +87,4 @@ includes `sha_noise.cuh` for its own noise. `mgemm.cu` includes `fgemm.cu`, and 
 `mgemm.cu`. Among the references, `eref.py`, `sref.py`, `pvref.py` and `lpref.py` import `mref.py`'s `decode`, `words`
 and `duo_receipts`, and `pvref.py` and `lpref.py` import `sref.py`'s `sigma`, `noise` and `fold`; each runs with this
 directory as its script directory. The Python here starts no process and touches no GPU: only the five job scripts do.
-The tables' test is `benchmarks/pouw/tests/test_masked_gemm_tables.py`.
+The tables' test is `tests/benchmarks/pouw/test_masked_gemm_tables.py`.

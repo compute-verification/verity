@@ -35,13 +35,13 @@ echo "${TREE_FROM:-test-os}" > $O/tree-source.txt
 
 N=${N:-64}; D=$S/stage
 # InnerClaims.lean as an executable beside verity-verify-proof (interpreted it takes about half an hour), cached by its sources
-CSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
+CSHA=$( (echo $LSHA; cat tests/verity/protocols/proofs/flock/prover/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
 CLAIMS_BIN=$L/claims-$CSHA/inner-claims
 (
   export PATH=$HOME/.elan/bin:$PATH
   exec 9>$L/claims.lock; flock 9
   if [ ! -x $CLAIMS_BIN ]; then
-    C=$L/claims-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp verity/protocols/proofs/flock/prover/tests/lean/InnerClaims.lean $C/ \
+    C=$L/claims-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp tests/verity/protocols/proofs/flock/prover/lean/InnerClaims.lean $C/ \
       && printf '\n[[lean_exe]]\nname = "inner-claims"\nroot = "InnerClaims"\n' >> $C/lakefile.toml \
       && (cd $C && lake build inner-claims) && mkdir -p $L/claims-$CSHA && cp $C/.lake/build/bin/inner-claims $CLAIMS_BIN
   fi

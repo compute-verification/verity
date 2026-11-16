@@ -260,11 +260,11 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests", "verity/circuits/kernels"]
+paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_grouped.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_prefill.py"]
@@ -276,11 +276,11 @@ paths = ["benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests", "verity/protocols/resource_accounting/compute/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_served_zk.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests"]
+paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
