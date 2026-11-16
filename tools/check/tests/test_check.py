@@ -2125,13 +2125,22 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == want, (p.stdout, p.stderr)
 
 
+#: a crashed twin launch whose exception was raised from another (`raise X from e`) or while handling one: one header per link
+_CHAINED = ("Traceback (most recent call last):\n  File \"r.py\", line 1, in <module>\nOSError: no route\n\n{join}\n\n"
+            "Traceback (most recent call last):\n  File \"r.py\", line 3, in <module>\nRunnerFailed: exit 1")
+
+
 @pytest.mark.parametrize("lost", ["research run --on vy-nebius-3: refused: the machine can start no run",
                                   "research: run r20261009-050000-cccc refused on vy-nebius-3 (MemoryNotAvailable): busy",
-                                  "Traceback (most recent call last):"])
+                                  "Traceback (most recent call last):",
+                                  _CHAINED.format(join="The above exception was the direct cause of the following exception:"),
+                                  _CHAINED.format(join="During handling of the above exception, another exception occurred:")])
 def test_train_sh_waits_past_a_refused_twin_for_every_other_twins_run_id(tmp_path, lost):
-    """A twin's launch refused on its machine, or crashed, before the other twins' runs launched: train.sh waits on for their run
-    ids, so RUN names every twin that launched. Stopping at the refusal left them out: the queue never followed the one that ran,
-    launched the shard again when the twins it knew exited 75, and left the unnamed twin running when it dropped the candidate."""
+    """A twin's launch refused on its machine, or crashed, before the other twins' runs launched, each a poll after the last:
+    train.sh waits on for their run ids, so RUN names every twin that launched. Stopping at the refusal left them out: the queue
+    never followed the one that ran, launched the shard again when the twins it knew exited 75, and left the unnamed twin running
+    when it dropped the candidate. A chained traceback counts as one lost twin: counted as two, it ended the wait with the last
+    twin's id unread."""
     import os
     import subprocess
 
@@ -2148,20 +2157,22 @@ def test_train_sh_waits_past_a_refused_twin_for_every_other_twins_run_id(tmp_pat
     bin_, slept, done = tmp_path / "bin", tmp_path / "slept", tmp_path / "launched"
     bin_.mkdir()
     logs = f"{tmp_path}/train-*.log"
-    # the launcher: the twins line and the lost twin at once, the two other twins' runs only once train.sh has slept past the loss
+    # the launcher: the twins line and the lost twin at once, then each other twin's run once train.sh has slept past the last line
     (bin_ / "uv").write_text(
         "#!/bin/sh\n" + _POST_STUB.format(posted=tmp_path / "posted")
         + "echo 'check: --on: twins 20261009T050000Z-ab12 on vy-nebius-1, vy-nebius-2, vy-nebius-3: the first to take a check "
           "slot runs'\n"
-        + f"echo '{lost}'\nwhile [ ! -e {slept} ]; do :; done\n"
+        + f"cat <<'EOT'\n{lost}\nEOT\nwhile [ ! -e {slept}.1 ]; do :; done\n"
         + "echo 'research: run r20261009-050001-aaaa launched on vy-nebius-1 (p) pid=1 -> /r'\n"
+        + f"while [ ! -e {slept}.2 ]; do :; done\n"
         + "echo 'research: run r20261009-050002-bbbb launched on vy-nebius-2 (p) pid=2 -> /r'\n"
         + f"touch {done}\n")
-    # waits on the launch, not on a clock: a sleep begun before the loss shows returns once it does, so the next poll reads it
-    marker = lost.split(":")[0] if lost.startswith("Traceback") else "refused"
+    # waits on the launch, not on a clock: a sleep returns once the launcher has printed its next line, so each poll reads one
+    marker = "Traceback" if lost.startswith("Traceback") else "refused"
     (bin_ / "sleep").write_text(
-        f"#!/bin/sh\nif grep -qs '{marker}' {logs}; then touch {slept}; while [ ! -e {done} ]; do :; done\n"
-        f"else while ! grep -qs '{marker}' {logs}; do :; done; fi\n")
+        f"#!/bin/sh\nif ! grep -qs '{marker}' {logs}; then while ! grep -qs '{marker}' {logs}; do :; done\n"
+        f"elif ! grep -qs 'aaaa launched' {logs}; then touch {slept}.1; while ! grep -qs 'aaaa launched' {logs}; do :; done\n"
+        f"else touch {slept}.2; while [ ! -e {done} ]; do :; done; fi\n")
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",

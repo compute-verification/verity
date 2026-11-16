@@ -214,10 +214,12 @@ setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check. A
 # twin whose launch was refused or crashed (`twin_lost`) counts as done, and the wait goes on for the others' run ids: the one
-# that runs may be among them, and a run id missing from RUN is a run the queue neither follows nor cancels with its candidate
+# that runs may be among them, and a run id missing from RUN is a run the queue neither follows nor cancels with its candidate.
+# A chained exception prints one Traceback header per link, joined by `twin_chained`'s lines, so a crash counts once
 # 60 min: the queue launches a check's shards at once, each placing itself and shipping its tree to its machine
 launch_wait_s=3600
 twin_lost='^research run --on [^ ]+: refused: |^research: run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} refused on |^Traceback \(most recent call last\)'
+twin_chained='^(The above exception was the direct cause of the following exception|During handling of the above exception, another exception occurred):$'
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break
@@ -227,7 +229,7 @@ for _ in $(seq $((launch_wait_s / 5))); do
   [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
   if [ -z "$on" ]; then
     grep -qE "refused|Traceback" "$log" && break
-  elif [ $(( $(wc -w <<<"$ids") + $(grep -cE "$twin_lost" "$log" || true) )) -ge "$want" ]; then
+  elif [ $(( $(wc -w <<<"$ids") + $(grep -cE "$twin_lost" "$log" || true) - $(grep -cE "$twin_chained" "$log" || true) )) -ge "$want" ]; then
     break
   fi
   sleep 5
