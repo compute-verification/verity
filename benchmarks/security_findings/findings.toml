@@ -47,7 +47,7 @@ machine left so makes the finding unread."""
 
 [[finding]]
 id = "security-updates-and-kernel"
-statement = "11 of the 15 CPU machines install only a short list of security updates by themselves, and not every CPU machine runs a kernel that still gets fixes."
+statement = "11 of the 16 CPU machines install only a short list of security updates by themselves, and not every CPU machine runs a kernel that still gets fixes."
 check = "updates-and-kernel"
 reads = "machine"
 how = """On each CPU machine of the deploy map (not staged): closed when apt's effective configuration (`apt-config dump`) \
