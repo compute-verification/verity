@@ -14,11 +14,11 @@ premises and the structure's are not the bound's own. The adversary picks its fa
 least `min_A lo_A`. A bound above an attack is a contradiction: one of the bound's premises is false for that
 algorithm, and `contradictions` names it.
 
-The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
+The slowdown is the GPU-hours over the reference training algorithm's at its MFU, `MFU₀` (the scenario's `mfu`),
 at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds
 (`theorem.Slowdown`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
-the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
-beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
+the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the task, wall-clock, is reported
+beside the slowdown: at least the slowdown times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
 A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary free-compute
 yield's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
@@ -141,7 +141,7 @@ class Estimate:
 
     @property
     def slowdown(self) -> float:
-        """The overhead: the hardware multiple over the reference at its MFU."""
+        """The slowdown: the GPU-hours over the reference's at its MFU."""
         return self.parts.value if self.parts else math.nan
 
     @property

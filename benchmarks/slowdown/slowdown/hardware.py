@@ -4,7 +4,7 @@ which bounds the feasible set 𝓕: the inventory's locations, its unregistered 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
 attacks' FLOP-model statements all pass through it, so under `structure.reference` (whose `s_×` moves with it) the
-overhead and the time to the target don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
+slowdown and the time to the task don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
 value comes from (`FLOP_MODEL`, or `boolean:<design>` when measured on one Boolean design); a structure's `s_×` must
 come from the same one (`classes.Structure.check`).
 

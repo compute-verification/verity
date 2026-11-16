@@ -1,7 +1,7 @@
 """The counted share of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
-multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
-"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
+multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow
+ARCHITECTURE.md's Glossary.
 
 counted share <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which
 steps are proved.

@@ -149,7 +149,7 @@ SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck",
 
 @dataclass(frozen=True)
 class Detection:
-    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every unit is proved
+    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every proof block is proved
     (`q = 1`, `χ = θ = 0`). Each field is `tiers.py`'s parameter of the same name (`proof_share` is its `share`)."""
 
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
@@ -210,7 +210,7 @@ class Detection:
 
     def tail(self) -> float:
         """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every unit is proved."""
+        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()

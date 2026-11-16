@@ -1,10 +1,10 @@
-"""Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
-``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
+"""Every number the published statement of the slowdown's claims, model and tiers quotes from ``tiers.py``,
+``exposure.py``, ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the statement is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
 cheating share. The slowdown is the slowdown calculator's at MFU_0, ``slowdown.theorem.multiple_bound`` in Lean's form
 (``Slowdown.Slowdown.remoteSlowdown``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, free compute at MFU_0
 under the reference-efficiency assumption; every scenario is a set of overrides on ``tiers.DEFAULTS``. The slowdown by
-the fit bound (``fit_slowdown``) is the same with the fit bound in place of the closed-form memory cap, which the page's memory rungs cite.
+the fit bound (``fit_slowdown``) is the same with the fit bound in place of the closed-form memory cap, which the statement's memory rungs cite.
 
     python benchmarks/nci/statement.py           # Markdown
     python benchmarks/nci/statement.py --json    # the same numbers, for renderers
@@ -77,7 +77,7 @@ REGIME_TIERS = ("T3", "T5")
 SDC = 2000.0
 LEVELS = (1000.0, 100.0, 10.0, 2.0)
 THRESHOLD_TIERS = ("T1", "T3", "T4", "T5")
-#: parameters the page's "no other parameter" sets aside: the parts of r̂ (the GPUs, the clock, host CPUs and the verdict
+#: parameters the statement's "no other parameter" sets aside: the parts of r̂ (the GPUs, the clock, host CPUs and the verdict
 #: lag J Delta / H), s and g
 TORNADO_SKIP = ("free", "host_share", "clock_share", "lag_s", "identities", "unregistered", "g")
 COSTS = {"today's sparse samples": T.DEFAULTS["overhead"], "512 samples per statement": 1.7e10}
@@ -486,7 +486,7 @@ def bullets(items: list[dict]) -> list[str]:
 
 def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
-    out = ["# The slowdown: the page's numbers", "",
+    out = ["# The slowdown: the statement's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. The slowdown is "
            "`slowdown.theorem.multiple_bound` in Lean's form (`remoteSlowdown`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
            "terms, free compute training at MFU_0 (the reference-efficiency assumption), at MFU_0 = "
