@@ -1,0 +1,68 @@
+# Pearl's "unneeded" element in prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_inert_element_map.toml`
+# renames (GLOSSARY.md, Older names: "debited element", "unneeded" element, now an inert element).
+#
+# Prose only (`scope = "prose"`), and only in the files whose "unneeded" is Pearl's: the word is ordinary English elsewhere.
+# The names (`unneeded_positions`, `forming_elements`) are `inert_work_names_map.toml`'s and are record keys.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = [
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pouw_pearl_c4.py",
+]
+
+[words_in.words]
+"unneeded elements" = "inert elements"
+"unneeded positions" = "inert positions"
+"unneeded" = "inert"
+
+[keep]
+patterns = ["(?<![\\w])cap-\\w|\\w-cap(?![\\w])"]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

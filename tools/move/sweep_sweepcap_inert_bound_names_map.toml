@@ -1,0 +1,95 @@
+# Pearl's "cap" in names that name only the bound: what `tools/move/rename.py --map
+# tools/move/sweep_sweepcap_inert_bound_names_map.toml` renames, each compound name `names.tsv` found to be Pearl's alone
+# (`CAP_ROW_WORDS`, `CAP_CHUNKS`, `_cap_ok`, `_over_the_cap`), whole, as `inert_bound` takes the word in it.
+#
+# Not here: a bare `cap` in code (the share ι by one symbol, the bound by another: `names.tsv`'s ASK lines), a registered
+# Definition's name, a leaf role, a record key and Pearl+'s `over_cap` (its HELD lines), and Lean.
+
+[words]
+"CAP_ROW_WORDS" = "INERT_BOUND_ROW_WORDS"
+"_over_the_cap_by_its_mends" = "_over_the_inert_bound_by_its_mends"
+"CAP_CHUNKS" = "INERT_BOUND_CHUNKS"
+"tile_cap_ok" = "tile_inert_bound_ok"
+"rows_over_row_cap" = "rows_over_row_inert_bound"
+"_cap_ok" = "_inert_bound_ok"
+"census_row_cap" = "census_row_inert_bound"
+"Cap1000_" = "inert_bound1000_"
+"rows_old_cap" = "rows_old_inert_bound"
+"over_cap_tiles" = "over_inert_bound_tiles"
+"Cap1000" = "InertBound1000"
+"rejected_at_scheme_cap" = "rejected_at_scheme_inert_bound"
+"worst_word_share_tile_cap_ok" = "worst_word_share_tile_inert_bound_ok"
+"tile_cap" = "tile_inert_bound"
+"row_cap" = "row_inert_bound"
+"test_dead_pairs_are_over_the_cap" = "test_dead_pairs_are_over_the_inert_bound"
+"test_raised_adder_groups_are_over_the_cap" = "test_raised_adder_groups_are_over_the_inert_bound"
+"test_planted_cross_group_skips_are_over_the_cap" = "test_planted_cross_group_skips_are_over_the_inert_bound"
+"test_live_raisers_are_over_the_cap" = "test_live_raisers_are_over_the_inert_bound"
+"test_sub_rule_raisers_are_over_the_cap" = "test_sub_rule_raisers_are_over_the_inert_bound"
+"test_live_raisers_at_the_deepest_shape_are_over_the_cap" = "test_live_raisers_at_the_deepest_shape_are_over_the_inert_bound"
+"test_sub_rule_raisers_at_the_deepest_shape_are_over_the_cap" = "test_sub_rule_raisers_at_the_deepest_shape_are_over_the_inert_bound"
+"test_dead_pairs_at_the_deepest_shape_are_over_the_cap" = "test_dead_pairs_at_the_deepest_shape_are_over_the_inert_bound"
+"test_raised_adder_groups_at_the_deepest_shape_are_over_the_cap" = "test_raised_adder_groups_at_the_deepest_shape_are_over_the_inert_bound"
+"test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_cap" = "test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_inert_bound"
+"test_v_ex_past_its_count_cap_fails_the_audit" = "test_v_ex_past_its_count_inert_bound_fails_the_audit"
+"test_the_h0_caps_are_one_400th" = "test_the_h0_inert_bound_are_one_400th"
+
+[keep]
+patterns = [
+    '''(?<![\w-])(?:pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400|pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096|pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192|pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192|pearlCGammaSm120v2LoopCast8p72Cap1000_8192|pearlCGammaSm120v1Cast8p72Rev1Cap_8192|pearlCGammaUOnlySm120v2Cap1000_8192|pearlCGammaSm120v2LoopCap1000_8192|pearlCGammaSm120v2Cap1000_8192|PEARLPLUS_OVER_CAP|Pc8CapRowDigestDef|Pc8CapRowDigest_v1|unneeded_positions|Pc8CapRowTallyDef|Pc8CapRowTally_v1|Pc8CapWordUnitDef|Pc8CapWordUnit_v1|Pc8CapTallyDefV2|Pc8CheckCapDefV2|words_cap_chunks|POUW_CAP_CHUNKS|Pc8CallCapDefV2|Pc8CapRowDigest|Pc8TileCapDefV2|words_cap_flags|POUW_CAP_FLAGS|Pc8CapRowTally|Pc8CapTallyDef|Pc8CapTally_v1|Pc8CapWordUnit|Pc8CheckCapDef|over_cap_draws|words_cap_rows|words_cap_sums|words_cap_word|POUW_CAP_ROWS|POUW_CAP_SUMS|POUW_CAP_WORD|Pc8CallCapDef|Pc8CapTileDef|Pc8CapTile_v1|Pc8CapWordDef|Pc8CapWord_v1|Pc8TileCapDef|Pc8TileCap_v1|Pc8TileCap_v2|debit_bounds|ALLOWED_CAP|Pc8CapTally|Pc8CheckCap|debit_flags|Pc8CallCap|Pc8CapTile|Pc8CapWord|Pc8TileCap|cap\-chunks|cap\-rows\-x|debit_sm90|cap\-flags|chain\-cap|debit_fwd|cap\-rows|cap\-sums|cap\-word|over\-cap|over_cap)(?![\w])''',
+    '''(?<!\.D, )["'](?:pouw_pearl_c_served_debit/per-input|cross_group_beyond_debit_mean_worst|cross_group_beyond_debit_mean|cross_group_beyond_debit_max|worst_word_share_tile_cap_ok|debit_share_of_credit|debit_max_word_share|rejected_at_scheme_cap|pouw_pearl_c_served_debit|unneeded_positions|max_debit_over_cap|rows_over_row_cap|forming_elements|debit_atom_share|debit_eF_share|census_row_cap|debit_over_cap|over_cap_tiles|tile_cap_ok|debit_exact|debit_share)["']''',
+    '''["'](?:tile_cap|row_cap)["'](?=: str\()''',
+    '''max_debit_over_cap=''',
+    '''(?<!cap\.)Pc8\w*Cap\w*''',
+    '''pearlCGamma\w*''',
+    '''…Cap1000_…|Cap1000\(\?=_\)''',
+    '''(?<!\w)(?:PEARLPLUS_OVER_CAP|test_cap_is_the_largest_power_of_two_a_statement_holds|test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not|coinPasses_overCap|capCheck_of_check)(?!\w)''',
+    '''(?m)^\| Pearl's "debit" and "cap".*$''',
+    '''["']debit["']''',
+    '''["']caps?["']''',
+]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

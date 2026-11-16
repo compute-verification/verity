@@ -1,0 +1,64 @@
+# Pearl's "debit" in prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_inert_work_map.toml` renames, the
+# older name "debit" where a comment, a docstring or Markdown's text says it (GLOSSARY.md, Older names: "debit", now inert
+# work).
+#
+# Prose only (`scope = "prose"`): never code, a string, backticks or a data file, so no key, no kernel name and no Lean name
+# moves. "debit" and "debits" are "inert work" and take no plural; "debited", a verb, stays for a hand edit.
+
+scope = "prose"
+
+[words]
+"a debit" = "inert work"
+"A debit" = "Inert work"
+"debits" = "inert work"
+"Debits" = "Inert work"
+"debit" = "inert work"
+"Debit" = "Inert work"
+
+[keep]
+patterns = ["(?<![\\w])cap-\\w|\\w-cap(?![\\w])"]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

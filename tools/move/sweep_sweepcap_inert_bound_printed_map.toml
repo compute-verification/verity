@@ -1,0 +1,65 @@
+# Pearl's "cap" in printed text: what `tools/move/rename.py --map tools/move/sweep_sweepcap_inert_bound_printed_map.toml`
+# renames, the phrases ("its cap", "the row cap") that a message, a comment or a doc says with a word before "cap", in a
+# file whose every "cap" is Pearl's, which no prose map reaches inside a string.
+#
+# Each entry is a phrase of two words, so it never stands in a name, and it is here only if every place the phrase stands in
+# the file is a string, a comment or a doc, no share ("cap 1/400") follows it anywhere, and neither a Lean string literal
+# nor a data file holds it. A cap written as a share stays (a prose and printed share is `inert_share`'s).
+
+[words]
+"count caps" = "count inert-work bounds"
+"hidden cap" = "hidden inert-work bound"
+"tile's cap" = "tile's inert-work bound"
+"also caps" = "also inert-work bounds"
+"chain cap" = "chain inert-work bound"
+"row's cap" = "row's inert-work bound"
+"split cap" = "split inert-work bound"
+"tile caps" = "tile inert-work bounds"
+"tile cap" = "tile inert-work bound"
+"two caps" = "two inert-work bounds"
+"TN cap" = "TN inert-work bound"
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

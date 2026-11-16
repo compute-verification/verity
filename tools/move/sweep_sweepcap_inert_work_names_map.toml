@@ -1,0 +1,79 @@
+# Pearl's "debit" in names and printed text: what `tools/move/rename.py --map tools/move/sweep_sweepcap_inert_work_names_map.toml`
+# renames, `debit` as a name or one part of one (`inert_work`, `InertWork`, `INERT_WORK`), the part of the retired term that
+# `inert_work_names_map.toml` and the prose map left (a local, a parameter, an attribute, a message). It takes no plural.
+#
+# Kept ([keep]): the names `inert_work_names_map.toml` kept, each spelling the classification found read as stored data, a
+# Lean name or a registered name (`names.tsv`'s HELD, LEAN and ASK lines), and the quoted key `"debit"` that
+# `pearl_c4.json`'s committed vectors carry. The kernel sources' names stay where they are ([keep_paths]). Lean is the Lean
+# names pass's.
+
+[words]
+"debits" = "inert_work"
+"Debits" = "InertWork"
+"debit" = "inert_work"
+"Debit" = "InertWork"
+"DEBIT" = "INERT_WORK"
+
+[keep]
+patterns = [
+    '''(?<![\w-])(?:pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192_of_cap400|pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096|pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192|pearlCGammaSm120v1Cast8p72Rev1Cap1000_8192|pearlCGammaSm120v2LoopCast8p72Cap1000_8192|pearlCGammaSm120v1Cast8p72Rev1Cap_8192|pearlCGammaUOnlySm120v2Cap1000_8192|pearlCGammaSm120v2LoopCap1000_8192|pearlCGammaSm120v2Cap1000_8192|PEARLPLUS_OVER_CAP|Pc8CapRowDigestDef|Pc8CapRowDigest_v1|unneeded_positions|Pc8CapRowTallyDef|Pc8CapRowTally_v1|Pc8CapWordUnitDef|Pc8CapWordUnit_v1|Pc8CapTallyDefV2|Pc8CheckCapDefV2|words_cap_chunks|POUW_CAP_CHUNKS|Pc8CallCapDefV2|Pc8CapRowDigest|Pc8TileCapDefV2|words_cap_flags|POUW_CAP_FLAGS|Pc8CapRowTally|Pc8CapTallyDef|Pc8CapTally_v1|Pc8CapWordUnit|Pc8CheckCapDef|over_cap_draws|words_cap_rows|words_cap_sums|words_cap_word|POUW_CAP_ROWS|POUW_CAP_SUMS|POUW_CAP_WORD|Pc8CallCapDef|Pc8CapTileDef|Pc8CapTile_v1|Pc8CapWordDef|Pc8CapWord_v1|Pc8TileCapDef|Pc8TileCap_v1|Pc8TileCap_v2|debit_bounds|ALLOWED_CAP|Pc8CapTally|Pc8CheckCap|debit_flags|Pc8CallCap|Pc8CapTile|Pc8CapWord|Pc8TileCap|cap\-chunks|cap\-rows\-x|debit_sm90|cap\-flags|chain\-cap|debit_fwd|cap\-rows|cap\-sums|cap\-word|over\-cap|over_cap)(?![\w])''',
+    '''(?<!\.D, )["'](?:pouw_pearl_c_served_debit/per-input|cross_group_beyond_debit_mean_worst|cross_group_beyond_debit_mean|cross_group_beyond_debit_max|worst_word_share_tile_cap_ok|debit_share_of_credit|debit_max_word_share|rejected_at_scheme_cap|pouw_pearl_c_served_debit|unneeded_positions|max_debit_over_cap|rows_over_row_cap|forming_elements|debit_atom_share|debit_eF_share|census_row_cap|debit_over_cap|over_cap_tiles|tile_cap_ok|debit_exact|debit_share)["']''',
+    '''["'](?:tile_cap|row_cap)["'](?=: str\()''',
+    '''max_debit_over_cap=''',
+    '''(?<!cap\.)Pc8\w*Cap\w*''',
+    '''pearlCGamma\w*''',
+    '''…Cap1000_…|Cap1000\(\?=_\)''',
+    '''(?<!\w)(?:PEARLPLUS_OVER_CAP|test_cap_is_the_largest_power_of_two_a_statement_holds|test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not|coinPasses_overCap|capCheck_of_check)(?!\w)''',
+    '''(?m)^\| Pearl's "debit" and "cap".*$''',
+    '''["']debit["']''',
+    '''["']caps?["']''',
+]
+
+[keep_paths]
+"**/debit_sm90.cu" = ["debit"]
+"benchmarks/pouw/pearl_c_sm90/debit.py" = ["debit"]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

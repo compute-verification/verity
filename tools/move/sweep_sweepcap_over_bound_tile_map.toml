@@ -1,0 +1,65 @@
+# Pearl's "over-cap" tile in prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_over_bound_tile_map.toml`
+# renames, "over-cap tile" where a comment, a docstring or Markdown's text says it (GLOSSARY.md, Older names: an "over-cap"
+# tile, now a tile over the inert-work bound).
+#
+# Prose only (`scope = "prose"`): no name, string, backticks or data file. Only "over-cap tiles" and "over-cap tile" move.
+# "over-cap rule" is Pearl+'s verdict rule, the name of its `--over-cap` flag and of `over_cap`, the key its Lean verifier
+# and the stored verdicts share, so it stays.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = [
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
+]
+
+[words_in.words]
+"over-cap tiles" = "tiles over the inert-work bound"
+"over-cap tile" = "tile over the inert-work bound"
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

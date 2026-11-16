@@ -1,0 +1,104 @@
+# Pearl's "cap" in prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_inert_bound_map.toml` renames, the
+# older name "cap" where a comment, a docstring or Markdown's text of a file whose every prose "cap" is Pearl's says it
+# (GLOSSARY.md, Older names: "cap", "cap check", now the inert-work bound). It runs after the share map and the "debit" map,
+# so "debit cap" and "inert work cap" are this bound.
+#
+# Prose only (`scope = "prose"`), and only in the files listed: "cap" is a request's token limit, a session's tile count,
+# a Merkle cap and more elsewhere (the lint's `OWN_CAPS`). A file that mixes Pearl's cap with another sense is not here; the
+# note lists it. A hyphenated "cap" (`cap-word`, `over-cap`, `chain-cap`) stays: a leaf role, Pearl+'s rule and a reading's
+# name.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = [
+    ".agents/skills/team/SKILL.md",
+    "benchmarks/one_stage/README.md",
+    "benchmarks/one_stage/served_shares.py",
+    "benchmarks/pouw/harness/price_twins.py",
+    "benchmarks/pouw/pearl_c_sm90/h200.sh",
+    "benchmarks/pouw/pearl_c_vllm/h3_screen.py",
+    "benchmarks/pouw/pearl_c_vllm/served_inert_work.py",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
+    "benchmarks/pouw/pearl_c_vllm/volunteer_pass.py",
+    "benchmarks/pouw/pearlc_k256_gate.py",
+    "benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py",
+    "benchmarks/pouw/tests/test_ledger.py",
+    "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py",
+    "benchmarks/pouw/tests/test_pearl_c_vllm.py",
+    "benchmarks/pouw/tests/test_price_twins_accounting.py",
+    "tests/conftest.py",
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.circuit-check.py",
+    "verity/protocols/accounting/pouw/prover/circuit/pc8.circuit-check.py",
+    "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.py",
+    "verity/protocols/accounting/pouw/prover/circuit/pearl_plus_tile.circuit-check.py",
+    "verity/protocols/accounting/pouw/verifier/tests/pouw_rows_vectors.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_boolean.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_inert_bound_lean.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_inert_work.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
+    "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_work.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pouw_pearl_c4.py",
+]
+
+[words_in.words]
+"a cap" = "an inert-work bound"
+"A cap" = "An inert-work bound"
+"debit cap" = "inert-work bound"
+"inert work cap" = "inert-work bound"
+"cap check" = "inert-work bound check"
+"caps" = "inert-work bounds"
+"Caps" = "Inert-work bounds"
+"cap" = "inert-work bound"
+"Cap" = "Inert-work bound"
+
+[keep]
+patterns = ["(?<![\\w])cap-\\w|\\w-cap(?![\\w])"]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]
