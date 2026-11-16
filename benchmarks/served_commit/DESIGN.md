@@ -9,7 +9,7 @@ What someone working on these arms needs beyond the [README](README.md) and each
   root (declared warm-ups, named in the verdict).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
-  kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs. `tests/test_served_arm.py` tests both over
+  kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs. `tests/benchmarks/served_commit/test_served_arm.py` tests both over
   stand-ins for the arms they build on.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
