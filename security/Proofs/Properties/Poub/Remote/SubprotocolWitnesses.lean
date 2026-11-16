@@ -843,26 +843,27 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
   · exact absurd hq (by decide)
   · exact ratio_EPS_ne_zero he.symm
 
-theorem publishedEps_acceptAll (reg : Poub.Registration) :
+theorem publishedEps_acceptAll :
     ∀ (params : Poub.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ)
       (events : Array Poub.Session.Event),
       ¬ (((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = ⟨0, 1⟩ ∧ (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).qBytes = 0) ∨
         ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public).eps = Poub.Protocol.ratio Poub.Protocol.EPS ∧
-          constantTerms params g reg appendCoins.size (Poub.Protocol.DELTA : ℝ) ≤ (Poub.Protocol.EPS : ℝ))) := by
+          constantTerms params g Toy.reg appendCoins.size (Poub.Protocol.DELTA : ℝ) ≤ (Poub.Protocol.EPS : ℝ))) := by
   intro _ _ _ _ _ _ hd
   rcases hd with ⟨-, hq⟩ | ⟨he, -⟩
   · exact absurd hq (by decide)
   · exact ratio_EPS_ne_zero he.symm
 
-theorem acceptIsVerified_acceptAll (reg : Poub.Registration) :
+theorem acceptIsVerified_acceptAll :
     ∀ (params : Poub.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ)
       (events : Array Poub.Session.Event) (rs : Array Poub.Session.Result) (s : Poub.Session.State)
       (sm : Poub.Session.Summary),
-      (⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public) ≠ (Poub.Protocol.certify params g reg appendCoins.size sm).1 := by
+      ¬ ((⟨⟨0, 1⟩, 1⟩ : Poub.Protocol.Public) = (Poub.Protocol.certify params g Toy.reg appendCoins.size sm).1) := by
   intro params g _ appendCoins _ _ _ _ sm h
-  have hc : (Poub.Protocol.certify params g reg appendCoins.size sm).1.eps = Poub.Protocol.ratio Poub.Protocol.EPS ∨
-      (Poub.Protocol.certify params g reg appendCoins.size sm).1.qBytes = 0 := by
-    cases hr : Poub.Protocol.refusal params g reg appendCoins.size with
+  have hc : (Poub.Protocol.certify params g Toy.reg appendCoins.size sm).1.eps =
+        Poub.Protocol.ratio Poub.Protocol.EPS ∨
+      (Poub.Protocol.certify params g Toy.reg appendCoins.size sm).1.qBytes = 0 := by
+    cases hr : Poub.Protocol.refusal params g Toy.reg appendCoins.size with
     | some why => exact .inr (by simp [Poub.Protocol.certify, hr])
     | none =>
       simp only [Poub.Protocol.certify, hr]
