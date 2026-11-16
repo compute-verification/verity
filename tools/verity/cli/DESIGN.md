@@ -7,7 +7,7 @@ What `verity run` runs for the onsite demo, and how its two commands of record a
 `demos/onsite_full.toml` is one configuration (`verity/config/v0`, `verity.config`) of onsite's seven
 subprotocols on the `served-window` workload: one execution phase of Llama-3.2-1B in int8 served through the vLLM adapter's
 committing endpoint. `verity run` executes it, reading `verity_cli/served_table.py`. The file is
-`served_table.configuration` rendered by `verity.config.render`, and `tests/test_onsite_served.py` holds it to that byte for
+`served_table.configuration` rendered by `verity.config.render`, and `tests/tools/verity/cli/test_onsite_served.py` holds it to that byte for
 byte, as it does each other demo file. It names no host and no address: those are the bindings' (`--bindings`, `verity_cli.run`'s
 docstring), so binding another host changes no hash. It pins the memory attester's two keys, one for PoUS's runs
 and one for the wipe's (`[[pin]]`, their only statement: `served_table.configuration` reads them from this file, and each

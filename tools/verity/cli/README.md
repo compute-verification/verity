@@ -7,7 +7,7 @@ it, such as the check, a benchmark's runner, Flock's Lean verifier or a configur
 
 ~~~sh
 uv run verity --help
-uv run verity demo onsite_full --dry-run
+uv run verity run demos/onsite_full.toml --dry-run
 ~~~
 
 The first prints every subcommand with a line each. The second resolves the onsite demo's eight parties and the
