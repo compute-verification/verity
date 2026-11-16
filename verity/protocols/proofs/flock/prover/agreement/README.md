@@ -1,12 +1,21 @@
 # Flock verifier: runners and cross-checks
 
-Flock's verifier is the Lean package in `verity/protocols/proofs/flock/verifier/` (`flock_verifier`, Lean 4, nothing fetched: it
-requires only the tree's three base packages, `verity/circuits/base/`, `verity/circuits/lean/` and
-`verity/commitments/lean/`, by path; toolchain pinned in its
-`lean-toolchain`). Its definitions are the specification, and its docstrings say
-what each check is. This directory holds what runs it and what holds it to other implementations: the agreement job
-against upstream's Rust verifier, the agreement scripts for single parts, the mutant and fuzz generators, and the vectors.
-Upstream's Rust verifier is a cross-check, never a verifier.
+Flock's verifier is written in Lean, in [`verity/protocols/proofs/flock/verifier/`](../../verifier/README.md), and its
+definitions are the specification. Upstream Flock has a verifier of its own, in Rust. This directory holds the Lean
+verifier to it: the agreement job runs both on the same sessions (honest ones, proof mutants, fuzz cases and
+forgeries) and fails on any session where they disagree, except where the Lean verifier is deliberately stricter.
+Upstream's Rust verifier is a cross-check, never a verifier. A disagreement is resolved against the paper and the Lean,
+never by copying upstream.
+
+The directory also holds a script for each Lean part that holds it to its Python or Rust counterpart, and the vectors.
+And this README is the verifier's outline: where each part of the Flock paper is in the Lean, what its guarantees rest
+on, what each command of `verity verify proof` takes, and every place the verifier is stricter than upstream (D1 to D22)
+or follows upstream where the paper is silent (A1 to A16). Lean docstrings cite those two tables by id, so they stay
+here.
+
+The agreement job is `check`'s `lean-agreement` step. It needs upstream's binaries and its inputs from the evidence
+store, so it runs on a pod: its command is under Agreement with upstream, below. To build the Lean verifier and run it
+yourself, see [its README](../../verifier/README.md).
 
 The verifier replays a recorded session offline, on the CPU, in interactive mode only: every coin comes from the
 verifier's live session record, and the transcript never hashes to derive a challenge. Fiat–Shamir, the union prover,
