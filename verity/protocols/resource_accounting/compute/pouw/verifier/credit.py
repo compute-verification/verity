@@ -819,12 +819,12 @@ def no_template(k: int) -> str:
             "R × C and in the same form at every K")
 
 
-def _chunks(k: int) -> int | None:
-    """`weights.chunks` of `k`, or None for a K it refuses."""
+def _chunks(k: int) -> int | str:
+    """`weights.chunks` of `k`, or why it refuses that K."""
     try:
         return chunks(k)
-    except ValueError:
-        return None
+    except ValueError as e:
+        return str(e)
 
 
 def tile_k(k: int) -> str:
@@ -853,7 +853,7 @@ def _tile(dj: Any, tid: str, k: int) -> tuple[int, int, bool] | None:
             and [p[0] for p in ps] in ([f"a_k{k}", f"b_k{k}", *SHARED], [f"a_k{k}", f"b_k{k}", *SHARED_J10R])):
         return None
     rows, n = [p[1] for p in ps[:2]], _chunks(k)
-    if n is None or not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1
+    if type(n) is not int or not all(type(t) is list and len(t) == 3 and t[0] == "Array" and _nat(t[1]) and t[1] >= 1
                             and t[1] % n == 0 and _bits(t[2]) == 8 * (k // n) + 32 for t in rows):
         return None
     return rows[0][1] // n, rows[1][1] // n, len(ps) == 2 + len(SHARED_J10R)
@@ -1309,11 +1309,10 @@ def established(layout: dict, credited_calls: list[int], served: list[int], k: i
     sampling design's sample of K misses a set of work εC with probability at most (1 − εC/W)^K, each stratum sampling K·W_s/W of its
     units rounded up. Its cap is K >= W, where every stratum is sampled whole; never the unit count n, since a sample of
     K = n samples a stratum of little work only in part."""
-    try:
-        return Wd.eps_at(k, DELTA, credited_work(layout, credited_calls, served),
-                         sum(size * work for size, work in call_work(layout)), 1)
-    except ValueError:
+    c, w = credited_work(layout, credited_calls, served), sum(size * work for size, work in call_work(layout))
+    if not (type(k) is int and 0 < c <= w and k >= Wd.k_prime(Fraction(1), DELTA, c, w, 1)):
         return None
+    return Wd.eps_at(k, DELTA, c, w, 1)
 
 
 def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[dict], k: Any
@@ -3608,7 +3607,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     rows: dict[int, int] = {}
     for _name, k, n in layout["linears"]:
         rows[k] = rows.get(k, 0) + n
-    if bad := sorted(k for k in rows if _chunks(k) is None):
+    if bad := sorted(k for k in rows if type(_chunks(k)) is not int):
         return None, ("layout", f"the window's K = {bad} have no chunks (weights.chunks: K <= {CHUNK_MAX}, or K/n a "
                                 f"multiple of {CHUNK_ALIGN} codes for some n >= K/{CHUNK_MAX}), so no row of them is leaves")
     names = {f"{prefix}b/{k}": k for k in rows}
