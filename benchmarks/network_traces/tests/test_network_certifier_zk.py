@@ -23,11 +23,11 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
-from verity.protocols.accounting.certifier.verifier.network_certifier import END
-from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
-from verity.protocols.accounting.certifier.prover import network_certifier_zk as wz
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
+from verity.protocols.resource_accounting.network.verifier.network_certifier import END
+from verity.protocols.resource_accounting.network.attester.tests import relay_runs as tws
+from verity.protocols.resource_accounting.network.prover import network_certifier_zk as wz
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()

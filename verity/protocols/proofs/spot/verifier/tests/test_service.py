@@ -14,7 +14,7 @@ import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.proofs.spot.device import challenger as C, coins as T
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 

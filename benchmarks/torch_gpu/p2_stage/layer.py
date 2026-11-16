@@ -5,7 +5,7 @@
                     [--encode-budget S] [--encode-blocks N] [--m 4096,16384]
 
 - `LAYOUT` is the store's layout, p2_v1's fixture (`p2_store/store.py layout`'s JSON), read by
-  `layout.store_layout`. `M` is the weights stream's manifest (`verity.protocols.accounting.pous.prover.served_weights manifest`; with `--digests`,
+  `layout.store_layout`. `M` is the weights stream's manifest (`verity.protocols.resource_accounting.memory.pous.prover.served_weights manifest`; with `--digests`,
   each tensor's SHA-256, which every loaded tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
@@ -50,7 +50,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import int_mm as IM
 
@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_store/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity.protocols.accounting.pous.prover.served_weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="verity.protocols.resource_accounting.memory.pous.prover.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     store = ap.add_mutually_exclusive_group(required=True)
