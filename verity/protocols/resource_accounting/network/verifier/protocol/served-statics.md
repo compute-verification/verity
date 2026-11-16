@@ -1,20 +1,20 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The served rows held to their Programs (`verity_vllm.compiler.served_statics`)
 
-The compile slice reads a window's served rows as a committed hidden row, ``srv``, and the verifier holds its b‖c to the
+The compile slice reads an execution phase's served rows as a committed hidden row, ``srv``, and the verifier holds its b‖c to the
 served-rows registration natively. What binds those rows to the batch the server ran is a tie. The routed tie
 (`verity_vllm.compiler.served_tie.ServedRowsTie_v2`) holds them to the Commit's committed positions. Each of its proof
-blocks hashes the window's whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class,
+blocks hashes the execution phase's whole ``srv`` row and each step's positions in-circuit, about 400 KB at the served class,
 which no Flock proof block of 2^27 holds. `ServedStaticsTie_v1{R, G, IW, L, T}` holds them to the Programs' statics
 instead, and reads its block's rows through the Lean verifier's registered reads, so its proof block hashes only those
 rows.
 
-**The rows registered.** `verity_vllm.compiler.served_rows.register(..., G=G)` commits each block of G steps of window w
+**The rows registered.** `verity_vllm.compiler.served_rows.register(..., G=G)` commits each block of G steps of execution phase w
 (j = 0 … P / G − 1) as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree, under the
-run root's binding. G is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's
+run root's binding. G is public and in the record (`Served.record`'s ``G``). At G = P an execution phase is one row, the slice's
 ``srv``. At G < P the slice is `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1{…, G}`, whose ``srv0`` …
-``srv{P/G − 1}`` are the window's blocks: proof block w's row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and
+``srv{P/G − 1}`` are the execution phase's blocks: proof block w's row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and
 step u is checked against row u // G. Its ANDs are the G = P proof block's: at 8eb1's engine class, G = 2 gives 27 rows
 and 1,021,302 ANDs, as at G = 54 = P.
 
@@ -35,11 +35,11 @@ sample.
 **Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vLLM's
 eager path a Program's RoPE positions are static structure (`RotaryEmbeddingRule` refuses computed ones), so no eager
 Program reads a committed position. The compiled path's RoPE reads ``c00.input/positions``, a committed value
-(`verity_vllm.program.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
+(`verity_vllm.program.predict.compiled`). For a compiled-path execution phase the committed positions are what the compute read, and the
 routed tie holds the served rows to them.
 
-**Idle blocks are proved.** Every block of every window is a proof block, under `Selection` All, the idle blocks too. A
-step past the window's executed count is idle by public structure, and its Programs' statics are zero. But the compile
+**Idle blocks are proved.** Every block of every execution phase is a proof block, under `Selection` All, the idle blocks too. A
+step past the execution phase's executed count is idle by public structure, and its Programs' statics are zero. But the compile
 slice reads every step's served rows, and only the tie shows an idle block's rows zero. A block left untied would make
 its rows the prover's word.
 
@@ -55,7 +55,7 @@ so its two rows, G·R·(3 + IW + 2·(LW + TW)) bits, set its Flock block
 | the served class | 64 | 540,670 | 27 |
 | the served class | 128 | 1,081,342 | 28 |
 
-So a served-class proof block fits 2^27 up to G = 64, four proof blocks a window.
+So a served-class proof block fits 2^27 up to G = 64, four proof blocks an execution phase.
 
 **Open.**
 - vLLM's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.

@@ -45,8 +45,8 @@ are built again without them in the same tick.
                                                    the gate's fix; a warn gate's failure is printed as a warning and refuses
                                                    nothing), or, merged onto it in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   test_repository.py, tools/research/tests/test_pythonpath.py, a lint its
-                                                   change reaches (tests/test_no_wall_clock.py, adapters/vllm/tests/lint),
+                                                   test_repository.py, tests/tools/research/test_pythonpath.py, a lint its
+                                                   change reaches (tests/test_no_wall_clock.py, tests/adapters/vllm/tests/lint),
                                                    or `pytest --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
@@ -3234,7 +3234,7 @@ _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/s
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
                   "verity/commitments/indexed.py", "verity/commitments/layout.py", "verity/commitments/limits.py",
-                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
+                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "tests/verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",
                   "verity/circuits/private_circuits/", "benchmarks/numerical/python/")
@@ -4900,7 +4900,7 @@ def _depth(crossed: list[dict], c: dict) -> int:
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
 #: `check`'s preflight-lints on test_repository.py (a report-genre name)
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tests/tools/research/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -4922,7 +4922,7 @@ def reaches(paths: Iterable[str], reach: Iterable[str]) -> bool:
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
 #: and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("tests/adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run on
 #: the base, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
 #: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.

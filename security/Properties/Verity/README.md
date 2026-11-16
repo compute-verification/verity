@@ -35,10 +35,10 @@ by name, which are the target of every subprotocol its list names, `SoundnessOf`
 policy's claim is on the case as sent, of which its target is proved (`Vocab.inferenceOnlySound`); these are what that
 leaves unsaid of the committed files, each stated and not proved:
 
-- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed units are held to. On an
-  accepted play, at most a `2ε` share of the committed units are unbound or read a row that is not the row the wiring
+- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed proof blocks are held to. On an
+  accepted play, at most a `2ε` share of the committed proof blocks are unbound or read a row that is not the row the wiring
   gives them, but for twice SPOT's error.
-- `GateARow`: every unit of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
+- `GateARow`: every proof block of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
   block, counts the gates PoUW's claim counts.
 
 No clause of the conclusion reads either: the conclusion's clause for the policy is still on the case as sent.
@@ -90,7 +90,7 @@ In this order:
    positions, the coin families, the fixed extractor, each subprotocol's fixed collision finders and LMS forger, the gates
    computed, the world, and the published certificates, `δ`s, `ε_forge` and losses.
 4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (SPOT's on the extractor's
-   transcript, the five period claims as `ResourceAccounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
+   trace, the five period claims as `ResourceAccounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
    case in the play's messages (`PolicyCase`), the Program its check judges and no field of `Vocab`, the wipe's as
    `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a` accepting its own case inside the composite's acceptance;
    `Vocab.error` is `δ + ε_forge + loss` where the finders and forger meet their premises, `⊤` elsewhere.
@@ -137,7 +137,7 @@ of assumption enter beside them, by their lock names:
   over `2^256` (`Vocab.crBound`, `Vocab.finder_calls`), and where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
   `ecr/sha-512` gives at their own budgets (`Vocab.finderCR`), and a second file with a registered digest enters the
   same way (`Vocab.fileFinder`, `Vocab.publicFinder`).
-- **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,
+- **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512-n64`,
   `security/Definitions/Hash/Assumptions.lean`; `security/Properties/lean-audit.json`). It is asked only of each
   subprotocol's fixed forger at the compiled LMS verifier (`Verity.lmsVerify`, `Vocab.Unforgeable`) and adds
   `ε_forge(t, Q)` to the error. A log a subprotocol's check reads that isn't the device's whole log is such a forgery,

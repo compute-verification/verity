@@ -12,7 +12,7 @@ Definition before anything is timed; nothing here changes a committed format, an
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
 | `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
 
-Each directory is also a test suite, run on the CPU from the tree's root:
+Each directory but `moe_align` is also a test suite, run on the CPU from the tree's root:
 
 ```bash
 uv sync --all-packages --extra torch-cpu
@@ -49,6 +49,6 @@ word to another directory.
 | `ship.sh` | sourced: the ship's toolkit, cubin flags and layout | `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` |
 | `job_nvcc.sh` | run as a script: nvcc for a library a job builds off the card | `benchmarks/hash/dither/job.sh` |
 | `numabind/numabind.py` | run as a script, from the tree or from a copy sent with a job | `benchmarks/hash/dither/sbench.sh`; `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
-| `s8_linear/sass_gate.py` | loaded by file, which fixes its path, nothing more | `benchmarks/pouw/tests/test_mma_gate.py` (declared in `benchmarks/pouw/pyproject.toml`) |
+| `s8_linear/sass_gate.py` | loaded by file, which fixes its path, nothing more | `tests/benchmarks/pouw/test_mma_gate.py` (declared in `tests/benchmarks/pouw/pyproject.toml`) |
 | `exactlin/kbench.py` | `timed`, `copies_for`, `nvml`, `ITEM_MS` | `benchmarks/kernels/s8_linear` |
 | `exactlin/kgate.py` | `MODELS` | `benchmarks/kernels/s8_linear` |

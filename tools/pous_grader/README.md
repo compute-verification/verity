@@ -114,7 +114,7 @@ Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is c
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
 `ObligationWide320` is stated at uniform indices. The 320-read certificate (`p2.wide320_certificate`, and
-`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `2^-127` for the memory challenger's SHA-512 indices, assuming
+`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `2^-127` for the memory attester's SHA-512 indices, assuming
 `ε_prf ≤ 2^-127` under `prf/sha-512`: `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model
 fixes.
 
@@ -146,7 +146,7 @@ then review the records' diff).
 files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
-starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_trusted.py` names it):
+starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_trusted.py` names it):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \

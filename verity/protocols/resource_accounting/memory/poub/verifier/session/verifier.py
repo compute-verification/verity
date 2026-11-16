@@ -67,7 +67,7 @@ beside it, and where the two differ the session is refused as `disagreement` (it
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
-was set, which `replay.py transcript` (verity/protocols/resource_accounting/memory/poub/verifier/lean/tests) replays through both
+was set, which `replay.py transcript` (tests/verity/protocols/resource_accounting/memory/poub/verifier/lean) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.

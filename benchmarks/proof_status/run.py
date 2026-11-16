@@ -4,7 +4,7 @@ all of them), `lean/trust-gap` (each deployed guarantee's gap in premises, its `
 for each lead the locks name, `lean/open-premises` and `lean/no-honest-witness` (its `member` the lead's handle).
 Each of those three is written last for the whole, with no member: the premises in any guarantee's gap, the open
 premises and the guarantees with no honest witness, each counted once. A reader that keys by name alone takes an id's
-last-written reading as the row's, so the row shows the whole and its members sit beside it.
+last-written value as the metric's, so the metric shows the whole and its members sit beside it.
 
     research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py
 

@@ -14,7 +14,7 @@ reads. [`security/README.md`](../README.md) has the argument, the lock and what 
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
 - One pin's command (`tools/check/pins.py`) runs Lean in this package's Lake environment:
-  `verity/protocols/resource_accounting/compute/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
+  `tests/verity/protocols/resource_accounting/compute/pouw/verifier/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
   `security/`, and the command runs it there and removes it.
 
 ## Areas
@@ -34,7 +34,7 @@ path: `research msg owners PATH`.
 | `InferenceOnly` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
 | `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
 | `Pouw` | PoUW's protocol: the definitions its statements read |
-| `Spot` | Populations: units over committed value slots, their dataflow, cones and egress |
+| `Spot` | Populations: proof blocks over committed value slots, their dataflow, cones and egress |
 | `WeightSecurity` | Model weight security: the setting |
 
 ## Generated files

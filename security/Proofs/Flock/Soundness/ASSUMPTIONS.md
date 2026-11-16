@@ -25,7 +25,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 ## Soundness's assumptions (taken without proof)
 
 Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions/Flock.lean`, hypotheses: SHA-512's
-collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
+collision resistance in two forms, and the randomness of the challenger's coins the proof-block sample reads. The fourth, A6,
 is the challenger's live-coin part's randomness for the round coins, which the model embodies. The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
@@ -36,7 +36,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
+| `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the proof-block sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, flipped after the prover's message; under `--zk` or `--coins tree`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample (`SampleFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `SamplingDesign.execOS` is `sampleOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `sampleOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `sampleOkZKHJ_of_file`) |
 | `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `SampleOk` (`SampleOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
@@ -105,12 +105,12 @@ sense, ePrint 2024/1434), for the audit's value layer.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-challenger's coins the unit sample reads and the proof system's epoch salt, and, per test, for zero knowledge: the
+challenger's coins the proof-block sample reads and the proof system's epoch salt, and, per test, for zero knowledge: the
 commitments' salts and the ZK server's tape.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
-  bytes; the unit sample takes it. `UniformRandomBytesTest L t E η` (as A4 is) says one event `E` has it within
+  bytes; the proof-block sample takes it. `UniformRandomBytesTest L t E η` (as A4 is) says one event `E` has it within
   `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes the operating
   system's reads are such a source, each call independent of the others: the challenger's `IO.getRandomBytes`, which
   it flips its coins from (Lean v4.34.0's runtime reads `/dev/urandom`), the ZK server's frame and tap, and the
@@ -128,10 +128,10 @@ coins.
   prover's message of that round. The model's session flips its coins exactly so (the games' coin nodes), so A6 is what
   makes the model's coins the run's.
 - **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a byte source for the coins it could be a
-  hypothesis about, as A3 is about the unit sample's byte source. Stating it as a `Prop` would need the session played on
+  hypothesis about, as A3 is about the proof-block sample's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
 - **What it assumes of the challenger.** The Rust challenger (`live/src/lib.rs`, `Server::coins`) reads each round's
-  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit sample's, the
+  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the proof-block sample's, the
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
 - **Seed coins are outside it.** By default the prover's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.commitments.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
@@ -201,7 +201,7 @@ none of them, and calls nothing of main's `--zk` sound.
 The four `flock_e2e_*_hm96` theorems (`Binding/E2E.lean`) add the four:
 `miss_L(K) + ksAvgStrict + ε_bind + δ_tree` for the count curve, the same without `miss_L(K)` for a sampled proof block. `δ_tree`
 enters through `tr : StrictCR.TreeRewind`, a rewinding at the serving roots (the prover after its registration, with the
-unit sample in place of the proof coins) whose `covers` says that the executable accepting while the model at the
+proof-block sample in place of the proof coins) whose `covers` says that the executable accepting while the model at the
 registered leaves rejects is no likelier than a run opening a serving root off its plurality. That cover is the link from
 the executable's openings to the model's (the refinement `ExecRefines`), still open, so `tr` is a named hypothesis; the
 skeleton's `hExec` (every executable accept is the model's) gives one with no positions, at `δ_tree = 0`
@@ -235,7 +235,7 @@ intended to prove, or a numeric condition on the bound's parameters.
 |---|---|---|
 | `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | hardness | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each sample at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
 | `hCR` (`LinkCR`) | hardness | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
-| `hA3` (`UniformRandomBytes`) | platform | A3 (`uniform/io-getrandombytes`), for the unit sample's byte source |
+| `hA3` (`UniformRandomBytes`) | platform | A3 (`uniform/io-getrandombytes`), for the proof-block sample's byte source |
 | none: the round coins | platform | A6 (`uniform/flock-coin-server`), the challenger's OS randomness: each round's coins uniform, flipped after the prover's message (under `--zk` or `--coins tree`: committed at `Hello` and opened after it, plus `N·2^-256`; A6, tree coins). The model embodies it (next row), so no hypothesis states it |
 | none: the session's game | model | the protocol as `batchedSession` models it, against any prover `Strategy`, with the round coins A6 gives |
 | `pp.placed`, `pp.aliased` | intended to prove | W6 (the table's statement holds the program's rows) and `Layout.Aliased` |
@@ -318,8 +318,8 @@ wipe's labels `SHA-512(LABEL_TAG ‖ K ‖ u64 i)` (`Assumptions.Keyed`).
   streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.commitments.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
-  `verity/commitments/randomness/tests/vectors.json`, and Python matches its vectors
-  (`verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py`). For the wipe's labels under that key, at
+  `tests/verity/commitments/randomness/vectors.json`, and Python matches its vectors
+  (`tests/verity/protocols/proofs/flock/prover/test_randomness_spec.py`). For the wipe's labels under that key, at
   distinct u64 indices, each a whole 64-byte digest, the labels pass `E` as independent uniform 64-byte strings do, plus `η`.
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
   most that many stream tuples. `keyedExecutionPhase_escape_le` takes A4 for one test per set `B` (`executionPhaseTest`: the window sample
@@ -420,7 +420,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Partition.LoweringSound` | — | a sampled incorrect proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
 | `IsHarmBound` | `H` | every set of incorrect proof blocks with miss probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
-Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a sampled proof block
+Both per-proof-block hypotheses are averages over the whole audit, for every prover and every rule that picks a sampled proof block
 before the session's first coin, not bounds state by state.
 
 | Named at the compiled layer | Meaning | Discharged by |
@@ -442,7 +442,7 @@ before the session's first coin, not bounds state by state.
   this theorem.
 - **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
   before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
-  tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
+  tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the proof-block sample A3.
 - **`seed` coins** (the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`; earlier,
   `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and the derivation's hash in counter
   mode is a PRF: SHA-512 (`prf/sha-512`; `live/src/coin_seed.rs`), SHA-256 in the earlier recorded sessions

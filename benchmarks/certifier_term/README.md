@@ -107,7 +107,7 @@ still, those rows' terms among it.
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
-`benchmarks/network_traces/tests/test_certifier_term.py`.
+`tests/benchmarks/network_traces/test_certifier_term.py`.
 
 ## The rows
 
@@ -133,10 +133,10 @@ and each row says where it stands:
   schedule under these two rows too, as is each connection of an execution phase no registration was read for. The
   jitter's 0 under `timing` and `all three` rests on the set-time card, which is simulated.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
-  audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
+  audit. The lengths proof block holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
   Its failed connections' charge, its jitter, its count and its entries are the design's.
-- `design` (no run behind it): head checks, a lengths unit on the network attester's records, and a stop block
+- `design` (no run behind it): head checks, a lengths proof block on the network attester's records, and a stop block
   sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
   nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
   holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
@@ -253,7 +253,7 @@ So superseding a run raises what is held only on a serve launched after that run
 record that doesn't read. In a run that no other replaces, a record that doesn't read holds no execution phase at
 all, and a line that is no JSON is named by its line, its file and its run. The ids are the tooling's, which is
 enough for the runs of record here; in a deployment the order comes from the auditor's own ledger, from something
-the prover cannot write.
+the developer cannot write.
 
 A verdict that doesn't count, refused or not complete, counts against the execution phase it names by its serve,
 its link and its number, whatever head it names: refused under one head, registered again under another and

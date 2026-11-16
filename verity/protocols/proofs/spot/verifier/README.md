@@ -1,4 +1,4 @@
-# SPOT (`verity-sampled-proofs`)
+# SPOT
 
 SPOT spot-checks a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then samples proof blocks
@@ -132,8 +132,8 @@ holds of that code under the premises `SamplingDeploy.ksTwo_code` states.
 A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
 1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
-unit on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
-`plancheck.two` refuses a cap below them.
+proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
+`plancheck.two` refuses a served cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
@@ -173,7 +173,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back). The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
-  `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The executable answers the challenger's ledger
+  `tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py`. The executable answers the challenger's ledger
   and session checks too (`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and
   `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks the verifier for them;
   `lean/tests/test_challenger_difftest.py` holds its answers to the challenger's Python. The same package ports the challenger's sample from the
@@ -208,7 +208,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
   (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
-  every wired row of every unit of the sample to its writer's output row in the members' public files
+  every wired row of every proof block of the sample to its writer's output row in the members' public files
   (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
@@ -264,7 +264,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
   count on two-stage designs (`tests/lean/`, by `generate.sh`); `tests/test_consumers.py` holds the consumers to them.
   `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `sampleOn` on raw bytes,
-  `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/protocols/proofs/flock/prover/tests/stratified_agree.py`
+  `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `tests/verity/protocols/proofs/flock/prover/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
 - **The parties.** `parties` holds both deployments (Core API) as parties of `verity.runtime`, each machine's work a
   capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.runtime.runner.run` runs them.
@@ -306,7 +306,7 @@ not give.
 | `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the docket sent; otherwise returns the answer it was given |
 | `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
 | `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
-| `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
+| `one_stage.proofs.population_why` | a reason or None for a public file whose proof blocks are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
 
 ## Core API
 
@@ -397,7 +397,7 @@ Its digest is `SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical J
 
 The verifier holds the record to its own copies with R1 to R8 (`check`). The Lean verifier runs the same check
 (`Spot.Docket.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
-`verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py` holds the Python to the Lean.
+`tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py` holds the Python to the Lean.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
 file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The
@@ -405,7 +405,7 @@ challenger's `service.ExecutionPhaseCommitmentRecord` is a record it admitted, w
 stream. The format, each check's rule and codes and the window domains (`window_domain`) are in
 `one_stage.docket`'s docstring.
 
-Pinned by `tests/test_one_stage.py`, and the window domain also by `adapters/vllm/tests/commit/test_serving_rows.py`.
+Pinned by `tests/test_one_stage.py`, and the window domain also by `tests/adapters/vllm/tests/commit/test_serving_rows.py`.
 
 ### Registered values
 
@@ -432,7 +432,7 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **Supplied values.** These are values the verifier fills itself, from the record's roots, positions after the log's,
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
-  (`verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+  (`tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_supplied_inputs.py`).
 - **Certified values.** R7 holds a registered value no parameter reads to the verifier's `certified` entry of it.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
@@ -451,7 +451,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   registered value of the verifier's) to the root of that value's entry in the record's `window.activations.values`,
   refusing it at any other root, under two roots, or with no such entry (`audit.window_reads`, `Record.windowReads`).
 
-Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
+Pinned by `tests/test_registered.py`, `tests/test_served.py` and `tests/verity/protocols/proofs/flock/prover/test_lean_registered_reads.py`.
 
 ## Not yet in Lean
 
@@ -479,7 +479,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
 states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
 is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
-core's `verity/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
+core's `tests/verity/circuits/partition_vectors.json` and `template_instance_vectors.json`, which
 `tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
@@ -559,7 +559,7 @@ sampling design).
 delta, through its weighted bound `harm_bound`; each application counts delta once.
 
 - `infiltration_bound(profile, output_bits)` is `harm_bound(output_bits)`, in bits: the committed values the prover wrote
-  in place of what the circuit computes, served or not, so no served output's size caps it. A two-stage design's profile
+  in place of what the circuit computes, served or not, so no served output's size bounds it. A two-stage design's profile
   is read at the footprint, so there it counts only what the boundary commitment pins down.
 - `exfiltration_bound(profile, output_bits)` is `infiltration_bound(profile, output_bits) + location_bits(profile)`, in bits.
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` proof blocks, 0 when `K ≤ 0` or `n = 0`, `n` when

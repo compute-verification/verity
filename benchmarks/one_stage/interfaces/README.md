@@ -6,15 +6,15 @@ Not a package: run the modules with this directory on `PYTHONPATH` (the suite's 
 ## The replay bundle of sampled proof blocks (`verity/drawn-unit-bundle/v2`)
 
 `verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
-behind the ZK server reads to prove a window's sampled proof blocks: per unit its coordinates (block, step, slot, layer, op, unit),
+behind the ZK server reads to prove a window's sampled proof blocks: per proof block its coordinates (block, step, slot, layer, op, unit),
 its template id and binding, each row's opening (input and output rows against the step commitment, weight rows against
 their registered value's root, every row against its window port's registered root) and the Flock `--zk` session's
 member, subset sample and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
-binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
+binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each proof block's rows in
 order, each row's u16 words little-endian then its 192-byte salt.
 
 The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
-unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
+proof-block trees over rows, only each proof block's outputs committed. An output row opens in its proof block's own commitment. An input
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server block's step roots.
 The bundle builds its step commitments with kernels' CPU reference, `verity/commitments/cuda/commit_slots/slots.py`,
@@ -26,8 +26,8 @@ reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
 docket, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
-prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
-bundle's units under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
+prover can't pick it), a subset sample of other than its k proof blocks, and a `draw.record` that isn't a sample of the
+bundle's proof blocks under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
 refuses to sample one).
 
 ~~~sh
@@ -35,13 +35,13 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 ~~~
 
 `build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
-(`locate`), a unit's coordinates (`coords`) and its registered reads (`reads`). The fixture,
+(`locate`), a proof block's coordinates (`coords`) and its registered reads (`reads`). The fixture,
 `tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's docket, is four sampled proof blocks of a W8A8 MLP's window
-(two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
+(two requests, one step, both linears, width 128: 512 proof blocks, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
-SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
+SHA-512s. `check` recomputes every string, path and domain and replays each proof block's Definition on its input rows. The
 window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
-`benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
+`tests/benchmarks/one_stage/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v2`)
 
@@ -86,6 +86,6 @@ subprotocols accept, and a wipe is carried but not composed, since it ran on ano
 verdict is undecided, and the error sum is at least SPOT's 1/2 from its 2-unit sample. `block-record-b71a-w30`
 carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
 SPOT at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
-`integrity-profile-stratified` is the profile of a served run's SPOT answer, which samples each template's units as a
+`integrity-profile-stratified` is the profile of a served run's SPOT answer, which samples each template's proof blocks as a
 stratum of their own (all 160 of one, 2 of another's 4): its bound is 2 of 164 at δ = 1/100, where a uniform sample of
 162 of 164 would say 1.

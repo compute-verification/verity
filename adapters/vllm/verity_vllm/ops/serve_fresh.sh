@@ -11,7 +11,7 @@
 # --gpu N sets CUDA_VISIBLE_DEVICES=N (default: the caller's, else the first Hopper card). --dry-run prints the paths and the
 # steps and does nothing. Before building anything it refuses, in one line each, a machine with no Hopper card (the row is
 # h200's: compute capability 9.0), no nvcc, no uv, or under DISK_GB (default 35) free at DIR. Where the toolkit lacks the
-# CUDA math headers, the environment's nvidia wheels give them (CPATH). The last line is `SERVE-FRESH SERVED AND SEALED ...`
+# CUDA math headers, the bootstrap takes them from the environment's NVIDIA wheels (CPATH). The last line is `SERVE-FRESH SERVED AND SEALED ...`
 # with the window's root, or `SERVE-FRESH FAILED <step>: ...`; logs are in DIR/logs.
 set -uo pipefail
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
@@ -48,7 +48,7 @@ done
 export PY PY312=$PY PYTHONPATH=$ROOTS
 HSO=$FA2/build/fa3_matReqG/verity_fa3_matReqG.so; NSO=$NT/build/verity_norm_tap.so
 WL=$TREE/adapters/vllm/workloads/$ROW.json; LOGS=$W/logs; PORT=${PORT:-$(( 18200 + RANDOM % 700 ))}
-fail() { echo "SERVE-FRESH FAILED $1: $2"; exit 1; }
+fail() { stop_group; echo "SERVE-FRESH FAILED $1: $2"; exit 1; }
 refuse() { echo "serve_fresh: $1" >&2; echo "SERVE-FRESH FAILED check: $1"; exit 3; }
 
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
@@ -61,6 +61,8 @@ if [ "$DRY" = 1 ]; then
   echo "pythonpath $PYTHONPATH"
   echo "path uv and pip caches: $W/.cache/{uv,pip} (the bootstrap's; removed after the install)"
   echo "checks: a card of compute capability 9.0, nvcc under CUDA_HOME ($CUDA_HOME), uv, ${DISK_GB:-35} GB free at $W"
+  [ -f "$CUDA_HOME/include/cusparse.h" ] || echo "headers: $CUDA_HOME/include lacks cusparse.h; the bootstrap takes the CUDA" \
+    "math headers torch reads from the environment's NVIDIA wheels (CPATH)"
   echo "build: the FA2 and FA3 taps for head size 64 only (the row's), with MAX_JOBS=${MAX_JOBS:-$(nproc)} (the CPUs this" \
     "shell may run on); building the taps is the longest step and its time falls with those CPUs, so give it all you can"
 fi
@@ -79,17 +81,31 @@ if [ "$DRY" = 0 ]; then
   [ "${free:-0}" -ge "${DISK_GB:-35}" ] || refuse "${free}G free at $W, under the ${DISK_GB:-35}G this needs: free room there or pass --work DIR on a larger disk"
   mkdir -p "$HOME" "$TMPDIR" "$LOGS"
 fi
-if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then
-  N=$VENV/lib/python3.12/site-packages/nvidia
-  export CPATH=$N/cusparse/include:$N/cusolver/include:$N/cufft/include:$N/curand/include${CPATH:+:$CPATH}
-  echo "serve_fresh: $CUDA_HOME/include lacks cusparse.h; the CUDA math headers come from the environment's nvidia wheels (CPATH)"
-fi
-
-# Each child runs in a process group of its own and is waited on in the background, so a signal to this script stops it and
-# everything it started (the compilers, the server and its engine) rather than leaving them on the card.
+# Each child runs in a process group of its own and is waited on in the background, so a signal to this script or a failure
+# stops it and everything it started (the compilers, the server and its engine) rather than leaving them on the card. A server
+# signalled mid-startup can take minutes to act on TERM, so the script polls, a second apart, for the whole group to be gone
+# (STOP_GRACE_S polls, default 60), KILLs what is left, and only then prints its last line.
 CHILD=""; STEP=start
-trap '[ -n "$CHILD" ] && kill -TERM -- "-$CHILD" 2>/dev/null' EXIT
-trap 'echo "SERVE-FRESH FAILED $STEP: stopped by a signal"; exit 143' TERM INT HUP
+in_group() {   # a process of group $1 that is not a zombie
+  local f s a
+  for f in /proc/[0-9]*/stat; do
+    { read -r s < "$f"; } 2> /dev/null || continue   # a process can exit between the glob and the read
+    read -r -a a <<< "${s##*) }"
+    [ "${a[2]:-}" = "$1" ] && [ "${a[0]:-}" != Z ] && return 0
+  done
+  return 1
+}
+stop_group() {
+  [ -n "$CHILD" ] || return 0
+  local g=$CHILD i; CHILD=""
+  kill -TERM -- "-$g" 2> /dev/null
+  for ((i = 0; i < ${STOP_GRACE_S:-60}; i++)); do in_group "$g" || return 0; sleep 1; done
+  echo "serve_fresh: process group $g outlived TERM by ${STOP_GRACE_S:-60} poll(s); KILL" >&2
+  kill -KILL -- "-$g" 2> /dev/null
+  while in_group "$g"; do sleep 1; done
+}
+trap stop_group EXIT
+trap 'stop_group; echo "SERVE-FRESH FAILED $STEP: stopped by a signal"; exit 143' TERM INT HUP
 # step NAME CMD...: runs CMD (in adapters/vllm) into $LOGS/NAME.log, or prints it under --dry-run
 step() {
   local name=$1 rc; shift
@@ -97,7 +113,7 @@ step() {
   local t=$(date +%s)
   echo "serve_fresh: $name ..."; STEP=$name
   (cd "$TREE/adapters/vllm" && exec setsid -w "$@") > "$LOGS/$name.log" 2>&1 &
-  CHILD=$!; wait "$CHILD"; rc=$?; CHILD=""
+  CHILD=$!; wait "$CHILD"; rc=$?; stop_group
   [ "$rc" = 0 ] || fail "$name" "exit $rc (log $LOGS/$name.log: $(tail -1 "$LOGS/$name.log" | cut -c1-200))"
   echo "serve_fresh: $name done in $(( $(date +%s) - t )) s"
 }
@@ -138,7 +154,7 @@ STEP=request
 lrc=$?
 STEP=stop
 kill -INT "$SERVER"
-wait "$SERVER"; src=$?; CHILD=""
+wait "$SERVER"; src=$?; stop_group
 [ "$lrc" = 0 ] || fail request "exit $lrc (log $LOGS/request.log)"
 [ "$src" = 0 ] || fail stop "the server exited $src (log $LOGS/serve.log)"
 seal=$(grep -m1 '"window": 0[,}]' "$W/serve/seals.jsonl" 2>/dev/null)
