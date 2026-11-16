@@ -24,7 +24,7 @@ verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|bool
 verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
 research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
   bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
-research run --on auto --project verity --source . --cwd clone --cpus 16 --mem-gb 64 --timeout 3h -- \
+research run --on auto --project verity --source . --cwd clone -- \
   bash benchmarks/verifier_cost/job.sh measure --config b0 --ir boolean   # the dashboard's proofs/verifier-seconds-served-description
 verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
 verity bench verifier_cost plot ART --to PNG             # from the store
