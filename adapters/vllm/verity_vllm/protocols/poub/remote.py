@@ -1,5 +1,5 @@
 """The Commit's PoUB session on its vLLM engine (`CommitSession`, ``--remote-verifier HOST:PORT``,
-`config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.accounting.poub.prover.node_store.serving`:
+`config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`:
 `StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine by the store binder
 (`verity_vllm.protocols.poub.binder`), the session in lockstep with the Commit's instrumented run.
 """
@@ -12,16 +12,20 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.poub.prover.node_store import memory_map as store_map
-from verity.protocols.accounting.poub.prover.node_store import serving
-from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
-from verity.protocols.accounting.poub.prover.node_store.serving import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import (
+    memory_map as store_map,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+    NodeMemory,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving import (
     KvDevice,
     Lockstep,
     StoreBackend,
 )
-from verity.protocols.accounting.poub.verifier import audit
-from verity.protocols.accounting.poub.verifier import codec as rcodec
+from verity.protocols.resource_accounting.memory.poub.verifier import audit
+from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
 from verity_vllm.engine.handle import core_in_process, engine_of
 from verity_vllm.protocols.poub.binder import Binder

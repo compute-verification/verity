@@ -54,7 +54,7 @@ import numpy as np
 import pytest
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
 from verity.circuits.codec import descriptor_id
@@ -67,7 +67,7 @@ HERE = (Path(__file__).resolve().parents[1])
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
@@ -207,7 +207,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
+    assert record["case_v2"]["written"] is False and "this audit sampled 2 members" in record["case_v2"]["why"]
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert answer["public"]["case_v2"] == record["case_v2"]
@@ -223,7 +223,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert not missing, missing
     # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
     assert not (out / "window" / "case-v2.json").exists()
-    assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
+    assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):

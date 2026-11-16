@@ -4,7 +4,7 @@ entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
 `verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
-stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
+stand-in gives them, and the network attester's entry (`network_attester`) and every other subprotocol's period check
 (`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
@@ -23,9 +23,9 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
-from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused
@@ -59,27 +59,27 @@ def _work_design(design: str, params: Mapping[str, Any]) -> None:
 
 
 def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `NetworkCertifierParams`' fields, and ``tie``, which is true. A field that is unset
+    """The network attester's parameters: `NetworkAttesterParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
-    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form
+    (`CERTIFIER_DEFAULTS`), as it stays out of `NetworkAttesterParams.digest`, so a configuration that sets none has the form
     and hash it had before any was a parameter."""
-    names = [f.name for f in fields(NetworkCertifierParams)]
+    names = [f.name for f in fields(NetworkAttesterParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
-        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkCertifierParams' "
+        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkAttesterParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
     given = {k: params[k] for k in names if k in params}
     try:
-        NetworkCertifierParams(**given)
+        NetworkAttesterParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
     return {**given, "tie": True}
 
 
-#: The network certifier's defaults: `NetworkCertifierParams`' but the fields unset by default (the response's token bound, the lengths
+#: The network attester's defaults: `NetworkAttesterParams`' but the fields unset by default (the response's token bound, the lengths
 #: rows' form, the content rows' classes, the request words), and ``tie``.
-CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
+CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(NetworkAttesterParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -135,8 +135,8 @@ def _json_if(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
-    """The network certifier's entry: no relay serves here (module docstring)."""
+def network_attester(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
+    """The network attester's entry: no relay serves here (module docstring)."""
     print("network-certifier: no relay serves at step 0 here", flush=True)
     return 2
 
@@ -275,7 +275,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
-    "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
+    "certifier": {"network-certifier": network_attester, "verifier": LIVE},
     **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}

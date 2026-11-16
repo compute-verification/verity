@@ -1,10 +1,10 @@
 """Pearl-C4, an experimental PoUW variant (README.md).  Importing it registers its scheme, ``pearl-c-nvfp4-v0``, with
-PoUW's registry (`verity.protocols.accounting.pouw.prover.schemes.register`), which names it and refuses it until then."""
+PoUW's registry (`verity.protocols.resource_accounting.compute.pouw.prover.schemes.register`), which names it and refuses it until then."""
 from __future__ import annotations
 
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.schemes import register
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import register
 
 
 def _pearl_c4(fmt: str, *, hashing: str):

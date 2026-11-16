@@ -25,16 +25,27 @@ verifier times every pass and checks each one's answers against the store's comm
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
   vllm`). Without it `--local` runs nothing and says how to make one. It serves the checkpoint and fetches it:
   `unsloth/Llama-3.2-1B` at the revision core's pin names
-  (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
+  (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json`), about 2.5 GB from Hugging Face, not gated, so
   no token.
+  Its vLLM and torch must be built for your card's CUDA. The recipe as written (no pin, index or extra) was run from
+  nothing on an H200: `uv venv` fetched Python 3.12 itself, and the install gave vLLM 0.33.0 and torch
+  `2.14.0+cu130`, which served the session; earlier runs used a vLLM development build and torch `2.13.0+cu129`.
 - **The CUDA toolkit with `nvcc`** (under `/usr/local/cuda*` or `CUDA_HOME`). The driver alone is not enough: the
   session compiles its kernels for your card.
-- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/accounting/poub/verifier/lean` installs `elan` and the
+- **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/resource_accounting/memory/poub/verifier/lean` installs `elan` and the
   verifier's dependencies. On your machine the Lean verifier builds from source: several minutes and about 4 GB of
   memory the first time, reused after.
+  `setup.sh` printing `error: unknown executable cache` (this package has no Mathlib to fetch) and
+  `lean-cache: no read credential (…); building from source` is expected: it still exits 0.
 - **Disk:** the checkpoint, the caches and each run's records go into `LOCAL_WORK` (default
   `~/.cache/verity/bench-memory`), and the command writes nothing outside it but the Lean build in the clone and
   `elan` in `~/.elan`.
+  `uv sync` fills `~/.cache/uv` before that: to keep both out of your home, set `UV_CACHE_DIR` (or `XDG_CACHE_HOME`)
+  and `LOCAL_WORK` to directories elsewhere.
+- **Time, disk and host memory:** from nothing on an H200, a run took about 33 minutes from the clone to the number
+  (the clone about 5, the vLLM install about 4, `--local` about 24, the Lean verifier's first build included) and
+  about 26 GB of disk (the vLLM environment 9, uv's cache 10, the clone with its `.venv` 4, the checkpoint 2.4), so
+  start with about 30 GB free. Have about 76 GB of host memory, the larger of the peaks the runs reached.
 - `GPU` picks the card (an index `nvidia-smi` gives; unset, the first). The session runs on this process's cores: a
   quarter to the engine, a quarter to the verifier and the rest to the prover (`taskset` narrows them;
   `ENGINE_CPUS`, `PROVER_CPUS` and `VERIFIER_CPUS` name others).
@@ -77,7 +88,7 @@ target is 0.14 at an error of at most 2^-100.**
   not a number from another.
 - The share is of the one card's read rate and its host's: the verifier's node is one card of the card's node sheet,
   handed to it as `--node`. A line names the card and the sheet with the SHA-256 of the tree's data sheets
-  (`hardware/`) and of the verifier (`verity/protocols/accounting/poub/verifier/`), Markdown left out, in the JSON's
+  (`hardware/`) and of the verifier (`verity/protocols/resource_accounting/memory/poub/verifier/`), Markdown left out, in the JSON's
   `machine` with the arena's GiB and vLLM's share of the card.
 
 **Exit codes:**
@@ -90,11 +101,15 @@ target is 0.14 at an error of at most 2^-100.**
 | 3 | no session reached a verdict (no NVIDIA driver, no data sheet for the card, no `VLLM_PY`, a checkpoint that can't be fetched, a process that failed): `memory: no number: WHY` |
 
 **Where the result goes:** the text and one line of JSON on stdout. With `OUT=DIR`, the JSON goes to `DIR/memory.json`
-and the result to `DIR/result.json`, its row `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
+and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
 beside the bytes and the error. The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints
 them as not read, with that reason.
+Under `research run` the records go to `$RESEARCH_RUN_DIR/out` instead, beside the JSON's `memory.json`, and the
+benchmark result to `$RESEARCH_RUN_DIR/result.json`, with the same metric.
+`--from` takes the run's directory or its `out/`, the directory stderr names, where `--local` leaves its JSON as
+`memory.json` beside the `verifier.json` it reads.
 
 ## What you may change
 
@@ -110,8 +125,8 @@ at its end. The sample term is next; it falls with more openings a stretch, whic
 line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
-  (`verity/protocols/accounting/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
-- how the arena is encoded and decoded on the GPU (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`), and
+  (`verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
+- how the arena is encoded and decoded on the GPU (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`), and
   how the engine serves from it (`benchmarks/remote_session/engine.py`);
 - the arena's size: `ARENA_GIB` (default 0.88 of the card's memory less 12 GiB, `arena_of`; 112 GiB on an H200, 72
   on an RTX PRO 6000) and vLLM's share `UTIL` (default 0.88). The document says what it was;
@@ -120,7 +135,7 @@ line prints the measured pass and the lateness allowed.
 
 ## What is fixed
 
-- the verifier and its Lean (`verity/protocols/accounting/poub/verifier/`, its `lean/`);
+- the verifier and its Lean (`verity/protocols/resource_accounting/memory/poub/verifier/`, its `lean/`);
 - the ledger that turns a session into the share and its error (`verifier/session/verifier.py`), and the error rule
   (an error of 1 or more prints no number);
 - the session's form: one paced session (`--paced 1:1000:2773:7`, a coin every pass group, seven credited stretches
@@ -194,8 +209,8 @@ verity bench memory --local                       vLLM serving Llama 3.2 1B on t
   Lean verifier in the tree, so under `research run` it takes `--cwd clone`, and `--store-read` for the references.
   `PLAN` is the prover's plan, `honest` unless set: a cheating one (`skip:0.0625`) is refused by the verifier.
 - **`--local`** is the section above: `remote_session/run.sh` with `ROLE=both SERVE=node GPUS=1`, the node run's
-  engine, prover and paced verifier on one card. Its row on the Metrics tab says it is no audit, and, where the share
-  is the Python ledger's, says that too. The served row (`SERVE=row`), whose store is one request's reads and whose
+  engine, prover and paced verifier on one card. Its metric on the Metrics tab says it is no audit, and, where the share
+  is the Python ledger's, says that too. The served workload (`SERVE=row`), whose store is one request's reads and whose
   share was 1 or more, is not this benchmark: `run.sh` runs it directly.
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
@@ -207,7 +222,7 @@ it prints no number and exits 3. The text's first line prints the number's error
 error the result's `error`, below, holds, with the same words in its unit; the JSON holds it under `error`. A session
 whose error is 1 or more bounds nothing: the first line prints "no bound at this period" with the error in place of
 the number, and the JSON's `value` is null with those words under `no_bound` (the rule and the words are
-`verity/protocol.py`'s, one for every row's error).
+`verity/protocol.py`'s, one for every metric's error).
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
 state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the
@@ -233,7 +248,7 @@ by window as the share is: the record's declared error, which adds the sketch's 
 binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
 and its unit says so. The printed number is written once more under
-`memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
+`memory-accounting/node-read-rate-uncertified`, the id of its metric on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
 That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
 verifier held no checkpoint, every session now, still writes it, with `"bound": false` and its verdict naming that premise
 (`within target; the verifier held no checkpoint`); a bound session's entry, from a record made while the verifier could bind

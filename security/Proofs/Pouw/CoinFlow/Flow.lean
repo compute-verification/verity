@@ -55,14 +55,14 @@ it reads (`eval_congr`), so two samples give it one value when they agree on its
 node's coins are its own fresh coins, and its reads are non-fold. `pointMass` moves the run's coins to
 `Ω₀ × (J → Bool)`, the coins a noise injection doesn't make fresh and the ones it does, through an equivalence that
 keeps the uniform measure (`prob_comp_equiv`). The view is then a function of `Ω₀` (`viewIndependent`), and
-`Accounting.HMuProofs.coinPointMass` applies.
+`ResourceAccounting.HMuProofs.coinPointMass` applies.
 -/
 
 @[expose] public section
 
-namespace Accounting.CoinFlowProofs
+namespace ResourceAccounting.CoinFlowProofs
 
-open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity Finset
+open ResourceAccounting.CoinFlow ResourceAccounting.HMu Pouw.RelativeSecurity Finset
 
 variable {m : ℕ} {C V : Type}
 
@@ -103,7 +103,7 @@ theorem mem_noiseCoins {P : FlowGraph m C V} {k : Fin m} {c : C} :
   · simp [hk]
   · simp [hk]
 
-theorem viewIndependent : Accounting.Guarantees.CoinFlow.ViewIndependent := by
+theorem viewIndependent : ResourceAccounting.Guarantees.CoinFlow.ViewIndependent := by
   intro m C V _ _ P hP k σ σ' hσ
   obtain ⟨-, -, hone, -⟩ := admits_spec hP
   refine fin_strong fun g ih hd => eval_congr P (fun c hc => hσ c fun hck => ?_) fun r hr hlt =>
@@ -112,7 +112,7 @@ theorem viewIndependent : Accounting.Guarantees.CoinFlow.ViewIndependent := by
   have : g = k := (hone k hk).1 c hck g hc
   exact hd (this ▸ Relation.ReflTransGen.refl)
 
-theorem coinsThroughNoise : Accounting.Guarantees.CoinFlow.CoinsThroughNoise := by
+theorem coinsThroughNoise : ResourceAccounting.Guarantees.CoinFlow.CoinsThroughNoise := by
   intro m C V _ _ P hP g σ σ'
   obtain ⟨-, hflow, -, hsink⟩ := admits_spec hP
   revert g
@@ -128,7 +128,7 @@ theorem coinsThroughNoise : Accounting.Guarantees.CoinFlow.CoinsThroughNoise := 
       | true => rw [hsink g r hr h] at hg; exact absurd hg (by decide)
     exact ih r hlt hr' fun k hk => hagree k (hk.tail hr)
 
-theorem oneReader : Accounting.Guarantees.CoinFlow.OneReader := by
+theorem oneReader : ResourceAccounting.Guarantees.CoinFlow.OneReader := by
   intro m C V _ P hP k r g hk hr hd
   obtain ⟨-, -, hone, -⟩ := admits_spec hP
   rcases Relation.ReflTransGen.cases_head hd with h | ⟨y, hy, hyg⟩
@@ -173,7 +173,7 @@ theorem glue_in (ω : ({c // c ∉ S} → Bool) × ({c // c ∈ S} → Bool)) (c
 
 end Prob
 
-theorem pointMass : Accounting.Guarantees.CoinFlow.PointMass := by
+theorem pointMass : ResourceAccounting.Guarantees.CoinFlow.PointMass := by
   intro m C V _ _ _ P hP k O F a v o t
   classical
   let V₀ : ({c // c ∉ P.noiseCoins k} → Bool) → P.View k := fun ω₀ =>
@@ -194,4 +194,4 @@ theorem pointMass : Accounting.Guarantees.CoinFlow.PointMass := by
   simp only [hview, hcoins]
   exact key
 
-end Accounting.CoinFlowProofs
+end ResourceAccounting.CoinFlowProofs

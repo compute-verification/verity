@@ -19,7 +19,7 @@ doesn't have yet.
 How the work is done, and nothing the verifier reads:
 
 - **The kernel** that computes the served model's matrix multiplications
-  (`verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
+  (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/`: `pearl_c_sm90.cu`, the inert-work counter
   `debit_sm90.cu`, `build.sh`, built by `benchmarks/harness/setup/pearl_c_sm90.sh`). Any code may replace it that
   commits the same operand rows, checked words and served outputs bit for bit: the verifier recomputes a sampled tile
   from its opened rows and never sees how they were computed (`checkTile`). `build.sh` refuses a binary that fails
@@ -57,7 +57,7 @@ What the number is of, and the verifier that decides it. Change any of these and
   by come from the model's shape and the class (`MODELS`, `model_macs` in `run.py`); attention is counted and never
   credited.
 - **The verifier**: the Lean program `pouw-pearlplus` (package `pouw_pearlplus` in
-  `verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
+  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
   tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or
@@ -80,7 +80,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/accounting/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
 the number counts what the verifier credits, and that this is work done is an open premise. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
@@ -103,7 +103,7 @@ one.
 record of another commitment is `after-coin`; a verdict of record refuses a sample the serving machine drew itself
 (`of-record`). One
 sampling session a root, ever, is the challenger's own rule, in Python on the auditor's device (`open_refusal` in
-`verity/protocols/compose/device/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
+`verity/protocols/compose/verifier/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
 retried sample.
 
 **Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
@@ -135,7 +135,7 @@ refuses an answer whose passes or credit hold more MACs than one load of the cla
 where the passes hold the head's calls), in Python on the measuring side.
 
 **Serving with weights other than the model's: not refused today.** The registration log can carry a checkpoint's
-SHA-512 (`checkpoint` in `verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean`), but no check
+SHA-512 (`checkpoint` in `verity/protocols/registration/verifier/lean/RegistrationLog.lean`), but no check
 recomputes the committed weight rows' root from the published checkpoint, so other weights of the same shapes can be
 credited.
 
@@ -215,7 +215,10 @@ in `/tmp`.
 It needs:
 
 - one idle H100 or H200 (the scheme follows the H100's FP8 tensor core): `GPU` is its index, default 0 (`nvidia-smi
-  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it;
+  -L` lists them), and serve.sh checks before any step that it is a compute capability 9.0 card with no process on it.
+  Run under a `gpu-lease` already held (`research run --gpus 1`, or your own `gpu-lease 1 --on 0 --cores CPUS -- bash
+  benchmarks/compute/serve.sh` to pin the run to some CPUs), it serves on that lease's card and takes no lease of its
+  own;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
@@ -323,7 +326,7 @@ directory, outside one where `OUT` names a directory, and otherwise nothing.
 **Exit code:** 0 with the number printed; 1 with none; 2 when the command line, the record or its policy can't be read,
 when the policy's load is not the benchmark's (`load.toml`), or when the split `--per-call` reads is not the answer's.
 
-## Ours: the evidence store and the metric rows
+## Ours: the evidence store and the metrics
 
 On our machines `--from` also takes a run id of our evidence store, read through research's store client with a key
 that reads the store; a withdrawal of part of a stored record is honored (a withdrawn required file refuses the record,

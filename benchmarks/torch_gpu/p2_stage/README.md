@@ -4,23 +4,23 @@ The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on on
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext load buffer, then run the exact GEMM
 on that buffer.
 
-- `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
+- `verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_store/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's load buffer. `Weights` is the plaintext, the seeded
-  weights stream (`verity.protocols.accounting.pous.prover.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
+  weights stream (`verity.protocols.resource_accounting.memory.pous.prover.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
   rows to it by P2's reference decode of one label (`p2_store/store.py`'s `decode_block`), the check's ground truth.
   `open_store` takes the store: memory-accounting's encoded store (`p2_store/store.py encode`'s segment files, read by
   `segment_rows`), under `store_salt`, `setup.sample_salt` of the coin and commitment its `setup.json` is held to; or a
   development store under a public test salt. An encoded store is refused unless its `setup.json`'s `program` is the
   weights manifest's name of its weights (`weights_name`: the generator's `model`), and a manifest that gives no name
   is refused; only a caller that holds nothing to a weights manifest passes none.
-- `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
+- `verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
   built on `libp2v1.so` through `p2_store.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
   block nonzero past its tensor's end, 0 for the library's own flag. `timed` is the one timer the drivers below use.
   `StoreLayout`, `EncodedRows`, its screen and `scatter` are the store's own
-  (`verity/protocols/accounting/pous/prover/p2/p2_store/load.py`), defined there and read through these two modules.
+  (`verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/load.py`), defined there and read through these two modules.
   `EncodedRows.decode_into` by W offset is also the GPU decode of `verity_vllm`'s PoUS store, which loads it from
   `p2_store` alone, under a layout of no tensors.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
@@ -35,7 +35,7 @@ on that buffer.
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth audit; the interface is
-  `verity/protocols/accounting/poub/verifier/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
+  `verity/protocols/resource_accounting/memory/poub/verifier/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
   a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
   units the store's tensors lie in, so the encoded padding past the head is in no receipt), `EncodedRows.decode_rows`
   sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored
@@ -46,7 +46,7 @@ on that buffer.
   stage pass, timed with the sketch and without; `bw_ref.py` checks it on the CPU afterwards (every y and the root
   from the pass's σ, and the σ of a sample of units from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
-- `verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's
+- `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's
   own Makefile; the scripts here run on its `lib/`. `session.sh` is one run on
   an H200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded

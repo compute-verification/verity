@@ -2,8 +2,8 @@ module
 
 public import Definitions.Poub.RateAuditSketchDeployed
 public import Definitions.Poub.RateAuditDeployed
-public import Definitions.Accounting.Gates.Codec
-public import Definitions.Accounting.Requirement
+public import Definitions.ResourceAccounting.Gates.Codec
+public import Definitions.ResourceAccounting.Requirement
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -69,7 +69,7 @@ passes' ticks (`Placement.executionPhaseTicks`). On one clock with a placed exec
 device tick be in two windows or in two passes of one window.
 
 **The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
-(`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
+(`Definitions/ResourceAccounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
 computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
 
 **The append-coin rule.** The audit appends blocks during a session (a KV page), and poub's PROTOCOL.md
@@ -92,7 +92,7 @@ coins.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- **The blocks a pass reads under the append-coin rule** (poub's PROTOCOL.md §3–§4). The store is made by
 `T` appends in order, each of `M` block positions: the registration first, whose coin is the codec seed, then the
@@ -107,9 +107,9 @@ def appendCoinBlocks {Ω Ca Ch B : Type} {T M N : ℕ} (enc : Ω → Fin T → C
     (y : Ω × (Fin T → Ca)) : Fin N → B :=
   fun u => enc y.1 (slot u).1 (choose y.1 (slot u).1 fun b => y.2 b.1) y.2 (slot u).2
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -281,9 +281,9 @@ def readsIn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → Sket
 
 end SketchDeployedWindow
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 
@@ -345,9 +345,9 @@ def linkBitsEven (w : IWorld N b h ρ) : List Bool → PIChip N b h ρ α → �
 
 end PIChip
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- **The encode cost of `x` bits of a block's encoding**, in nonlinear units: `Gates.encodeCost` (the fewest nonlinear
 units, budgeted units and data products, of a restricted circuit with no run input, at most `B` operand bits a budgeted
@@ -358,9 +358,9 @@ last round's input, which is why the words' targets leave it out) enters a prove
 noncomputable def encodeBitsCost (F : Gates.Field) (k B εnum εden x : ℕ) : ℕ∞ :=
   Gates.encodeCost F k B εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.Requirement
+namespace ResourceAccounting.Requirement
 
 variable {L G : Type} {n P : ℕ}
 
@@ -380,4 +380,4 @@ def Placement.Deadlines (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ
   ∀ d, (Pairwise fun w w' => Disjoint (p.executionPhaseTicks bind τ w d) (p.executionPhaseTicks bind τ w' d)) ∧
     ∀ w, Pairwise fun j j' => Disjoint (p.passTicks bind τ w j d) (p.passTicks bind τ w j' d)
 
-end Accounting.Requirement
+end ResourceAccounting.Requirement

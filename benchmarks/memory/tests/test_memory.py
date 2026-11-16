@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -394,6 +395,32 @@ def test_a_local_run_that_died_before_its_document_is_not_printed_as_a_node_sess
     assert out == "" and f"{RUN} holds --local's {M.NODE_FILE} but no out/memory.json saying what it was" in err
     assert M.main(["--from", str(held)], store_of=lambda: store) == 2
     assert f"holds --local's {M.NODE_FILE}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("researched", [True, False])
+def test_from_reads_back_the_directory_a_local_run_names_and_the_run_directory_around_it(
+        store, capsys, work, monkeypatch, tmp_path, researched):
+    """The records' place `--local` names on stderr, `DIR/out`, and the `--from DIR` it names beside it both print the
+    session back as the `--local` measurement it was, under a research run (`$RESEARCH_RUN_DIR/out`) and outside
+    one (a directory of LOCAL_WORK/runs/, where the command leaves its document for `--from`)."""
+    held = a_run(monkeypatch, tmp_path) if researched else None
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, err = printed(capsys)
+    named = re.search(r"its records go to (\S+), which `verity bench memory --from (\S+)` reads back", err)
+    assert named and Path(named[1]) == Path(named[2]) / "out"
+    assert (Path(named[2]) == held) if researched else (Path(named[2]).parent == work / "runs")
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    for given in named[1], named[2]:
+        assert M.main(["--from", given], store_of=lambda: store) == 0, capsys.readouterr().err
+        text, again, _ = printed(capsys)
+        assert text[1] == f"  {M.LOCAL}" and (again["value"], again["local"]) == (doc["value"], M.LOCAL)
+
+
+def test_from_an_out_directory_that_holds_no_record_says_so(store, capsys, tmp_path):
+    (tmp_path / "out").mkdir()
+    assert M.main(["--from", str(tmp_path / "out")], store_of=lambda: store) == 3
+    assert f"{tmp_path} holds no verifier's record (out/verifier.json)" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("marks", [{}, {"loopback": "no"}, {"loopback": False, "local": 1},
@@ -1493,7 +1520,7 @@ def test_from_a_records_directory_reads_it_with_nothing_of_ours(store, capsys, t
 def test_the_verifiers_node_is_the_one_card_of_the_tree_sheets():
     """`--local`'s share is of the card it ran on and its host: the verifier's node is one card of the node sheet,
     read from the tree's data sheets, not the eight-card node `verifier_process.py` defaults to."""
-    from verity.protocols.accounting.poub.verifier import ledger, timing
+    from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
     eight = ledger.Node.stated(timing.RTX_PRO_6000_NODE)
     rtx, rtx_hbm = M.one_card("rtx-pro-6000-server-x8")
     assert rtx["spec_bytes_per_s"] == pytest.approx(eight.spec_bytes_per_s - 7 * timing.GPU_SPEC_BYTES_PER_S)

@@ -163,14 +163,14 @@ def test_after_replay_exports_only_a_passing_pair_zero(attn_world, tmp_path):
 
 
 @pytest.mark.slow
-def test_a_spent_time_budget_stops_the_draw_by_name(attn_world, tmp_path):
+def test_a_spent_time_budget_stops_the_sampling_by_name(attn_world, tmp_path):
     """The forked pool's check of the budget (`Limits.workers` is 8 unless set); `test_vu_store_budget` holds the serial one's."""
     s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, max_seconds=0.0))
     assert s["sets"] == [] and s["by_family"]
     assert all(c.get("drawn", 0) == 0 and c["not_drawn_time_budget"] > 0 for c in s["by_family"].values())
 
 
-def test_families_are_interleaved_in_the_draw(attn_world):
+def test_families_are_interleaved_in_the_sample(attn_world):
     bmap, committed = attn_world.bmap_and_reader()
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.population import population

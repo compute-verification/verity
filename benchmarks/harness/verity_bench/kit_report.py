@@ -13,6 +13,7 @@ re-exported by `kit`:
 
 from __future__ import annotations
 
+import enum
 import json
 import os
 import re
@@ -42,7 +43,13 @@ OWN_WORD = "coins by the record's own word, not checked"
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 #: research's run ids, the one form `record_dir` reads through the store
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-_UNSAID = object()
+
+
+class _Unsaid(enum.Enum):
+    UNSAID = enum.auto()
+
+
+_UNSAID = _Unsaid.UNSAID
 
 
 class NoRecord(ValueError):
@@ -117,7 +124,7 @@ def record(arg: str | os.PathLike, *, paths: list[str] | None = None) -> Record:
 def ran_with(coins: str, parameters: str, detail: str | None = None, *,
              verified: bool = False) -> tuple[str, dict[str, Any]]:
     """The run's coins and parameters as its one line, ``ran with: coins COINS; parameters PARAMETERS[ (DETAIL)]``, and
-    as the document's ``ran_with``; `detail` is the command's own words (draws, δ, scheme, key). Words other than
+    as the document's ``ran_with``; `detail` is the command's own words (its sample, δ, scheme, key). Words other than
     `COINS`' and `PARAMETERS`' are refused. `verified` is True only where the command itself checked the challenger's
     signature on the coins against a pinned key; the deployed challenger's coins without it are the record's own word,
     which the object holds as ``verified: false`` and `report` states (`OWN_WORD`) and never takes for an audit."""
@@ -138,7 +145,7 @@ _pair = ran_with
 
 def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
            document: bool = True, mark: str | None = None, out: str | os.PathLike | None = None,
-           ran_with: tuple[str, Mapping[str, Any]] | None | object = _UNSAID, accepted: bool | None = None,
+           ran_with: tuple[str, Mapping[str, Any]] | None | _Unsaid = _UNSAID, accepted: bool | None = None,
            why: str | None = None, made_up: bool = False, withdrawn: Sequence[str] = ()) -> int:
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
     JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its

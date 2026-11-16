@@ -72,7 +72,7 @@ choices favourable to the block:
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
 **The one bound** (`bound`, which `at` reads): the counting lemma over kinds K of block work, each a lower
-bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
+bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(q_K(k)/c), q_K the yield of a block of kind K: each kind's term, the max, the kind it binds on and what each
 kind rests on (`RESTS_ON`). Where Fit fails the record's slowdown is the entry point's, max(1, that max); where Fit holds it is
 c/(c − d), and every term is at most that. Its one kind:
 - products: the theorem of record's count on M (`RESTS_ON` has its statement), a theorem for the run's circuit given

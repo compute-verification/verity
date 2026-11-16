@@ -72,7 +72,7 @@ def test_incorrect_outputs_capacity_is_where_detection_reaches_one_minus_delta()
 def test_incorrect_outputs_are_the_same_in_either_regime_and_undetected_unregistered():
     onsite = operating.incorrect(REG, build(REG, "reference-onsite-nvl72"))
     assert operating.incorrect(REG, build(REG, "reference-remote-h200")) == onsite
-    # every unit proved: the first incorrect block is sampled, so the channel carries J ln(1/δ) (1 + floor) blocks' bits,
+    # every proof block proved: the first incorrect block is sampled, so the channel carries J ln(1/δ) (1 + floor) blocks' bits,
     # each the widest public size class of a block's outputs
     assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * partition_v2.SIZE_CLASS_MAX)
     unregistered = operating.incorrect(REG, build(REG, "unregistered-h200-kimi"))

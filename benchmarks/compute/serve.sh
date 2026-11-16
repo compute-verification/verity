@@ -7,8 +7,8 @@
 #
 # Steps, each one's log in $OUT/logs/STEP.log and its exit status a line of $OUT/steps.txt:
 #   1. cubin: Pearl-C's sm_90a cubin built from this tree (benchmarks/harness/setup/pearl_c_sm90.sh: nvcc, its SASS gates);
-#   2. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card, under `gpu-lease 1` where the machine
-#      has it (GPU picks the card, default 0) and directly otherwise: with no warm-up, CLASS's fixed load, SLOTS requests of
+#   2. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card: the caller's gpu-lease's where serve.sh
+#      runs under one, else under `gpu-lease 1` where the machine has it (GPU picks the card, default 0), else directly: with no warm-up, CLASS's fixed load, SLOTS requests of
 #      PROMPT seeded random tokens and OUTPUTS outputs each, every engine step one pass retained under PASSES;
 #   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
 #      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
@@ -48,12 +48,15 @@
 # Lean both accept and run.py prints the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
-AUDITOR=verity/protocols/compose/device/live_challenger/auditor.py
+AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
+# under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
+# no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
+[ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
 SCHEME=pearl-c-h100-v1-h3
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
@@ -120,8 +123,10 @@ step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
     | tee -a "$OUT/steps.txt"
   return "$rc"
 }
-lease() {  # CMD...: on one card, under gpu-lease where the machine has it
-  if command -v gpu-lease > /dev/null; then
+lease() {  # CMD...: on one card: the caller's lease's, else under gpu-lease where the machine has it, else GPU
+  if [ -n "${GPU_LEASE_UUID:-}" ]; then
+    "$@"
+  elif command -v gpu-lease > /dev/null; then
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-compute-serve} gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${LEASE_MIN:-30}" -- "$@"
   else
     CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-$GPU} "$@"

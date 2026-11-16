@@ -79,7 +79,7 @@ def _ledger(root: Path) -> list[dict]:
 
 
 def test_the_local_challenger_samples_the_verifier_and_stop_leaves_none_of_its_processes(tmp_path, monkeypatch):
-    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
     from verity_vllm.pipeline.commit_coins import ChallengerGate
 
     root, out, scratch = tmp_path / "auditor", tmp_path / "out", tmp_path / "scratch"

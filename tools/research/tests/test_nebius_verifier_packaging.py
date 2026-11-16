@@ -1,5 +1,5 @@
 """The verifier host's packaging (`pods/nebius/verifier/`) against the gate it deploys
-(`verity/protocols/accounting/poub/device/live_verifier/host.py`): the sshd and tunnel files open the gate's ports and no
+(`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`): the sshd and tunnel files open the gate's ports and no
 others, `pin.sh` runs no unpinned code, `setup.sh` gives a tunnel key a pty only where its client forces one, and the
 deployed `verifier.json` has the shape the gate's own tests run on."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 PACKAGING = REPO / "tools/research/src/research/pods/nebius/verifier"
-LIVE_VERIFIER = REPO / "verity/protocols/accounting/poub/device/live_verifier"
+LIVE_VERIFIER = REPO / "verity/protocols/resource_accounting/memory/poub/attester/live_verifier"
 _spec = importlib.util.spec_from_file_location("live_verifier_host", LIVE_VERIFIER / "host.py")
 H = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H)
@@ -47,7 +47,7 @@ def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces
     (`ssh -T`), has no `pty`, and the challenger's keeps it only while serve.py forces one."""
     setup = (PACKAGING / "setup.sh").read_text()
     assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
-    serve = (REPO / "verity/protocols/compose/device/live_challenger/serve.py").read_text()
+    serve = (REPO / "verity/protocols/compose/verifier/live_challenger/serve.py").read_text()
     assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
         "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
 

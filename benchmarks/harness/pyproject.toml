@@ -62,51 +62,51 @@ inputs = [
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/credit_gate.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",
     "adapters/vllm/verity_vllm/protocols/pous.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/circuit.py",
-    "verity/protocols/accounting/pouw/prover/serving/device.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/prover.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/records.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/records.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
     "adapters/torch/verity_torch/pouw/h1/registered_device.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/static.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
-    "verity/protocols/accounting/pouw/prover/serving/native.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/native.py",
     "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "adapters/torch/verity_torch/pouw/pearl_c/graphs.py",
     "adapters/torch/verity_torch/pouw/pearl_c/grouped.py",
     "adapters/torch/verity_torch/pouw/pearl_c/host.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/kernel.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/lanes.py",
-    "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/kernel.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
     "adapters/torch/verity_torch/pouw/pearl_c/screen.py",
     "adapters/torch/verity_torch/pouw/pearl_c/screen_kernels.py",
     "adapters/torch/verity_torch/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
     "adapters/torch/verity_torch/pouw/pearl_c/whole_calls.py",
-    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda",
-    "verity/protocols/accounting/pouw/prover/serving/h1/kept.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/live.py",
-    "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/kept.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
     "adapters/torch/verity_torch/pouw/h1/tables_device.py",
     "benchmarks/vllm_encoded/bench_arm.py",
     "benchmarks/vllm_encoded/step_spans.py",
-    "verity/protocols/accounting/poub/prover/word_codec/paged.cu",
+    "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
-    "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu",
+    "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
@@ -125,7 +125,7 @@ inputs = [
     # door's runner, which a test runs
     "benchmarks/slowdown/data/reference.toml",
     "benchmarks/prove/run.py",
-    # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
+    # `verity bench exfiltration` reads the network attester's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
     # modules, with the figure's model, the cost model, the second stage's bound the cost model imports and the cards
     # they read, and the slowdown calculator's world fleet); a test runs its runner. How the calculator charges the stop class is the stop
@@ -133,7 +133,7 @@ inputs = [
     "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/second_stage.py",
     "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",
-    "verity/protocols/accounting/certifier/prover/stop_verdicts.py",
+    "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "benchmarks/exfiltration/run.py",
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
@@ -164,7 +164,7 @@ inputs = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bench.py", "tests/test_bench_engines.py", "tests/test_bench_results.py",
          "tests/test_bench_resume.py", "tests/test_bench_served.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/test_overhead_node.py",

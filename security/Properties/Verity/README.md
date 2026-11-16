@@ -11,7 +11,7 @@ subprotocol's own proof discharges it. This page says where it is, what it reads
 **Imports.** These modules import what the `Properties.Verity` entry of `layers` lists
 (`security/Properties/lean-audit.json`): the composites' compiled code, the definitions and the composition's
 properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) import them, and so do two readers of
-`Sha512.lean`: `security/Proofs/Accounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
+`Sha512.lean`: `security/Proofs/ResourceAccounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
 
 ## The theorem
 
@@ -73,7 +73,7 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
-| the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
+| the network attester | `NetworkAttesterSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
 | the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | yes |
 
 ## How to read it
@@ -90,7 +90,7 @@ In this order:
    positions, the coin families, the fixed extractor, each subprotocol's fixed collision finders and LMS forger, the gates
    computed, the world, and the published certificates, `δ`s, `ε_forge` and losses.
 4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (SPOT's on the extractor's
-   transcript, the five period claims as `Accounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
+   transcript, the five period claims as `ResourceAccounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
    case in the play's messages (`PolicyCase`), the Program its check judges and no field of `Vocab`, the wipe's as
    `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a` accepting its own case inside the composite's acceptance;
    `Vocab.error` is `δ + ε_forge + loss` where the finders and forger meet their premises, `⊤` elsewhere.
@@ -105,8 +105,8 @@ In this order:
 
 ## Where each target is discharged
 
-- **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
-  per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
+- **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network attester): a target is the
+  per-period guarantee `ResourceAccounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Compose/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
   a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
