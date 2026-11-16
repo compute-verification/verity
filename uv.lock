@@ -1030,7 +1030,7 @@ wheels = [
 [[package]]
 name = "memory-challenger-lean"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pous/device/lean" }
+source = { virtual = "verity/protocols/resource_accounting/memory/pous/attester/lean" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1465,7 +1465,7 @@ wheels = [
 [[package]]
 name = "pous-check"
 version = "0.1.0"
-source = { virtual = "verity/protocols/accounting/pous/verifier/check" }
+source = { virtual = "verity/protocols/resource_accounting/memory/pous/verifier/check" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -2700,12 +2700,12 @@ provides-extras = ["research", "exact-kit"]
 [[package]]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/check" }
+source = { virtual = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/window" }
+source = { virtual = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"

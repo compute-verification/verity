@@ -19,13 +19,13 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity_vllm.definitions.registry import boolean_io_shell as BIO
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-from verity.protocols.accounting.certifier.verifier import blocks as BK
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.verifier import blocks as BK
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = BK.SCAN_STATE
 #: the network certifier's cells at the class of record (w63,
-#: `verity.protocols.accounting.certifier.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
+#: `verity.protocols.resource_accounting.network.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
 #: request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 

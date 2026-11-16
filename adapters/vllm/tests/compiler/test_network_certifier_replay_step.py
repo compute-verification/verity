@@ -13,12 +13,12 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.compiler import replay_step as RS
-from verity.protocols.accounting.certifier.verifier.head_check import ands
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 
 ROOT = Path(__file__).parent.parent.parent.parent.parent
 #: a fetched fixture (`artifacts.json`), beside its writer's other vectors, which `suites.py` fetches before the suite runs
 #: (the suite's inputs hold `verity` and the registry), so a missing one fails these tests rather than skipping them
-FIXTURE = "verity/protocols/accounting/certifier/verifier/tests/fixtures/replay_step_vectors.json"
+FIXTURE = "verity/protocols/resource_accounting/network/verifier/tests/fixtures/replay_step_vectors.json"
 
 
 def _fixture():

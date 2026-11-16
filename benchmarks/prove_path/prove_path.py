@@ -358,8 +358,8 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     `challenger_session.LOCAL_PARAMS`, development; a gate's is its key record's, deployed only at `lms.DEPLOYED`'s W and H.
     A gate without its key record states none."""
     from verity.commitments.crypto import lms
-    from verity.protocols.proofs.spot.device import challenger as Ch
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     dep = lms.DEPLOYED
     if challenger == "local":
@@ -1263,7 +1263,7 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 def audit(a: argparse.Namespace) -> int:
     import a5 as A5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     world, ranks = ranks_of(a)
@@ -1651,8 +1651,8 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
     if not a.window_registration or getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-    from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
     if key and not a.h1_key:
         raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
@@ -1826,12 +1826,12 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     filled = WRS.Rows(low, slots, values)
     previous = None
     if tie is not None:
-        from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
         h1w, meta, _tables = tie
         values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
         previous = R.digest(h1w)
     elif pearl is not None:
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
         pw, manifests, rounds, _tables = pearl
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)

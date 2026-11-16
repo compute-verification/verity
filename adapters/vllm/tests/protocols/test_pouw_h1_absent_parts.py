@@ -10,30 +10,30 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.pouw.prover.serving.h1 import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     CHALLENGER,
     H1Run,
     registered,
 )
-from verity.protocols.accounting.pouw.prover.serving.h1.challenger import drawn_of
-from verity.protocols.accounting.pouw.prover.serving.h1.commit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger import drawn_of
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit import (
     ROOT_BYTES,
     SCHEME,
     UNTIED,
 )
-from verity.protocols.accounting.pouw.prover.serving.h1.requests import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests import (
     RoundOpening,
     slot_reason,
     step_digest,
     table_root,
     tables_reason,
 )
-from verity.protocols.accounting.pouw.prover.serving.h1.served import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served import (
     Served,
     declared,
     descriptor,
 )
-from verity.protocols.proofs.spot.device.challenger import OPENING_FORM, LiveCommitment
+from verity.protocols.proofs.spot.verifier.challenger.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.protocols.pouw.h1_ranks import Holder, RankExtension, executor_of

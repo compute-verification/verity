@@ -58,7 +58,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/resource_accounting/network/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -218,7 +218,7 @@ _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\
 
 ALLOWED: dict[str, str] = {
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
-    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/accounting/certifier/prover/scan_zk.py`): "
+    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/resource_accounting/network/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
@@ -744,7 +744,7 @@ def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/accounting/certifier/verifier/network/tests/a.py"
+    net = "verity/protocols/resource_accounting/network/verifier/network/tests/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'

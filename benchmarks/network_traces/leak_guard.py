@@ -80,7 +80,7 @@ import zipfile
 import zlib
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.prover import released_keys as RK
+from verity.protocols.resource_accounting.network.prover import released_keys as RK
 
 #: the system python3 of an exit before chain_record's setup may have no numpy: `Finder` then scans in pure Python.
 #: numpy's import starts its BLAS threads, which start with SIGTERM blocked: a SIGTERM the kernel gave one of them would
