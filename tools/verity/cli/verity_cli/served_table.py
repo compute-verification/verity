@@ -12,15 +12,16 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
 - ``gate``: the auditor's side of a session, which the auditor's gate starts on its host when the prover's piece opens it;
   `verity run` starts nothing for it;
 - ``runtime``: a party of its protocol's `ProtocolDef` (`Session`), which `verity run` starts on the machine the
-  configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece: the
-  wipe's, PoUS's rounds' and PoUB's parties. The auditor's side listens at its ``address`` binding and the prover's side
+  configuration places it on through the runtime (`verity.runtime.runner.run`), one run of the protocol a piece: PoUS's
+  rounds' and PoUB's parties. The auditor's side listens at its ``address`` binding and the prover's side
   dials it; a party whose manifest needs a clock gets the clock its header names (`RealClock(read, name)`). Its
   protocol starts it (`ProtocolDef.starts`: from the configuration, the piece's bindings and the party's state
   directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's.
+  composed verdict is the period's; for a set no Lean verifier takes (`verity.config.UNACCEPTED`), its rows combined
+  in Python, which the line's ``combined_by`` says.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
@@ -58,7 +59,6 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
@@ -260,8 +260,7 @@ class Session:
     """A protocol whose parties the table starts through the runtime (module docstring): its `ProtocolDef`'s halves,
     each a ``module:attribute`` (`_protocol_def`), whose manifests are one; each configuration party's role in it
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
-    configuration party that listens (``listener``, the auditor's), and whether the run ends before the served window
-    starts (``before``) or runs beside it. ``reads`` gives a configuration party's start, beside its bindings, the state
+    configuration party that listens (``listener``, the auditor's), whose run is beside the served window. ``reads`` gives a configuration party's start, beside its bindings, the state
     directory of another party's run on the same machine: binding name -> (component, party). ``starts`` are a role's
     starts the table makes, over its halves': a start handed what its protocol's code may not load."""
 
@@ -269,7 +268,6 @@ class Session:
     roles: Mapping[str, str]
     clocks: Mapping[str, tuple[Callable[[], int], str]]
     listener: str
-    before: bool = False
     reads: Mapping[str, Mapping[str, tuple[str, str]]] = field(default_factory=dict)
     starts: Mapping[str, Starter] = field(default_factory=dict)
 
@@ -386,12 +384,20 @@ def _pouw(cfg, params, bound):
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
 
 
-#: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
-#: header names
-WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger:PROTOCOL",
-                "verity.protocols.resource_accounting.memory.pous.prover.wipe_prover:PROTOCOL"),
-               {MEMORY_CHALLENGER: WP.CHALLENGER, PROVER: WP.PROVER}, {WP.CHALLENGER: (sw.raw_clock_ns, sw.CLOCK)},
-               MEMORY_CHALLENGER, before=True)
+WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
+#: served_wipe.sh's variable for each binding of the wipe's memory challenger
+_WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
+
+
+def _wipe(cfg, params, bound):
+    """The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
+    another; with no pin served_wipe.sh refuses."""
+    pin = next((p["key-sha512"] for p in cfg.get("pin", [])
+                if (p["party"], p["protocol"]) == (MEMORY_CHALLENGER, "wipe")), "")
+    return {"WIPE_CMD": f'WIPE_KEY_SHA512={pin} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
+            **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
+
+
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
 POUS = Session(("verity.protocols.resource_accounting.memory.pous.attester.challenger_party:PROTOCOL",
@@ -483,11 +489,12 @@ PARTIES: dict[str, dict[str, Piece]] = {
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
     },
     "wipe": {
-        PROVER: Piece("wipe", PROVER, RUNTIME, "the streamed wipe of the card before its engine loads, its session "
-                      "trusted only under the memory challenger's pinned key", reaches=MEMORY_CHALLENGER,
-                      binds=("address",), session=WIPE),
-        MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, RUNTIME, "the wipe's memory challenger, on its own coins "
-                                 "and raw clock, signing the session", binds=("address",), session=WIPE),
+        PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before the workload's engine loads "
+                      "(WIPE_CMD, served_wipe.sh), its session trusted only under the key the configuration pins for "
+                      "the memory challenger's wipe", scripts=(WIPE_SCRIPT,), reaches=MEMORY_CHALLENGER,
+                      binds=("address",), optional=("host", "command"), hooks=_wipe),
+        MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, GATE, "the gate: the wipe's memory challenger, on its own "
+                                 "coins and raw clock, signing the session"),
         VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),
     },
 }
@@ -612,8 +619,11 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
     """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
     (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
-    ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
+    ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
+    is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
+    theirs."""
+    node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
+    env = {**os.environ, **node, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -648,12 +658,19 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     rows = json.loads((state / "record" / "onsite" / "verdicts.json").read_text())["protocols"]
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
-    verdict = VERDICTS.get(line["composed"], "undecided")
-    return {"block": k, "components": components, "product": K.composite(cfg["protocols"], MANIFESTS),
-            "reason": line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None)
-            or (f"no row for {absent}" if absent else None),
-            "registration": None, "coins": coins_of(cfg),
-            "verdict": "undecided" if verdict == "accept" and absent else verdict}
+    verdict, product = VERDICTS.get(line["composed"], "undecided"), K.composite(cfg["protocols"], MANIFESTS)
+    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
+        or (f"no row for {absent}" if absent else None)
+    python = {}
+    if product in K.UNACCEPTED:
+        seen = set(components.values())
+        verdict = "reject" if seen & {"reject", "error"} else "accept" if seen == {"accept"} else "undecided"
+        reason = "; ".join(f"{c} {v}" for c, v in sorted(components.items()) if v != "accept") or None
+        python = {"combined_by": f"python: no Lean verifier takes {product}, so this verdict is its rows' verdicts "
+                                 "combined in Python (each accepts: accept; one rejects or errs: reject), not a Lean "
+                                 "verifier's"}
+    return {"block": k, "components": components, "product": product, "reason": reason, "registration": None,
+            "coins": coins_of(cfg), "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
 
 
 #: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
@@ -689,9 +706,8 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
-    """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
-    window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
-    the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
+    served window when the workload's party is here; a gate's side as started by the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
@@ -711,11 +727,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
         if (where := placement(cfg, x, got.get("outcome"))) is not None:
             mine.setdefault("placement", {})[x.component] = where
 
-    for x, start in ready:
-        if x.session.before:
-            done(x, start())
     with ThreadPoolExecutor(max_workers=max(1, len(ready))) as pool:
-        beside = [(x, pool.submit(start)) for x, start in ready if not x.session.before]
+        beside = [(x, pool.submit(start)) for x, start in ready]
         if WORKERS in here:
             rc = served_window(cfg, state, bindings)
             for p in here:
