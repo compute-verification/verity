@@ -1,3 +1,0 @@
-[2026-11-16T22:55Z] ddd1fb747f7a
-Coordinator 3:12 PM PST, for Task B: top ruled the demo sample is THREE PROOF BLOCKS OF ONE MEMBER (one template; proofs confirms several blocks of one circuit are one member). Soundness accepts a non-stratified tied sample for the smoke test on three conditions: stratified stays the default, the other is a named opt-in setting, and the record states the weaker tie in its own words so nothing cites it as the tied guarantee. Shape your uncommitted diff to that: name the setting, say how the audit is told to sample 3 blocks inside one template under the tie (or what is missing for that; proofs is reading the same), and what the record line says.
-
