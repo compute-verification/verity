@@ -47,8 +47,6 @@ uv run verity bench inference_only                   # and the class this tree b
 ~~~
 
 The last builds the Lean count and runs it on the class this tree builds, which is heavy work.
-[`DESIGN.md`](DESIGN.md) says what each section of the output means, how the record is read, and the policy file's
-keys.
 
 ## What you may change
 

@@ -39,7 +39,6 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 
 s_× and whole-in-a-block are defined only on a Boolean lowering: a word circuit's tensor-core step computes 16
 products in one gate. The package also reads off a word Program what the min-cut bound takes of a circuit at a
-policy's k, which the training benchmark holds beside its own reading of a trace. [`DESIGN.md`](DESIGN.md) holds each
-property's definition and the rules of that reading.
+policy's k, which the training benchmark holds beside its own reading of a trace.
 
 What it measured of a training step sits in `benchmarks/slowdown/data/circuits.toml`, each number with its source.

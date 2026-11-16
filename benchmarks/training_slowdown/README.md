@@ -6,7 +6,7 @@ one training step, and reads the run's slowdown at a policy off that step. The s
 its counted gates to a target gain over its honest config's, times that slowdown.
 
 What it gives is the attack search's own measurement of a run, not the slowdown's definition. The slowdown is the
-Glossary's, and [`DESIGN.md`](DESIGN.md) says how this measurement stands beside it. Nothing runs the attack search
+Glossary's. Nothing runs the attack search
 today: its commands are documented as they are, and none of them is a routine step.
 
 ## Try it
@@ -63,5 +63,5 @@ packages). The grader runs from `grader/`:
 python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.products.json] --out OUT.json
 ~~~
 
-[`DESIGN.md`](DESIGN.md) says what each command reads, prints and refuses, and the limits of the count. The suite is
+The suite is
 `uv run tools/check/suites.py benchmarks/training_slowdown`.

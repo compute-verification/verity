@@ -8,7 +8,7 @@ MAC of the model's forward matmuls, `Shape.outputs / Shape.macs`, and `b` a bf16
 `c`. That is `max(1, N / limit)`, `limit` the most of such work one block of the policy finishes
 (`Bound.macs_a_block`): the number is 1 where the count lets a block hold all of its own work as training.
 
-`stated` reads a policy's public numbers from a file (`served.toml`, whose keys DESIGN.md lists) and says what its `k`
+`stated` reads a policy's public numbers from a file (`served.toml`) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
 holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/slowdown`).
 `tied` reads the served class under the value tie (`tied.toml`), which `tied.py` prices over those periods.
