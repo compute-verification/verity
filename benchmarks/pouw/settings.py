@@ -139,7 +139,6 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
     S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
     S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
-    # ---------------------------------------------------------------- hidden_zk's staging (served_stage.py)
     S("HZ_STAGE", str, "fast", WHERE, "how a hiding tile is staged: fast (fast_stage's patches) or library, the same bytes"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
     # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
