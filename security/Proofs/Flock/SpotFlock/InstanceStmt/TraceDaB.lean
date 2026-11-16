@@ -68,7 +68,7 @@ open Flock FlockSoundness
 open SpotFlock.InstanceStmt.TraceDelta (EX OX)
 
 set_option maxRecDepth 200000
-set_option maxHeartbeats 0 -- the kernel evaluates the parsed circuit's output rows' pairs
+set_option maxHeartbeats 200000000 -- the kernel evaluates the parsed circuit's output rows' pairs
 
 namespace SpotFlock.InstanceStmt.TraceDaB
 
