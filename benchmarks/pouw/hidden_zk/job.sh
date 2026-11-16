@@ -62,8 +62,18 @@ vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
 tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
   | xargs -0 sha256sum | sha256sum | cut -c1-16); }
 
+# check's Rust pin (check_build.sh's RUST_TOOLCHAIN default): a machine's default toolchain, or a home with none, doesn't decide it
+RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-$(sed -n 's/^RUST_TOOLCHAIN=\${RUST_TOOLCHAIN:-\(.*\)}$/\1/p' \
+  "$SRC/verity/protocols/proofs/flock/prover/check_build.sh")}
+
 build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/flock-circuit-selftest
   export PATH="$HOME/.cargo/bin:$PATH"
+  [ -n "$RUST_TOOLCHAIN" ] || { echo "no RUST_TOOLCHAIN pin in verity/protocols/proofs/flock/prover/check_build.sh" >&2; return 1; }
+  command -v rustup >/dev/null \
+    || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null || return 1
+  rustup toolchain list | grep -q "^$RUST_TOOLCHAIN-" \
+    || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal >/dev/null || return 1
+  export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
@@ -121,7 +131,7 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
+  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)-rust$RUST_TOOLCHAIN" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
