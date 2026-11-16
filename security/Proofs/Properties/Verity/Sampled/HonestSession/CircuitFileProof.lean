@@ -483,10 +483,11 @@ theorem cR_leavesIn : cR.leavesIn = #[#[-1]] := by kernel_rfl'
 theorem cR_leavesOut : cR.leavesOut = #[#[0]] := by kernel_rfl'
 theorem cR_perVu : cR.perVu = #[1, 1, 1] := by kernel_rfl'
 theorem cR_wires : cR.wires = #[⟨(2, 0, 0), (1, 0, 0)⟩] := by kernel_rfl'
-theorem cR_ranges_size : cR.ranges.size = 4 := by kernel_rfl'
-/-- The ranges' kinds, slots, positions and counts in META's order (hm96, sha512x3, the unit, the mask); their `packed`
-flags are not stated: the kernel does not reduce META's lookup of the absent key. -/
-theorem cR_ranges : cR.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) =
-    [(.net 2, 18, 0, 1), (.net 1, 18, 1, 1), (.net 0, 9, 1024, 1), (.mask, 14, 64, 1)] := by kernel_rfl'
+/-- META's ranges in its order: hm96, sha512x3, the unit, the mask. -/
+theorem cR_ranges : cR.ranges = #[
+    { kind := .net 2, slotLog := 18, pos0 := 0, count := 1, role := .none, packed := false },
+    { kind := .net 1, slotLog := 18, pos0 := 1, count := 1, role := .none, packed := false },
+    { kind := .net 0, slotLog := 9, pos0 := 1024, count := 1, role := .none, packed := false },
+    { kind := .mask, slotLog := 14, pos0 := 64, count := 1, role := .none, packed := false }] := by kernel_rfl'
 
 end Verity.Sampled.Instance.HonestSession.CircuitFileProof
