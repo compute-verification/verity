@@ -8,7 +8,8 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.Hex
 
 The descriptor parses to `program`, its query's population is the public file's one proof block, the sampling design
 the verifier derives from it is the subset of one, and the partition object's digest is `partitionDigestB`: the named
-proposition `ProgramFacts`, which is not proved. The pieces that use it take it as a hypothesis. `PopMatches` is `popCheck`'s verdict, which
+proposition `ProgramFacts`, proved with no hypothesis by `ProgramPop.programFacts`. The pieces that use it take it as a
+hypothesis. `PopMatches` is `popCheck`'s verdict, which
 evaluates the partition object's validity (`isSha512Hex` of the program's spliced SHA-512, `Hex.isSha512Hex_hexOf`) and
 the query over the descriptor; no step evaluates a hash. `Array.qsort` over the descriptor's keys is read by
 `qsort_of_sorted`, the keys being ascending.
@@ -20,7 +21,7 @@ namespace Verity.Sampled.Instance.HonestSession
 
 open Flock
 
-/-- **Facts about the concrete program, not proved**: the descriptor parses to `program` with SHA-512 `programSha`, its
+/-- **Facts about the concrete program** (`ProgramPop.programFacts`): the descriptor parses to `program` with SHA-512 `programSha`, its
 query's population matches the public file's, the sampling design is the subset of one, a verifier holding the session's
 program, query, law and work table derives that design, and the partition object's digest is `partitionDigestB`. -/
 structure ProgramFacts : Prop where
