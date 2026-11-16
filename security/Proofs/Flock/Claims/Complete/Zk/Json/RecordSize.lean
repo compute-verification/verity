@@ -41,7 +41,7 @@ theorem jsz_recordObjZk_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size
     jsz (recordObjZk spec h hz ct #[rb] points streams proofs) ≤
       18 * hz.length + jsz (spec.unitSample.getD Json.null) + jsz ct.toJson + 72 * spec.sigma.size +
         36 * rb.size + 36 * t.length + points.size * (579 * Q + 2 + 1) + 579 * spec.points +
-        spec.repStreams.size * (18 * L + R * (M + 4747) + 36 * E + 4500 + 1) +
+        spec.repStreams.size * (18 * L + R * (M + 4747) + 40 * E + 4500 + 1) +
         spec.repStreams.size * (18 * L + 2900 + 1) + 30000 := by
   have hK : ∀ p ∈ recordListZk spec h hz ct #[rb] points streams proofs, p.1.length ≤ 16 :=
     keys_le (by

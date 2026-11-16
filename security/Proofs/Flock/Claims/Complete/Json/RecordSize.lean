@@ -12,7 +12,7 @@ Each value the record writes has a weight (`jsz`) read off what it holds: a numb
 (`jsz_toJson_le`), a byte string's hex 36 per byte and two quotes (`jsz_hexJ`), a coin 578 (`jsz_f128J`), a digest's
 hex at most 2306 (`dgOf_size_le`); an object of distinct keys of at most sixteen characters weighs its values, 292 per
 field and two braces (`jsz_mkObj_keys`), and an array its elements, one per comma and two brackets (`jsz_arr_le`).
-A round then weighs at most `579` per coin and `36` per message byte above a constant (`jsz_roundObj_le`), and a rep
+A round then weighs at most `579` per coin and `40` per message byte above a constant (`jsz_roundObj_le`), and a rep
 stream its name, its label and its rounds (`jsz_streamObj_le`).
 -/
 
@@ -36,6 +36,21 @@ theorem jsz_toJson_le {n : ℕ} (hn : n < 10 ^ 20) : jsz (Lean.toJson n) ≤ 80 
   have h2 := (Nat.length_repr_le_iff (n := n) (k := 20) (by decide)).2 hn
   have h3 := size_le_length (Nat.repr n)
   omega
+
+/-- A number's weight, at any size: at most four per its value and eighty. -/
+theorem jsz_toJson_gen (n : ℕ) : jsz (Lean.toJson n) ≤ 4 * n + 80 := by
+  by_cases hn : n < 10 ^ 20
+  · have := jsz_toJson_le hn
+    omega
+  · have h1 : jsz (Lean.toJson n) = (Int.repr (n : Int)).utf8ByteSize := rfl
+    rw [Int.repr_eq_ite, if_pos (by omega)] at h1
+    simp only [Int.toNat_natCast] at h1
+    have hlt : n < 10 ^ (n + 1) :=
+      (by first | exact Nat.lt_pow_self (by norm_num) | exact Nat.lt_pow_self (by norm_num) _ : n < 10 ^ n).trans
+        (Nat.pow_lt_pow_right (by norm_num) (by omega))
+    have h2 := (Nat.length_repr_le_iff (n := n) (k := n + 1) (by first | decide | omega | simp | positivity)).2 hlt
+    have h3 := size_le_length (Nat.repr n)
+    omega
 
 theorem hexOf_len (b : ByteArray) : (hexOf b).length = 2 * b.size := by
   rw [← String.length_toList, Properties.NetworkRecords.Bytes.hexOf_toList, List.length_flatMap]
@@ -146,15 +161,15 @@ theorem jsz_mkObj_keys {l : List (String × Json)} (hd : Distinct l) {K : ℕ} (
 /-! ## A round and a rep stream -/
 
 theorem jsz_roundObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 64) (spec : SessionSpec) {k : ℕ}
-    {r : Round} (hk : k < 10 ^ 20) (hn : r.n < 10 ^ 20) (hm : (r.bytes.getD ByteArray.empty).size < 10 ^ 20) :
-    jsz (roundObj spec h k r) ≤ 579 * r.coins.size + 36 * (r.bytes.getD ByteArray.empty).size + 2200 + 2306 + 240 := by
+    {r : Round} (hk : k < 10 ^ 20) (hn : r.n < 10 ^ 20) :
+    jsz (roundObj spec h k r) ≤ 579 * r.coins.size + 40 * (r.bytes.getD ByteArray.empty).size + 2200 + 2306 + 240 := by
   have hK : ∀ p ∈ roundList spec h k r, p.1.length ≤ 16 :=
     keys_le (by rcases dk_cases spec with e | e <;> simp only [roundList, e, List.map_cons, List.map_nil] <;>
       first | decide +kernel | decide)
   have e0 := jsz_mkObj_keys (roundList_distinct spec h k r) hK
   have e1 := jsz_toJson_le hk
   have e2 := jsz_toJson_le hn
-  have e3 := jsz_toJson_le hm
+  have e3 := jsz_toJson_gen (r.bytes.getD ByteArray.empty).size
   have e4 := jsz_dg_le hh spec (r.bytes.getD ByteArray.empty)
   have e5 := jsz_coins r.coins
   have e6 := jsz_hexJ (r.bytes.getD ByteArray.empty)
@@ -168,11 +183,10 @@ theorem jsz_roundObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 
 theorem jsz_streamObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 64) (spec : SessionSpec)
     (rootB : Array ByteArray) (q : (Nat × Nat × String) × Array Round) {M E : ℕ} (hq : q.2.size < 10 ^ 20)
     (hr : ∀ (k : ℕ) (hk : k < q.2.size), (q.2[k]'hk).n < 10 ^ 20 ∧
-      ((q.2[k]'hk).bytes.getD ByteArray.empty).size < 10 ^ 20 ∧
-      579 * (q.2[k]'hk).coins.size + 36 * ((q.2[k]'hk).bytes.getD ByteArray.empty).size ≤
-        M + (if k = 0 then 36 * E else 0)) :
+      579 * (q.2[k]'hk).coins.size + 40 * ((q.2[k]'hk).bytes.getD ByteArray.empty).size ≤
+        M + (if k = 0 then 40 * E else 0)) :
     jsz (streamObj spec h rootB q) ≤
-      18 * (q.1.2.2.length + (spec.domain spec.tables[q.1.1]! q.1.2.1).length) + q.2.size * (M + 4747) + 36 * E +
+      18 * (q.1.2.2.length + (spec.domain spec.tables[q.1.1]! q.1.2.1).length) + q.2.size * (M + 4747) + 40 * E +
         4500 := by
   have hK : ∀ p ∈ streamList spec h rootB q, p.1.length ≤ 16 :=
     keys_le (by rcases dk_cases spec with e | e <;> simp only [streamList, e, List.map_cons, List.map_nil] <;>
@@ -181,13 +195,13 @@ theorem jsz_streamObj_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size =
   have e1 := jsz_toJson_le (n := 0) (by decide)
   have e2 := jsz_dg_le hh spec rootB[q.1.1]!
   have e3 := jsz_arr_le_first ((Array.range q.2.size).map fun k => roundObj spec h k q.2[k]!) (B := M + 4746)
-    (F := 36 * E) (by
+    (F := 40 * E) (by
     intro k hk
     have hk' : k < q.2.size := by simpa using hk
     simp only [Array.getElem_map, Array.getElem_range]
     rw [getElem!_pos q.2 k hk']
-    obtain ⟨h1, h2, h3⟩ := hr k hk'
-    have := jsz_roundObj_le hh spec (k := k) (by omega) h1 h2
+    obtain ⟨h1, h3⟩ := hr k hk'
+    have := jsz_roundObj_le hh spec (k := k) (by omega) h1
     split_ifs at h3 ⊢ <;> omega)
   rw [Array.size_map, Array.size_range] at e3
   generalize hW : jsz (Json.mkObj (streamList spec h rootB q)) = W at e0
@@ -281,13 +295,13 @@ theorem zip_size_le {α β : Type} (as : Array α) (bs : Array β) : (as.zip bs)
 def NamesLe (spec : SessionSpec) (L : ℕ) : Prop :=
   ∀ q ∈ spec.repStreams, q.2.2.length + (spec.domain spec.tables[q.1]! q.2.1).length ≤ L
 
-/-- Each recorded stream has at most `R` rounds, each of at most `M` in coins and message bytes, the first of at most
-`M + 36 E`. -/
+/-- Each recorded stream has at most `R` rounds, each of at most `M` in coins and message bytes (a byte counting 40), the first of at most
+`M + 40 E`. -/
 def StreamsLe (streams : Array (Array Round)) (R M E : ℕ) : Prop :=
   ∀ rs ∈ streams, rs.size ≤ R ∧
-    ∀ (k : ℕ) (hk : k < rs.size), (rs[k]'hk).n < 10 ^ 20 ∧ ((rs[k]'hk).bytes.getD ByteArray.empty).size < 10 ^ 20 ∧
-      579 * (rs[k]'hk).coins.size + 36 * ((rs[k]'hk).bytes.getD ByteArray.empty).size ≤
-        M + (if k = 0 then 36 * E else 0)
+    ∀ (k : ℕ) (hk : k < rs.size), (rs[k]'hk).n < 10 ^ 20 ∧
+      579 * (rs[k]'hk).coins.size + 40 * ((rs[k]'hk).bytes.getD ByteArray.empty).size ≤
+        M + (if k = 0 then 40 * E else 0)
 
 /-- **The plain record's values weigh at most** what its spec's text, its root, its points and its streams do. -/
 theorem recordList_sum_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String}
@@ -297,12 +311,12 @@ theorem recordList_sum_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size 
     ((recordList spec h #[rb] points streams proofs).map fun p => jsz p.2).sum ≤
       18 * spec.hello.length + jsz (spec.unitSample.getD Json.null) + 72 * spec.sigma.size + 36 * rb.size +
         36 * t.length + points.size * (579 * Q + 2 + 1) + 579 * spec.points +
-        spec.repStreams.size * (18 * L + R * (M + 4747) + 36 * E + 4500 + 1) +
+        spec.repStreams.size * (18 * L + R * (M + 4747) + 40 * E + 4500 + 1) +
         spec.repStreams.size * (18 * L + 2900 + 1) + 12000 := by
   have e1 := jsz_linkObj_le hh ht rb hp
   have e2 := jsz_dg_le hh spec (lbOf spec #[rb] points)
   have e3 := jsz_arr_le ((spec.repStreams.zip streams).map (streamObj spec h #[rb]))
-    (B := 18 * L + R * (M + 4747) + 36 * E + 4500) (by
+    (B := 18 * L + R * (M + 4747) + 40 * E + 4500) (by
       intro j hj
       obtain ⟨q, hq, rfl⟩ := Array.mem_map.1 hj
       obtain ⟨hq1, hq2⟩ := mem_zip_of hq
@@ -318,7 +332,7 @@ theorem recordList_sum_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size 
       have := jsz_proofObj_le hh spec q
       omega)
   rw [Array.size_map] at e3 e4
-  have e5 := Nat.mul_le_mul_right (18 * L + R * (M + 4747) + 36 * E + 4500 + 1) (zip_size_le spec.repStreams streams)
+  have e5 := Nat.mul_le_mul_right (18 * L + R * (M + 4747) + 40 * E + 4500 + 1) (zip_size_le spec.repStreams streams)
   have e6 := Nat.mul_le_mul_right (18 * L + 2900 + 1) (zip_size_le spec.repStreams proofs)
   have e7 : jsz (Json.mkObj [("require_link", Json.bool true)]) ≤ 18 * 12 + 5 + 6 :=
     jsz_mkObj_one "require_link" (Json.bool true)
