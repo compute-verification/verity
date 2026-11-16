@@ -1,18 +1,10 @@
 # verity_vllm.observe.fold
 
-The fold: a raw observation log and a profile become a record Program. Its modules are the resolver, the versioned
-memory, the kernel patterns (`patterns/`) and the profiles (`profiles/`); `fold.py`'s docstring has the contract.
+The fold turns a raw observation log back into a Program. The observer records a run as a long list of the engine's
+calls. The fold resolves each call against a pinned profile, which says what the pinned vLLM, torch, Triton and GPU
+compute, and folds the calls into a record Program, in the same form as the Program the Build derived. The Match then
+compares the two.
 
-## Interface
-
-What the integration's other packages and the benchmarks import from this package, module by module. From `fold`:
-`fold`, `FoldResult` and `summarize`. From `resolver`: `Compute`, `Transparent`, `Profile` and `parts_of`. From
-`resolve_log`: `resolve_log` and `load_profile`, and the `resolve-log` command runs its `main` over its `Options`. From
-`tree`: `step_events`. From `supplied`: `program_registered_values`. From `patterns.collectives`: `allreduce_settings`;
-from `patterns.sampling`: `with_sampler_construction`; from `patterns.pouw`: `with_protocols`. From `profiles`:
-`profile_for_case` and `profile_module_for_case`, and a profile is also imported by its module's name,
-`verity_vllm.observe.fold.profiles.<name>`. From `profiles.generic`: `derive_config`, `effective_sliding_window`,
-`module_name`, `rank_hf_config`, `router_vpt_bf16` and `structural_refusal`, and `program.predict.dsa` also reads its
-private `_MLA_SCALES` and `_mla_weight_field`. Each of these modules but `profiles.generic` declares its names in
-`__all__`. The other modules that declare one (`patterns` and five of its modules, two of `profiles`) declare it for
-the fold's own files and the tests: no library module outside the fold imports a name from them.
+It needs no torch. `verity-vllm resolve-log --profile PROFILE LOG` resolves one log against a profile and prints what
+each event resolved to; its `--help` gives the options. `fold.py`'s docstring has the fold's contract, and
+[`DESIGN.md`](DESIGN.md) lists which names other code imports from each module.
