@@ -201,6 +201,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for what a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `adapters/vllm/` until vLLM's workloads move | workload; a workload of record |
+| "benchmark row", "benchmark cell", "bench cell", "measured cell", "metric row", "metrics row"; "proof table" for the proof benchmarks' results; "row" and "cell" for what a benchmark recorded (a table's row, a commitment row and Dither's cell keep their senses) | a benchmark result, or a metric for one named number of it (Terms of one area) |
 | "link-window", "link window"; code and records' `window` (`NetworkCertifierParams.window`), the Lean's `TransferBlocks` and `TransferBlocksAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.commitments.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
 | "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
@@ -370,8 +371,13 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   A replay block is *closed* when it reads no other replay block's values, recomputing from its own inputs any it
   needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
   served cap of S bits charges each replay block at most F S.
-- **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
-  hardware.
+- **Benchmark**: one command that measures and records its numbers (`verity bench NAME`, a directory's runner under
+  `benchmarks/`).
+- **Metric**: one named number a benchmark records, declared as one `[[metric]]` of its directory's `metrics.toml`
+  (`benchmarks/README.md`).
+- **Benchmark result**: what one run of a benchmark recorded in one configuration. A proof benchmark's
+  configuration is a proof system (or an archived one's backend id) × statement × input set × prover hardware
+  (`verity_numerical.bench.cell`).
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
   anchor (the registered weights root, the client's request commitment, the challenger's live coins), always, never sampled.
