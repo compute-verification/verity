@@ -616,7 +616,7 @@ def period_roots_instance(rng: random.Random, name: str = "honest") -> dict:
     """A `period` case's ledger, key and name with the roots its windows present (`credit.presented`), as `credit.period`
     takes them; none for windows not of the evidence's form."""
     case = credit_cases.period_instance(rng, name)
-    roots = Cr.presented(case["windows"]) if Cr._formed(case["windows"], Cr.PERIOD_KEYS) else []
+    roots = Cr.presented(case["windows"]) if Cr._formed(case["windows"], Cr.PROVED_KEYS) else []
     return {"key": case["key"], "ledger": case["ledger"], "name": case["name"], "roots": roots}
 
 
