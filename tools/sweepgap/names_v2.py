@@ -110,7 +110,7 @@ for r in rows:
     if term == "memory challenger":
         if f.endswith(".lean") and not re.fullmatch(r"(?i)memory challengers?", sp):
             add(term, sp, "Lean name", f, ln, kind, own, "NAME-LATER", "", "a Lean name: lean's names pass, in a later PR")
-        elif kind == "prose" or f.endswith(".lean"):
+        elif re.fullmatch(r"(?i)memory challengers?", sp) and (kind == "prose" or f.endswith(".lean")):
             add(term, sp, "prose", f, ln, kind, own, "RENAME", re.sub(r"(?i)challenger", lambda mo: "Attester" if mo.group(0)[0] == "C" else "attester", sp), "")
         else:
             add(term, sp, kind, f, ln, kind, own, "NAME-LATER", "", "an identifier, key or string: the Glossary row and the names move come in a later PR; memory-accounting renames its own files")
