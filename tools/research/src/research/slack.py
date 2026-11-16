@@ -1060,7 +1060,7 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
 
 
 # --- routing: `@name` at the start of a post wakes that name's agent ---------------------------------------------------------
-# The rule is `route_targets`, a pure function pinned by tests/slack_routing_vectors.json.  Delivery is a doorbell: the post itself (`doorbell`), as a reply in the
+# The rule is `route_targets`, a pure function pinned by tests/tools/research/slack_routing_vectors.json.  Delivery is a doorbell: the post itself (`doorbell`), as a reply in the
 # target's inbox thread, which its agent subscribes to.
 
 def ours(msg: dict | None, reg: dict) -> bool:
