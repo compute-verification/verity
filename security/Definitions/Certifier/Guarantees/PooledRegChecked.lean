@@ -27,10 +27,15 @@ open Claims.SamplingGeneric (Arg Compiled)
 set_option linter.unusedVariables false
 
 /-- **The leak through the network attester over a monitoring period, at the trace with the registered openings, with
-the checked inputs left out.** `PooledLeakRegistered`'s setting, with the network attester's one run giving the cells
-the client receives and the phases' observations (`trusted-device`), reading back under a registered parameter of `Θ`
-(`RecordFormat.ReadsBy`, `MonitoringPeriodChannelReg` at each sample of the coins), and each phase's check pinning its
-checked inputs (`CheckedUnique`) and holding on the run at its trace with the registered openings except with
+the checked inputs left out, given `PhaseChecks`**: a conditional bound, whose premise `PhaseChecks` is open and
+discharged by no check today. `valid` is any `Prop` on a run, so the statement alone would let a reader pick a `valid`
+no verifier evaluates and move the whole count into `εchk`. The check meant is a deployed one that pins its checked
+inputs (`CheckedUnique`) with a proved bound on its miss, `MemCheck_v1`'s offline check run every run on its own live
+coins; until that check's miss bound is proved at `regRunR`, the number to quote is `PooledLeakRegistered`'s, without
+`chk`. `PooledLeakRegistered`'s setting, with the network attester's one run giving the cells the client receives and
+the phases' observations (`trusted-device`), reading back under a registered parameter of `Θ` (`RecordFormat.ReadsBy`,
+`MonitoringPeriodChannelReg` at each sample of the coins), and each phase's check pinning its checked inputs
+(`CheckedUnique`) and holding on the run at its trace with the registered openings except with
 probability `εchk i` (`PhaseChecks`). For every secret:
 
 * every phase is accepted, registered as the period's and with a complete record while the period's good event with

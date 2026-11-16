@@ -527,7 +527,8 @@ theorem encard_pooledRegChecked_le {Lk K S m : ℕ} (lay : AuditStatement → Bo
           exact (hread θ _ hal hfit (arr (srv z))).symm)
 
 /-- **The leak through the network attester over a monitoring period, at the trace with the registered openings, with
-the checked inputs left out**: `Guarantees.PooledLeakRegisteredChecked`. The bound is `pooledChecked_of_event` at
+the checked inputs left out, given `PhaseChecks`**: `Guarantees.PooledLeakRegisteredChecked`, conditional on that open
+premise. The bound is `pooledChecked_of_event` at
 `PooledLeakRegistered`'s event bound (`Compiled.ksRegR_of_sessionKS`) and its registration facts; the count is
 `encard_pooledRegChecked_le` at each sample of the coins, a registered phase's `WregR` holding only its partition's
 proof blocks (`fregR_lt`). -/
