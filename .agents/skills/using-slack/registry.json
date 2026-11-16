@@ -453,7 +453,6 @@
         "hardware/",
         "benchmarks/pouw/tensor_kinds/",
         "benchmarks/pouw/opcode_probe/",
-        "benchmarks/pouw/sass_census/",
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
