@@ -6744,8 +6744,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Properties.NetworkScan.Flattens"],
+    "domain": ["Properties.NetworkScan.Flattens"],
+    "open": [],
     "reads": []
    },
    "type_hash": "3bc0c8f7cfb2d13135dd40e28b4c705bdbbc93fe4b623452ba8387bbcb3288b2",
