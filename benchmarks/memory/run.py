@@ -116,7 +116,10 @@ REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
-RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", "node.json"]
+#: the verifier's one-card node a --local run writes into its records before the session starts (its `--node`): the mark
+#: of a --local run, read where the run died before its out/memory.json
+NODE_FILE = "out/local-node.json"
+RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", NODE_FILE]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
@@ -370,13 +373,13 @@ def kind(doc: dict) -> str | None:
 
 def kind_of(tree: Path, run: str) -> str | None:
     """What `run`, whose records are under `tree`, was (`kind`), as the document this command left in it says. A
-    document about another run, or one that doesn't say, says nothing of this run's session, and a `--local` run
-    (its node.json) that left no document isn't printed as a node's either."""
+    document about another run, or one that doesn't say, says nothing of this run's session, and a `--local` run that
+    died before its document (its `NODE_FILE`, which only `local()` writes) isn't printed as a node's either."""
     doc = left(tree)
     if not doc:
-        if (tree / "node.json").is_file():
-            raise Unreadable(f"{run} holds --local's node.json but no out/memory.json saying what it was, so it isn't "
-                             "printed as a node session")
+        if (tree / NODE_FILE).is_file():
+            raise Unreadable(f"{run} holds --local's {NODE_FILE} but no out/memory.json saying what it was, so it "
+                             "isn't printed as a node session")
         return None
     if doc.get("run") != run:
         raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so what {run}'s own session "
@@ -587,9 +590,9 @@ def local(run: Callable = subprocess.run) -> dict:
         (work / "runs").mkdir(parents=True, exist_ok=True)
         held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
     env["RESEARCH_RUN_DIR"] = held
-    Path(held).mkdir(parents=True, exist_ok=True)
-    (Path(held) / "node.json").write_text(json.dumps(node, sort_keys=True))
-    env["VERIFIER_ARGS"] = " ".join(filter(None, [env.get("VERIFIER_ARGS"), "--node", shlex.quote(f"{held}/node.json"),
+    (Path(held) / NODE_FILE).parent.mkdir(parents=True, exist_ok=True)
+    (Path(held) / NODE_FILE).write_text(json.dumps(node, sort_keys=True))
+    env["VERIFIER_ARGS"] = " ".join(filter(None, [env.get("VERIFIER_ARGS"), "--node", shlex.quote(f"{held}/{NODE_FILE}"),
                                                   "--hbm-bytes", str(hbm_bytes)]))
     print(f"memory: --local serves {row} on {name}, the verifier's node one card of {kind}; its records go to "
           f"{held}/out", file=sys.stderr)

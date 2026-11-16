@@ -358,7 +358,7 @@ def test_a_recorded_local_session_is_printed_as_one_and_writes_no_node_result(st
     it is still a `--local` measurement, in the text and in the JSON, and writes its one-machine row, never the
     node's."""
     held = a_run(monkeypatch, tmp_path)
-    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())), "node.json": {},
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())), M.NODE_FILE: {},
                     "out/memory.json": {"value": 0.25, "run": RUN, "loopback": False, "local": M.LOCAL}})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
@@ -367,11 +367,22 @@ def test_a_recorded_local_session_is_printed_as_one_and_writes_no_node_result(st
     assert M.METRIC not in got and got[M.LOCAL_METRIC]["value"] == doc["value"]
 
 
-def test_a_local_run_that_left_no_document_is_not_printed_as_a_node_session(store, capsys):
-    store.add(RUN, {"out/verifier.json": a_record(a_session()), "node.json": {}})
+def test_a_local_run_that_died_before_its_document_is_not_printed_as_a_node_session(store, capsys, work, monkeypatch,
+                                                                                    tmp_path):
+    """The records a real `--local` run leaves, read back as they would be had it died after the session and before
+    writing its document: its node file marks it, so it is refused, by run id and by directory alike."""
+    held = a_run(monkeypatch, tmp_path)
+    assert bench(store, "--local", run=Machine()) == 0
+    capsys.readouterr()
+    (held / "out" / "memory.json").unlink()
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("RESEARCH_RUN_ID")
+    store.add(RUN, {f: (held / f).read_text() for f in ("out/verifier.json", M.NODE_FILE)})
     assert bench(store, "--from", RUN) == 2
     out, err = capsys.readouterr()
-    assert out == "" and f"{RUN} holds --local's node.json but no out/memory.json saying what it was" in err
+    assert out == "" and f"{RUN} holds --local's {M.NODE_FILE} but no out/memory.json saying what it was" in err
+    assert M.main(["--from", str(held)], store_of=lambda: store) == 2
+    assert f"holds --local's {M.NODE_FILE}" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("marks", [{}, {"loopback": "no"}, {"loopback": False, "local": 1},
@@ -1134,8 +1145,9 @@ def test_local_serves_the_cards_row_with_the_verifier_beside_it_and_says_first_i
     assert text[3] == f"  session 0 of no recorded run, commit {COMMIT}: accepted by the Lean verifier"
     assert doc["machine"] == {"card": "NVIDIA H200", "sheet": "h200-sxm-141gb-x1", "sheet_sha256": M.digest(M.SHEETS),
                               "verifier_sha256": M.digest(M.VERIFIER)}
-    node = json.loads((Path(env["RESEARCH_RUN_DIR"]) / "node.json").read_text())
-    assert env["VERIFIER_ARGS"] == f"--node {env['RESEARCH_RUN_DIR']}/node.json --hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}"
+    node = json.loads((Path(env["RESEARCH_RUN_DIR"]) / M.NODE_FILE).read_text())
+    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
+                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
     assert node == M.one_card("h200-sxm-141gb-x1")[0]
     assert (doc["loopback"], doc["value"], doc["commit"]) == (False, 0.199, COMMIT)
     assert [(r["value"], r["why"]) for r in doc["beside"]] == [(None, M.NO_STORE)] * 2 and store.asked == []
