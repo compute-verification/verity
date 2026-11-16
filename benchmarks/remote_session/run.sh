@@ -171,6 +171,7 @@
 #
 # Start the prover first: its lease waits for all 8 GPUs, and once it holds them it waits for the verifier's tunnel;
 # start the verifier then.
+case "${1:-}" in -h | --help) sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;; esac
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 refuse() { echo "run.sh: refused: $*"; exit 3; }
