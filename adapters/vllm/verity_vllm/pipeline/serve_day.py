@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import device as S
+from verity.channel import Refused
 from verity.protocols.registration.verifier import registration as G
 from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
@@ -144,14 +145,14 @@ def declare(opts: Any, out: Path) -> Day | None:
     if d.day_params:
         try:
             params = G.params_of(json.loads(M.read(Path(d.day_params), "MonitoringPeriodDeclaration")))
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, Refused) as e:
             raise UsageError(f"--day-params {d.day_params}: {e}") from None
     try:
         day = append(Path(d.day_log), G.Declaration(d.day, d.day_program, blocks_of(d.day_blocks)), params)
     except G.Refused as e:
         raise UsageError(f"--day {d.day}: the registration log {d.day_log} refuses its declaration, {e}: day {d.day} is "
                          "declared already, to another circuit, and a day has one") from None
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, Refused) as e:
         raise UsageError(f"--day-log {d.day_log}: {e}") from None
     (out / FILE).write_text(json.dumps({**day.describe(), "entry": day.entry.to_json()}, indent=1, sort_keys=True) + "\n")
     return day

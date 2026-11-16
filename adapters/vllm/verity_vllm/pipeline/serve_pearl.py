@@ -40,6 +40,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from verity.channel import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as PS
 from verity_vllm import messages as M
 
@@ -71,7 +72,7 @@ def config_of(value: str | None) -> dict[str, Any]:
         doc = load_settings(None if value is None else json.loads(M.body("PoUWScheme", value.encode())
                                                                   if value.lstrip().startswith("{")
                                                                   else M.read(Path(value), "PoUWScheme")))
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, Refused) as e:
         raise UsageError(f"--protocols-config {str(value)[:80]}: {e}") from None
     if stray := sorted(set(doc) - {"pouw"}):
         raise UsageError(f"--protocols-config: {stray} are not Pearl+'s (pouw)")

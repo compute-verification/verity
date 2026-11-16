@@ -85,6 +85,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from verity.channel import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1_PROGRAM as PROGRAM,
 )
@@ -209,7 +210,7 @@ def config_of(value: str | None) -> dict[str, Any]:
     try:
         doc = load_settings(json.loads(M.body("PoUWScheme", value.encode()) if value.lstrip().startswith("{")
                                        else M.read(Path(value), "PoUWScheme")))
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, Refused) as e:
         raise UsageError(f"--protocols-config {value[:80]}: {e}") from None
     if stray := sorted(set(doc) - {"pouw"}):
         raise UsageError(f"--protocols-config: {stray} are not the enabled protocols' (pouw)")
