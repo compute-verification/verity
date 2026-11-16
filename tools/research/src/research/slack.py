@@ -111,12 +111,17 @@ from zoneinfo import ZoneInfo
 
 try:
     from . import vocabulary, waitcap
-    from .timefmt import both, slack_dates
+    from .timefmt import DEADLINE_WORDS, both, slack_dates, stamp_ahead
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
         @staticmethod
         def retired(text: str) -> list[tuple[str, str]]:
             return []
+
+    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}   # timefmt's
+
+    def stamp_ahead(text: str, now: Any) -> str | None:
+        return None
 
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
@@ -915,8 +920,14 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
 
 
 HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
-DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
 STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def not_ahead(text: str) -> str:
+    """`text`, unless its first line's header time is ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
+    if why := stamp_ahead(text, _now()):
+        raise SlackError(why)
+    return text
 
 
 def stamp_time(text: str, now: datetime) -> str:
@@ -1800,7 +1811,7 @@ def _body(ns: argparse.Namespace) -> str:
         text = sys.stdin.read()
     if not text.strip():
         raise SlackError("empty message")
-    return text.rstrip()
+    return not_ahead(text.rstrip())
 
 
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
@@ -2193,7 +2204,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value or brief, "the TEXT (or --file BODY.md)")
+        text = not_ahead(need(value or brief, "the TEXT (or --file BODY.md)"))
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
@@ -2937,25 +2948,30 @@ def comment_by(c: dict) -> str | None:
 RECORD_UNREADABLE = "unreadable"                                     # the record of an ask's answer (Linear, Notion) couldn't be read
 
 
-def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]]) -> tuple[bool, str]:
-    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
-    someone other than `asker` commented on it; and the state that says so.  Not taken when Linear can't say, so a doubtful
-    ask still shows."""
-    if ident not in cache:
+def issue_state(ident: str, asker: str | None, to: list[str], cache: dict[tuple[str, tuple[str, ...]], tuple[bool, str]]
+                ) -> tuple[bool, str]:
+    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or a
+    handle in `to` (or its worker, `HANDLE/NAME`) commented on it, or, with `to` empty, anyone but `asker` did; and the state
+    that says so.  Not taken when Linear can't say, so a doubtful ask still shows."""
+    key = (ident, tuple(sorted(to)))
+    if key not in cache:
         from . import linear
         q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } body } } } }"
         try:
             i = linear.Linear().gql(q, {"id": ident})["issue"]
-            other = next((w for c in i["comments"]["nodes"] if (w := comment_by(c)) and w != asker), None)
+            others = sorted({w for c in i["comments"]["nodes"] if (w := comment_by(c)) and w != asker})
+            asked = next((w for w in others if not to or w in to or w.split("/")[0] in to), None)
             if i["state"]["type"] != "backlog":
-                cache[ident] = (True, f"left Backlog ({i['state']['type']})")
-            elif other:
-                cache[ident] = (True, f"commented on by {other}")
+                cache[key] = (True, f"left Backlog ({i['state']['type']})")
+            elif asked:
+                cache[key] = (True, f"commented on by {asked}")
+            elif others:
+                cache[key] = (False, f"in Backlog, no comment by {', '.join('@' + h for h in to)} (commented on by {', '.join(others)})")
             else:
-                cache[ident] = (False, "in Backlog, no comment but the asker's")
+                cache[key] = (False, "in Backlog, no comment but the asker's")
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
-            cache[ident] = (False, f"{RECORD_UNREADABLE} ({e})")
-    return cache[ident]
+            cache[key] = (False, f"{RECORD_UNREADABLE} ({e})")
+    return cache[key]
 
 
 def issue_commenters(ident: str, cache: dict[str, set[str] | str]) -> set[str] | str:
@@ -3336,7 +3352,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
-    taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
+    taken: dict[tuple[str, tuple[str, ...]], tuple[bool, str]] = {}   # (Linear issue, handles asked) -> (taken, its state)
     said: dict[str, set[str] | str] = {}                             # Linear issue -> who commented on it, or why unreadable
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
@@ -3358,7 +3374,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a machine's alert (`vy-monitors`) isn't an ask
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
-            answered, state = issue_state(link[1], x["by"], taken)
+            answered, state = issue_state(link[1], x["by"], x["to"], taken)
             answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
         elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):

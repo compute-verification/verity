@@ -50,7 +50,7 @@ def test_the_driver_takes_every_rank_of_the_world_and_only_those(tmp_path, got, 
 @pytest.mark.parametrize("cfg, deferred, arm, refused", [
     ({}, "full", None, False), (None, "full", None, True), ({}, None, None, True), ({}, "full", "control", True)],
     ids=["deferred", "no-required-manifest", "in-process-replay", "control-only"])
-def test_a_commit_whose_windows_could_not_come_before_every_draw_is_refused(cfg, deferred, arm, refused):
+def test_a_commit_whose_windows_could_not_come_before_every_sample_is_refused(cfg, deferred, arm, refused):
     args = SimpleNamespace(serving_rows="request.json", replay_deferred=deferred, only_arm=arm)
     if refused:
         with pytest.raises(SystemExit, match="--serving-rows on a TP Commit needs"):

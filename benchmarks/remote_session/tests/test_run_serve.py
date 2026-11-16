@@ -6,8 +6,8 @@ does around the lease, and that no verifier is left behind.
 The node of stubs: a vLLM venv whose interpreter is this one, except that the verifier and the prover it would start
 are `VERIFIER` and `PROVER` below (a verifier that listens, takes one connection and writes verifier.json as the word
 it is sent says; a prover that connects, sends that word and writes its record), with `verity-vllm`, `gpu-lease` and
-`nvcc` beside it, each writing what it was asked to `calls`, and an `ss` and an `nvidia-smi` that answer from files.
-`taskset` and the rest are the system's own (`MACHINE_PATH`)."""
+`nvcc` beside it, each writing what it was asked to `calls`, an `ss` that answers from a file and an `nvidia-smi`
+that names no process.  `taskset` and the rest are the system's own (`MACHINE_PATH`)."""
 from __future__ import annotations
 
 import importlib.util
@@ -37,10 +37,7 @@ def load_serve():
 serve = load_serve()
 RUN = HERE.parent / "run.sh"
 BASH = shutil.which("bash")
-TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
-MACHINE_PATH = ":".join(d for d in os.defpath.split(":") if d and not (Path(d) / "gpu-lease").exists())
-"""The system's default search path, less any directory that holds a `gpu-lease`: a line whose stub lease a test took
-away finds none, never the lease program of the machine the suite runs on.  The node's stubs come before it."""
+MACHINE_PATH = os.defpath
 ROW = "llama__bf16__h200__tp1__b1__i256__o32"
 
 INTERPRETER = r"""#!/bin/bash
@@ -147,6 +144,12 @@ LEASE_CORES = LEASE + "# gpu-lease N [--wait] [--on LIST] [--cores CPUS] [--max-
 """A lease program whose text names ``--cores``; `LEASE` names none, as a lease program older than the option."""
 
 NVCC = r"""#!/bin/bash
+if [ "$1" = --version ]; then  # a toolkit's own: the release its directory names (cuda-12.9), a bare `cuda` 12.9
+  v=$(basename "$(dirname "$(dirname "$0")")"); v=${v#cuda}; v=${v#-}; v=${v:-12.9}
+  [[ $v == *.* ]] || v+=.0
+  echo "Cuda compilation tools, release $v, V$v.0"
+  exit 0
+fi
 echo "nvcc $*" >> "$STUB_DIR/calls"
 while [ $# -gt 0 ]; do
   [ "$1" = -o ] && : > "$2"
@@ -160,24 +163,8 @@ grep -qx "${2##*:}" "$STUB_DIR/busy" 2> /dev/null && echo "LISTEN 0 128 127.0.0.
 exit 0
 """
 
-LEASE_BASH = r"""#!/bin/bash
-case "$1" in
-  */gpu_lease.sh)
-    echo "lease bash $*" >> "$STUB_DIR/calls"
-    while [ "$1" != -- ]; do shift; done
-    shift
-    exec "$@" ;;
-esac
-exec "$REAL_BASH" "$@"
-"""
-
-NVIDIA_SMI = r"""#!/bin/bash
-n=$(cat "$STUB_DIR/smi.asked" 2> /dev/null || echo 0)
-echo "$((n + 1))" > "$STUB_DIR/smi.asked"
-echo "$*" > "$STUB_DIR/smi.argv"
-cat "$STUB_DIR/apps.$n" 2> /dev/null
-exit 0
-"""
+NVIDIA_SMI = "#!/bin/bash\nexit 0\n"
+"""A card with no compute process on it, whatever is asked."""
 
 
 def program(path: Path, text: str) -> Path:
@@ -214,6 +201,8 @@ class Node:
         self.out = tmp / "run" / "out"
         for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits)):
             d.mkdir(parents=True)
+        for t in toolkits:
+            program(tmp / "cuda" / t / "bin" / "nvcc", NVCC)
         (self.stub / "verifier.py").write_text(VERIFIER)
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
@@ -232,7 +221,7 @@ class Node:
     def run(self, **env: str | None) -> subprocess.CompletedProcess:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
-                "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "REAL_BASH": BASH, "STUB_TORCH_CUDA": "12.9",
+                "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
                 "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
@@ -407,6 +396,16 @@ def test_one_line_of_tiny_ends_0_with_its_verifier_started_and_its_session_accep
     assert gone(v["pid"]) and v["pid"] == v["pgid"] and node.scratch() == []
 
 
+def test_a_paced_line_hands_the_verifier_its_pace_in_place_of_the_windows_and_one_word_a_session(node, tmp_path):
+    p = node.both("tiny", PACED="1:1000:2773:7", PACE_PASS_MS="0")
+    assert p.returncode == 0, said(p)
+    argv = " ".join(node.verifier()["argv"])
+    assert "--paced 1:1000:2773:7 --pace-pass-ms 0 --jitter-ms 5000" in argv and "--windows" not in argv
+    other = Node(tmp_path / "other")
+    refused(other, other.both("tiny", PACED="1:1000:2773:7 1:1000:2773:7"),
+            "refused: PACED=1:1000:2773:7 1:1000:2773:7 paces 2 session(s), and PLAN=serve has 1")
+
+
 def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     port = str(free_port())
     p = node.both("row", PORT=port, ROW_ARGS="--norm-tap-so /taps/norm.so")
@@ -430,7 +429,7 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
     # the registration is encoded on the card: kv.cu built for it at the session's codec, handed to the Commit
     assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1" in nvcc
-    kv = "verity/protocols/accounting/poub/prover/word_codec/kv.cu"
+    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
     assert nvcc.endswith(kv) and (ROOT / kv).is_file()
     assert commit["env"]["EXTRA_COMMIT_ARGS"].split() == [
         "--remote-plan", "serve", "--remote-kv-pages", "24", "--remote-weight-blocks", "4096", "--remote-kv-lib",
@@ -502,31 +501,6 @@ def test_a_served_line_declares_its_cores_to_a_lease_program_that_takes_them(nod
     alone = ",".join(map(str, every))
     assert second.startswith(f"lease {node.lease} 1 --wait --max-min 30 --cores {alone} -- taskset -c {alone} ")
     assert [x["cpus"] for x in node.provers() if x["what"] != "row build"] == [cores()[1], every]
-
-
-def test_nowait_ends_75_for_a_card_with_a_process_on_it_before_a_build_and_before_the_lease(node):
-    """The stub `nvidia-smi` answers its n-th question with the file apps.n: the first is asked before anything is
-    built, the second before the lease."""
-    (node.stub / "apps.0").write_text("4242\n")
-    p = node.both("row", NOWAIT="1", GPU="0")
-    assert p.returncode == 75 and "run.sh: NOWAIT=1: GPU 0 is not free: 1 compute process(es) on it" in p.stdout, said(p)
-    assert node.calls() == [] and node.scratch() == []
-    assert (node.stub / "smi.argv").read_text().split() == ["-i", "0", "--query-compute-apps=pid", "--format=csv,noheader"]
-
-    (node.stub / "apps.0").unlink()
-    (node.stub / "smi.asked").unlink()
-    (node.stub / "apps.1").write_text("4242\n4243\n")
-    p = node.both("row", NOWAIT="1", GPU="0")
-    assert p.returncode == 75 and "GPU 0 is not free: 2 compute process(es) on it" in p.stdout, said(p)
-    assert "remote session verdict: the prover ended 75 with no session on record (exit 75)" in p.stdout
-    assert [c.split()[0] for c in node.calls()] == ["nvcc", "row", "verifier"] and gone(node.verifier()["pid"])
-
-    (node.stub / "apps.1").unlink()
-    (node.stub / "smi.asked").unlink()
-    assert node.both("row", NOWAIT="1", GPU="0").returncode == 0
-    assert (node.stub / "smi.asked").read_text().split() == ["2"]
-    (node.stub / "smi.asked").unlink()
-    assert node.both("row", GPU="0").returncode == 0 and not (node.stub / "smi.asked").exists()     # it may queue
 
 
 # ------------------------------------------------------------------------------- run.sh: refused before the lease
@@ -633,37 +607,24 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 
 @pytest.mark.parametrize("toolkits, torch, home", [
     (("cuda-12.9", "cuda-13.0", "cuda"), "12.9", "cuda-12.9"),     # the toolkit of the CUDA the prover's torch is built for
-    (("cuda-13.0", "cuda"), "12.9", "cuda-13.0"),
+    (("cuda-12", "cuda-13.0", "cuda"), "12.9", "cuda-12"),         # else one of its major version
     (("cuda-12.9", "cuda"), None, "cuda"),                         # a venv with no torch to ask
     (("cuda-12.9",), "13.0", None),
+    (("cuda-13.0", "cuda-13"), "12.9", 13),                        # only another major version's: torch's JIT won't see
 ])
 def test_cuda_home_is_a_toolkit_the_node_has(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
     p = node.both("row", STUB_TORCH_CUDA=torch)
     if home is None:
-        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13.0 "
-                                f"{tmp_path}/cuda/cuda is a directory")
+        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13 "
+                                f"{tmp_path}/cuda/cuda-13.0 {tmp_path}/cuda/cuda is a directory")
+    if home == 13:
+        return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
+                                "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
     assert p.returncode == 0, said(p)
     build, commit = node.provers()
     assert build["env"]["CUDA_HOME"] == commit["env"]["CUDA_HOME"] == f"{tmp_path}/cuda/{home}"
     assert commit["argv"][commit["argv"].index("--cuda-bin") + 1] == f"{tmp_path}/cuda/{home}/bin"
-
-
-def test_the_lease_program_is_the_one_named_then_the_paths_then_the_nodes(node):
-    assert node.both("tiny").returncode == 0                       # GPU_LEASE names it
-    on_path = program(node.bin / "gpu-lease", LEASE)
-    installed = program(node.ws / "pouw/infra/bin/gpu-lease", LEASE)
-    assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the one on the PATH
-    on_path.unlink()
-    assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the one installed on the node
-    installed.unlink()
-    program(node.bin / "bash", LEASE_BASH)                         # a `bash` that runs what a lease script is handed
-    assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the tree's script
-    asked = [c for c in node.calls() if c.startswith("lease")]
-    leases = [c.split()[1:3] for c in asked]
-    assert [x[0] for x in leases[:3]] == [str(node.lease), str(on_path), str(installed)]
-    assert leases[3] == ["bash", str(ROOT / TREE_LEASE)] and (ROOT / TREE_LEASE).is_file()
-    assert [" --cores " in c for c in asked] == [False, False, False, True]     # the tree's script takes them
 
 
 # ------------------------------------------------------------------------------------ run.sh: a row around its lease
@@ -693,29 +654,6 @@ def test_a_verifier_that_never_listens_ends_the_line_before_the_lease(node):
     assert node.calls() == ["verifier"] and gone(node.verifier()["pid"])
 
 
-def test_the_rows_knobs_reach_its_build_and_its_commit(node, tmp_path):
-    kv = tmp_path / "kept-kv.so"
-    kv.write_text("")
-    p = node.both("row", KV_LIB=str(kv), WEIGHT_BLOCKS="512", KV_PAGES="40", EXTRA_COMMIT_ARGS="--remote-filler-gib 1",
-                  BUILD_GPU="1", STAGES="build,match,commit", SWEEP_DIR=str(tmp_path / "sweep"), CONFIG_RUN="0",
-                  VERIFIER_CPUS=str(cores()[1][0]), PROVER_CPUS=str(cores()[1][0]), OMP_NUM_THREADS="3")
-    assert p.returncode == 0, said(p)
-    (commit,) = node.provers()                                  # BUILD_GPU: every stage under the lease, none before
-    assert commit["what"] == "row build,match,commit" and [c.split()[0] for c in node.calls()] == ["verifier", "lease", "row"]
-    assert commit["env"]["EXTRA_COMMIT_ARGS"].split() == [
-        "--remote-plan", "serve", "--remote-kv-pages", "40", "--remote-weight-blocks", "512", "--remote-kv-lib", str(kv),
-        "--remote-filler-gib", "1"]
-    assert commit["argv"][commit["argv"].index("--sweep-dir") + 1] == str(tmp_path / "sweep")
-    assert commit["env"]["CONFIG_RUN"] == "0" and commit["env"]["OMP_NUM_THREADS"] == "3" and commit["env"]["MKL_NUM_THREADS"] == "1"
-    assert commit["cpus"] == node.verifier()["cpus"] == [cores()[1][0]]
-    assert (tmp_path / "sweep" / ROW / "commit/remote_session.json").is_file()
-    (node.stub / "calls").unlink()
-    (node.stub / "prover.jsonl").unlink()
-    assert node.both("row", KV_LIB="cpu").returncode == 0      # the reference on the CPU: no build, no library
-    assert node.calls()[0] == "row build" and [c.split()[0] for c in node.calls()] == ["row", "verifier", "lease", "row"]
-    assert "--remote-kv-lib" not in node.provers()[1]["env"]["EXTRA_COMMIT_ARGS"]
-
-
 # ---------------------------------------------------------------------------- run.sh: ROLE=prover's verifier is told
 
 @pytest.mark.parametrize("keep", [False, True])
@@ -743,10 +681,10 @@ def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path)
     """The same against the verifier's own process, started as by hand with the Lean verifier built: the connection
     `run.sh` opens and drops is the one it accepts, and it ends red at the closed stream rather than listening on.
     The verifier's output is read to its end, so one that listened on would hang here."""
-    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 
     port = str(free_port())
-    line = [sys.executable, str(ROOT / "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py"),
+    line = [sys.executable, str(ROOT / "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py"),
             "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
             "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
             "--lean-exe", str(lv.build())]

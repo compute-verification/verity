@@ -136,6 +136,36 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     assert prof.checkpoint_for("ROLE_X", m) == made
 
 
+def test_a_pin_absent_at_the_manifests_path_is_read_from_its_revision_under_hf_home(tmp_path, monkeypatch) -> None:
+    """A recipe pin made under this process's HF_HOME (not the manifest's hf_home) is served from that snapshot of its revision;
+    with neither there, the refusal names both places, and another revision's snapshot under HF_HOME is not taken."""
+    import json
+
+    import pytest
+
+    from verity_vllm.engine import engine_profile as prof
+
+    rev = "15b0976d400d" + "0" * 28
+    entry = {"repo": "org/model-int8", "role": "ROLE_X", "revision": rev, "recipe": {"id": "verity-int8-channel127/v1"},
+             "local_path": str(tmp_path / "manifest-hf" / "gone")}
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [entry]}))
+    hf = tmp_path / "job-hf"
+    monkeypatch.setenv("HF_HOME", str(hf))
+    here = hf / "hub" / "models--org--model-int8" / "snapshots" / rev
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("ROLE_X", m)
+    assert str(refused.value) == f"org/model-int8: local snapshot {entry['local_path']} missing, and none of its revision at {here} (HF_HOME)"
+    (here.parent / ("4e20de362430" + "1" * 28)).mkdir(parents=True)
+    with pytest.raises(SystemExit, match="none of its revision at"):
+        prof.checkpoint_for("ROLE_X", m)
+    here.mkdir()
+    assert prof.checkpoint_for("ROLE_X", m) == dict(entry, local_path=str(here))
+    monkeypatch.delenv("HF_HOME")
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("ROLE_X", m)
+    assert str(refused.value) == f"org/model-int8: local snapshot {entry['local_path']} missing"
+
+
 def test_a_role_two_pins_carry_is_refused_with_both_revisions(tmp_path) -> None:
     """A role names one checkpoint.  Two pins under one role are refused, each named by its revision's first twelve characters,
     where the first pin's snapshot would have been served; under a role of its own each resolves to its own snapshot."""

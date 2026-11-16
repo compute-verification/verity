@@ -8,12 +8,13 @@
 # `check.py --record --on MACHINE --priority --timeout 36000 --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
-# (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
+# (but verifier/sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
 # changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`; when its pick had a slot free, on two others at most, which join their lines only after a delay, `--twin-after`): the first to
-# take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every twin exits 75
+# take a slot runs the check and the others exit 75, not started, so RUN names one id per twin (but a twin whose launch a
+# machine refused: the wait goes on past that refusal for every other twin's id). When every twin exits 75
 # (check.py's own exit 75), none of them ran: rerun the train.
 #
 # `--deferred STEP,...`: drive's after-landing run and its lock run in place of the check: only those ci.toml jobs and what
@@ -50,7 +51,7 @@
 # origin/main, or its parent for a commit on main) or that origin doesn't hold. A COMMIT a branch of origin pointed at when it
 # started and none does once it holds the clone's lock (the queue dropped it meanwhile) launches nothing and exits 0.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '/^set -euo pipefail$/q;2,$p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect=
 while [ $# -gt 0 ]; do
@@ -107,8 +108,10 @@ if [[ $shard == auto:* ]]; then [ -n "$plan" ]; else [ -z "$plan" ]; fi \
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
 [ -z "$plan" ] || pass+=(--shard-plan-file "$plan")
-# the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
-settings=tools/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
+# the settings.py beside this script first: the tree's, or the one of the same commit that the queue's loop puts beside its copy of
+# this script, run from outside the tree (`research.landing.detach`, `TRAIN_COMPANIONS`); then the tree it runs in
+settings="$(dirname "$0")/settings.py"; [ -f "$settings" ] || settings=tools/check/settings.py
+[ -f "$settings" ] || { echo "train: no settings.py beside $0 nor at $PWD/$settings: run train.sh from a tree, or with its own commit's settings.py beside it (research.landing.TRAIN_COMPANIONS)" >&2; exit 1; }
 python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
@@ -209,9 +212,14 @@ setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN
   ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
-# with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
+# with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check. A
+# twin whose launch was refused or crashed (`twin_lost`) counts as done, and the wait goes on for the others' run ids: the one
+# that runs may be among them, and a run id missing from RUN is a run the queue neither follows nor cancels with its candidate.
+# A chained exception prints one Traceback header per link, joined by `twin_chained`'s lines, so a crash counts once
 # 60 min: the queue launches a check's shards at once, each placing itself and shipping its tree to its machine
 launch_wait_s=3600
+twin_lost='^research run --on [^ ]+: refused: |^research: run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} refused on |^Traceback \(most recent call last\)'
+twin_chained='^(The above exception was the direct cause of the following exception|During handling of the above exception, another exception occurred):$'
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break
@@ -219,7 +227,11 @@ for _ in $(seq $((launch_wait_s / 5))); do
   on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
   [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
   [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
-  grep -qE "refused|Traceback" "$log" && break
+  if [ -z "$on" ]; then
+    grep -qE "refused|Traceback" "$log" && break
+  elif [ $(( $(wc -w <<<"$ids") + $(grep -cE "$twin_lost" "$log" || true) - $(grep -cE "$twin_chained" "$log" || true) )) -ge "$want" ]; then
+    break
+  fi
   sleep 5
 done
 ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true

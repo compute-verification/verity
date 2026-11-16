@@ -302,10 +302,10 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -437,20 +437,15 @@ def test_train_launch_gives_train_sh_no_cache_circuit_checks_cache_and_ratchet_g
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
-def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
-    """The records run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh takes the flag
-    (`takes_bookkeeping`); a train.sh that predates it would refuse every records run, so it isn't given it."""
-    from research.landing import takes_bookkeeping, train_launch
+def test_the_records_run_gives_train_sh_bookkeeping_warn(tmp_path):
+    """The records run repairs bookkeeping and warns (`--bookkeeping-warn`), which `train_launch` passes on to train.sh."""
+    from research.landing import train_launch
 
     sh = tmp_path / "tools" / "check" / "train.sh"
     sh.parent.mkdir(parents=True)
-    assert not takes_bookkeeping(tmp_path)
-    sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
-    assert takes_bookkeeping(tmp_path)
+    sh.write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="lean-audit", bookkeeping_warn=True)
     assert ids == ["r20261027-120000-aaaa"] and f"argv: {'c' * 40} m1 --deferred lean-audit --bookkeeping-warn" in tail, tail
-    sh.write_text('echo "argv: $*"\n')
-    assert not takes_bookkeeping(tmp_path)
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
@@ -468,6 +463,7 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
     (repo / "tools" / "check").mkdir(parents=True)
     (repo / "tools" / "check" / "train.sh").write_text(
         'echo "rank=[$CHECK_SLOT_RANK] argv=[$*]"\necho "RUN r20261103-140000-aaaa"\n')
+    monkeypatch.setattr(landing, "OWN_TRAIN", repo / "tools" / "check" / "train.sh")
     d = Landing(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
 
     def tail(job: dict) -> str:
@@ -478,14 +474,13 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
     ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
         d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
-    assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
+    assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
-def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping_where_train_sh_takes_it(
-        tmp_path, monkeypatch):
+def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping(tmp_path, monkeypatch):
     """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_after_landing` and
     `launch_locks`), a candidate's check with the loop's own train.sh when given one (``train_from``), and the records run with
-    `--bookkeeping-warn` where the clone's train.sh takes it (`takes_bookkeeping`)."""
+    the loop's own (`OWN_TRAIN`) and `--bookkeeping-warn`, whatever the clone's train.sh says."""
     import types
 
     from research.landing import launched
@@ -495,7 +490,8 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
     repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261110-100000-aaaa"
     for path, who in ((repo / "tools" / "check" / "train.sh", "clone"), (own, "own")):
         path.parent.mkdir(parents=True)
-        path.write_text(f'# --bookkeeping-warn\necho "{who} n=$GIT_CONFIG_COUNT argv=[$*]"\necho "RUN {rid}"\n')
+        path.write_text(f'echo "{who} n=$GIT_CONFIG_COUNT argv=[$*]"\necho "RUN {rid}"\n')
+    monkeypatch.setattr(landing, "OWN_TRAIN", own)
     d = Landing(types.SimpleNamespace(auth=("-c", "credential.helper="), workdir=repo), on="m1")
 
     def tail(job: dict) -> str:
@@ -506,7 +502,7 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
     assert d.launch(repo, "c" * 40, "m1", False) == ([rid], f"clone n=1 argv=[{'c' * 40} m1]\nRUN {rid}")
     assert f"own n=1 argv=[{'c' * 40} m1 --deferred pytest]" in tail(
         d.launch_after_landing(repo, "c" * 40, "m1", "pytest", train_from=own))
-    assert f"clone n=1 argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(
+    assert f"own n=1 argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(
         d.launch_locks(repo, "c" * 40, "m1"))
 
 
@@ -586,6 +582,91 @@ def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone
         os.waitpid(job["pid"], 0)
     ids, tail = launched(job)
     assert ids == [rid] and f"train: own in {repo}" in tail, tail
+
+
+#: train.sh's refusal after its `settings.py --of-record`, where these launches stop: the rest of a launch needs the store
+NO_STORE_KEY = "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)"
+
+
+def _launchable(monkeypatch, tmp_path: Path) -> None:
+    """Launches under ``tmp_path`` in an environment `settings.py --of-record` takes (no check setting, no debug one) and
+    train.sh then refuses for want of the store's key (`NO_STORE_KEY`)."""
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    for k in [k for k in os.environ if k.startswith(("CHECK_", "LEAN_SLOT"))]:
+        monkeypatch.delenv(k)
+    for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN", "AWS_ACCESS_KEY_ID", "R2_ENDPOINT"):
+        monkeypatch.delenv(k, raising=False)
+
+
+def _clone_off_the_new_layout(tmp_path: Path, tree: str) -> tuple[Path, str]:
+    """The queue's clone with a branch at a commit of the new layout (tools/check/, this tree's train.sh and settings.py), its
+    working tree at a commit of the old one (tools/verity/check/), and with ``tree`` "emptied" no file at all, or with "stale" a
+    settings.py of another commit at tools/check/ (a hand-placed one): the clone and the new layout's commit."""
+    from research.landing import OWN_TRAIN
+
+    repo = tmp_path / "clone"
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check" / "settings.py").write_text("raise SystemExit('settings: the old layout')\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "old layout")
+    _git(repo, "checkout", "-q", "-b", "new")
+    _git(repo, "rm", "-q", "-r", "tools/verity")
+    (repo / "tools" / "check").mkdir(parents=True)
+    for f in (OWN_TRAIN, OWN_TRAIN.parent / "settings.py"):
+        (repo / "tools" / "check" / f.name).write_bytes(f.read_bytes())
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "new layout")
+    new = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    assert not (repo / "tools" / "check").exists()
+    if tree == "emptied":
+        for p in repo.iterdir():
+            if p.name != ".git":
+                shutil.rmtree(p)
+    elif tree == "stale":
+        (repo / "tools" / "check").mkdir()
+        (repo / "tools" / "check" / "settings.py").write_text("raise SystemExit('settings: a stale settings.py')\n")
+    return repo, new
+
+
+@pytest.mark.parametrize("tree", ["old layout", "emptied", "stale"])
+def test_a_detached_launch_reads_the_settings_py_beside_the_loops_train_sh_whatever_the_clones_tree_holds(tmp_path, monkeypatch,
+                                                                                                         tree):
+    """The loop runs its own train.sh (`OWN_TRAIN`) from a copy outside the queue's clone, whose working tree may be an old
+    layout's commit, empty, or hold another commit's settings.py: a candidate's check and its records run each get past
+    train.sh's `settings.py --of-record` on the settings.py of the train.sh's own tree, copied beside it, to its next refusal."""
+    import types
+
+    from research.landing import OWN_TRAIN, launched
+
+    _launchable(monkeypatch, tmp_path)
+    repo, new = _clone_off_the_new_layout(tmp_path, tree)
+    d = Landing(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
+    for job in (d.launch_after_landing(repo, new, "m1", "pytest", train_from=OWN_TRAIN), d.launch_locks(repo, new, "m1")):
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        assert (Path(job["dir"]) / "settings.py").read_bytes() == (OWN_TRAIN.parent / "settings.py").read_bytes()
+        assert launched(job) == ([], NO_STORE_KEY)
+
+
+def test_a_detached_launch_whose_train_sh_has_no_settings_py_beside_it_says_where_it_looked(tmp_path, monkeypatch):
+    """A train.sh copied from a tree without its settings.py, run from a clone whose working tree has none either, says so, naming
+    both places it looked, rather than python's "can't open file"."""
+    from research.landing import LEAN_STEP, OWN_TRAIN, launched, train_launch
+
+    _launchable(monkeypatch, tmp_path)
+    repo, new = _clone_off_the_new_layout(tmp_path, "old layout")
+    own = tmp_path / "own" / "train.sh"
+    own.parent.mkdir()
+    own.write_bytes(OWN_TRAIN.read_bytes())
+    job = train_launch(repo, new, "m1", False, deferred=LEAN_STEP, detached=True, script_from=own)
+    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
+        os.waitpid(job["pid"], 0)
+    copy = Path(job["dir"]) / "train.sh"
+    assert not (Path(job["dir"]) / "settings.py").exists()
+    assert launched(job) == ([], f"train: no settings.py beside {copy} nor at {repo}/tools/check/settings.py: run train.sh from "
+                                 "a tree, or with its own commit's settings.py beside it (research.landing.TRAIN_COMPANIONS)")
 
 
 def test_a_train_launch_given_a_deselect_list_passes_it_to_train_sh(tmp_path, monkeypatch):
@@ -1296,3 +1377,36 @@ def test_a_progress_line_that_does_not_parse_is_skipped_and_said_but_no_progress
     (tmp_path / "steps.jsonl").write_text('{"step": "lint", "status": "failed"}\n{"step": "su')
     assert landing.failing(tmp_path) == "step lint"
     assert "landing: a line of steps.jsonl is not JSON, skipped" in capsys.readouterr().err
+
+
+#: a workspace as the root's `tests/` mirroring the tree leaves it: each member's tests at `tests/<its directory>` (a virtual
+#: member `NAME-tests` beside the member, or a suite with no distribution), the repository's own suite beside them
+MIRRORED = {
+    "pyproject.toml": '[project]\nname = "verity"\n\n[tool.uv.workspace]\nmembers = ["tools/research", "tests/tools/research", '
+                      '"adapters/vllm", "tests/adapters/vllm/tests"]\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+    "tools/research/pyproject.toml": '[project]\nname = "research"\n',
+    "tools/research/src/research/q.py": "",
+    "tests/tools/research/pyproject.toml": ('[project]\nname = "research-tests"\ndependencies = ["research"]\n\n'
+                                            '[tool.pytest.ini_options]\ntestpaths = ["."]\n'),
+    "tests/tools/research/test_q.py": "",
+    "adapters/vllm/pyproject.toml": '[project]\nname = "verity_vllm"\ndependencies = ["research"]\n',
+    "adapters/vllm/x.py": "",
+    "tests/adapters/vllm/tests/pyproject.toml": ('[project]\nname = "verity-vllm-tests"\ndependencies = ["verity-vllm"]\n\n'
+                                                 '[tool.pytest.ini_options]\ntestpaths = ["."]\n\n[tool.verity.tests]\n'
+                                                 'inputs = ["hardware", "tools/config/x.py"]\n'),
+    "tests/adapters/vllm/tests/test_v.py": "",
+    "hardware/cards.toml": "", "tests/hardware/test_cards.py": "", "tools/config/x.py": "",
+    "tests/verity/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/verity/test_a.py": "",
+    "tests/test_root.py": "",
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw-bench"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n',
+}
+
+
+@pytest.mark.parametrize(("suite", "name"), [
+    ("tests/adapters/vllm/tests", "verity-vllm"), ("tests/tools/research", "research"), ("tests/verity", "verity"),
+    ("tests/verity/", "verity"), (".", "repository"), ("", "repository"), ("benchmarks/pouw", "pouw-bench"),
+])
+def test_a_suite_is_named_as_suites_py_names_it_where_its_tests_mirror_the_tree(world, suite, name):
+    """A reds row, an allowance and the graph name a suite by its directory at the commit, as `suites.discover` names it
+    (`suite_layout.suite_name`): the tests of a member at `tests/<its directory>` by the member's distribution."""
+    assert landing.suite_name(world.dev, world.change(MIRRORED), suite) == name

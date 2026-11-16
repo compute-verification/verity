@@ -21,9 +21,9 @@ from typing import Any
 
 import pytest
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import CoinError
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
 
 from tests.protocols import challenger_host as CH
 from verity_vllm.commit.challenge import challenge_positions
@@ -178,7 +178,7 @@ def test_openings_drawn_before_their_runs_root_are_refused(tmp_path, monkeypatch
     coins.close()
     auditor.end(coins.reserved["session"])
     why = _reason(auditor, early, [_root("run 0"), _root("run 1")], coins.reserved["session"])
-    assert why is not None and "a coin drawn before its run's root" in why
+    assert why is not None and "a coin flipped before its run's root" in why
 
 
 def test_a_session_opened_on_another_commits_root_is_refused(tmp_path, monkeypatch):
@@ -279,10 +279,10 @@ def test_coins_held_in_the_commits_process_credit_nothing(tmp_path, monkeypatch)
     assert CC.replay_challenge(rc, "abcd") == ("abcd", {"source": "flag"})
     assert CC.replay_challenge(rc, None)[1] == {"source": CC.IN_PROCESS, "family": CC.REPLAY, "index": None}
     assert _reason(auditor, [rc.extra["coins"]], roots, sid) == (
-        "the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, which "
+        "the Commit's coins were flipped in its own process, not by the auditor device's challenger: a measurement, which "
         "credits nothing")
     assert _reason(auditor, [*records, rc.extra["coins"]], [*roots, roots[0]], sid).startswith(
-        "the Commit's coins were drawn in its own process")
+        "the Commit's coins were flipped in its own process")
 
 
 def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
@@ -329,11 +329,11 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     with pytest.raises(CoinError, match="not this run's 32-byte root \\(vllm-v1\\)"):
         coins.draw(hashlib.sha256(b"v1").digest())
     coins.draw(_root("run 0"))
-    with pytest.raises(CoinError, match="holds coins for 1 runs, and each is drawn"):
+    with pytest.raises(CoinError, match="holds coins for 1 runs, and each is flipped"):
         coins.draw(_root("run 1"))
     coins.close()
     rc = SimpleNamespace(run_root=_root("run 1"), extra={"coins": {"root": _root("run 0").hex(), "keys": {}}})
-    with pytest.raises(ValueError, match="no coins drawn after it"):
+    with pytest.raises(ValueError, match="no coins flipped after it"):
         CC.positions(rc)
 
 

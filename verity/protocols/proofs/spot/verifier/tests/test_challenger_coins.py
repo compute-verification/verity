@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from verity.protocols.proofs.spot.device import challenger as C, coins as T, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T, remote as R
 from verity.protocols.proofs.spot.verifier import service as S
 
 from test_challenger import entropy

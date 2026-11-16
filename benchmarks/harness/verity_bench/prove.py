@@ -215,7 +215,9 @@ class Cost:
     statements a steady-state figure was measured on are of, by its id (`definition`: the type's own row's, or that of
     the family's row it is scaled from; None from any other source). `sizes` is each statement size the type's own
     steady-state rows timed at its prover count and cores, as (blocks, a statement's GPU-seconds, the run or art that
-    holds it), the size that prices it first; empty where they timed one size or none."""
+    holds it), the size that prices it first; empty where they timed one size or none. `steady` is the steady-state
+    row the figure rests on, the type's own or its family's (None from any other source): what the figure was read
+    from, which two costs with the same figures needn't share, so it takes no part in comparing them."""
 
     source: str
     seconds: float | None = None
@@ -234,6 +236,7 @@ class Cost:
     proof_bytes_source: str | None = None
     sizes: tuple[tuple[int, float, str], ...] = ()
     lean_statement: LeanVerify | None = None
+    steady: Steady | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -387,7 +390,9 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     of the MACs where every row holds them (a type with no time has no share of the proving time). `planned` is the
     same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `above_cores` is the
     share of the proving time that rests on steady-state rows timed at more cores than the table's host holds
-    (`_above_cores`). `unread` names each steady-state row that is on no block type's row: what holds it, the run that
+    (`_above_cores`), and `off_node` how many of the steady-state rows that price a type ran with their card on
+    another NUMA node than their CPUs, how many on its node and how many don't record it, each with the share it
+    holds (`_off_node`). `unread` names each steady-state row that is on no block type's row: what holds it, the run that
     measured it, the type and Definition it staged, its prover count and cores, and a block's GPU-seconds where it is
     a steady-state measurement, else why it isn't. `lean_verifier_seconds_per_token` and `proof_bytes_per_token` are
     the Lean verifier's seconds and the proof's bytes a served token, with each source's share (`_scaled`), None
@@ -447,7 +452,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
         "system": table.system, "rows": sorted(rows, key=lambda r: -(r["time_share"] or 0.0)), "sources": sources,
         "unread": unread,
         "totals": {
-            "status": status, "steady_time_share": steady, "above_cores": _above_cores(table), "missing": missing,
+            "status": status, "steady_time_share": steady, "above_cores": _above_cores(table),
+            "off_node": _off_node(table), "missing": missing,
             "blocks_per_token": blocks, "gpu_seconds_per_token": total, "gpu_seconds_per_token_range": [low, high],
             "tokens_per_gpu_second": share(1.0, total),
             "tokens_per_gpu_second_range": [share(1.0, high), share(1.0, low)],
@@ -504,6 +510,34 @@ def _above_cores(table: Table) -> dict[str, Any] | None:
     return {"cores": table.cores, **of(above), "timed_at": sorted({r.cost.cores for r in above}),
             "sources": [{"source": source, **of(mine)} for source in SOURCES
                         if (mine := [r for r in above if r.cost.source == source])]}
+
+
+def _off_node(table: Table) -> dict[str, Any] | None:
+    """How the steady-state rows that price the table's types sat against their card, None where no row prices one:
+    how many rows price a type (a row that prices several, its own and its family's, counts once), and of them those
+    whose card was on another NUMA node than their CPUs (`off`), those whose card was on their CPUs' node (`on`) and
+    those that don't record it (`not_recorded`), each with its runs and the share of the proving time that rests on
+    them, at the table's own weights; and the table's rows priced from the single-session card (`single`), whose table
+    records no CPUs, with their share."""
+
+    total = table.gpu_seconds_per_token()
+    priced = [(steady, r.per_token * seconds) for r in table.rows
+              if (steady := r.cost.steady) is not None and (seconds := r.cost.seconds) is not None]
+    if not priced:
+        return None
+
+    def share(times: Sequence[float]) -> float | None:
+        return sum(times) / total if total else None
+
+    def of(off: bool | None) -> dict[str, Any]:
+        mine = [(steady, time) for steady, time in priced if steady.off_node is off]
+        return {"rows": len({steady for steady, _ in mine}), "time_share": share([time for _, time in mine]),
+                "runs": sorted({steady.run for steady, _ in mine})}
+
+    single = [r.per_token * seconds for r in table.rows
+              if r.cost.source in (SINGLE, MODELED) and (seconds := r.cost.seconds) is not None]
+    return {"rows": len({steady for steady, _ in priced}), "off": of(True), "on": of(False), "not_recorded": of(None),
+            "single": {"rows": len(single), "time_share": share(single)}}
 
 
 def _planned(table: Table, serving_seconds: float) -> dict[str, Any] | None:

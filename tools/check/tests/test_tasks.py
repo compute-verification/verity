@@ -128,6 +128,27 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
                   "lean-audit:lean/Q": {"cores": 32, "mem_gb": 128, "disk_gb": 60}}, by
 
 
+@pytest.mark.parametrize("fixtures, line", [
+    ("tools/verity/lean/tests/fixtures", None),
+    ("tests/tools/verity/lean/fixtures", 'FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"')])
+def test_a_change_to_the_controls_fixtures_touches_every_lean_audit_wherever_they_are(tree, fixtures, line):
+    """Every Lean check run builds the controls' packages (`check.FIXTURES`), so a change to one reruns each audit, also once
+    they sit under the root's tests/, outside the Lean tool; where they are under it, its cover is what it was."""
+    check = tree / "tools" / "verity" / "lean" / "check.py"
+    if line:
+        check.write_text(check.read_text().replace('FIXTURES = HERE / "tests" / "fixtures"', line, 1))
+    (tree / fixtures / "control").mkdir(parents=True)
+    (tree / fixtures / "control" / "Control.lean").write_text("theorem c : True := trivial\n")
+    _git(tree, "add", "-A")
+    _git(tree, "commit", "-q", "-m", "fixtures")
+    base = _git(tree, "rev-parse", "HEAD").strip()
+    paths = next(t["inputs"]["paths"] for t in _graph(tree)[0]["tasks"] if t["id"] == "lean-audit:lean/P")
+    assert paths == ["lean/P", "tools/verity/lean", *([fixtures] if line else []), "tools/check/common.py"], paths
+    (tree / fixtures / "control" / "Control.lean").write_text("theorem c : 1 = 1 := rfl\n")
+    _git(tree, "commit", "-q", "-am", "control")
+    assert "lean-audit:lean/P" in {t["id"] for t in _graph(tree, "--changed", base)[0]["tasks"]}
+
+
 def test_a_lean_audit_fails_on_a_lock_record_difference_as_the_after_landing_run_does(tree, monkeypatch):
     """An audit task never regenerates lock records (`--no-regenerate`, drive's after-landing run), listed or run: with
     `--regenerate` it passed `security` on a stale lock that the after-landing run of the same commit failed."""

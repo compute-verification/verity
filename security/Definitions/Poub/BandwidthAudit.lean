@@ -21,7 +21,7 @@ bandwidth audit, and the device's limits (`Step.Fits`) bound the accounts' reads
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The bandwidth audit's coins in its game with a store of `N` blocks of `b` bits, `h`-bit tags and `s` sampled blocks:
 the store, the oracle at the fresh seed and the sample. -/
@@ -43,4 +43,4 @@ structure RealizesBandwidth (G : ℕ) {N b h s : ℕ} {ι : Type} [Fintype ι] {
   /-- the bandwidth account's reads from device memory cover the game's ingress -/
   ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1 ≤ r.read (x, y, s')
 
-end Accounting
+end ResourceAccounting

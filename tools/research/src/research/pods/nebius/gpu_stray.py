@@ -81,7 +81,10 @@ def environ(pid: int) -> dict[str, str]:
         raw = Path(path).read_bytes()
     except PermissionError:
         raw = subprocess.run(["sudo", "-n", "grep", "-zaE", pattern, path], capture_output=True).stdout
-    except OSError:
+    except OSError as e:
+        if alive(pid):
+            print(f"gpu_stray: pid {pid}'s environment unread, so its GPU variables are unknown ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
         return {}
     pairs = (kv.split("=", 1) for kv in raw.decode(errors="replace").split("\0") if "=" in kv)
     return {k: v for k, v in pairs if k in GPU_VARS}
@@ -101,7 +104,9 @@ def cmdline(pid: int) -> str:
 def pod_uid_of(pid: int) -> str | None:
     try:
         m = re.search(r"pod([0-9a-f_-]{36})", Path(f"/proc/{pid}/cgroup").read_text())
-    except OSError:
+    except OSError as e:
+        if alive(pid):
+            print(f"gpu_stray: pid {pid}'s cgroup unread, so its pod is unknown ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return m.group(1).replace("_", "-") if m else None
 
@@ -112,7 +117,10 @@ def ancestors(pid: int) -> set[int]:
         seen.add(pid)
         try:
             pid = int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[1])
-        except (OSError, IndexError, ValueError):
+        except (OSError, IndexError, ValueError) as e:
+            if alive(pid):
+                print(f"gpu_stray: pid {pid}'s parent unread, so its ancestors stop there ({type(e).__name__}: {e})", file=sys.stderr,
+                      flush=True)
             break
     return seen
 

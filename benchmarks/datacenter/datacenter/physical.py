@@ -2,8 +2,8 @@
 
 This mirrors Lean's physical model (`security/Definitions/Registration/Physical.lean`, `Hardware`): a datacenter is a
 tree of locations whose leaves are devices; a block is a set of devices behind one boundary (`Hardware.SpatialUnit`);
-a link joins two devices, and a link that crosses a block boundary must pass a network certifier (coverage,
-`Accounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
+a link joins two devices, and a link that crosses a block boundary must pass a network attester (coverage,
+`ResourceAccounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
 proved: each number is an `Assumption` with its source, and the account reads them by name.
 """
 from __future__ import annotations
@@ -156,7 +156,7 @@ class Datacenter:
     def uncovered_links(self) -> list[LinkEntry]:
         """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
         host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
-        The network certifiers cover every link when this is empty."""
+        The network attesters cover every link when this is empty."""
         devices = self.devices
         inside = lambda l: self.zone_of(l.a) is not None and self.zone_of(l.a) is self.zone_of(l.b)  # noqa: E731
         return [l for l in self.links if not inside(l)

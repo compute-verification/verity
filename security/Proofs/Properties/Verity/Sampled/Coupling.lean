@@ -34,7 +34,7 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The subprotocol's constructions with the messages' two-continuation finders at the readings `rd`** (`msgFinder`,
 `recordFinder`): `K`'s coins, projection, read finder, forger and bound digests' finder. -/

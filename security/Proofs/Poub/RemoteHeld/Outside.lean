@@ -23,9 +23,9 @@ the node or computed on outside it for the node at a tick of a pass was on the n
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions
 
 section Trace
 
@@ -63,7 +63,7 @@ end Trace
 
 section Sketch
 
-open Accounting.Remote.Sketch Accounting.Remote.Sketch.Assumptions
+open ResourceAccounting.Remote.Sketch ResourceAccounting.Remote.Sketch.Assumptions
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
@@ -94,4 +94,4 @@ theorem present_of_covered {O : Outside T} {I : Ingress (Outcome β Hs N m)} (hl
 
 end Sketch
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

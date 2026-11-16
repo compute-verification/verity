@@ -8,7 +8,8 @@ Each row is one number with its unit, over three windows: now, the last hour, an
                             and why (`leave`); and the loop's own log for the time each tick ended
   the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
-                            slot), `status.json` (when it ended), and for a check's shard `check-live.json`, `steps.jsonl`,
+                            slot, and for a check's shard what its scope used at its most, `used`), `status.json` (when it
+                            ended), and for a check's shard `check-live.json`, `steps.jsonl`, `spans.jsonl`'s `memory.peak`,
                             `suites.failed.json` and three lines of `lean-audit.log`; for a run of the task graph's executor,
                             the result files under `out/results`
   GitHub                    the open PRs and their heads, and each counted head's subject and nearest first parents, which
@@ -306,6 +307,22 @@ def audit(path):
         out["unread"] = repr(e)[:120]
     return out
 
+def spans_peak(path):
+    """A check's `memory.peak` in GB, the highest `mem_peak_gb` its spans.jsonl kept at a step's end or its own; nothing for a
+    check that kept none (it ran in no scope of its own); `spans_unread` says why a file that is there was not read."""
+    if not os.path.isfile(path):
+        return {}
+    peaks = []
+    try:
+        for line in open(path, errors="replace"):
+            if '"mem_peak_gb"' in line:
+                v = (json.loads(line).get("attributes") or {}).get("mem_peak_gb")
+                if isinstance(v, (int, float)):
+                    peaks.append(v)
+    except (OSError, ValueError) as e:
+        return {"spans_unread": repr(e)[:120]}
+    return {"mem_peak_gb": max(peaks)} if peaks else {}
+
 s0, t0 = stat(), time.time()
 runs = []
 for d in sorted(glob.glob(ROOT + "/runs/r2*")):
@@ -327,6 +344,8 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
         row.update(used(d + "/resources.jsonl"))
     if kind == "shard":
         row["sha"] = (((job.get("run") or {}).get("remote") or {}).get("source_sha") or "")[:12]
+        row["used"] = slot.get("used")
+        row.update(spans_peak(d + "/spans.jsonl"))
         row["shard"] = argv[argv.index("--shard") + 1] if argv.index("--shard") + 1 < len(argv) else "?"
         if row["end"] is None:
             row.update(scope(rid))
@@ -373,6 +392,11 @@ def slot_status(slot_py, f, limit=30):
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         return None, repr(e)[:120]
 
+def line_keys(waiters):
+    """One key for each run in a line: its twin pair (`--twin PAIR[@HOME]`), which each machine one check twins on names
+    alike, else its run, else its pid."""
+    return sorted({str(w.get("twin") or w.get("run") or w.get("pid")).split("@")[0] for w in waiters})
+
 slots, unread = [], []
 try:
     trees = sorted((e.path for e in os.scandir(ROOT + "/src") if os.path.exists(check_file(e.path, "slot.py"))),
@@ -386,7 +410,7 @@ for f in [ROOT + "/locks/slots"] + sorted(glob.glob(ROOT + "/locks/*/slots")):
         unread.append({"pool": pool, "why": why})
         continue
     ss = doc.get("slots") or []
-    slots.append({"pool": pool, "slots": len(ss),
+    slots.append({"pool": pool, "slots": len(ss), "shards": line_keys(doc.get("waiters") or []),
                   "busy": sum(1 for s in ss if s.get("holder")), "blocked": sum(1 for s in ss if s.get("blocked") and not s.get("holder")),
                   "waiting": len(doc.get("waiters") or []), "mem": {s.get("name"): s.get("mem") for s in ss if s.get("mem")}})
 time.sleep(max(0.0, sample - (time.time() - t0)))
@@ -709,7 +733,7 @@ def cut(doc: dict, end: float) -> dict:
             if (r.get("took") or 0) > end:
                 r.update(took=None, slot_state="waiting")
             if (r.get("end") or 0) > end:
-                r.update(end=None, rc=None, state="running")
+                r.update(end=None, rc=None, state="running", used=None, mem_peak_gb=None)
             if "steps" in r:
                 r["steps"] = [st if (st.get("end") or 0) <= end else {"step": st["step"], "state": "running", "start": st.get("start")}
                               for st in r["steps"] if (st.get("start") or (st.get("end") or 0) - (st.get("seconds") or 0)) <= end]
@@ -945,8 +969,10 @@ def slot_groups(doc: dict) -> list[dict]:
     finds a place.  Every other pool but the check slots and the executor's is a lane's own: a run takes its slots only when
     sent to it by name (`research run --pool`), so its free slots start no run that waits in the shared pool's line.
 
-    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, free_no_line, longest, unread}`: `group` is `check`,
-    `executor`, `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are
+    Each is `{group, pools, nodes, slots, busy, blocked, waiting, distinct, free, free_no_line, longest, unread}`: `group` is
+    `check`, `executor`, `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it;
+    `waiting` counts the runs in its lines and `distinct` the runs they are, a check's twins counted once (a check's shard
+    waits in the line of every machine it twins on, and the first slot free runs it); `free` are
     the slots nothing holds and nothing blocks, and `free_no_line` those of them with no run in line on their node;
     `longest` is the node with the longest line and the runs in it, None with no run in line; `unread` are its slots files
     that gave no answer, each `{node, pool, why}`, whose slots none of its numbers count.  A run waits in the line it
@@ -978,6 +1004,9 @@ def slot_groups(doc: dict) -> list[dict]:
         for n, s in entries:
             line[n] = line.get(n, 0) + s["waiting"]
         total = {k: sum(s[k] for _, s in entries) for k in ("slots", "busy", "blocked", "waiting")}
+        # a node read before the keys were (`shards`) counts each of its runs in line as one
+        total["distinct"] = (len({k for _, s in entries for k in s.get("shards") or []})
+                             + sum(s["waiting"] for _, s in entries if "shards" not in s))
         node = max(sorted(line), key=line.get, default=None)
         free = [(s["slots"] - s["busy"] - s["blocked"], s["waiting"]) for _, s in entries]
         out.append({"group": group, "pools": pools, "nodes": len({n for n, s in entries if s["slots"]}), **total,
@@ -1009,6 +1038,8 @@ def slots_text(g: dict) -> str:
     if free and g["free_no_line"] < g["free"]:
         free += f"{g['free_no_line']} of them with no line on their node, "
     line = f"{g['waiting']} runs in line"
+    if g.get("distinct", g["waiting"]) < g["waiting"]:
+        line += f" ({g['distinct']} distinct, a check's twins counted once)"
     if g["group"] in ("check", "shared") and longest and 2 * longest["waiting"] > g["waiting"]:
         line += f", {longest['waiting']} of them on {longest['node'].replace('vy-nebius-', '')}"
     unread = ", ".join(("" if len(pools) == 1 else f"{u['pool']} on ") + f"{u['node'].replace('vy-nebius-', '')} ({u['why']})"
@@ -1329,14 +1360,34 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
              if r["kind"] == "shard" and r.get("scope_cpu_s") and r.get("took") and doc["nodes"][r["node"]]["now"] > r["took"]]
     res = [mem[(r["node"], r["slot"])] for r in going if (r["node"], r.get("slot")) in mem]
     live = sum(1 for r in runs.values() if r["kind"] == "shard" and r.get("took") and r.get("end") is None)
+
+    def used_text(since: float) -> str:
+        by: dict[str, list[dict]] = defaultdict(list)
+        for r in runs.values():
+            if r["kind"] == "shard" and r.get("took") and (r.get("end") or 0) >= since:
+                by[r.get("shard") or "?"].append(r)
+
+        def most(vals: list, unit: str, missing: str) -> str:
+            vals = [v for v in vals if isinstance(v, (int, float))]
+            return f"p50 {pct(vals, .5):.0f}, most {max(vals):.0f}{unit} (n={len(vals)})" if vals else missing
+
+        return ". ".join(
+            f"{part}, {len(rs)} ended: cores at the busiest minute "
+            f"{most([(r.get('used') or {}).get('cores_max') for r in rs], '', 'not kept')}; anon at its highest "
+            f"{most([(r.get('used') or {}).get('anon_max_gib') for r in rs], ' GiB', 'not kept')}; memory.peak "
+            f"{most([r.get('mem_peak_gb') for r in rs], ' GB', 'not kept')}" for part, rs in sorted(by.items())) or "none ended"
+
     add("7", "Reserved against used, a check's shard", past or ((f"{len(going)} of the {live} running, the ones whose cgroup was found: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
         f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
         f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GiB, most {max(r['scope_anon_gb'] for r in going):.0f} GiB; peak with the "
         f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GiB" + (f", of {pct(res, .5):.0f} GiB reserved" if res else ""))
-        if going else f"no cgroup was found for the {live} running" if live else "no shard is running"), "",
-        "not measured: a shard's cgroup is gone when it ends", "",
-        "the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot so far, "
-        "`anon` of `memory.stat`, and `memory.peak`, which counts the page cache")
+        if going else f"no cgroup was found for the {live} running" if live else "no shard is running"),
+        used_text(hour), used_text(day), "",
+        "now: the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot "
+        "so far, `anon` of `memory.stat`, and `memory.peak`, which counts the page cache; the hour and the 24 hours: the shards that "
+        "ended in the window, by part (`--shard K/N`): CPU seconds over seconds at its busiest minute and `anon` at its highest, "
+        "which the check read of its own cgroup every 10 s and kept in its slot.json (`used`, tools/check/spans.py's "
+        "`ScopeWatch`), and `memory.peak`, the highest its spans.jsonl kept (`mem_peak_gb`)")
     read = [r for r in runs.values() if r["kind"] == "shard" and r.get("parallel") is not None]
     held = worker_memory(read)
     seen = [*(r for r in readings if "workers" in r), *([] if past else [{"now": now, "workers": held}])]

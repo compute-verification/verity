@@ -32,7 +32,10 @@ elsewhere still counts.  A word's other senses aren't counted: by the words abou
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``, a memory cap, a compute capability), by the code around it
 (hypothesis's ``draw``), by the file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live
 proof block's caps, a PoUW session's cap, Flock's caps, a request's length cap, a logit soft cap) and by the name it
-stands in (``OWN_NAMES``: PoUS's ``Pous.Period``, its responder's ``B2Period`` and a party's ``Attest.Period``).
+stands in (``OWN_NAMES``: PoUS's ``Pous.Period``, its responder's ``B2Period`` and a party's ``Attest.Period``).  A key
+a stored record or format still carries is held only in the files its entry of ``HELD_KEYS`` names, where the key stands
+whole (the whole identifier, or for a plain word the whole quoted string); the same key in another file, the word in
+prose and a longer name still count, and an entry whose key no longer stands in one of its files is refused as stale.
 Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
 with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
@@ -130,11 +133,11 @@ OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
 #: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``; and the
 #: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
-LIVE_CAPS = ("verity/protocols/accounting/pouw/prover/circuit/live.py",
-             "verity/protocols/accounting/pouw/verifier/live_reads.py",
-             "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py",
-             "verity/protocols/accounting/pouw/verifier/tests/test_pouw_window.py",
-             "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py")
+LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/live.py",
+             "verity/protocols/resource_accounting/compute/pouw/verifier/live_reads.py",
+             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_live.py",
+             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_window.py",
+             "verity/protocols/resource_accounting/compute/pouw/verifier/tests/window_vectors.py")
 #: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
@@ -160,23 +163,23 @@ CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 #: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
 #: ``PEARL_CAP`` too outside ``CAPITALS``
 OWN_CAPS = {
-    "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
-    "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/resource_accounting/memory/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/resource_accounting/memory/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
     **dict.fromkeys(tuple(f"security/{tree}/{area}"
                           for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
                           for area in ("Pous", "Poub")),
                     "PoUS's and PoUB's caps in their Lean (an audit's duration, a schedule's bits, a chip's steps, an "
                     "oracle's queries, a side channel's rate); Pearl's is PoUW's"),
-    **dict.fromkeys(("security/Definitions/Accounting/Gates", "security/Definitions/Accounting/Guarantees/Gates.lean",
-                     "security/Proofs/Accounting/Gates"),
+    **dict.fromkeys(("security/Definitions/ResourceAccounting/Gates", "security/Definitions/ResourceAccounting/Guarantees/Gates.lean",
+                     "security/Proofs/ResourceAccounting/Gates"),
                     "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
     **dict.fromkeys(tuple(f"benchmarks/{b}/"
                           for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
                     "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
                     "CTAs); Pearl's is PoUW's"),
-    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
-    "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
-    "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
     "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
@@ -233,6 +236,42 @@ OWN_NAMES = {
 }
 OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in names)
             for term, names in OWN_NAMES.items()}
+#: keys a stored record or format still carries, by the key as written: (the files that read it, by file, never by
+#: directory; the reason, naming the record and its owner).  A site in a file its entry names is held where the key stands
+#: there whole: the whole run of identifier characters around it (``HELD_CHAR``, a ``*`` in the key any run of word
+#: characters and hyphens), and for a key that is a plain word, the whole quoted string too (between two of one quote:
+#: ``"``, ``'`` or a backtick).  The same key in a file its entry doesn't name, the same word in prose and a longer name
+#: holding the key still count.  An entry leaves with its format (a key that no longer stands held in one of its files is
+#: refused as stale); when an owner writes a new key beside the old one, the entry's reason gets the day the old key stops
+#: being read.  A file's entry in the list falls by its held sites (``--prune``) and never rises for them.
+HELD_KEYS = {
+    "firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
+    "flock_firewall": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
+    "flock-firewall": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md"),
+                       "reads a stored recursion run, benchmarks'"),
+    "FIREWALL-REFUSED": (("benchmarks/recursion_e2e/rec_profile.py", "benchmarks/recursion_e2e/README.md",
+                          "benchmarks/recursion_e2e/tests/test_recursion_e2e.py"),
+                         "reads a stored recursion run, benchmarks'"),
+    "t.firewall_recheck": (("benchmarks/recursion_e2e/rec_profile.py",), "reads a stored recursion run, benchmarks'"),
+    "sampled-proofs:*": (("benchmarks/harness/README.md", "benchmarks/harness/specs/llama31-8b-fp8-1gpu-commit-served.toml",
+                          "benchmarks/harness/tests/test_bench.py", "benchmarks/harness/verity_bench/vllm/commit_arm.py"),
+                         "a stored run's arm key, vllm's"),
+    "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "benchmarks/harness/tests/test_bench.py"),
+                    "the PoUW commitment's key, compute-accounting's"),
+}
+#: a character of an identifier a held key stands in
+HELD_CHAR = re.compile(r"[\w.:-]")
+QUOTES = "\"'`"
+
+
+def held_key(key: str) -> tuple[re.Pattern, bool]:
+    """``key``'s pattern over a whole identifier, and whether it is a plain word, held only as a whole quoted string."""
+    return re.compile(re.escape(key).replace(r"\*", r"[\w-]+")), bool(re.fullmatch(r"[A-Za-z]+", key))
+
+
+HELD_KEY = {key: held_key(key) for key in HELD_KEYS}
+HELD = {f: tuple(HELD_KEY[k] for k, (files, _) in HELD_KEYS.items() if f in files)
+        for files, _ in HELD_KEYS.values() for f in files}
 #: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
 #: data object's ``data.draw(``, as code where the file is Python; a comment or a string there, a ``"draw"`` key anywhere, a
 #: longer name, an attribute (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
@@ -398,9 +437,12 @@ def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
     return found, by
 
 
-def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple[int, str]]:
+def sites_of(text: str, by: dict[str, list[Term]], path: str = "",
+             keys: tuple[tuple[re.Pattern, bool], ...] | None = None) -> list[tuple[int, str]]:
     """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word, ``path`` the
-    file's.  Where two terms match one span, the one the table spells longer names it, then the first by spelling."""
+    file's, outside the keys it holds (``keys``, by default ``HELD``'s for ``path``).  Where two terms match one span, the
+    one the table spells longer names it, then the first by spelling."""
+    keys = HELD.get(path, ()) if keys is None else keys
     words = {w.lower() for w in set(WORDS.findall(text))}
     candidates = sorted({t for w in words & by.keys() for t in by[w]}, key=lambda t: (-len(t.old), t.old))
     if not candidates:
@@ -416,9 +458,42 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
             continue
         if any(n.fullmatch(text, s, e) and (not files or path in files) for n, files in OWN_NAME.get(t.old, ())):
             continue
+        if keys and held(text, s, e, keys):
+            continue
         end = e
         line, at = line + text.count("\n", at, s), s
         out.append((line, f"{text[s:e]!r} is retired; say {t.new[:120]} (GLOSSARY.md)"))
+    return out
+
+
+def held(text: str, s: int, e: int, keys: tuple[tuple[re.Pattern, bool], ...]) -> bool:
+    """Whether the site ``text[s:e]`` stands in one of ``keys`` whole (``HELD_KEYS``): the run of ``HELD_CHAR`` around it
+    is the key, and quoted where the key is a plain word."""
+    a, b = s, e
+    while a and HELD_CHAR.match(text, a - 1):
+        a -= 1
+    while b < len(text) and HELD_CHAR.match(text, b):
+        b += 1
+    quoted = 0 < a and b < len(text) and text[a - 1] in QUOTES and text[b] == text[a - 1]
+    return any(key.fullmatch(text, a, b) and (quoted or not plain) for key, plain in keys)
+
+
+def stale(entries: dict[str, tuple[tuple[str, ...], str]]) -> list[str]:
+    """Each file of ``entries`` (``HELD_KEYS``' form) that isn't a file this lint reads, or where its key no longer stands
+    held at a site of a retired term, with the fix."""
+    out = []
+    for key, (paths, reason) in entries.items():
+        if not paths or not reason:
+            out.append(f"{key!r}: an entry names the files that read its key and the reason, naming the record and its owner")
+        for f in paths:
+            if not (holds(f) and (ROOT / f).is_file()):
+                out.append(f"{key!r}: {f} is not a file this lint reads: name each file that reads the key, never a "
+                           f"directory, and move its name with the file")
+                continue
+            text = (ROOT / f).read_text(encoding="utf-8", errors="replace")
+            if len(sites_of(text, terms()[1], f, ())) == len(sites_of(text, terms()[1], f, (held_key(key),))):
+                out.append(f"{key!r} no longer stands held in {f}: the entry leaves with its format, so take {f} out of "
+                           f"HELD_KEYS' entry (or the entry, if it was the last file)")
     return out
 
 
@@ -693,7 +768,7 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
 def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
     """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
     count in the same file."""
-    path = "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/sgemm.cu"
+    path = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/sgemm.cu"
     theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
     assert said(theirs, path) == []
     assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
@@ -730,10 +805,10 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
     theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
-    for path in ("verity/protocols/accounting/pous/verifier/audit.py", "verity/protocols/accounting/poub/verifier/audit.py"):
+    for path in ("verity/protocols/resource_accounting/memory/pous/verifier/audit.py", "verity/protocols/resource_accounting/memory/poub/verifier/audit.py"):
         assert said(theirs + pearls, path) == pearl
-    assert said(theirs + pearls, "verity/protocols/accounting/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
-    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/poub/verifier/audit.py")] == [o for _, o in pearl]
+    assert said(theirs + pearls, "verity/protocols/resource_accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/resource_accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
 
 
 def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not() -> None:
@@ -742,12 +817,12 @@ def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not(
     table = "uint64_t cap;  // its leaves\nif (p < t->cap) return 2 * cap;"
     pearls = "\n// Pearl's: capOK, CAP, an over-cap tile"
     pearl = [(3, "capOK"), (3, "CAP"), (3, "over-cap")]
-    for path in ("verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu",
-                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh",
-                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
+    for path in ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu",
+                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh",
+                 "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
         assert said(table + pearls, path) == pearl
-    beside = "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
+    beside = "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
     assert said(table + pearls, beside) == [(1, "cap"), (2, "cap"), (2, "cap"), *pearl]
 
 
@@ -787,7 +862,7 @@ def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spe
     for path in LIVE_CAPS:
         assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of LIVE_CAPS with it"
         assert said(live + pearls, path) == pearl
-    credit = "verity/protocols/accounting/pouw/verifier/credit.py"
+    credit = "verity/protocols/resource_accounting/compute/pouw/verifier/credit.py"
     assert said(live + pearls, credit) == [(1, "CAPS"), (1, "caps"), (2, "CAP"), (3, "cap"), (3, "CAPS"), (3, "cap"),
                                            *pearl]
 
@@ -800,7 +875,7 @@ def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() 
                "CAP = 2\nWd.public_inputs(reg, SAMPLED, s, V.CAP, domain_h3)\n")
     pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
     pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
-    window = "verity/protocols/accounting/pouw/verifier/"
+    window = "verity/protocols/resource_accounting/compute/pouw/verifier/"
     for path in ("tests/test_pouw_window.py", "tests/window_vectors.py"):
         assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of LIVE_CAPS with it"
         assert said(session + pearls, window + path) == pearl
@@ -905,7 +980,7 @@ def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_reti
     assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
     assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
     assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
-    kept = "a served cap S charges each replay block at most F S; `NetworkCertifierParams.max_tokens_cap`\n"
+    kept = "a served cap S charges each replay block at most F S; `NetworkAttesterParams.max_tokens_cap`\n"
     assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
     assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
         (2, "cap"), (2, "cap")]
@@ -1003,7 +1078,7 @@ def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> 
     assert period_sites("monitoringPeriodG, monitoringPeriod_every, liveAt_monitoringPeriod") == []
     assert period_sites("ledgerPeriod_le_monitoringPeriod") == []
     assert period_sites("ComposePeriod, CircuitWorkPeriod, DampenerRemotePeriod, MONITORINGPeriod, "
-                        "Accounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
+                        "ResourceAccounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
         "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod",
         "composePeriod", "ledgerPeriod"]
     assert period_sites("ComposeHorizon, PooledHorizonBound, the horizon") == [
@@ -1051,6 +1126,77 @@ def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_on
             assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
             assert [w.split("'")[1] for _, w in sites(text, f) if (term == "*Period*") == ("Period" in w)] == []
     assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
+
+
+RECORDED_KEYS = ('ZK_SERVER_MODE, RECORDED_MODE = "zk_server", "firewall"\n'
+                 'LOOP, RECORDED_LOOP = "lean_session_loop", "flock_firewall"\n'
+                 'LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")\n'
+                 "#: a recorded run's ZK server refused as ``FIREWALL-REFUSED``\n"
+                 'STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")\n'
+                 'RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}\n')
+ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'
+            'assert build_bound(bound_arm) == ("sampled-proofs:hm96",)\n'
+            'live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))\n')
+RECURSION = "benchmarks/recursion_e2e/"
+HARNESS = "benchmarks/harness/"
+
+
+def retired(text: str, path: str) -> list[tuple[int, str]]:
+    return [(line, w.split(" is retired")[0].strip("'\"")) for line, w in sites(text, path)]
+
+
+def test_a_held_key_in_a_file_its_entry_doesn_t_name_still_counts() -> None:
+    """A key is held only in the files its entry names: in a file beside them, and in a file another key's entry names,
+    every site of it counts."""
+    recorded = [(1, "firewall"), (2, "firewall"), (3, "flock-firewall"), (4, "FIREWALL"), (5, "FIREWALL"), (6, "firewall")]
+    assert retired(RECORDED_KEYS, RECURSION + "forge_after.py") == recorded
+    assert retired(RECORDED_KEYS, HARNESS + "verity_bench/vllm/runner.py") == recorded
+    assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/runner.py") == [(1, "sampled-proofs"), (2, "sampled-proofs")]
+    assert retired(ARM_KEYS, HARNESS + "verity_bench/vllm/commit_arm.py") == [(3, "coin_source")]
+    assert retired(ARM_KEYS, "benchmarks/one_stage/run.py") == [(1, "sampled-proofs"), (2, "sampled-proofs"),
+                                                                (3, "coin_source")]
+
+
+def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> None:
+    """In a file its entry names, a key is held only where it stands whole: the bare word, a plain word unquoted or quoted
+    with more beside it, another spelling, and a longer name holding the key still count."""
+    recursion = ('# the firewall refused it: mode = firewall, "the firewall", FIREWALL\n'
+                 'firewall_mode, "firewall_v2", flock_firewall_loop, "FIREWALL-REFUSED-AGAIN", "t.firewall_recheck2"\n')
+    assert retired(recursion, RECURSION + "rec_profile.py") == [
+        (1, "firewall"), (1, "firewall"), (1, "firewall"), (1, "FIREWALL"),
+        (2, "firewall"), (2, "firewall"), (2, "firewall"), (2, "FIREWALL"), (2, "firewall")]
+    harness = ('# the coin source, coin_source_v2, c["coin_sources"]; the sampled proofs, "sampled-proofs", sampled-proofs:\n')
+    assert retired(harness, HARNESS + "tests/test_bench.py") == [
+        (1, "coin source"), (1, "coin_source"), (1, "coin_sources"), (1, "sampled proofs"), (1, "sampled-proofs"),
+        (1, "sampled-proofs")]
+
+
+def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
+    """Each key where it stands whole in a file its entry names, quoted or as the identifier it is, in code, a comment or
+    Markdown; a site beside it on the same line still counts."""
+    assert retired(RECORDED_KEYS, RECURSION + "rec_profile.py") == []
+    readme = ("  `FIREWALL-REFUSED`) or Lean refused it\n"
+              "  cost is read from `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds\n")
+    assert retired(readme, RECURSION + "README.md") == []
+    stop = '(d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\\n")\n'
+    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', RECURSION + "tests/test_recursion_e2e.py") == []
+    assert retired(ARM_KEYS, HARNESS + "tests/test_bench.py") == []
+    coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
+             "               else {}  # the firewall's coins\n")
+    assert retired(coins, HARNESS + "verity_bench/vllm/runner.py") == [(2, "firewall")]
+    assert retired("A protocol arm (`pouw:SCHEME`, SPOT's key, `sampled-proofs:SCHEME`) runs; sampled-proofs alone\n",
+                   HARNESS + "README.md") == [(1, "sampled-proofs")]
+
+
+def test_a_held_key_that_no_longer_stands_in_a_file_its_entry_names_is_refused_as_stale() -> None:
+    """Every entry of ``HELD_KEYS`` holds its key in each of its files; one that names a file where the key stands only in
+    prose or not at all, a directory, or no reason is refused, naming the fix."""
+    assert not stale(HELD_KEYS), "\n".join(stale(HELD_KEYS))
+    reason = "reads a stored recursion run, benchmarks'"
+    gone = stale({"flock_firewall": ((HARNESS + "verity_bench/vllm/runner.py",), reason)})
+    assert len(gone) == 1 and "no longer stands held in" in gone[0], gone
+    assert "never a directory" in stale({"flock_firewall": ((RECURSION,), reason)})[0]
+    assert "the reason" in stale({"flock_firewall": ((RECURSION + "rec_profile.py",), "")})[0]
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:

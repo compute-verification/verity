@@ -79,8 +79,8 @@ of the other audits' coins, the verifier's whole decision accepts the period wit
 held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. -/
 def PeriodHeldDeployed : Prop :=
   Pous.P2.Assumptions.P2RingAuditSecure RING_D RING_Q RING_L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+      (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
       DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
         S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
@@ -97,27 +97,27 @@ least the H200's 992,061,184 bits of registers, shared memory with L1 and L2 at 
 (`store` in `hardware/cards/h200-sxm-141gb.toml`); `C*`'s `2^19 · 16,448` bits of device memory; and one side
 channel, its PCIe Gen 5 ×16 link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured
 GPU-to-host copy is 57.2 GB/s). -/
-def honestDevice : Accounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩
+def honestDevice : ResourceAccounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩
 
 /-- A period on the honest device whose capacity account holds `m ≤ FULL` bits at every tick, its window the session's
 `105` rounds, one tick each. -/
 def periodRun (m : ℕ) (hm : m ≤ FULL) :
-    Accounting.Run honestDevice Unit Unit Unit ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) where
+    ResourceAccounting.Run honestDevice Unit Unit Unit ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) where
   acct _ := ()
   win _ := ⟨0, K⟩
   schedule _ _ := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => m⟩
   fits := by
     intro _ _
-    simp [Accounting.Step.Fits, honestDevice, hm]
+    simp [ResourceAccounting.Step.Fits, honestDevice, hm]
   accepts _ _ := True
 
 /-- **The honest period**: the capacity account holds all of `C*`, `FULL` bits, at every tick. -/
-def honestRun : Accounting.Run honestDevice Unit Unit Unit
+def honestRun : ResourceAccounting.Run honestDevice Unit Unit Unit
     ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
   periodRun FULL le_rfl
 
 /-- **The empty period**: the capacity account holds nothing. -/
-def emptyRun : Accounting.Run honestDevice Unit Unit Unit
+def emptyRun : ResourceAccounting.Run honestDevice Unit Unit Unit
     ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
   periodRun 0 (Nat.zero_le _)
 

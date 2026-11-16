@@ -30,8 +30,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
 HERE = Path(__file__).resolve().parent
@@ -143,7 +143,7 @@ def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, 
 
 
 #: why a5 writes no case for the compiled check on a sample of two members, and on plain sessions (`a5.v2_proof`)
-TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"
+TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit sampled 2 members"
 PLAIN = "ValueError: v2 verifies --zk sessions; this audit's are plain"
 
 
