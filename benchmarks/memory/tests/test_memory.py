@@ -66,6 +66,12 @@ def an_undecided_session() -> dict:
     return s
 
 
+def a_refused_session() -> dict:
+    """A session the verifier refused, as its record holds it: at its pass group or window 2, its `receipt` check
+    failing at pass 0, position 492119."""
+    return {**a_session(accepted=False), "failure": {"t": 2, "failure": "receipt", "at": [0, 492119]}}
+
+
 def a_python_ledger_session(gamma: float = 0.199, error: float = 2.0 ** -40) -> dict:
     """An accepted session whose γ the Lean leaves undecided, with the Python ledger's reading the verifier records
     beside it (`python_ledger`): γ at the data sheet's rate and the declared error."""
@@ -569,6 +575,8 @@ def test_a_run_that_ran_the_loopback_keeps_its_mark_whatever_it_prints_afterward
 @pytest.mark.parametrize("rc, record, why, code", [
     (3, None, "the loopback's processes failed (run.sh exited 3)", 3),
     (0, a_record(a_session(accepted=False, failure="late")), "session 0 was not accepted (late)", 1),
+    (1, a_record(a_refused_session()), "the verifier refused session 0 at window 2: its check `receipt` failed at pass "
+     "0, position 492119 (run.sh exited 1)", 1),
     (0, None, "the verifier's record doesn't read as one", 1),
 ])
 def test_a_loopback_whose_session_failed_prints_no_number(store, capsys, monkeypatch, rc, record, why, code):
@@ -1045,13 +1053,13 @@ def a_local_record(*sessions: dict, arena: int = ARENA) -> dict:
 class Machine:
     """This machine as `--local` asks it, one stand-in for every process it starts: nvidia-smi answers `card` (or fails
     with `smi_rc`, or is not installed, `driver` false), the checkpoint's fetch ends `fetch_rc`, and `run.sh` writes
-    `record` as its verifier's, its engine's record with the `--arena-gib` and `--util` it was handed as `engine.py`
-    does (unless `engine` is false), and ends `rc`."""
+    `record` as its verifier's (unless `verifier` is false), its engine's record with the `--arena-gib` and `--util` it
+    was handed as `engine.py` does (unless `engine` is false), and ends `rc`."""
 
     def __init__(self, *, card: str = "NVIDIA H200, 9.0", smi_rc: int = 0, fetch_rc: int = 0, rc: int = 0,
-                 record: dict | None = None, driver: bool = True, engine: bool = True) -> None:
+                 record: dict | None = None, driver: bool = True, engine: bool = True, verifier: bool = True) -> None:
         self.card, self.smi_rc, self.fetch_rc, self.rc, self.driver = card, smi_rc, fetch_rc, rc, driver
-        self.engine = engine
+        self.engine, self.verifier = engine, verifier
         self.record = a_local_record(a_session(gamma=0.199)) if record is None else record
         self.started: list[tuple[list[str], dict]] = []
 
@@ -1068,7 +1076,8 @@ class Machine:
             return SimpleNamespace(returncode=self.fetch_rc)
         out = Path(kw["env"]["RESEARCH_RUN_DIR"]) / "out"
         out.mkdir(parents=True, exist_ok=True)
-        (out / "verifier.json").write_text(json.dumps(self.record))
+        if self.verifier:
+            (out / "verifier.json").write_text(json.dumps(self.record))
         if self.engine:
             given = kw["env"].get("ENGINE_ARGS", "").split()
             args = {k: float(given[given.index(f) + 1]) for k, f in (("arena_gib", "--arena-gib"), ("util", "--util"))
@@ -1112,7 +1121,8 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     assert machine.fetches() == [[str(tmp_path / "vllm" / "python"), "-c", M.FETCH, pin["repo"], pin["revision"],
                                   *sorted(pin["files"])]]
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {ARENA} --util 0.88"
-    assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
+    assert env["NODE_ARGS"] == (f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap} "
+                                "--node local/h200-sxm-141gb-x1/serving")
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
     assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
                                     f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
@@ -1322,10 +1332,17 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
      "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
-    (Machine(rc=6), "the node's session failed (run.sh exited 6)", 3),
+    (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),
+    (Machine(rc=6, verifier=False), "the node's session failed (run.sh exited 6)", 3),
+    (Machine(rc=6, record=a_local_record(a_refused_session())),
+     "the verifier refused session 0 at pass group 2: its check `receipt` failed at pass 0, position 492119 (run.sh "
+     "exited 6)", 1),
+    (Machine(rc=6, record=a_record(a_refused_session())),
+     "the verifier refused session 0 at window 2: its check `receipt` failed at pass 0, position 492119", 1),
     (Machine(record=a_record(a_session(accepted=False, failure="window 2: a receipt doesn't open"))),
      "session 0 was not accepted (window 2: a receipt doesn't open)", 1),
-], ids=["no-driver", "no-gpu", "no-sheet", "checkpoint", "run-sh", "rejected"])
+], ids=["no-driver", "no-gpu", "no-sheet", "checkpoint", "run-sh", "no-record", "refused", "refused-window",
+        "rejected"])
 def test_a_local_session_that_cannot_run_exits_3_and_one_not_accepted_exits_1(store, capsys, work, machine, why, code):
     """Both print no number: an accepted session prints its number and exits 0, one the verifier refused exits 1, and
     one that never reached a verdict (this machine lacks what it needs, or a process failed) exits 3."""
@@ -1347,13 +1364,14 @@ def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, 
     """PLAN reaches `run.sh` under both one-machine ways in, and whatever session it makes, the verifier's refusal is
     the command's, with no number and exit 1."""
     monkeypatch.setenv("PLAN", "skip:0.0625")
-    rejected = a_record(a_session(accepted=False, failure="window 0: 4 of 16 openings missing"))
-    for way in ("--loopback", "--local"):
-        machine = Machine(record=rejected)
+    for way, rc, record, where in (("--loopback", 1, a_record(a_refused_session()), "window"),
+                                   ("--local", 6, a_local_record(a_refused_session()), "pass group")):
+        machine = Machine(rc=rc, record=record)
         assert bench(store, way, run=machine) == 1
         ((_, env),) = machine.runs()
         assert env["PLAN"] == "skip:0.0625"
-        assert printed(capsys)[0][0] == "memory: no number: session 0 was not accepted (window 0: 4 of 16 openings missing)"
+        assert printed(capsys)[0][0].startswith(f"memory: no number: the verifier refused session 0 at {where} 2: its "
+                                                f"check `receipt` failed at pass 0, position 492119 (run.sh exited {rc})")
 
 
 def test_a_refused_local_session_writes_its_row_with_no_value_and_why(store, capsys, work, tmp_path, monkeypatch):

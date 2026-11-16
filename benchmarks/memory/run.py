@@ -490,6 +490,8 @@ def loopback(run: Callable = subprocess.run) -> dict:
         env.pop("SERVE", None)
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
+            if (why := refusal(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json")) is not None:
+                raise NoNumber(f"{why} (run.sh exited {done.returncode})")
             raise CouldNotRun(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
         s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None, python_ledger=True)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
@@ -628,7 +630,7 @@ def local(run: Callable = subprocess.run) -> dict:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               given.get("NODE_ARGS")])),
+                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
            "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
@@ -637,6 +639,8 @@ def local(run: Callable = subprocess.run) -> dict:
           f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
+        if (why := refusal(Path(held) / "out" / "verifier.json")) is not None:
+            raise NoNumber(f"{why} (run.sh exited {done.returncode}); its logs are above and in {held}/out")
         raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
                           f"{held}/out")
     s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
@@ -647,6 +651,27 @@ def local(run: Callable = subprocess.run) -> dict:
     machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
                "verifier_sha256": digest(VERIFIER)}
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+
+
+def refusal(record: Path) -> str | None:
+    """The verdict of a session the verifier refused, from its record at `record`: which session, where (its pass
+    group, or its window where the session is not paced), and the check that failed at which sample (pass,
+    position). None where the verifier recorded no refusal, which is no verdict: `run.sh` failed some other way."""
+    if not record.is_file():
+        return None
+    try:
+        sessions = json.loads(record.read_text())["sessions"]
+        vs = next((s for s in sessions if s.get("accepted") is False), None)
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
+        raise CouldNotRun(f"the verifier's record doesn't read as one ({type(e).__name__}: {e})") from e
+    if vs is None:
+        return None
+    failure = vs.get("failure") if isinstance(vs.get("failure"), dict) else {}
+    where = "" if failure.get("t") is None else f" at {'pass group' if vs.get('pace') else 'window'} {failure['t']}"
+    at = failure.get("at")
+    sample = f" at pass {at[0]}, position {at[1]}" if isinstance(at, list) and len(at) == 2 else ""
+    return (f"the verifier refused session {vs.get('k')}{where}: its check `{failure.get('failure') or 'unrecorded'}` "
+            f"failed{sample}")
 
 
 def engine_args(held: Path) -> dict:

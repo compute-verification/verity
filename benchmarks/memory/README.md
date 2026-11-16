@@ -53,19 +53,22 @@ target is 0.14 at an error of at most 2^-100.**
   2^80 SHA-512 compressions over the session on any hardware (`audit.QUERIES_LOG2`). At the 16 sketch rows a `--local`
   session registers, the sketch term is the largest, about 2^-15.1, far above the target's 2^-100; the deployed
   registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't pass yet, bring that term below it.
+- **It varies from run to run** with the lateness allowance each session's calibration sets, through the timing term,
+  and its error is a probability, the chance the share is wrong, not a band around it: two runs' shares can differ by
+  more than the error.
 - **The next line,** `ran with: coins local challenger; parameters development (…)`, says what the session ran with,
-  from the verifier's record (the JSON's `ran_with`). Its coins were drawn on this machine. Its parameters are
+  from the verifier's record (the JSON's `ran_with`). Its coins were flipped on this machine. Its parameters are
   development ones because it registers 16 sketch rows where the deployed registration has 64. The detail names the
-  arena against the card's memory, the paced form, the passes, the rows, the sample's term a window (the chance one
-  window's openings miss what they test; it is not the error), the lateness allowed, the error and the prover it is
-  priced against, and the sheet.
+  arena against the card's memory, the paced form, the passes, the rows, the sample's term a pass group (the chance
+  one pass group's openings miss what they test; it is not the error), the lateness allowed, the error and the prover
+  it is priced against, and the sheet.
 - **It is a measurement to improve on, not an audit.** The verifier and its coins run on the machine being measured,
   so you could re-roll them. The line under it says so, and the JSON's `audit` is false.
 - **Who decided each number is in the document.** `gamma_decided_by` is `lean` where PoUB's Lean verifier decided the
   share. Where it is `python-ledger`, the share and its error are the Python ledger's reading of the accepted session,
   which the verifier records beside its own, and a line of the text says so. Where the document holds
   `numbers_decided_by`, it lists by key which printed numbers are the Lean verifier's and which are the Python
-  ledger's: the error's sketch and sampling (draw) terms are among the latter.
+  ledger's: the error's sketch and sample terms are among the latter.
 - **It certifies reads, not contents.** The audit certifies reads of the registered store whatever it holds; the
   verifier holds no checkpoint, so the store's bytes are the developer's choice, which the store's line says.
 - **The store is the card's memory, not a request's.** A session whose store is below half the card's memory
@@ -98,13 +101,13 @@ them as not read, with that reason.
 The prover's side, which is all of what the audit treats as untrusted. What lowers the share is the bytes the card
 reads for the store in each stretch against what it could read.
 
-On one card the share is mostly the timing term: the share of the session's span, from its first pass group's release
-to its last one's deadline, that its passes don't cover at the sheet's bandwidth. Each pass is credited only the
-store's bytes, which at that bandwidth take the time a bare read of the store would, so the share falls most with a
-faster pass: a prover that reads and sketches the store nearer the card's bandwidth, with no gap between passes. The deadline A (the slowest pass, gap and round trip its
-calibration measured, at `QUANTILE`, plus twice `JITTER_MS`) adds to the span only at its end. The sample term is next;
-it falls with more draws a stretch, which the fixed form sets. The `ran with` line prints the measured pass and the
-lateness allowed.
+On one card the share is mostly the timing term: the share of the session's span, from its first pass group's release to
+its last one's deadline, that its passes don't cover at the sheet's bandwidth. Each pass is credited only the store's
+bytes, which at that bandwidth take the time a bare read of the store would, so the share falls most with a faster pass:
+a prover that reads and sketches the store nearer the card's bandwidth, with no gap between passes. The deadline A (the
+slowest pass, gap and round trip its calibration measured, at `QUANTILE`, plus twice `JITTER_MS`) adds to the span only
+at its end. The sample term is next; it falls with more openings a stretch, which the fixed form sets. The `ran with`
+line prints the measured pass and the lateness allowed.
 
 - the pass that reads the arena, and its pacing against the verifier's coins
   (`verity/protocols/accounting/poub/prover/remote_session/session.cu`, `benchmarks/remote_session/node.py`);
@@ -130,9 +133,11 @@ A number from a changed verifier or sheet is not a result, and the digests in it
 
 ## How a cheating change is refused
 
-Every pass answers challenges the verifier draws only after the pass's data is fixed, and the verifier checks each
+Every pass answers challenges the verifier samples only after the pass's data is fixed, and the verifier checks each
 answer against the store's committed contents and against time. A prover that skips reading part of the store, or
-answers late, is refused: the session isn't accepted, and the command prints `memory: no number: WHY` and exits 1.
+answers late, is refused: the session isn't accepted, and the command prints `memory: no number: WHY` and exits 1,
+WHY read from the verifier's record: the session, the pass group it was refused at, and the check that failed at
+which sample, as ``the verifier refused session 0 at pass group T: its check `receipt` failed at pass P, position Q``.
 
 - **What you can watch refused:** `PLAN=skip:0.0625 uv run verity bench memory --loopback`, on the CPU. The prover
   skips a sixteenth of the store, the verifier refuses the session ("session 0 was not accepted (…)"), and the

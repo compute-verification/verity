@@ -305,7 +305,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         out["error"] = e
         raise
     finally:
