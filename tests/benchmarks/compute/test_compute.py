@@ -1213,15 +1213,16 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
 
 
 def test_every_metric_row_reads_the_run_of_record_its_header_names():
-    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line: every row's ``--from`` is
-    that run, so moving the rows to another run is one edit that this holds complete, and every metric `run.py` writes
-    has a row."""
+    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line, with the commit it ran
+    at: every row's ``--from`` is the placeholder ``RUN_OF_RECORD`` its owner fills in from that line, so moving the rows
+    to another run is one edit, and the weekly rerun loop, which launches no command that takes a placeholder, never
+    records the stored run's old number as a new reading; every metric `run.py` writes has a row."""
     import re
     import tomllib
     text = (HERE.parents[2] / "benchmarks" / "compute" / "metrics.toml").read_text()
-    named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}),", text, re.M)
-    assert named, "metrics.toml's header names no run of record"
+    named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}), commit [0-9a-f]{7,40}", text, re.M)
+    assert named, "metrics.toml's header names no run of record and the commit it ran at"
     rows = tomllib.loads(text)["metric"]
     assert {m["id"]: re.search(r"--from (\S+)", m["command"]).group(1) for m in rows} == dict.fromkeys(
-        (m["id"] for m in rows), named.group(1))
+        (m["id"] for m in rows), "RUN_OF_RECORD")
     assert {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE} <= {m["id"] for m in rows}
