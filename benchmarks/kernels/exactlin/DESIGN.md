@@ -6,7 +6,7 @@ The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_f
 `engine.int8_ops` registers for both ops, with their config table in `engine.profiles.int8_gemm_configs`. Every gate
 and bench here imports that module, so a gate's pass and a timing describe the kernels vLLM serves. This directory holds
 no kernel or table of its own. `benchmarks/hash/dither/dither_a.py` inlines `int8_fused`'s public Triton helpers
-(`rni_s32`, `membar_gl`, `epilogue`) into its kernels; `tests/test_dither_a_helpers.py` holds each name it reads to
+(`rni_s32`, `membar_gl`, `epilogue`) into its kernels; `tests/benchmarks/kernels/exactlin/test_dither_a_helpers.py` holds each name it reads to
 one `int8_fused` binds. Nothing a verifier runs reads this directory.
 
 ## Entry points
