@@ -662,6 +662,8 @@ def test_the_record_says_whether_it_was_composed_on_the_auditors_device_as_the_d
     manifest = tmp_path / "deploy.toml"
     manifest.write_text("[nodes.other]\nadmin = true\n" + (f"[nodes.h]\n{node}" if node is not None else ""))
     assert S.auditor_device("h", manifest) == said
+    assert S.auditor_device("h", manifest, served_node=True) == "composed off the auditor's device: on the served node"
+    assert S.auditor_device("h", None) == "not known: no deploy manifest given (record --deploy-manifest)"
     assert S.auditor_device("h", tmp_path / "gone.toml") == "not known: the deploy manifest gone.toml can't be read (FileNotFoundError)"
     manifest.write_text("[nodes")
     assert S.auditor_device("h", manifest).startswith("not known: the deploy manifest deploy.toml can't be read (TOMLDecodeError)")
@@ -1181,7 +1183,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
-    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM, "auditor_device": S.auditor_device("vy-dc-h200")}
+    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM, "auditor_device": "composed off the auditor's device: on the served node"}
     assert report["composed_on"] == line["composed_on"] == where and "deferred" not in line and "deferred" not in report
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
     left = "V3c's audit and the composite, to a follow-on on a node with the memory, which composes the final record"
@@ -1210,12 +1212,12 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert S.main(argv) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert line["composed_on"] == {"host": "vy-auditor-2", "served_node": False, "from": S.COPIED_FROM,
-                                 "auditor_device": S.auditor_device("vy-auditor-2")}
+                                 "auditor_device": "not known: no deploy manifest given (record --deploy-manifest)"}
     (tmp_path / "serve" / "requests.jsonl").unlink()
     assert S.main([*argv, "--steps", "5,11", "--off-node"]) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
-    handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM, "auditor_device": S.auditor_device("vy-auditor-2")}
+    handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM, "auditor_device": "not known: no deploy manifest given (record --deploy-manifest)"}
     assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
     assert S.TAKEN_AS_GIVEN == ("a verdict computed off the auditor's device and handed in is taken as given, for the "
                                 "whole chain")
@@ -4970,12 +4972,13 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-6] == [
+    assert argv[:-8] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
         "--node", "vy-dc-h200"]
-    assert (argv[-6], len(argv[-5]), argv[-4:]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
-                                                                           str(out / "composite")])
+    assert (argv[-8], len(argv[-7]), argv[-6:-2]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
+                                                                             str(out / "composite")])
+    assert argv[-2] == "--deploy-manifest" and argv[-1].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
 
@@ -5552,9 +5555,9 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200", "--steps", "0,3"]
-    assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
-                                                                         "--tree", SHA, "--composite",
-                                                                         str(out / "composite")])
+    assert (argv[17], len(argv[18]), argv[19:23], argv[25:]) == (
+        "--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean"], ["--tree", SHA, "--composite", str(out / "composite")])
+    assert argv[23] == "--deploy-manifest" and argv[24].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
     assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
@@ -6040,8 +6043,8 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
     assert composed["composed"]["verdict"] == "pending" and all(
         composed["protocols"][k]["verdict"] == "accept" for k in ("integrity", "work"))
+    assert isinstance(composed["composed_on"].pop("auditor_device"), str)  # by the pinned tree's manifest, of this host
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
-                                      "auditor_device": S.auditor_device(socket.gethostname()),
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
     assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == REG.digest(LEAN_RECORD), row

@@ -354,9 +354,6 @@ HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wro
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
                f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
-#: infra's deploy manifest of the Nebius nodes, where `research` reads the auditor devices (`research.remote.restricted`):
-#: `composed_on`'s ``auditor_device`` reads it of the host composing the record (`auditor_device`)
-DEPLOY_MANIFEST = Path(__file__).resolve().parents[2] / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "deploy.toml"
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
@@ -2188,18 +2185,23 @@ def keep(serve_dir: Path, line: str) -> None:
         f.write(line + "\n")
 
 
-def auditor_device(host: str, manifest: Path | None = None) -> str:
-    """Whether the record was composed on the auditor's device, as infra's deploy manifest (`DEPLOY_MANIFEST`) says of
-    ``host``: on it where the manifest marks the node ``auditor = true``; off it where it lists the node with neither that
-    nor ``admin = true``, a node the lanes' keys reach; and not known where it marks the node ``admin = true`` alone, which
-    it gives the control host too, or lists no such node, or can't be read."""
+def auditor_device(host: str, manifest: Path | None, served_node: bool = False) -> str:
+    """Whether the record was composed on the auditor's device: off it on the served node, which is never the auditor's;
+    elsewhere as infra's deploy manifest, where `research` reads the auditor devices (``manifest``:
+    ``tools/research/src/research/pods/nebius/deploy.toml``), says of ``host``: on it where the manifest marks the node
+    ``auditor = true``; off it where it lists the node with neither that nor ``admin = true``, a node the lanes' keys
+    reach; and not known where it marks the node ``admin = true`` alone, which it gives the control host too, lists no
+    such node, can't be read, or none is given."""
+    if served_node:
+        return "composed off the auditor's device: on the served node"
+    if manifest is None:
+        return "not known: no deploy manifest given (record --deploy-manifest)"
     import tomllib  # here, not at the top: the lines `say` publishes run this file under the node's python3, maybe older
 
-    path = manifest or DEPLOY_MANIFEST
     try:
-        nodes = tomllib.loads(path.read_text()).get("nodes") or {}
+        nodes = tomllib.loads(manifest.read_text()).get("nodes") or {}
     except (OSError, ValueError) as e:
-        return f"not known: the deploy manifest {path.name} can't be read ({type(e).__name__})"
+        return f"not known: the deploy manifest {manifest.name} can't be read ({type(e).__name__})"
     node = nodes.get(host)
     if not isinstance(node, Mapping):
         return f"not known: the deploy manifest lists no node {host}"
@@ -2424,7 +2426,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read") -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           lean: str = "no composite was read",
+           manifest: Path | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2434,7 +2437,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``answer``: the product's compiled
     Lean check's answer (`composite_answer`), the block record's verdict, and ``lean`` where it was read or why there is
-    none, which the report and the line carry; a rejection by it rejects whatever the rows say."""
+    none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``manifest``: infra's
+    deploy manifest, by which ``composed_on`` says whether this host is the auditor's device (`auditor_device`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2459,7 +2463,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                            "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM,
-             "auditor_device": auditor_device(host), **(tree or {})}
+             "auditor_device": auditor_device(host, manifest, host == node), **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
@@ -2616,6 +2620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--composite", type=Path, help="the composites' public output (served_composite.sh's $OUT/composite): "
                                                   "the product's compiled Lean check's answer there is the record's verdict")
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
+    r.add_argument("--deploy-manifest", type=Path, help="infra's deploy manifest, which composed_on's auditor_device reads")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
@@ -2845,7 +2850,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean)
+                               answer=answer, lean=lean, manifest=a.deploy_manifest)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
