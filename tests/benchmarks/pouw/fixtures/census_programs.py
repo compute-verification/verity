@@ -21,7 +21,7 @@ KEEP = 0.98
 
 
 def _loads():
-    spec = importlib.util.spec_from_file_location("facet_break_loads", HERE.parents[1] / "facet_break" / "loads.py")
+    spec = importlib.util.spec_from_file_location("facet_break_loads", HERE.parents[3] / "benchmarks" / "pouw" / "facet_break" / "loads.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
