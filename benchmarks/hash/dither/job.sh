@@ -5,7 +5,7 @@
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
-#   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
+#   partials h1u.so and every h1u_*.so shipped: tests/benchmarks/pouw/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
 #
@@ -95,7 +95,7 @@ for b in ${BENCH//,/ }; do
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
         [ -f "$f" ] || continue
         v=$(basename "$f" .so); NEED+=("$v")
-        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py $ROOT/benchmarks/pouw/tests/test_lane_refs.py")
+        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/tests/benchmarks/pouw/test_partials.py $ROOT/tests/benchmarks/pouw/test_lane_refs.py")
       done
       [ -f "$LIBS/h1u.so" ] || { echo "job.sh: partials needs $LIBS/h1u.so" >&2; exit 2; } ;;
     *) echo "job.sh: no bench $b" >&2; exit 2 ;;
