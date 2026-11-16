@@ -61,7 +61,9 @@ target is 0.14 at an error of at most 2^-100.**
 - **Its error** is printed beside it with its power of two, as `δ = 2.8e-05 (2^-15.1)`. It reads
   `δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)`: δ is the chance, over the verifier's coins, that
   the share is wrong, and each window's adv_t is a prover's edge at telling SHA-512's output from random, which the
-  number names but neither prices nor assumes away. The error is priced against one prover, one that makes at most
+  number names but neither prices nor assumes away. Neither it nor the verifier's published ε (`period.eps`) holds the
+  network attesters' term δnet, the chance their count of what enters the node is wrong: `LineHeld`'s bound carries
+  it as a term of its own (`IngressCounted`), and nothing here prints it. The error is priced against one prover, one that makes at most
   2^80 SHA-512 compressions over the session on any hardware (`audit.QUERIES_LOG2`). At the 16 sketch rows a `--local`
   session registers, the sketch term is the largest, about 2^-15.1, far above the target's 2^-100; the deployed
   registration's 64 rows (`node.py --rows 64`), which `run.sh` doesn't pass yet, bring that term below it.

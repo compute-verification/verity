@@ -28,9 +28,9 @@ statement in `Properties.Poub.Remote.SubprotocolDeployed`:
   bytes that play the record of `ω` on the node (`Plays`) while the network attesters sign nothing but the verifier's
   messages entering the node and the record's line credits more bits read than the trace's passes read is at most
   `LineHeld`'s bound, term for term.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64` over the session's `⌈W/g⌉`
-  samples at its `samples` s, at the component's δ (`Poub.Protocol.DELTA`), at least that bound's sample term
-  `δ + Σ_c s/2^256`, or nothing certified at all.
+* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^256` over the session's
+  `⌈W/g⌉` samples at its `samples` s, at the component's δ (`Poub.Protocol.DELTA`), that bound's sample term, or
+  nothing certified at all.
 * **QBytesAtSubprotocol** and **PublishedQBytes**: what the subprotocol publishes as `q_bytes` on acceptance. The first
   bounds, except with the samples' part of `LineHeldAtSubprotocol`'s bound at `DELTA`, the trace's wrong receipts among
   the verifier's own count `U`; the second is what the check itself gives of a record it accepts, with no premise.
@@ -110,7 +110,7 @@ def AcceptIsVerifiedFor (chk : Poub.Protocol.Params → Poub.Registration → Po
 
 /-- **`PublishedEps` at a check `chk`**: whenever `chk` accepts parameters `p`, a registration `reg` and a log `e` with
 public outputs `pub`, they decode to a session, and either `pub` certifies nothing or its `eps` is
-`δ + Σ_c s/2^64` at every node of the session's parameters and g whose δ is `Poub.Protocol.DELTA`.
+`δ + Σ_c s/2^256` at every node of the session's parameters and g whose δ is `Poub.Protocol.DELTA`.
 `PublishedEps` (`Properties.Poub.Remote.SubprotocolDeployed`) is it at `Poub.Protocol.check`. -/
 def PublishedEpsFor (chk : Poub.Protocol.Params → Poub.Registration → Poub.Protocol.Evidence →
     Core.Outcome Poub.Protocol.Public Lean.Json) : Prop :=
@@ -124,7 +124,7 @@ def PublishedEpsFor (chk : Poub.Protocol.Params → Poub.Registration → Poub.P
         ∀ node : Node, node.params = params → node.groupsPerCoin = g →
           (node.delta : ℚ) = Poub.Protocol.DELTA →
           (pub.eps.num : ℚ) / pub.eps.den =
-            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
+            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 256)
 
 /-- The groups the line reads of record `r` on the node, when a verifier records it as `sum node r`: `Record.groups`
 at `sum = Record.summary`. -/

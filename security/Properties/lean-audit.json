@@ -1611,6 +1611,10 @@
    "honest": ["Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_honest"],
    "nontrivial": "Properties.Poub.Subprotocol.SecurityProofs.lineHeldAtSubprotocol_nontrivial"
   },
+  "Properties.Poub.Subprotocol.publishedEps": {
+   "honest": ["Properties.Poub.Subprotocol.publishedEps_honest"],
+   "nontrivial": "Properties.Poub.Subprotocol.publishedEps_acceptAll"
+  },
   "Properties.Pouw.PearlPlus.tileKeepsTheInertBound": {
    "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheInertBound_honest"],
    "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_nontrivial"
@@ -1928,10 +1932,6 @@
   "Properties.Poub.Subprotocol.acceptIsVerified": {
    "type_hash": "24966b9a2a442fc1bfd14ea399cf06b60c45246e014d93fe2eccf7789454dc6d",
    "unfolded_hash": "64ed7c7948d4c6808e470ef89624c5e6f6782bb446f567a6e6fd751dd4aa954f"
-  },
-  "Properties.Poub.Subprotocol.publishedEps": {
-   "type_hash": "15ebef425510bcf7bd868d9a6db984bb76052200ea09f3c327fd44e25ad0dc13",
-   "unfolded_hash": "88c1ce2f1e369e32a1b63cabcc35f029c7fdf9076f2284f53f8fe2e1ffa7bca4"
   },
   "Properties.Poub.acceptChecksOpenings": {
    "type_hash": "4fbeddbfd8ebc3764ce443b7a3bd3accf8712775a2ea153e91dd73497ffabba3",
@@ -2307,7 +2307,7 @@
   }
  },
  "witnesses_assumed": {
-  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witness of `lineHeldAtSubprotocol` takes it."
+  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witnesses of `lineHeldAtSubprotocol` and `publishedEps` take it."
  },
  "layers": {
   "Properties.Pouw": {
@@ -7551,7 +7551,57 @@
     "reads": []
    },
    "type_hash": "15ebef425510bcf7bd868d9a6db984bb76052200ea09f3c327fd44e25ad0dc13",
-   "unfolded_hash": "88c1ce2f1e369e32a1b63cabcc35f029c7fdf9076f2284f53f8fe2e1ffa7bca4"
+   "unfolded_hash": "e65c9f398882d453a80cb2c50cfa9a1bb4e15acb4b2e6aa7b3b70d406068b1d8"
+  },
+  "Properties.Poub.Subprotocol.publishedEps_acceptAll": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Subprotocol.publishedEps_acceptAll (params : Poub.Session.Params) (g : Nat) :",
+    "  ∀ (x x✝ : Array ByteArray) (x✝¹ : Nat) (x✝² : Array Poub.Session.Event),",
+    "    Not",
+    "      (Or",
+    "        (And (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.eps { num := 0, den := 1 })",
+    "          (Eq { eps := { num := 0, den := 1 }, qBytes := 1 }.qBytes 0))",
+    "        (∀ (node : Properties.Poub.Line.Node),",
+    "          Eq node.params params →",
+    "            Eq node.groupsPerCoin g →",
+    "              Eq node.delta.cast Poub.Protocol.DELTA →",
+    "                Eq",
+    "                  (instHDiv.hDiv { eps := { num := 0, den := 1 }, qBytes := 1 }.eps.num.cast",
+    "                    { eps := { num := 0, den := 1 }, qBytes := 1 }.eps.den.cast)",
+    "                  (instHAdd.hAdd node.delta.cast",
+    "                    (instHDiv.hDiv (Finset.univ.sum fun _c => node.params.samples).cast (instHPow.hPow 2 256)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "edcfd15042a45baea6b9fdab7b4ea4cfbe86d1f186622753e21724f2f521b380"
+  },
+  "Properties.Poub.Subprotocol.publishedEps_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Subprotocol.publishedEps_honest (h : Properties.Poub.Subprotocol.HonestLogAccepted) :",
+    "  Exists fun reg =>",
+    "    Exists fun pub =>",
+    "      Exists fun prof =>",
+    "        And (Eq (Poub.Difftest.registrationOf Properties.Poub.Subprotocol.HonestLog.registration) (Except.ok reg))",
+    "          (Eq",
+    "            (Poub.Protocol.check Properties.Poub.Subprotocol.HonestLog.params reg",
+    "              Properties.Poub.Subprotocol.HonestLog.evidence)",
+    "            (Core.Outcome.accept pub prof))"
+   ],
+   "assumptions": ["Properties.Poub.Subprotocol.HonestLogAccepted"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Properties.Poub.Subprotocol.HonestLogAccepted"],
+    "reads": []
+   },
+   "type_hash": "cf4583908d6642e0345b4a93c7c43ad834a871cf26e1ca4e1f86addf1056a0fe"
   },
   "Properties.Poub.Subprotocol.publishedEps_nontrivial": {
    "owner": "@memory-accounting",
@@ -23654,7 +23704,7 @@
    }
   },
   "Poub.Protocol": {
-   "digest": "b3bc5da29b9957c21dd40e9e208ef957ff1a5dd6962033389c34acdbfb993632",
+   "digest": "5f6dbd96951d30a59dd5781fbdb1a54fc3796584300c4289aee19b03a8859ff3",
    "definitions": {
     "Poub.Protocol.DELTA": "23192b0bf473651ba69d1321f51f36752bd094cf4e5f762029509fe6ba2d3944",
     "Poub.Protocol.Evidence": "3a44a76d7aa604cd4112cadca1bd972535584be84312a889951cf3e73e35ce58",
@@ -23672,7 +23722,7 @@
     "Poub.Protocol.decodeCommitment": "ce97abcbfea39be188b0af1a0a8117b520abf906c6f62f3fdcaad8210c33a1c9",
     "Poub.Protocol.decodeEvidence": "eaae23fc40cff2e0b81a765e05a966f601d97889d952d26853571059a148351e",
     "Poub.Protocol.decodeParams": "b3127cfa9428e08168696c822887644ab1c76e7b5b7463375014fa563d4ea03b",
-    "Poub.Protocol.eps": "26443f8c9022b2386923eeb9e9de006ba64c15c65082c86fb45fb8ef97acfb98",
+    "Poub.Protocol.eps": "6f98eca43bb8c2319d0bcb5f5ec32a6c3ca6cf115f08b05b86359a322a2821ca",
     "Poub.Protocol.openingsCoins": "3a978a3284c20d1bd2278ef65e1071271cfe32da069a48d65d8e27c559b00117",
     "Poub.Protocol.ratio": "46da1eda670efc8f4a92976076a11f07a27c783bc7a59b7baa909d5dcc8a7d83",
     "Poub.Protocol.replay": "53c92c061747d87540f9bf0acb44f64164d30d32f3023ae30ccf1a11ff8c7b7b",
@@ -26440,14 +26490,14 @@
    }
   },
   "Properties.Poub.Remote.Subprotocol": {
-   "digest": "a33728af8a9ae8fdc2e920592755c08e09d9d64df5c4d263e29da36dd046240b",
+   "digest": "e9040e0c0637a039760b1a70f23270aeb78340421a158d3864c6f275128acec4",
    "definitions": {
     "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": "c86af8f52523a7fb5a58d26b6b67145dac500def8ca04e50da89ab57de4c97d8",
     "Properties.Poub.Subprotocol.HonestSchedule": "c43858493c5b2c04ebdc74a83726bcb11bb3b51dc511ec6fb3ff2dcd9536e740",
     "Properties.Poub.Subprotocol.LineHeldAtSubprotocolBy": "368046654023f438c2cb435d9291c331cec166fccecd7e4f3e35e8ff7cc9cbbb",
     "Properties.Poub.Subprotocol.LineHeldBy": "9798e85ee8660974c15871fa665346891f6eec71c75eb36f703b0eb84e19cdb8",
     "Properties.Poub.Subprotocol.Plays": "8b3a2bd8dbff1d4b28e6e4d71639dd5ef7218fa72273e79e3b4c897798519b82",
-    "Properties.Poub.Subprotocol.PublishedEpsFor": "1b15ff8d87d9e818764f2bd63b0a423d107684da052bdd79699ff9d62c3657c5",
+    "Properties.Poub.Subprotocol.PublishedEpsFor": "c5bde146e6da8945654fcc4a8ce5b662880427b8afe047d2626dff320c7cc7ea",
     "Properties.Poub.Subprotocol.QBytesAtSubprotocolBy": "e184e24c96d27bbe58e496cba7c1af822eeb9698eb2d672b4e79438868c7309a",
     "Properties.Poub.Subprotocol.QBytesBy": "0a04e7c6d4dbcb267021d35fba50d11e3437272db114b99dc4128cf25d8c91c9",
     "Properties.Poub.Subprotocol.ReadBy": "acf2ccaf0bd8abdb02dbaa03ef22fe4dece2095d45a4c36e8c8aba89e3203c9a",
@@ -26466,11 +26516,11 @@
    }
   },
   "Properties.Poub.Remote.SubprotocolDeployed": {
-   "digest": "74ff30ac8594a9bb78ffe2a5777c732ada85b2787a408b656673de31b8989bb8",
+   "digest": "be75f43793fe26893656e8c210b017b215c54a0449a4c77111558d0ed70310f1",
    "definitions": {
     "Properties.Poub.Subprotocol.AcceptIsVerified": "be65ee35f12a2678462c58864cef70e7a516a91fb71c1d666ce50a112ba9722b",
     "Properties.Poub.Subprotocol.LineHeldAtSubprotocol": "ebc21d5754f18f4be5c22b85127cdb34beebfe39f3f60d0df3e616cd9f688352",
-    "Properties.Poub.Subprotocol.PublishedEps": "e3d93a8bb400296dde635e3daaa3bb7cff8cdd5c232965ef6de7b2b90e55a055"
+    "Properties.Poub.Subprotocol.PublishedEps": "93cc6b08c91cc1b5ce467e0c3014e0c6907b37c14b1409a8aa3563a3ef55a71c"
    }
   },
   "Properties.Pous": {

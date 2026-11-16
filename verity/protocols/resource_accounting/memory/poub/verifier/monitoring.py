@@ -4,10 +4,10 @@ answer as `Poub.Protocol.certify` publishes it and that session's error in its v
 `error`): `q_bytes`, the receipts not shown wrong in bytes, certified as read except with the session's whole error p.
 
 The whole error is the ledger's for the session's openings read pooled (its `horizon`): the openings' pooled bound's δ₀
-(2^-101) with AuditRO's slack a pass, the sample's terms (`sample`: the rejection ⌈W/g⌉·s/2^64, the session's openings
+(2^-101) with AuditRO's slack a pass, the sample's terms (`sample`: the rejection ⌈W/g⌉·s/2^256, the session's openings
 coins at its `samples` s each, and the receipts' binding term) and the sketch's term at the prover's budget (`sketch`:
-`timing.sketch_failure`; 0 for a receipt that is no sketch). The answer's own `eps` is δ₀ + ⌈W/g⌉·s/2^64, at least the
-sample term (`LineHeldAtSubprotocol`'s ⌈W/g⌉·s/2^256), the error of "U − W receipts are correct"; a correct receipt is
+`timing.sketch_failure`; 0 for a receipt that is no sketch). The answer's own `eps` is δ₀ + ⌈W/g⌉·s/2^256, the
+sample term (`LineHeldAtSubprotocol`'s), the error of "U − W receipts are correct"; a correct receipt is
 a read only on the sketch bound's event, so a table that prints `q_bytes` as reads carries the whole error. An error
 below the answer's `eps` is not that session's, and `table` refuses it.
 

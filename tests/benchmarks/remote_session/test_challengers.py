@@ -462,7 +462,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         printed = next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:"))
         assert ", error δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ = " in printed
         assert printed.endswith(
-            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
+            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^256) summed over the "
             "credited sessions; Σ_t adv_t (claim prf/sha-512) is named, with no value and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON
         assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
@@ -1054,7 +1054,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
          "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
     e = al.session_error(s)
     parts = {n: al.line.number(e["exact"][f"delta_{n}"]) for n in al.ledger.DELTA_PARTS}
-    rejection = Fraction(passes * drawn, 2 ** al.ledger.REJECTION_LOG2)
+    rejection = Fraction(passes * drawn, 2 ** al.UNRECORDED_REJECTION_LOG2)
     assert parts["rejection"] == rejection == (Fraction(3177, 2 ** 59) if passes == 2118 else Fraction(87, 2 ** 56))
     hiding = Fraction(al.ledger.hiding_over(passes))
     assert parts["hiding"] == hiding and float(hiding) == pytest.approx(passes * 2.0 ** -191, rel=1e-12)

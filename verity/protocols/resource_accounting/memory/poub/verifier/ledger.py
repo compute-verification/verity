@@ -21,7 +21,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
 `timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
-`LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
+`LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^256 at the record's `samples`.  `LineHeld`'s error also carries the
 windows' PRF advantages Σ_t adv_t, which no δ here holds: SHA-512's stream as a PRF is not priced and not assumed, so
 a δ of this module is never read alone.  It reads `DELTA_FORM`, δ + Σ_t adv_t, and a record names the term in the
 object that carries its δ (`NAMED_TERMS`, under `PRF_CLAIM`).  γ's errors carry `PooledSample`'s terms beyond δ by
@@ -43,9 +43,11 @@ SNAPSHOT = "snapshot"
 TIME_HELD, LINK_CHARGED = line.FORMS
 FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
-REJECTION_LOG2 = 64
-"""The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
-`ResourceAccounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
+REJECTION_LOG2 = 256
+"""The sample's rejection a sample, in bits: a sample below U reads words of `bitlen(U) + 64` bits or more (`Key._uniform`,
+`ResourceAccounting.Remote.Sample.width`), each rejected with probability below 2^-64, and U < 2^64 puts at least four
+of them in its stream's first SHA-512 block, so every word of that block is rejected with probability below 2^-256
+(`PooledSample`'s Σ_t s_t/2^256)."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
@@ -211,14 +213,14 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> Fraction:
-    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt sample t
+    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^256: 2^-`REJECTION_LOG2` a receipt sample t
     requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
     ⌈W/g⌉ samples at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
         raise ValueError("the record states no samples, the receipts every sample requested, at which the memory "
-                         "line's δ charges the sample's rejection (Σ_t k_t/2^64): give the record its session's "
+                         "line's δ charges the sample's rejection (Σ_t k_t/2^256): give the record its session's "
                          "Params.samples")
     return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
                     2 ** REJECTION_LOG2)
