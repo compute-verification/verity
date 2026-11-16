@@ -150,10 +150,10 @@ def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) 
     firstParentReason au.session au.pinned p.main = none ∧
     challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
     withheldOn c.ledger w.root = true ∧
-    sampledOn w.root roots = #[a.registration] ∧
+    sampledOn w.root roots = #[a.docket] ∧
     we.audits = #[k] ∧
-    (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
-    Flock.hexOf cm.digest = a.registration ∧ record = cm.record ∧
+    (Flock.canon k.docket >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
+    Flock.hexOf cm.digest = a.docket ∧ record = cm.record ∧
     OneStageZk.paramsOfJson (paramsAt p w.root k.pub before) = .ok q ∧
     (∃ header, (bs.get k.pub "public file" >>= FilePart.header) = .ok header ∧
       (field? header "shared_rows").isSome = false) ∧
@@ -173,7 +173,7 @@ def AcceptMeans : Prop :=
       (prof : Array Core.Integrity),
     checkWith inner p c e bs = .accept pub prof →
       pub.lane = p.ledger.lane ∧ pub.start = p.ledger.start ∧ pub.stop = p.ledger.stop ∧
-      pub.registration = p.registration ∧
+      pub.docket = p.docket ∧
       ∃ r ws, read p.ledger c.ledger = .ok r ∧ runsIn p.ledger r = .ok ws ∧
         registeredIn p r ws = .ok pub.others ∧
         pub.windows.map (·.window) = ws.windows ∧ e.windows.size = ws.windows.size ∧
@@ -198,13 +198,13 @@ def CommittedOnce : Prop :=
       ∃ r, read p.ledger c.ledger = .ok r ∧ checked c.ledger p.ledger.key = .ok (r.wins, r.periods) ∧
         Reaches p.ledger c.ledger ∧
         (∀ x ∈ r.wins, Committed p.ledger c.ledger x →
-          (∃ d, registrationOf r x.opened.session = some d) ∧
-          (registrationOf r x.opened.session = some p.registration →
+          (∃ d, docketOf r x.opened.session = some d) ∧
+          (docketOf r x.opened.session = some p.docket →
             ∃ i, ∃ h : i < pub.windows.size, pub.windows[i].window.root = x.root ∧
               pub.windows[i].window.session = x.opened.session ∧ (∃ a, pub.windows[i].audits = #[a]) ∧
               ∀ j (hj : j < pub.windows.size), pub.windows[j].window.root = x.root → j = i)) ∧
         ∀ w ∈ pub.windows, ∃ x ∈ r.wins, Committed p.ledger c.ledger x ∧ Sampled p.ledger x ∧
-          registrationOf r x.opened.session = some p.registration ∧
+          docketOf r x.opened.session = some p.docket ∧
           x.root = w.window.root ∧ x.opened.session = w.window.session
 
 /-- **The other sessions published are exactly the lane's roots under other registrations.** For every audit of one
@@ -219,11 +219,11 @@ def OthersElsewhere : Prop :=
     checkWith inner p c e bs = .accept pub prof →
       ∃ r, read p.ledger c.ledger = .ok r ∧
         (∀ x ∈ r.wins, Committed p.ledger c.ledger x →
-          ∀ d, registrationOf r x.opened.session = some d → d ≠ p.registration →
-            ∃ o ∈ pub.others, o.registration = d ∧ o.session = x.opened.session) ∧
-        (∀ o ∈ pub.others, o.registration ≠ p.registration ∧
+          ∀ d, docketOf r x.opened.session = some d → d ≠ p.docket →
+            ∃ o ∈ pub.others, o.docket = d ∧ o.session = x.opened.session) ∧
+        (∀ o ∈ pub.others, o.docket ≠ p.docket ∧
           ∃ x ∈ r.wins, Committed p.ledger c.ledger x ∧
-            registrationOf r x.opened.session = some o.registration ∧ x.opened.session = o.session) ∧
+            docketOf r x.opened.session = some o.docket ∧ x.opened.session = o.session) ∧
         (pub.others.toList.map (·.session)).Nodup
 
 /-- **What the decoder gives the check.** For every parameters `AuditParams.of` decodes: the key's JSON that the

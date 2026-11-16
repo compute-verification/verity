@@ -741,7 +741,7 @@ certifier's, are held to the session's number of the entry `w` picks (`certifies
 def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
     (reg : Json) (x : ExecutionPhase) : Found (Facts × Nat) := do
   let what := s!"window {w}"
-  let rs := x.registrations
+  let rs := x.dockets
   unless ScanOk.named "program" p.program reg do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do

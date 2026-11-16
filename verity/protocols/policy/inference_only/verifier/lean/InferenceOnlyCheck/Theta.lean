@@ -226,7 +226,7 @@ def trustedOf (tr : Json) : Except String Trusted := do
 
 /-- One θ entry's provenance: the registration record `D` it cites, the value `V` and the root `R`. -/
 structure Prov where
-  registration : String
+  docket : String
   value : String
   root : String
   deriving Inhabited
@@ -238,7 +238,7 @@ def provOf (p : Json) : Option Prov := do
   match ← strAt p "kind" with
   | "registered" =>
     guard (keys? p == some REGISTERED_KEYS)
-    pure { registration := ← strAt p "registration", value := ← strAt p "value", root := ← strAt p "root" }
+    pure { docket := ← strAt p "registration", value := ← strAt p "value", root := ← strAt p "root" }
   | _ => none
 
 /-- `provenance`: one entry per θ entry (`theta-provenance` otherwise). -/
@@ -262,7 +262,7 @@ def dims (e : Json) : Option (Nat × Nat × Nat) := do
 input `T`, each root node's parameter `own` and each parameter's gate count `counts`. -/
 def entryStep (T : Trusted) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat) (p : Prov) :
     Except String Unit := do
-  let some d := T.digests.findIdx? (· == p.registration) | throw "theta-record-unknown"
+  let some d := T.digests.findIdx? (· == p.docket) | throw "theta-record-unknown"
   if d != 0 then throw "theta-not-at-deployment-start"
   let some e := lastWith T.log[0]! "registered" "value" p.value | throw "theta-root"
   if strAt e "root" != some p.root then throw "theta-root"

@@ -323,7 +323,7 @@ theorem acceptedOutputs_canon : ∃ t, Flock.canon acceptedOutputs = .ok t := by
   · exact canon_nat 1
 
 theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutputs = .ok d := by
-  obtain ⟨t, ht⟩ : ∃ t, Flock.canon (Json.mkObj [("format", .str verdictFormat), ("registration", .str c.registration),
+  obtain ⟨t, ht⟩ : ∃ t, Flock.canon (Json.mkObj [("format", .str verdictFormat), ("registration", .str c.docket),
       ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs)]) =
       .ok t := by
     apply canon_mkObj
@@ -383,7 +383,7 @@ def unproved (w : ByteArray) : Case where
   run := ""
   window := 0
   root := .empty
-  registration := ""
+  docket := ""
   units := #[]
   program := ""
   partition := ""

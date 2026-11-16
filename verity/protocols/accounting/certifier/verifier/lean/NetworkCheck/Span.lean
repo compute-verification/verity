@@ -155,7 +155,7 @@ structure Commitment where
 structure Phase where
   phase : Nat
   certificates : Array Certificate
-  registration : Rows
+  docket : Rows
 
 abbrev Evidence := Array Phase
 
@@ -273,7 +273,7 @@ def phaseOf (j : Json) : V Phase := do
   keyed j ["certificates", "phase", "registration"] ctx
   let certificates ← (← Flock.J.arr j "certificates" ctx).mapM (certificateOf · s!"{ctx}.certificates")
   pure { phase := ← Flock.J.nat j "phase" ctx, certificates,
-         registration := ← rowsOf (← Flock.J.get j "registration" ctx) s!"{ctx}.registration" }
+         docket := ← rowsOf (← Flock.J.get j "registration" ctx) s!"{ctx}.registration" }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
@@ -324,7 +324,7 @@ def phaseCheck (p : Params) (w : Nat) (x : Phase) : Except String Unit := do
     unless c.window == w do throw s!"the {what} certificate is at another execution phase"
     unless c.signs p.lms p.key p.session do
       throw s!"the {what} certificate does not verify under the key in the certifier session: {noneCertified}"
-  let (r, s, sd) := (x.registration, p.schedule, p.scheduleDigest)
+  let (r, s, sd) := (x.docket, p.schedule, p.scheduleDigest)
   let (B, S, T) := (s.cellBytes, s.allocation, s.window)
   let d := Direction.egress
   unless r.parameters == Flock.hexOf sd do

@@ -95,7 +95,7 @@ structure Case where
   run : String
   window : Nat
   root : ByteArray
-  registration : String
+  docket : String
   units : Array Nat
   program : String
   partition : String
@@ -204,7 +204,7 @@ def caseOf (j : Json) : V Case := do
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
       throw "a network certifier link's two ends are on the network certifier's one grid, with no occupancy profile"
   pure { link := ← str j "link" "case", run := ← str j "run" "case", window := ← nat j "window" "case",
-         root := ← bytesOf (← get j "root" "case") "root", registration := ← str j "registration" "case",
+         root := ← bytesOf (← get j "root" "case") "root", docket := ← str j "registration" "case",
          units := ← natsOf (← get j "units" "case") "units", program := ← str j "program" "case",
          partition := ← str j "partition" "case",
          gates := ← (← arr j "gates" "case").mapM (asStr · "gates"),
@@ -414,7 +414,7 @@ structure Verdict where
 
 /-- `SHA-512(canonical_json({format, registration, sessions, accepted, public}))`, hex. -/
 def verdictDigest (c : Case) (accepted : Bool) (outputs : Json) : V String := do
-  let body := Json.mkObj [("format", .str verdictFormat), ("registration", .str c.registration),
+  let body := Json.mkObj [("format", .str verdictFormat), ("registration", .str c.docket),
     ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool accepted), ("public", outputs)]
   return Flock.hexOf (Flock.Sha512.hash (← Flock.canon body).toUTF8)
 

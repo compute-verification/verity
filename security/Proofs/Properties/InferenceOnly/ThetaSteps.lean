@@ -219,7 +219,7 @@ theorem trustedOf_ok (tr : Json) (T : Trusted) (h : trustedOf tr = .ok T) :
 
 
 theorem provOf_ok (p : Json) (q : Prov) (h : provOf p = some q) :
-    strAt p "kind" = some "registered" ∧ strAt p "registration" = some q.registration ∧
+    strAt p "kind" = some "registered" ∧ strAt p "registration" = some q.docket ∧
       strAt p "value" = some q.value ∧ strAt p "root" = some q.root := by
   unfold provOf at h
   rcases hk : strAt p "kind" with _ | kind <;> simp only [hk, Option.bind_none, Option.bind_some, bind] at h
@@ -240,7 +240,7 @@ theorem provOf_ok (p : Json) (q : Prov) (h : provOf p = some q) :
 
 theorem provenanceOf_ok (j : Json) (n : Nat) (ps : Array Prov) (h : provenanceOf j n = .ok ps) :
     ∃ prov, getD j "provenance" = .arr prov ∧ prov.size = n ∧ ps.size = n ∧
-      ∀ t < n, strAt prov[t]! "kind" = some "registered" ∧ strAt prov[t]! "registration" = some ps[t]!.registration ∧
+      ∀ t < n, strAt prov[t]! "kind" = some "registered" ∧ strAt prov[t]! "registration" = some ps[t]!.docket ∧
         strAt prov[t]! "value" = some ps[t]!.value ∧ strAt prov[t]! "root" = some ps[t]!.root := by
   unfold provenanceOf at h
   split at h
@@ -262,12 +262,12 @@ theorem provenanceOf_ok (j : Json) (n : Nat) (ps : Array Prov) (h : provenanceOf
 
 theorem entryStep_ok (T : Trusted) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
     (p : Prov) (h : entryStep T own counts k width p = .ok ()) :
-    T.digests.findIdx? (· == p.registration) = some 0 ∧
+    T.digests.findIdx? (· == p.docket) = some 0 ∧
       (∃ e, lastWith T.log[0]! "registered" "value" p.value = some e ∧ strAt e "root" = some p.root) ∧
       ∃ i, own[k]? = some (some i) ∧
         ∃ e', lastWith T.log[T.run]! "registered" "value" T.params[i]!.1 = some e' ∧ strAt e' "root" = some p.root := by
   unfold entryStep at h
-  rcases hd : T.digests.findIdx? (· == p.registration) with _ | d <;> simp only [hd] at h
+  rcases hd : T.digests.findIdx? (· == p.docket) with _ | d <;> simp only [hd] at h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   by_cases hd0 : (d != 0) = true
   · simp [hd0, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
@@ -384,7 +384,7 @@ theorem provenanceHeld_of (j tr out : Json) (h : Theta.evaluate j tr = .ok out)
   obtain ⟨own, hown, hp⟩ := owners_some _ _ _ _ hp
   obtain ⟨h0lt, h0r⟩ := findIdx_eq _ _ _ h0
   obtain ⟨fk, freg, fval, froot⟩ := hfields t ht
-  exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
+  exact ⟨prov, ps[t]!.docket, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
     by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, e', he', her'⟩
 
 end InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps

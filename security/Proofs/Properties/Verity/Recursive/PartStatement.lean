@@ -677,7 +677,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
           program := some o.program } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
-      (o.registration.mapM fun d => do
+      (o.docket.mapM fun d => do
           let some s := String.fromUTF8? (← bs.get d "rec inner registration")
             | throw "rec inner registration: not UTF-8"
           pure s : Flock.V (Option String)) = .ok reg ∧
@@ -861,7 +861,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hIprog : r.innerRaw.program = some o.program)
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
-    (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIreg : (o.docket.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
     (hIlinks : r.w.links = none)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
@@ -1019,7 +1019,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hIprog : r.innerRaw.program = some o.program)
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
-    (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIreg : (o.docket.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
     (hIlinks : r.w.links = none)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))

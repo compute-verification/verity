@@ -537,7 +537,7 @@ theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json}
     {before : Array Json} {k : Case} {bs : Core.Blobs} {x : Json × Core.Outcome OneStage.Public Core.Integrity}
     (h : caseAt inner p ledger pins session w want before k bs = .ok x) :
     ∃ (cm : OneStage.Commitment) (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
-      (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
+      (Flock.canon k.docket >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
       Flock.hexOf cm.digest = want ∧
       OneStageZk.paramsOfJson (paramsAt p w.root k.pub before) = .ok q ∧
       (∃ header, (bs.get k.pub "public file" >>= FilePart.header) = .ok header ∧
@@ -546,7 +546,7 @@ theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json}
         fun s => OneStageZk.evidenceOf s.toUTF8) = .ok ev ∧
       x = (cm.record, inner q cm ev bs) := by
   refine of_triple (Q := fun x => ∃ (cm : OneStage.Commitment) (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
-      (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
+      (Flock.canon k.docket >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
       Flock.hexOf cm.digest = want ∧
       OneStageZk.paramsOfJson (paramsAt p w.root k.pub before) = .ok q ∧
       (∃ header, (bs.get k.pub "public file" >>= FilePart.header) = .ok header ∧
@@ -586,7 +586,7 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
       ((∃ published profile, o = .accept published profile ∧
           st' = { st with before := st.before.push record,
                           passed := st.passed.push
-                            { window := w, audits := #[{ registration := d, published, profile }] } }) ∨
+                            { window := w, audits := #[{ docket := d, published, profile }] } }) ∨
         (∃ why, st' = { st with before := st.before.push record, undecided := st.undecided <|> some why })) := by
   refine of_triple (Q := fun st' => ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots)
         (d : String) (k : Case) (record : Json) (o : Core.Outcome OneStage.Public Core.Integrity),
@@ -601,7 +601,7 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
       ((∃ published profile, o = .accept published profile ∧
           st' = { st with before := st.before.push record,
                           passed := st.passed.push
-                            { window := w, audits := #[{ registration := d, published, profile }] } }) ∨
+                            { window := w, audits := #[{ docket := d, published, profile }] } }) ∨
         (∃ why, st' = { st with before := st.before.push record, undecided := st.undecided <|> some why }))) ?_ h
   clear h
   mvcgen [executionPhaseAt, -Spec.throw_Except, throw_spec, coinOf_spec, caseAt_spec]
@@ -632,7 +632,7 @@ theorem executionPhaseAt_step {inner : Inner} {p : AuditParams} {c : Commitment}
   unfold StepOk
   rcases h9 with ⟨published, profile, hacc, hst⟩ | ⟨why, hst⟩
   · subst hst
-    refine Or.inl ⟨{ registration := d, published, profile }, record, rfl, rfl, rfl, ?_⟩
+    refine Or.inl ⟨{ docket := d, published, profile }, record, rfl, rfl, rfl, ?_⟩
     exact ⟨au, opened, lc, roots, k, cm, q, ev, h1, h2, h3, h4, h5, Array.ext' h6, Array.ext' h7, c1, c2, hrec, c3,
       c4, c5, ho.symm.trans hacc⟩
   · subst hst
@@ -649,17 +649,17 @@ theorem foldlM_spec {α σ ε : Type} (f : σ → α → Except ε σ) (init : �
 by that circuit and its session. -/
 def othersOf (r : Read) (others : Array Session) : Array Other :=
   others.filterMap fun s =>
-    (registrationOf r s.session).map fun d => ({ registration := d, session := s.session } : Other)
+    (docketOf r s.session).map fun d => ({ docket := d, session := s.session } : Other)
 
 /-- What `registeredIn` checked where it returns: every window is this registration's, every other session of the
 lane is listed by a period that committed another circuit, and it returns those (`othersOf`). -/
 theorem registeredIn_ok {p : AuditParams} {r : Read} {ws : Runs} {os : Array Other}
     (h : registeredIn p r ws = .ok os) :
-    (∀ w ∈ ws.windows, registrationOf r w.session = some p.registration) ∧
-      (∀ s ∈ ws.others, ∃ d, registrationOf r s.session = some d ∧ d ≠ p.registration) ∧
+    (∀ w ∈ ws.windows, docketOf r w.session = some p.docket) ∧
+      (∀ s ∈ ws.others, ∃ d, docketOf r s.session = some d ∧ d ≠ p.docket) ∧
       os = othersOf r ws.others := by
-  refine of_triple (Q := fun os => (∀ w ∈ ws.windows, registrationOf r w.session = some p.registration) ∧
-      (∀ s ∈ ws.others, ∃ d, registrationOf r s.session = some d ∧ d ≠ p.registration) ∧
+  refine of_triple (Q := fun os => (∀ w ∈ ws.windows, docketOf r w.session = some p.docket) ∧
+      (∀ s ∈ ws.others, ∃ d, docketOf r s.session = some d ∧ d ≠ p.docket) ∧
       os = othersOf r ws.others) ?_ h
   clear h
   unfold othersOf
@@ -673,7 +673,7 @@ theorem registeredIn_ok {p : AuditParams} {r : Read} {ws : Runs} {os : Array Oth
     simpa using this
   · have a := Array.find?_eq_none.1 h2 s hs
     have b := Array.find?_eq_none.1 h3 s hs
-    cases hd : registrationOf r s.session with
+    cases hd : docketOf r s.session with
     | none => simp [hd] at a
     | some d => exact ⟨d, rfl, fun hdp => by simp [hd, hdp] at b⟩
 
@@ -682,14 +682,14 @@ theorem registeredIn_spec (p : AuditParams) (r : Read) (ws : Runs) :
 
 /-- A session `othersOf` returns is one of the others, under the circuit its period committed. -/
 theorem othersOf_mem {r : Read} {others : Array Session} {o : Other} (ho : o ∈ othersOf r others) :
-    ∃ s ∈ others, registrationOf r s.session = some o.registration ∧ o.session = s.session := by
+    ∃ s ∈ others, docketOf r s.session = some o.docket ∧ o.session = s.session := by
   obtain ⟨s, hs, hso⟩ := Array.mem_filterMap.1 ho
   obtain ⟨d, hd, rfl⟩ := Option.map_eq_some_iff.1 hso
   exact ⟨s, hs, hd, rfl⟩
 
 /-- Each of the others that a period committing a circuit lists is returned by `othersOf`, under that circuit. -/
 theorem mem_othersOf {r : Read} {others : Array Session} {s : Session} {d : String} (hs : s ∈ others)
-    (hd : registrationOf r s.session = some d) : (⟨d, s.session⟩ : Other) ∈ othersOf r others :=
+    (hd : docketOf r s.session = some d) : (⟨d, s.session⟩ : Other) ∈ othersOf r others :=
   Array.mem_filterMap.2 ⟨s, hs, by rw [hd]; rfl⟩
 
 theorem filterMap_map_sublist {α β γ : Type} (f : α → Option β) (g : β → γ) (k : α → γ)
@@ -742,7 +742,7 @@ theorem checkWith_accept {inner : Inner} {p : AuditParams} {c : Commitment} {e :
     {pub : Public} {prof : Array Core.Integrity} (h : checkWith inner p c e bs = .accept pub prof) :
     ∃ others st, _root_.Spot.MonitoringPeriod.run inner p c e bs = .ok (others, st) ∧ st.undecided = none ∧
       pub = { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop,
-              registration := p.registration, windows := st.passed, others := others } ∧
+              docket := p.docket, windows := st.passed, others := others } ∧
       prof = st.passed.flatMap fun x => x.audits.map (·.profile) := by
   unfold checkWith at h
   split at h
@@ -883,7 +883,7 @@ theorem committedOnce : CommittedOnce := by
   refine ⟨r, hr, hck', hreach, fun x hx hC => ⟨?_, fun hthis => ?_⟩, fun w hw => ?_⟩
   · by_cases hS : Sampled p.ledger x
     · obtain ⟨w, hwm, -, hws⟩ := (hcom x hx hC).1 hS
-      exact ⟨p.registration, by rw [← hws]; exact hwin w hwm⟩
+      exact ⟨p.docket, by rw [← hws]; exact hwin w hwm⟩
     · obtain ⟨s, hs, -, hss⟩ := (hcom x hx hC).2 hS
       obtain ⟨d, hd, -⟩ := hoth s hs
       exact ⟨d, by rw [← hss]; exact hd⟩
@@ -939,7 +939,7 @@ theorem othersElsewhere : OthersElsewhere := by
     obtain ⟨s, hs, hsd, hos⟩ := othersOf_mem ho
     obtain ⟨d, hd, hne⟩ := hoth s hs
     obtain ⟨x, hx, hC, -, -, hxs⟩ := hothers s hs
-    have hdo : d = o.registration := Option.some.inj (hd.symm.trans hsd)
+    have hdo : d = o.docket := Option.some.inj (hd.symm.trans hsd)
     refine ⟨by rw [← hdo]; exact hne, x, hx, hC, by rw [hxs]; exact hsd, by rw [hos]; exact hxs⟩
   · rw [hpo]
     exact othersOf_nodup (List.nodup_append.1 hses).2.1

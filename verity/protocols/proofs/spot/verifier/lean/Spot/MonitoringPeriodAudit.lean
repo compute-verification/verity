@@ -91,7 +91,7 @@ structure AuditParams where
   ledger : Params
   keyJ : Json
   main : Json
-  registration : String
+  docket : String
   audit : Json
 
 /-- The keys of one-stage v2's parameters that the check sets at a window. -/
@@ -131,15 +131,15 @@ def REGISTRATION_FORM : String :=
 def AuditParams.of (j : Json) : V AuditParams := do
   unless keys? j == some #["audit", "key", "label", "lane", "main", "registration", "start", "stop"] do
     throw "a period's parameters' keys are audit, key, label, lane, main, registration, start, stop"
-  let .str registration := getD j "registration" | throw REGISTRATION_FORM
-  unless Challenger.isCircuit (.str registration) do throw REGISTRATION_FORM
+  let .str docket := getD j "registration" | throw REGISTRATION_FORM
+  unless Challenger.isCircuit (.str docket) do throw REGISTRATION_FORM
   let ledger ← Params.of (getD j "key") (getD j "label") (getD j "lane") (getD j "start") (getD j "stop")
   let audit := getD j "audit"
   let formed := (audit matches .obj _) && (getD audit "log" matches .arr _) &&
     keys? (getD audit "proofs") == some #["circuit", "registered"] &&
     (WINDOW_KEYS ++ UNDERIVED_KEYS).all fun k => (field? audit k).isNone
   unless formed do throw AUDIT_FORM
-  let p : AuditParams := { ledger, keyJ := getD j "key", main := getD j "main", registration, audit }
+  let p : AuditParams := { ledger, keyJ := getD j "key", main := getD j "main", docket, audit }
   let _ ← (OneStageZk.paramsOfJson (paramsAt p ZEROS ZEROS #[])).mapError (s!"audit: {·}")
   return p
 
@@ -158,7 +158,7 @@ def Commitment.of (b : ByteArray) : V Commitment := do
 /-- One audit of a window's evidence: the registration's record, the digest of its public file, and one-stage v2's
 evidence for it, whose `coins` name the sample's segment alone (`evidenceAt`). -/
 structure Case where
-  registration : Json
+  docket : Json
   pub : String
   evidence : Json
 
@@ -186,7 +186,7 @@ def Evidence.of (j : Json) : V Evidence := do
     let audits ← cs.mapM fun a => do
       unless keys? a == some #["evidence", "public", "registration"] do throw EVIDENCE_FORM
       let .str pub := getD a "public" | throw EVIDENCE_FORM
-      pure ({ registration := getD a "registration", pub, evidence := getD a "evidence" } : Case)
+      pure ({ docket := getD a "registration", pub, evidence := getD a "evidence" } : Case)
     pure ({ session := getD w "session", audits } : RunEvidence)
   return { pins := getD j "pins", windows }
 
@@ -215,7 +215,7 @@ def sampledOn (root : String) (roots : Challenger.Roots) : Array String :=
 
 /-- An accepted audit: the registration's digest and what one-stage v2 published and profiled for it. -/
 structure Audit where
-  registration : String
+  docket : String
   published : OneStage.Public
   profile : Core.Integrity
 
@@ -227,7 +227,7 @@ structure Passed where
 /-- A session of the lane that is another registration's: the circuit the period that lists it committed, and the
 session. -/
 structure Other where
-  registration : String
+  docket : String
   session : String
 
 /-- What an accepted period publishes: the lane, the monitoring period and this registration's circuit, each window
@@ -236,7 +236,7 @@ structure Public where
   lane : String
   start : String
   stop : String
-  registration : String
+  docket : String
   windows : Array Passed
   others : Array Other
 
@@ -273,7 +273,7 @@ file shares no rows (`names`); its evidence is one-stage v2's (`evidence`). -/
 def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Run) (want : String)
     (before : Array Json) (k : Case) (bs : Core.Blobs) :
     Except (Code × String) (Json × Core.Outcome OneStage.Public Core.Integrity) := do
-  let c ← match Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8 with
+  let c ← match Flock.canon k.docket >>= fun s => OneStage.commitmentOf s.toUTF8 with
     | .ok c => pure c
     | .error why => throw (Code.evidence, s!"session {w.session}: registration: {why}")
   let got := Flock.hexOf c.digest
@@ -319,7 +319,7 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
   let at_ := s!"session {w.session}, registration {want.take 16}"
   match o with
   | .accept published profile =>
-    let audit : Audit := { registration := want, published, profile }
+    let audit : Audit := { docket := want, published, profile }
     return { st with before := st.before.push record, passed := st.passed.push { window := w, audits := #[audit] } }
   | .reject why => throw (Code.audit, s!"{at_}: {why}")
   | .undecided why =>
@@ -327,7 +327,7 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
 
 /-- The circuit that the period listing session `ses` committed when the ledger opened it: `none` when no period
 lists the session, or the one that does committed no circuit. -/
-def registrationOf (r : Read) (ses : String) : Option String :=
+def docketOf (r : Read) (ses : String) : Option String :=
   (r.periods.find? (·.windows.contains ses)).bind fun mp =>
     match mp.circuit with
     | .str d => some d
@@ -338,18 +338,18 @@ and every other session of the lane is another registration's, returned with tha
 first refusal, the windows first, then the others that are of no registration, then the others that are this
 registration's. -/
 def registeredIn (p : AuditParams) (r : Read) (ws : Runs) : Except (Code × String) (Array Other) := do
-  if let some w := ws.windows.find? fun w => registrationOf r w.session != some p.registration then
+  if let some w := ws.windows.find? fun w => docketOf r w.session != some p.docket then
     throw (Code.period, s!"period {w.period}, which lists session {w.session}, does not commit this " ++
-      s!"registration's circuit {p.registration.take 16}")
-  if let some s := ws.others.find? fun s => (registrationOf r s.session).isNone then
+      s!"registration's circuit {p.docket.take 16}")
+  if let some s := ws.others.find? fun s => (docketOf r s.session).isNone then
     throw (Code.outside, s!"session {s.session} of lane {p.ledger.lane} holds no {p.ledger.label} coin, and no " ++
       "period that commits a circuit lists it: its root is committed under no registration")
-  if let some s := ws.others.find? fun s => registrationOf r s.session == some p.registration then
+  if let some s := ws.others.find? fun s => docketOf r s.session == some p.docket then
     throw (Code.period, s!"session {s.session} is in a period that commits this registration's circuit " ++
-      s!"{p.registration.take 16} and holds no {p.ledger.label} coin: its root is committed under this " ++
+      s!"{p.docket.take 16} and holds no {p.ledger.label} coin: its root is committed under this " ++
       "registration and never sampled")
   return ws.others.filterMap fun s =>
-    (registrationOf r s.session).map fun d => ({ registration := d, session := s.session } : Other)
+    (docketOf r s.session).map fun d => ({ docket := d, session := s.session } : Other)
 
 /-- The ledger's half, whose each session is (`registeredIn`), then every window in the ledger's order against its
 evidence (`executionPhaseAt`): the lane's sessions that are other registrations' with the check's state at the end, or the
@@ -379,7 +379,7 @@ def checkWith (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) 
     | some why => .undecided s!"audit: {why}"
     | none =>
       .accept { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop,
-                registration := p.registration, windows := st.passed, others }
+                docket := p.docket, windows := st.passed, others }
         (st.passed.flatMap fun x => x.audits.map (·.profile))
 
 /-- **The period's check** on the blobs (module docstring, **The check**): `checkWith` at one-stage v2's audit on
@@ -389,18 +389,18 @@ def checkBlobs (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blob
   checkWith OneStageZk.checkBlobs p c e bs
 
 def Audit.toJson (a : Audit) : Json :=
-  Json.mkObj [("published", OneStage.publicJson a.published), ("registration", Json.str a.registration)]
+  Json.mkObj [("published", OneStage.publicJson a.published), ("registration", Json.str a.docket)]
 
 def Passed.toJson (x : Passed) : Json :=
   Json.mkObj [("audits", Json.arr (x.audits.map Audit.toJson)), ("period", Json.str x.window.period),
     ("phase", Lean.toJson x.window.phase), ("root", Json.str x.window.root), ("session", Json.str x.window.session)]
 
 def Other.toJson (o : Other) : Json :=
-  Json.mkObj [("registration", Json.str o.registration), ("session", Json.str o.session)]
+  Json.mkObj [("registration", Json.str o.docket), ("session", Json.str o.session)]
 
 def Public.toJson (x : Public) : Json :=
   Json.mkObj [("lane", Json.str x.lane), ("others", Json.arr (x.others.map Other.toJson)),
-    ("registration", Json.str x.registration), ("start", Json.str x.start), ("stop", Json.str x.stop),
+    ("registration", Json.str x.docket), ("start", Json.str x.start), ("stop", Json.str x.stop),
     ("windows", Json.arr (x.windows.map Passed.toJson))]
 
 def PROTOCOL : String := "verity/sampled-proofs/period/v1"

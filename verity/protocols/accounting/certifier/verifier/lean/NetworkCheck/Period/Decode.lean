@@ -248,7 +248,7 @@ structure Rows where
 structure ExecutionPhase where
   answer : Core.Answer
   certificates : Array Certificate
-  registrations : Array Rows
+  dockets : Array Rows
 
 /-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
 `deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
@@ -867,7 +867,7 @@ def certifierLink (j : Json) : V String := (·.link) <$> paramsOf j
 #guard (certifierLink (Json.mkObj [("link", .str "eth0")])).toOption == none
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
-def registrationOf (j : Json) (ctx : String) : V Json := do
+def docketOf (j : Json) (ctx : String) : V Json := do
   let format ← Flock.J.str j "format" ctx
   unless Flock.WindowRecord.FORMATS.contains format do
     throw s!"{ctx}: format is not {" or ".intercalate Flock.WindowRecord.FORMATS}"
@@ -876,8 +876,8 @@ def registrationOf (j : Json) (ctx : String) : V Json := do
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
   exactly j ["audits", "windows"] "the object"
-  let audits ← (← Flock.J.arr j "audits" "the object").mapM (registrationOf · "an audit's registration")
-  let windows ← (← Flock.J.arr j "windows" "the object").mapM (registrationOf · "an execution phase's registration")
+  let audits ← (← Flock.J.arr j "audits" "the object").mapM (docketOf · "an audit's registration")
+  let windows ← (← Flock.J.arr j "windows" "the object").mapM (docketOf · "an execution phase's registration")
   pure { audits, windows, bytes := b }
 
 def rowsOf (j : Json) (ctx : String) : V Rows := do
@@ -903,8 +903,8 @@ def executionPhaseOf (j : Json) (ctx : String) : V ExecutionPhase := do
   exactly j ["answer", "certificates", "registrations"] ctx
   let answer ← Core.Answer.ofJson (← Flock.J.get j "answer" ctx) s!"{ctx}.answer"
   let certificates ← (← Flock.J.arr j "certificates" ctx).mapM (certificateOf · s!"{ctx}.certificates")
-  let registrations ← (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")
-  pure { answer, certificates, registrations }
+  let dockets ← (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")
+  pure { answer, certificates, dockets }
 
 /-- A session's signed start, as the run's `deployment.json` holds it (`"start"`). -/
 def startOf (j : Json) (ctx : String) : V Start := do

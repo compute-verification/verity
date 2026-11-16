@@ -2274,7 +2274,7 @@ example : CALLS_TAG = Domains.POUW_H1_CALLS.toUTF8.push 0 := rfl
 example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
 example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
 example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
-example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
+example : COMMIT_FORMAT = Domains.DOCKET := rfl
 example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl

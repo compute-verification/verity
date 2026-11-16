@@ -169,7 +169,7 @@ private def committed (policy audit : ByteArray) : Answer :=
 -- every window of PoUW's period on the policy's record: one record leaves the verdict to the subprotocols, and a window
 -- on another record rejects onsite, naming both, whatever the subprotocols answer but a rejection, which stands
 /-- A registration record every record reader decodes, a window's Commit record among them. -/
-private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
+private def docket (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 
@@ -191,17 +191,17 @@ private def stray (policy : String) (rs : List String) (o : Outcome Keyed Keyed)
 
 private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided "u"]
 
-#guard answered.all fun o => stray (registration 0) [registration 0, registration 0] o == none
+#guard answered.all fun o => stray (docket 0) [docket 0, docket 0] o == none
 -- a window on another record
-#guard answered.all fun o => stray (registration 0) [registration 0, registration 1] o ==
+#guard answered.all fun o => stray (docket 0) [docket 0, docket 1] o ==
   some "record: verity/inference-only/v0 and verity/pouw/period/v1 named different values"
 -- every window on a record that isn't the policy's
-#guard answered.all fun o => (stray (registration 1) [registration 0] o).isSome
+#guard answered.all fun o => (stray (docket 1) [docket 0] o).isSome
 -- a window naming no Commit record leaves the period to refuse it
-#guard answered.all fun o => stray (registration 0) [registration 0, "{}"] o == none
+#guard answered.all fun o => stray (docket 0) [docket 0, "{}"] o == none
 -- a subprotocol's rejection stands, and onsite's answer on those cases is its subprotocols' refusals
-#guard stray (registration 0) [registration 1] (.reject "r") == some "r"
-#guard (answer (executionPhasesOn (registration 0) [registration 1])).reason.map
+#guard stray (docket 0) [docket 1] (.reject "r") == some "r"
+#guard (answer (executionPhasesOn (docket 0) [docket 1])).reason.map
   (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 
 /-! ## The wipe's count, held to the network attester's -/

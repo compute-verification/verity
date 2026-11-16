@@ -317,6 +317,6 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
-example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
+example : formats = [Domains.DOCKET_V1, Domains.DOCKET] := rfl
 
 end PouwCheck
