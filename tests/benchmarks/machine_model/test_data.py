@@ -9,7 +9,7 @@ import tomllib
 import pytest
 
 from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, all_attacks, attacks, census,
-                                        census_files, census_lines, citations, cites, entries, floors, holds,
+                                        census_files, census_lines, citations, entries, floors, holds,
                                         kind_lists, model, rows, run_lists, u_of, vector, vectors)
 
 M = model()
