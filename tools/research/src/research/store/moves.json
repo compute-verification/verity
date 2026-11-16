@@ -5023,7 +5023,6 @@
         "benchmarks/harness/specs/pyproject.toml": "tests/benchmarks/harness/specs/pyproject.toml",
         "benchmarks/hash/dither/pyproject.toml": "tests/benchmarks/hash/dither/pyproject.toml",
         "benchmarks/inference_only/pyproject.toml": "tests/benchmarks/inference_only/pyproject.toml",
-        "benchmarks/int8_class_rate/pyproject.toml": "tests/benchmarks/int8_class_rate/pyproject.toml",
         "benchmarks/kernels/exactlin/pyproject.toml": "tests/benchmarks/kernels/exactlin/pyproject.toml",
         "benchmarks/kernels/numabind/pyproject.toml": "tests/benchmarks/kernels/numabind/pyproject.toml",
         "benchmarks/kernels/s8_linear/pyproject.toml": "tests/benchmarks/kernels/s8_linear/pyproject.toml",
