@@ -246,7 +246,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, the registered circuit's work; execution block, execution phase |
 | a served span: "window", "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
-| "window" for SPOT's served span with its audit; SPOT's records' `window` (`window.kind`, `window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
+| "window" for SPOT's served span with its audit; SPOT's records' `window` (`window_root`) until a format version | run (`Spot.Run`); its served part is the run's serving, and its length the run length |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
@@ -326,10 +326,10 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
-  - **Window**: the code's windows (`verity.commitments.windows`, a served window circuit and its window record, PoUW's window and
-    its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
-    server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
-    PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
+  - **Window**: the code's windows (`verity.commitments.periods`' `Window`, a served window circuit and its window
+    record, PoUW's window and its salt) are one period's served steps, and keep the word until renamed. A span of time
+    is a period, a server's gates between two memory wipes are a server block, and a sliding window is a model's term
+    (above). PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
   - **Escape**: an incorrect proof block's chance to pass the sample is its miss probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
