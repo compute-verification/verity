@@ -5,7 +5,6 @@
     {"file": "adapters/torch/verity_torch/frontend/rules/family.py", "count": 1},
     {"file": "adapters/torch/verity_torch/frontend/rules/reference.py", "count": 1},
     {"file": "adapters/torch/verity_torch/frontend/rules/vocab.py", "count": 1},
-    {"file": "benchmarks/codec_tensor/bench.py", "count": 1},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 1},
     {"file": "benchmarks/hash/dither/dither_a.py", "count": 1},
     {"file": "benchmarks/hash/dither/sbench.py", "count": 2},

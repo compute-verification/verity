@@ -22,8 +22,7 @@ Nothing outside `benchmarks/` reads this directory by its path: `kv.cu`, `kv.py`
 (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/`), with `paged.py` beside them.
 
 **Status: active.** `run.sh` is the GPU run of the prover's `kv.cu`, and this suite holds its
-`kv.py` and `cuda_lib.py` to their vectors. `benchmarks/vllm_encoded` includes `wc.cu` and takes `wide.cu`'s build, and
-`benchmarks/codec_tensor/bench.py` loads `codec.py`. The `codec_tensor` and `vllm_encoded` suites read its Python as
+`kv.py` and `cuda_lib.py` to their vectors. `benchmarks/vllm_encoded` includes `wc.cu` and takes `wide.cu`'s build. The `codec_tensor` and `vllm_encoded` suites read its Python as
 inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/check/suites.py benchmarks/word_codec` checks the references against their vectors
