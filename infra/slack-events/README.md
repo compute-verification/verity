@@ -6,7 +6,9 @@ chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the
 one goes to the admin, with a routing line in its thread (`consumer.NO_MODEL`) saying no lane was named and routing by
 model is off. In a person's chat, their own post that names no one goes instead to the lane their people.d record
 names (`lane`, set by `research msg chat open|expect --lane HANDLE`), with a routing line saying it is their usual
-lane; a lane the registry doesn't have falls back to the admin. Nothing is routed in `#agent-coordination`, where the sender rings its own doorbells. A newcomer whom
+lane; a lane the registry doesn't have falls back to the admin. Nothing is routed in `#agent-coordination`, where the sender rings its own doorbells,
+except a post through Verity's bot under a registry `external_posters` name (Codex), which no sender delivered: there
+and in the channels above it rings the names it starts with, by the rule alone, and nothing when it names no one. A newcomer whom
 `research msg chat expect` published gets their chat when they join the workspace. The service keeps no database:
 Slack is the record (below).
 
@@ -17,12 +19,12 @@ Every route is `api/index.py`, the FastAPI app `slack_events/app.py` builds; `se
 
 | Route | Caller | What it does |
 |---|---|---|
-| `POST /api/slack/events` | Slack's Events API | Checks Slack's signature (HMAC SHA-256 of `v0:{ts}:{raw body}` with `SLACK_SIGNING_SECRET`, at most 5 minutes old), answers `url_verification`, drops our own bot's posts, publishes the event to the `slack-events` topic keyed on its `event_id`, and answers 200, or 503 when the publish fails so Slack retries. Nothing runs after the answer. |
+| `POST /api/slack/events` | Slack's Events API | Checks Slack's signature (HMAC SHA-256 of `v0:{ts}:{raw body}` with `SLACK_SIGNING_SECRET`, at most 5 minutes old) and stamps `slack_heard_at` (Health) for every request that passes, ignored ones included; answers `url_verification`, drops our own bot's posts, publishes the event to the `slack-events` topic keyed on its channel and ts (`deps.message_key`, as reconciliation keys a post it finds; an event that is no message on its `event_id`), and answers 200, or 503 when the publish fails so Slack retries. Nothing runs after the answer. |
 | `POST /api/slack/interactivity` | Slack's Interactivity | The same check, then the payload onto the same topic, keyed on its action (not handled yet: Needs). |
 | `GET /api/slack/health` | whoever holds `HEALTH_TOKEN` | The numbers under Health. |
 | `GET /api/cron/drain` | Vercel cron, every minute, `CRON_SECRET` | Consumes the topic (`subscriber.drain`, below). |
 | `GET /api/cron/watchdog` | Vercel cron, every 5 minutes, `CRON_SECRET` | Rings again a chat post with no 👀 and no lane reply after 15 minutes (the names of its routing line, else the rule's), and the admin as well, once, when that line sent it to the person's usual lane; rings the admin and says so in the thread after 60; every doorbell it rings is URGENT (a person is waiting); once a day (16:00Z) posts the open chat threads to the admin's inbox; rings `crons.STALL_TO` when the queue stalls, and publishes the hourly canary (Health). |
-| `GET /api/cron/reconcile` | Vercel cron, every 10 minutes, `CRON_SECRET` | Re-enqueues, keyed on channel and ts, a person's post of the last hour that should ring someone and has neither a routing line nor a doorbell. |
+| `GET /api/cron/reconcile` | Vercel cron, every 10 minutes, `CRON_SECRET` | Re-enqueues, keyed on channel and ts as Slack's event is, each post of the last hour (older than 2 minutes) the consumer should have routed and didn't: a person's in a chat or ask channel that should ring someone and has neither a routing line nor a doorbell, and an `external_posters` one in those channels or `#agent-coordination` that names a lane whose inbox has no doorbell for it. Rings `crons.STALL_TO` when Slack has gone silent (Health). |
 
 ## Modules
 
@@ -36,7 +38,7 @@ them, so Vercel installs them alone; `uv lock` in `service/` after a pin moves).
 | `slack_events/app.py` | The HTTP side: signature and bearer checks, publishing to the topic, health, the cron routes. |
 | `slack_events/subscriber.py` | The queue's consumer in poll mode: `drain` claims messages as consumer group `slack-events-drain` until the topic is empty or 45 s have passed. |
 | `slack_events/consumer.py` | One message: route a person's post (`deliver`, routing lines), dead-letter after 5 deliveries, the canary, a newcomer's `team_join`. |
-| `slack_events/crons.py` | The watchdog (reminders, escalation, the daily list, `stall`, `canary`) and reconciliation. |
+| `slack_events/crons.py` | The watchdog (reminders, escalation, the daily list, `stall`, `canary`) and reconciliation (with `silence`). |
 | `slack_events/router.py` | `route_unaddressed`, the seam for routing by model: None (no-model mode) unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built. |
 | `slack_events/deps.py` | What the service runs against (routing code, registry, queue, Slack, cache, clock): `deployed()` from the environment, fakes in the tests. |
 | `slack_events/vendor.py` | Loads the routing code and registry: `_vendor/` in a deployment, the repository's own files from a checkout. |
@@ -56,7 +58,8 @@ the clock. No test calls Slack, Vercel, GitHub or a model.
 | Retries, redelivery, dead letters | `consumer.consume`, `consumer.dead_letter`; Slack is the record, below |
 | Reminders, escalation, the daily list | `crons.watchdog`, `crons.daily` |
 | A stalled queue | `crons.stall`, `crons.canary`; Health, below |
-| Posts that were never routed | `crons.reconcile` |
+| Posts that were never routed | `crons.reconcile`, `crons.unrung` (an external poster's) |
+| Slack calling us no more | `crons.silence`; Health, below |
 | Routing by model | `router.py` |
 | Newcomers | `consumer.newcomer`; Newcomers, below |
 | Signatures, bearers | `app.signed`, `app.bearer` |
@@ -69,8 +72,9 @@ Logs are JSON lines of ids, decisions and errors. They never carry a post's text
 The service keeps no database. What it has routed is what it posted in Slack, which it and the crons read back:
 
 - **A crash.** The queue keeps a message invisible while its handler runs (the SDK renews the lease) and redelivers it
-  when the handler fails or its function dies. `event_id` is the publish's idempotency key, so Slack's retries of one
-  event are one message.
+  when the handler fails or its function dies. A message's channel and ts are the publish's idempotency key, so Slack's
+  retries of one event, and reconciliation's find of a post Slack sent too, are one message (the queue keeps a key
+  for 24 hours).
 - **A post that names no one.** Before ringing anyone, the consumer reads the post's thread (with its messages'
   metadata) for its own routing line: posted by `router` on Verity's bot, its metadata `verity_routing_line` with the
   post's ts and the names it rang. Finding one, it rings those names, with no second pick and no second model call;
@@ -80,7 +84,9 @@ The service keeps no database. What it has routed is what it posted in Slack, wh
 - **A route that can't be read** (the published `routes.d` copy answering an error, or no JSON) leaves its doorbell
   NOT RUNG, so the delivery fails and is retried, like a failed post; only a lane read as having no route is logged as
   having no inbox and left.
-- **Reconciliation** reads the same two records: a post that should ring someone and has neither is enqueued again.
+- **Reconciliation** reads the same two records: a person's post that should ring someone and has neither is enqueued
+  again. An external poster's post has no routing line, so its record is a doorbell in each inbox it rings: missing in
+  one, it is enqueued, and `deliver` rings only that one.
 - Where the bot can't read a channel's history, a redelivery can't find the line: it picks again and may post a second
   line, though `deliver` still rings each lane at most once. Invite the bot to `#ask-the-team` and `#resource-accounting`.
 
@@ -96,6 +102,17 @@ best effort): the cache is regional and may drop a value at any time, so a cold 
   which the crons keep fresh, looks healthy while nothing is consumed.
 - `canary_sent_at` and `canary_done_at`: each hour the watchdog publishes a synthetic `canary` event, stamped as an
   enqueue, which only the consumer can mark done. So the stall check proves the drain on a day no person posts.
+- `slack_heard_at`: when Slack last sent the events route a request with a valid signature, any event, ignored ones
+  included. Slack switches event delivery off when our URL fails it, and tells no one; then nothing is enqueued, so the
+  stall check stays quiet, and the canary, which our own cron publishes, proves the drain and not Slack. So each
+  reconciliation run compares it with the newest message it read. Each channel it reads is one the bot is in, so Slack
+  owes the events route an event for every message there, our bot's own included. When that message is more than 30
+  minutes (`crons.SILENT_S`) newer, it rings `crons.STALL_TO`, at most hourly (`crons.silence`). Why 30 minutes: Slack
+  sends a message's event within seconds and retries a failed one within 5 minutes, so a working service never trips
+  it, while a silence rings within 40 minutes of Slack's last request (30, plus reconciliation's 10-minute period) once
+  messages keep coming. The check adds no Slack call: it reads the messages reconciliation reads anyway. An unknown time (a new
+  deployment, a cold cache) is set to that run's time and rings nothing, so `slack_heard_at` may be a reconciliation
+  run's time rather than Slack's. An hour with no message in those channels proves nothing and rings nothing.
 - `oldest_unprocessed_age_s`: the age now of the oldest unrouted post reconciliation found on its last run (0 when it
   found none); unknown once that finding is 30 minutes old.
 - `dead_letter_count` and `dead_letter_since`: dead letters counted since `since`. The client can't count a topic's
@@ -165,4 +182,25 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
   (the broker's check lives in the website); `HEALTH_TOKEN` stands in until it can be shared.
 - **Routing by model is off** (`router.py`).
 - **Unverified until a deploy:** the drain's first `done` lines (polling from a Vercel function, a per-minute cron),
-  and Runtime Cache's behavior across regions.
+  and Runtime Cache's behavior across regions, which the silence check leans on too: the events route writes
+  `slack_heard_at` and the reconcile cron reads it.
+
+## Comms rehearsal
+
+The existing Events API can forward a verified router doorbell in the comms inbox to the
+production agents platform. Set `COMMS_RELAY_INBOX` (channel ID/thread timestamp) and
+`COMMS_RELAY_UNTIL` (UTC ISO timestamp) in both production projects. Set `COMMS_RELAY_URL`, the
+platform's relay route (https), on this project: the code names no address, and the relay stays closed without it. The 24-hour window is
+closed by default. While Cursor holds the route, only the public coordination thread named by
+`COMMS_RELAY_CANARY_THREAD` can be rehearsed, on a doorbell from Codex containing `[comms relay test]`. Reserve that thread with the Cursor holder first.
+Full delivery requires the verified platform seat to hold the open comms route. The relay handles
+public coordination doorbells only. If the platform owns the inbox and an outside-channel
+or Linear doorbell arrives, the relay alerts top with the message timestamp. The original
+stays in Slack. Private-channel work and other notification types need their own handoff
+before a full cutover.
+
+The relay authenticates with its Vercel production identity, checks Slack for an existing receipt
+after an uncertain post, and replies as comms in the verified source thread. Pending polls and
+temporary failures can retry for 30 minutes from the event. At exhaustion top gets a recovery
+notice and the dead-letter queue records the message identifiers. Pausing the platform seat, restoring the Cursor route and
+clearing the canary or closing the time window stops forwarding.
