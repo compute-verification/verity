@@ -113,7 +113,7 @@ What each one checks, and the Lean or the test that reads it.
 - `cpw_sass.sh` with `cpw_sass.cu`, counted by `cpw_sass_count.py`: the sm_120 unit with its per-set warp checkpoint
   (`PouwWarpCheck_v2` at fx1), each checkpoint route's SASS and its rate on the device.
 - `cpw_routes.sh` with `cpw_routes.cu`: the checkpoint routes that merge on the memory system or the uniform datapath.
-  `tests/test_census_cover.py`'s SASS fixtures hold its runs' timed loops.
+  `tests/benchmarks/pouw/test_census_cover.py`'s SASS fixtures hold its runs' timed loops.
 - `cpw_floor.py`: the unit's floor from the sm_120 headline's Lean bound, beside what each checkpoint route adds.
 - `a2u_sat.sh` with `a2u_sat.cu`, counted by `a2u_sat_count.py`: whether a uniform-datapath instruction takes an issue
   slot beside a saturating FFMA stream (`Sheet.lean`'s `SheetDispatch`, A2u).
