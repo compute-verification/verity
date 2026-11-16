@@ -11,19 +11,24 @@ m = S.lint(); owner = S.owners()
 def git(*a): return subprocess.run(["git", *a], capture_output=True, text=True).stdout
 have = m.allowed(); where = collections.defaultdict(list)
 for f, l, w in m.scan(): where[f].append((l, w))
-over = {f: v for f, v in where.items() if len(v) > have[f]}
+over = {f: v for f, v in where.items() if len(v) > have[f] and not f.startswith('tools/sweepgap/')}
 pr_of = {}
+FIRST = git("rev-list", "--first-parent", "origin/main").split()
 def pr(commit):
-    """The queue merge that brought ``commit`` to origin/main: the first-parent step git name-rev names it by."""
+    """The first-parent commit of origin/main that first holds ``commit`` (binary search: what an ancestor test says is
+    monotone along the first-parent line), named by its queue number."""
     if commit not in pr_of:
-        name = git("name-rev", "--name-only", "--no-undefined", "--refs=refs/remotes/origin/main", commit).strip()
-        mo = re.match(r"(?:remotes/)?origin/main(?:~(\d+))?(\^2.*)?$", name) if name else None
-        if not mo:
+        def has(i): return subprocess.run(["git", "merge-base", "--is-ancestor", commit, FIRST[i]]).returncode == 0
+        lo, hi = 0, len(FIRST) - 1          # FIRST[0] is the newest; find the largest i with has(i)
+        if not has(0):
             pr_of[commit] = "?"
         else:
-            merge = git("rev-parse", f"origin/main~{mo.group(1) or 0}").strip()
-            s = git("log", "-1", "--format=%s", merge)
-            pr_of[commit] = (re.search(r"Queue: (#\d+)", s) or re.search(r"(#\d+)", s) or [None, "direct:" + merge[:12]])[1]
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if has(mid): lo = mid
+                else: hi = mid - 1
+            s = git("log", "-1", "--format=%s", FIRST[lo])
+            pr_of[commit] = (re.search(r"Queue: (#\d+)", s) or re.search(r"(#\d+)", s) or [None, "direct:" + FIRST[lo][:12]])[1]
     return pr_of[commit]
 LIST = "tests/lint/allowlists/repo_retired_terms.json"
 rows = []
@@ -39,9 +44,11 @@ for f, sites in sorted(over.items()):
     for l, w in sites:
         c, _, t, s = blame.get(l, ["?", l, 0, "?"])
         old = re.match(r"'(.+?)' is retired", w).group(1)
-        rows.append((f, l, " ".join(old.split()), c[:12], pr(c) if c != "?" else "?", subprocess.run(["date", "-u", "-d", f"@{t}", "+%Y-%m-%dT%H:%MZ"], capture_output=True, text=True).stdout.strip(),
-                     s[:90], f"{len(sites)} found, {have[f]} allowed", owner(f), entry[0][:12] + " " + entry[1] if entry else "no entry ever"))
+        when = subprocess.run(["date", "-u", "-d", f"@{t}", "+%Y-%m-%dT%H:%MZ"], capture_output=True, text=True).stdout.strip()
+        after = "yes" if entry and when > subprocess.run(["date", "-u", "-d", entry[1], "+%Y-%m-%dT%H:%MZ"], capture_output=True, text=True).stdout.strip() else ("no" if entry else "no entry")
+        rows.append((f, l, " ".join(old.split()), c[:12], pr(c) if c != "?" else "?", when,
+                     s[:90], f"{len(sites)} found, {have[f]} allowed", owner(f), entry[0][:12] + " " + entry[1] if entry else "no entry ever", after))
 with open(sys.argv[1], "w") as fh:
-    fh.write("file\tline\told\tcommit\tpr\tcommit_date\tcommit_subject\tfound_allowed\towner\tentry_last_set\n")
+    fh.write("file\tline\told\tcommit\tpr\tcommit_date\tcommit_subject\tfound_allowed\towner\tentry_last_set\tadded_after_entry\n")
     for r in rows: fh.write("\t".join(map(str, r)) + "\n")
 print(len(rows), "sites in", len(over), "files")
