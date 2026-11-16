@@ -33,13 +33,13 @@ HOST = "host0"
 CHALLENGER = "challenger0"
 SCHEME = SCHEMES[0]
 CERTIFIER = ("certifier0", "dummy-certifier0-key", SCHEME)
-"""A network certifier's id, key and the key's scheme, as whoever registers a node gives them: a node file names
+"""A network attester's id, key and the key's scheme, as whoever registers a node gives them: a node file names
 none of them."""
 READ = [kind for kind in S.node_kinds()
         if {"dram", "disk"} <= {leaf["tier"] for leaf in S.load_node(kind).get("memory", {}).values()}]
 """The nodes whose file states the host's DRAM and a disk: the ones an entry can be built of."""
 WIRED = [kind for kind in READ if any(way.split and way.bw for way in S.ways_out(S.load_node(kind), "host0"))]
-"""Those with an interface that states a line rate: the ones a network certifier can be registered in front of."""
+"""Those with an interface that states a line rate: the ones a network attester can be registered in front of."""
 ART = re.compile(r"\bart:[0-9a-f]{12}")
 NAMED = re.compile(r"\bvy-[a-z0-9-]+|\bcomputeinstance-\w+|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:nebius|runpod)\b", re.I)
 """What a node file never holds: a machine's name or instance id, an address, or a provider's name. A machine's name
@@ -78,7 +78,7 @@ def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = N
 
 
 def reached(entry: Entry) -> Entry:
-    """`entry` with a memory challenger of the auditor's linked to the host."""
+    """`entry` with a memory attester of the auditor's linked to the host."""
     return replace(entry, locs=(*entry.locs, Loc(CHALLENGER, "challenger", "site", "auditor", key="dummy-key",
                                                          scheme=SCHEME)),
                    links=(*entry.links, Link(f"{CHALLENGER}-link", (CHALLENGER, HOST), 1, 1)))
@@ -204,7 +204,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
 def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, str] | None) -> None:
     """The node's interface is a boundary link that no certifier splits and that says no reason, so `onsite` refuses
     the node by `uncertified`, naming it and not the storage path, which says why, before and once a challenger
-    reaches the host, and with a network attester standing in front of the node as without one: the certifier's
+    reaches the host, and with a network attester standing in front of the node as without one: the network attester's
     links are registered beside the node's own, which stay."""
     keys = {CHALLENGER: "dummy-key", **({} if certifier is None else {certifier[0]: certifier[1]})}
     entry = log_of(kind, "onsite", certifier).entries[0]
@@ -262,8 +262,8 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_cer
 @pytest.mark.parametrize("kind", WIRED)
 @pytest.mark.parametrize("held", [{}, {CERTIFIER[0]: "dummy-another-key"}, {"certifier1": CERTIFIER[1]}])
 def test_a_certifiers_key_is_the_one_the_auditor_holds_for_its_id(kind: str, held: dict[str, str]) -> None:
-    """An auditor that holds no key for the certifier's id, another key for it, or the key under another id refuses the
-    entry by `owner`; with the caller's key under the caller's id it is accepted."""
+    """An auditor that holds no key for the network attester's id, another key for it, or the key under another id
+    refuses the entry by `owner`; with the caller's key under the caller's id it is accepted."""
     log = log_of(kind, "remote", CERTIFIER)
     with pytest.raises(Refused) as refused:
         check(log, auditor(kind, **held))
@@ -758,7 +758,7 @@ def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
 
 def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
     """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's device `VM` whose time base's card is
-    `card`, and the auditor holding the certifier's and the host's keys and the host's time base."""
+    `card`, and the auditor holding the network attester's and the host's keys and the host's time base."""
     node, log = S.load_node(kind), Registration("remote")
     log = log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=CERTIFIER,
                                     certifier_host=auditor_host(*VM, card),
@@ -772,10 +772,10 @@ def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
 @pytest.mark.parametrize("kind", WIRED)
 def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
     """A certifier registered in an auditor's device reads that host's clock. Where the time base's drift is a premise
-    the host states its time base and no drift, the auditor takes none for it, the log is accepted, the certifier
+    the host states its time base and no drift, the auditor takes none for it, the log is accepted, the network attester
     reads no drift from the Site, and the premise is the host's `Account.Premised`. Marked a ceiling, the same number
-    is the host's drift and the auditor's, the certifier's as the Site reads it, and the log is accepted only by an
-    auditor that holds it. Held as the auditor's figure while the host states none, the premise's number is refused
+    is the host's drift and the auditor's, the network attester's as the Site reads it, and the log is accepted only by
+    an auditor that holds it. Held as the auditor's figure while the host states none, the premise's number is refused
     by `owner`, as is another time base than the host's."""
     cert, vm = CERTIFIER[0], VM[0]
     premise = clock_drift(vm, S.load_card(TIMEBASE))

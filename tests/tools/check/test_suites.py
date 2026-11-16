@@ -1291,6 +1291,32 @@ def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp
     assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
 
 
+def test_a_check_slot_reuses_a_pass_another_slot_of_its_machine_keeps_and_writes_nothing_there(tmp_path):
+    """A check slot's cache (`tests-slot-NAME`) finds a pass the machine's other slot keeps under the same key, cites the run
+    that earned it, and leaves that slot's cache as it was; a pass file there that doesn't parse (one being written) is no
+    pass, so its suite runs.  A cache that isn't a slot's reads no other."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"one": "def test_one():\n    pass\n", "two": "def test_two():\n    pass\n"})
+    caches = tmp_path / "home" / ".cache" / "verity"
+    a, b = ({"VERITY_TEST_CACHE": str(caches / f"tests-slot-{n}")} for n in "ab")
+    p = _run_suite(root, tmp_path, "--run", "r-a", extra=a)
+    assert p.returncode == 0 and "passed  one" in p.stdout and "passed  two" in p.stdout, p.stdout + p.stderr
+    kept = {f: f.read_bytes() for f in (caches / "tests-slot-a").rglob("*") if f.is_file()}
+    [one] = [f for f in (caches / "tests-slot-a").glob("*.json") if json.loads(f.read_text()).get("suite") == "one"]
+    one.write_bytes(kept[one][: len(kept[one]) // 2])
+    kept[one] = one.read_bytes()
+
+    p = _run_suite(root, tmp_path, "--run", "r-b", extra=b)
+    assert p.returncode == 0 and "passed  one" in p.stdout, p.stdout + p.stderr
+    assert re.search(r"cached  two +passed at \S+ \S+ \S+ in run r-a\n", p.stdout), p.stdout
+    assert f"suites: {one} is no pass (JSONDecodeError" in p.stderr, "the file that didn't parse is named: " + p.stderr
+    assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
+    assert {f: f.read_bytes() for f in (caches / "tests-slot-a").rglob("*") if f.is_file()} == kept
+
+    p = _run_suite(root, tmp_path, "--run", "r-c", extra={"VERITY_TEST_CACHE": str(caches / "tests")})
+    assert p.returncode == 0 and "2 suites: 2 passed (0 cached)" in p.stdout, p.stdout + p.stderr
+
+
 def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
     """check's verity-flock and verity-lean-audit run after its lean-build step, with `lake` on the PATH; run on their own they
     skipped the Lean tests or found no `verity-verify-proof`. So suites.py builds the verifier first, only for those suites, not when
@@ -2310,13 +2336,62 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
     [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
     assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
     assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
-    assert [(x.suites, x.procs) for x in S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None)] == [([big], 6), ([a, b], 1)], \
-        "a suite never timed runs in the rest's lane, counted at nothing"
+    assert S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None) == [S.Lane([a, big, b], 7, None)], \
+        "a suite whose seconds aren't known isn't counted at nothing beside the others: one lane, each on all of it in turn"
     assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
     assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
     assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
     assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
         "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def test_what_a_run_has_to_do_is_the_seconds_of_the_kept_passes_of_the_tests_it_will_run(tmp_path, monkeypatch):
+    import json
+
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
+    s = S.Suite("pkg", "pkg", (), (), parallel=True)
+    assert S.todo_seconds(s, None) is None, "no kept pass here: not known"
+    d = S.per_test_dir(s)
+    d.mkdir(parents=True)
+    (d / "a.json").write_text(json.dumps({"when": "2026-11-15 10:00", "passed": {"tests/test_a.py::t1": 600.0, "tests/test_a.py::t2": 300.0}}))
+    (d / "b.json").write_text(json.dumps({"when": "2026-11-15 10:00", "passed": {"tests/test_b.py::t3": 100.0, "tests/gone.py::t4": 50.0}}))
+    (d / "a-old.json").write_text(json.dumps({"when": "2026-11-01 10:00", "passed": {"tests/test_a.py::t1": 9.0}}))
+    assert S.todo_seconds(s, None) == 1050.0, "each test at its newest kept pass"
+    mods = {"pkg/tests/test_a.py", "pkg/tests/test_b.py"}
+    assert S.todo_seconds(s, None, mods) == 1000.0, "a test module the tree no longer holds counts nothing"
+    assert S.todo_seconds(s, None, mods, ["tests/test_a.py::t1"]) == 400.0, "a test whose pass it reuses counts nothing"
+    assert S.todo_seconds(s, None, mods, ["tests/test_a.py::t1", "tests/test_a.py::t2", "tests/test_b.py::t3"]) == 1.0
+    by_file = S.Part((1,), 2, ("pkg/tests/test_b.py",), ("pkg/tests/test_a.py", "pkg/tests/test_b.py"), "d", 0.1)
+    assert S.todo_seconds(s, by_file, mods) == 100.0, "a part by file: its files' tests"
+    assert S.todo_seconds(s, S.Part((1,), 2, ("pkg/tests/test_c.py",), (), "d", 0.1), mods) is None
+    by_id = S.Part((3, 4, 5, 6), 6, (), (), "d", 4 / 6, "id")
+    assert S.todo_seconds(s, by_id, mods) == 1000.0 * 4 / 6, "a part by test id: its share of the suite's"
+
+
+def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_duration(tmp_path, monkeypatch):
+    """Check slot b of vy-nebius-cpu-6, lean-suites with --jobs 96 and --mem-gb 135, two one-process suites beside: flock's
+    record was 112 s, from a run that reused most of its passes, so its 4 parts of 6 (75 s) got 16 GB beside vstar_cli's
+    (360 s) 105 GB, one worker at worker_gb 16, and ran 1,413 tests in 5,933 s while vstar_cli's lane sat idle after 359 s.
+    Split by what each run has to do (its kept passes there: 7,143 s and 2,490 s), flock gets five. On vy-nebius-cpu-8 slot
+    b (--mem-gb 145), verity-vllm had no recorded duration, so it ran 7,985 tests on the 15 GB flock's lane left (one worker
+    at 8 GB); in one lane it gets them all while it runs."""
+    S = _suites(monkeypatch, tmp_path)
+    vstar = S.Suite("vstar_cli", "v", (), (), parallel=True, worker_gb=9)
+    flock = S.Suite("verity-flock", "f", (), (), parallel=True, worker_gb=16)
+    r = S.serial_slots([987.0, 1904.0], 2, 96, 135)
+    procs, gb = 96 - r, S.wide_gb(135, r)
+    assert (r, procs, gb) == (2, 94, 126.0)
+
+    def workers(lanes):
+        return {s.name: S.wide_workers(s, x.procs, x.gb) for x in lanes for s in x.suites}
+
+    assert workers(S.wide_lanes([vstar, flock], [360.0, 112.0 * 4 / 6], procs, gb)) == {"vstar_cli": 11, "verity-flock": 1}, \
+        "what tonight's last durations planned"
+    assert workers(S.wide_lanes([flock, vstar], [7143.0, 2490.0], procs, gb)) == {"verity-flock": 5, "vstar_cli": 3}
+    vllm = S.Suite("verity-vllm", "a", (), (), parallel=True, worker_gb=8)
+    evaluate = S.Suite("verity-core-evaluate", "e", (), (), parallel=True)
+    assert workers(S.wide_lanes([vllm, flock, evaluate], [None, 2979.0 * 2 / 6, 220.0], 94, 136.0))["verity-vllm"] == 17
 
 
 def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
@@ -2384,9 +2459,11 @@ def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_pat
 
 
 def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
-    """End to end: three parallel suites whose recorded seconds put the longest beside the other two, on 4 of 6 processes and 2,
-    pass as the same suites under the same keys as in one lane (no recorded seconds)."""
+    """End to end: three parallel suites whose kept passes put the longest beside the other two, on 4 of 6 processes and 2,
+    pass as the same suites under the same keys as in one lane (no kept pass). The split reads the kept passes' seconds, not
+    the last durations, which here say the opposite."""
     import json
+    import shutil
 
     root = tmp_path / "tree"
     test = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
@@ -2397,10 +2474,13 @@ def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_p
     _git(root, "commit", "-qam", "all three are parallel")
     (tmp_path / "cache").mkdir()
 
-    def line(durations: dict | None) -> tuple[str, list[tuple]]:
-        (tmp_path / "cache" / "durations.json").unlink(missing_ok=True)
-        if durations:
-            (tmp_path / "cache" / "durations.json").write_text(json.dumps(durations))
+    def line(seconds: dict | None) -> tuple[str, list[tuple]]:
+        shutil.rmtree(tmp_path / "cache" / "per-test", ignore_errors=True)
+        for name, s in (seconds or {}).items():
+            (tmp_path / "cache" / "per-test" / name).mkdir(parents=True)
+            (tmp_path / "cache" / "per-test" / name / "kept.json").write_text(json.dumps(
+                {"when": "2026-01-01 00:00", "passed": {"tests/test_it.py::test_a": s / 2, "tests/test_it.py::test_b": s / 2}}))
+        (tmp_path / "cache" / "durations.json").write_text(json.dumps({"big": 1.0, "mid": 30.0, "small": 20.0}))
         out = tmp_path / "out.json"
         p = _run_suite(root, tmp_path, "--fresh", "--jobs", "6", "--json", str(out))
         assert p.returncode == 0, p.stdout + p.stderr
@@ -2581,6 +2661,79 @@ def test_a_suite_whose_key_is_its_bases_is_lent_and_one_the_change_touches_runs(
     for flag in (["--fresh"], ["--quick"], ["--changed", head]):
         p = _run_suite(root, tmp_path, "--lend-from", head, *flag)
         assert p.returncode == 2 and "--lend-from takes none of --fresh, --quick and --changed" in p.stderr, p.stderr
+
+
+def _allow(root: Path, *entries: tuple[str, str]) -> str:
+    """Commit a policy.toml whose allowances name (test id, expiry) ``entries`` of suite `a`; the commit."""
+    allow = "".join(f'\n[[allow]]\nid = "suite a::{t}"\nowner = "ci"\nexpires = "{e}"\nreason = "its fix is landing"\n'
+                    for t, e in entries)
+    (root / "tools" / "check" / "policy.toml").write_text('schema = "policy/v0"\noff_gate = []\n' + allow)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "policy")
+    return _git(root, "rev-parse", "HEAD")
+
+
+def test_a_suite_red_only_on_allowed_tests_passes_and_is_reused_until_the_allowance_lapses(tmp_path):
+    """`--allowances COMMIT`, through the runner and its guard: a test an unexpired allowance of COMMIT's policy names runs as a
+    non-strict expected failure, so its suite passes, keeps a pass and is reused; a test that passes while an allowance still
+    names it fails nothing. Once the allowance has lapsed the key is another and the suite fails on that test, and a failure no
+    allowance names fails it whatever the others say. Without the flag every failure is the suite's, as before."""
+    root, out = tmp_path / "tree", tmp_path / "out.json"
+    red, ok = "tests/test_it.py::test_red", "tests/test_it.py::test_ok"
+    _env_workspace(root, {"a": "def test_ok():\n    pass\n\n\ndef test_red():\n    assert False\n"})
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"), (ok, "2999-01-01T00:00:00Z"))
+
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout + p.stderr
+    assert f"a: 2 tests an unexpired allowance at {live[:12]} names run as expected failures: {ok}, {red}" in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert (row["status"], row["failed_tests"]) == ("passed", [])
+    assert list((tmp_path / "cache").glob(f"{row['key']}.json")), "the pass is kept"
+    p = _run_suite(root, tmp_path, "--allowances", live)
+    assert p.returncode == 0 and "cached  a" in p.stdout, "a later check reuses it: " + p.stdout
+
+    lapsed = _allow(root, (red, "2000-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", lapsed, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout and "cached  a" not in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert (row["failed_tests"], row["beyond_tests"]) == ([red], False)
+
+    (root / "a" / "tests" / "test_it.py").write_text("def test_new():\n    assert False\n\n\ndef test_red():\n    assert False\n")
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert row["failed_tests"] == ["tests/test_it.py::test_new"], row
+
+    p = _run_suite(root, tmp_path, "--allowances", "no-such-ref", "--json", str(out))
+    assert p.returncode == 1 and "--allowances no-such-ref: no-such-ref isn't a commit here" in p.stdout, p.stdout
+    for flag in (["--quick"], ["--changed", live]):
+        p = _run_suite(root, tmp_path, "--allowances", live, *flag)
+        assert p.returncode == 2 and "--allowances takes neither --quick nor --changed" in p.stderr, p.stderr
+
+
+def test_an_allowance_does_not_excuse_a_teardown_error_charged_to_its_test(tmp_path):
+    """pytest charges a module fixture's finalizer to the fixture's last user, and reports an expected failure's teardown error
+    as one more expected failure. When that user is a test an allowance names, the guard reports the error as an error, so the
+    suite fails and names the test; the same module without the failing finalizer passes under the same allowance."""
+    root, out = tmp_path / "tree", tmp_path / "out.json"
+    red = "tests/test_it.py::test_red"
+    module = ("import pytest\n\n\n@pytest.fixture(scope='module')\ndef held():\n    yield 1\n    FINALIZER\n\n\n"
+              "def test_ok(held):\n    pass\n\n\ndef test_red(held):\n    assert False\n")
+    _env_workspace(root, {"a": module.replace("FINALIZER", "raise RuntimeError('the finalizer of held')")})
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout + p.stderr
+    [row] = json.loads(out.read_text())
+    assert (row["status"], row["failed_tests"]) == ("failed", [red]), row
+    assert not list((tmp_path / "cache").glob(f"{row['key']}.json")), "no pass is kept"
+
+    (root / "a" / "tests" / "test_it.py").write_text(module.replace("FINALIZER", "pass"))
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout + p.stderr
 
 
 def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tmp_path, monkeypatch):
