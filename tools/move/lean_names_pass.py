@@ -5,6 +5,7 @@ names. Run from the repository root; `tools/move/rename.py --map tools/move/lean
 
     python3 tools/move/lean_names_pass.py [--part ontology|areas|retired]...   write the map (by default every part)
     python3 tools/move/lean_names_pass.py --hand                               after the rename: what the map can't carry
+    python3 tools/move/lean_names_pass.py --part docket                        the docket part's own map, run after --hand
 
 The root namespace `Accounting` becomes `ResourceAccounting`, but two other namespaces end in the same word
 (`FlockSoundness.Accounting`, `Pous.Accounting`) and a Flock file names its own as `Accounting.X` under
@@ -22,6 +23,7 @@ import subprocess
 from pathlib import Path
 
 MAP = Path("tools/move/lean_names_pass_map.toml")
+DOCKET_MAP = Path("tools/move/lean_names_pass_docket_map.toml")
 TREES = ("Definitions", "Properties", "Proofs")
 WORD, NEW = "Accounting", "ResourceAccounting"
 RENAMED = {WORD, *(f"{t}.{WORD}" for t in TREES)}
@@ -205,6 +207,61 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "
 """
 
 
+SPOT, FLOCK, CERT = ("verity/protocols/proofs/spot/verifier/lean/Spot/", "verity/protocols/proofs/flock/verifier/",
+                     "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/")
+#: the docket part: the record a SPOT run fixes before any challenge, `registration` in these Lean names, is the docket.
+#: In these files every name the words spell in code is one of the record's (or a local), so the whole word is renamed.
+DOCKET_WORDS = {"registration": "docket", "registrationOf": "docketOf", "registrations": "dockets",
+                "registrationDeadline": "docketDeadline", "innerMetaRegistration": "innerMetaDocket",
+                "heldToRegistration": "heldToDocket", "REGISTRATION": "DOCKET", "REGISTRATION_V1": "DOCKET_V1"}
+DOCKET_FILES = [
+    *(SPOT + f for f in ("MonitoringPeriodAudit.lean", "Stream.lean", "Record.lean", "Pieces.lean")),
+    *(FLOCK + f for f in ("Flock/RecCompose.lean", "Flock/Test/RecCompose.lean", "Flock/RecVStar.lean", "FlockVerify.lean")),
+    "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean",
+    "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Theta.lean",
+    *(CERT + f for f in ("Span.lean", "TransferBlocks.lean", "Period.lean", "Period/Decode.lean")),
+    "verity/protocols/compose/verifier/onsite/CoreOnsite.lean",
+    "verity/commitments/identity/Identity/Domains/Shared.lean",
+    "security/Properties/Spot/MonitoringPeriod.lean",
+    "security/Proofs/Properties/Spot/MonitoringPeriod.lean",
+    "security/Proofs/Properties/Spot/Halt.lean",
+    "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean",
+    "security/Proofs/Properties/InferenceOnly/ThetaSteps.lean",
+    "security/Proofs/Flock/C3/RegLevels/TopHold.lean",
+]
+#: files that spell other names' `registration` too (PoUW's, the recursion proofs' own records): the record's alone.
+DOCKET_SCOPED = [
+    (["verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
+      "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean"],
+     {"Domains.REGISTRATION": "Domains.DOCKET", "Domains.REGISTRATION_V1": "Domains.DOCKET_V1"}),
+    (["security/Proofs/Flock/Recursive/HoloExec.lean", "security/Proofs/Flock/Recursive/TopFinder.lean"],
+     {"Flock.RecVStar.registration": "Flock.RecVStar.docket"}),
+    (["security/Proofs/Properties/Verity/Recursive/Names.lean", "security/Proofs/Properties/Verity/Recursive/PartStatement.lean"],
+     {"o.registration": "o.docket"}),
+    (["security/Proofs/Properties/Verity/Recursive/Refusals.lean"], {"p.own.registration": "p.own.docket"}),
+    (["security/Properties/lean-audit.json"], {"Spot.MonitoringPeriod.registrationOf": "Spot.MonitoringPeriod.docketOf"}),
+]
+DOCKET_HEADER = """\
+# Written by tools/move/lean_names_pass.py --part docket: the Lean names pass's docket part, which `rename.py --map` runs
+# after the pass's map and `--hand`, and which is dropped whole by not running it. SPOT's run record, the circuit's digest,
+# pieces, sampling design and roots fixed before any challenge, is the docket; the registration protocol keeps its word.
+# Only code is renamed (`scope = "code"`): the record's keys, its formats `verity/registration/v1` and `v2`, the domain
+# constants' values and every message keep their bytes, and so do comments and docstrings.
+scope = "code"
+"""
+
+
+def docket() -> str:
+    def table(words: dict[str, str]) -> list[str]:
+        return [f'"{o}" = "{n}"' for o, n in words.items()]
+
+    out = [DOCKET_HEADER, "[words]", "", "[[words_in]]", "files = ["] + [f'  "{f}",' for f in DOCKET_FILES]
+    out += ["]", "[words_in.words]", *table(DOCKET_WORDS)]
+    for files, words in DOCKET_SCOPED:
+        out += ["", "[[words_in]]", "files = [" + ", ".join(f'"{f}"' for f in files) + "]", "[words_in.words]", *table(words)]
+    return "\n".join(out) + "\n\n[rewrite]\nexclude = [\"tools/move/**\"]\n"
+
+
 REG = "public import Definitions.Registration."
 #: what the map can't carry, for `--hand` after `rename.py`: (file, the region of it the edit is held to, old, new). A lock's
 #: `four_names` and `layers` text is not a name `rename.py` renames, and the area's umbrella keeps importing the modules
@@ -241,13 +298,19 @@ def hand() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--part", action="append", choices=["ontology", "areas", "retired"])
+    ap.add_argument("--part", action="append", choices=["ontology", "areas", "retired", "docket"],
+                    help="docket: its own map, DOCKET_MAP, which runs after the pass's map and --hand")
     ap.add_argument("--out", type=Path, default=MAP)
     ap.add_argument("--hand", action="store_true", help="after `rename.py`: apply what the map can't carry (HAND)")
     a = ap.parse_args()
     if a.hand:
         return hand()
     parts = a.part or ["areas", "ontology", "retired"]
+    if "docket" in parts:
+        DOCKET_MAP.write_text(docket())
+        print(DOCKET_MAP)
+        if parts == ["docket"]:
+            return None
     body = []
     for p in ["areas", "ontology", "retired"]:
         if p in parts:
