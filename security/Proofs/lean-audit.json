@@ -271,6 +271,10 @@
    "why": "plainT, a macro that closes plainS j = true for a literal Json j (the honest circuit file's metadata objects, CircuitFileWalk.lean) by first over exact of the module's plainS_hex, plainS_hexArr and plainS_leafOs, refine of plainS_mkObj and plainS_arr with simp only, and/intros and itself, and simp. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "cc364d70f02ee1cb0b3462252626e5799eb35bb056fb7b5cff2277b444603ea6"
   },
+  "Proofs.Properties.Verity.Sampled.HonestSession.Params": {
+   "why": "plstr, a local macro that closes Firewall.plain j = true for a literal Json j (this module's plainness lemmas) by a single simp over Firewall.plain, plainList and plainStr with the def-named strings unfolded so their literals reduce. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "09650a6115af1782b491013c830daeb4a3cf157966668923bf4db66f8729e426"
+  },
   "Proofs.Properties.Verity.Sampled.HonestSession.SetupReads": {
    "why": "lawMatch%, a term elaborator that names Stmt.setupHidden's auxiliary match on an (Except _ Draw.Law × _) for law_match: it reads Stmt.setupHidden's body's constants (getConstInfo, getMatcherInfo?), the matchers' discriminant types (forallTelescopeReducing, whnfR), and returns that matcher's constant or throws an error naming the matches it saw. It runs only inside the elaborator and does no IO, and the kernel replays every proof that uses it.",
    "digest": "9a4b6c5ae69ecb6a40ef387b4047c01d4af35e5efa9708eb50fcdaef48c8d327"
