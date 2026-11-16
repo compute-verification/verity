@@ -34,8 +34,16 @@ unset NCCL_P2P_DISABLE
 if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 if [ -z "${SERVED:-}" ] && [ ! -f "$C4" ]; then
-  art=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["c4"]["art"])' "$here/../ppl/datasets.json")
-  C4=$(research data fetch "$art" --to "$D/inputs" | tail -1)
+  C4=$(HF_HUB_OFFLINE=0 "$PY" - "$here/../ppl/datasets.json" "$D/inputs" <<'EOF'
+import hashlib, json, sys
+from huggingface_hub import hf_hub_download
+d = json.load(open(sys.argv[1]))["c4"]
+p = hf_hub_download("allenai/c4", "en/" + d["file"], repo_type="dataset", local_dir=sys.argv[2])
+if hashlib.sha256(open(p, "rb").read()).hexdigest() != d["sha256"]:
+    sys.exit(f"replay-ladder: {p} is not datasets.json's c4 shard")
+print(p)
+EOF
+)
 fi
 ARMS=${ARMS:-pinned unpinned}
 # the arms whose engines also run at TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 (rblock always does; never unpinned)

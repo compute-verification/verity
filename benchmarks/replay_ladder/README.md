@@ -46,7 +46,7 @@ from a summary.json's two arms.
 
 On a node with the pinned vLLM venv and the ladder's checkpoints (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh
 --cpu --cases ROLE,...` installs both on a RunPod pod and checks every shard), under `research run`, with the C4 shard
-`benchmarks/ppl/datasets.json` pins sent with `--send` (unsent, `run.sh` fetches it from the store by its `art:` id). The
+`benchmarks/ppl/datasets.json` pins sent with `--send` (unsent, `run.sh` downloads it from the Hugging Face hub and checks its pinned sha256). The
 dashboard's `proofs/replay-rows-exact` is `metrics.toml`'s command, Llama 3.2 1B's pinned arm on one leased H200:
 
 ~~~sh
