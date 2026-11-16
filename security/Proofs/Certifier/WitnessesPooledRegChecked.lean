@@ -98,9 +98,11 @@ execution phase audited by `twoL` against the prover that sends nothing, the pro
 `twoObs`, the phase's error `e₂` (`twoL`'s committed form's, with the collision finder against `certOps`). The check
 pins the run's gate `1` to the value of the run at the trace with the registered openings there: it pins the checked
 input (`CheckedUnique`, by `checkedUnique_pin`) and its miss is `0` (`PhaseChecks`), since that run passes it by
-construction; it is not a check any deployed system runs. The network attester has no connection, so no cell reaches
-the client, and one secret: the read-back and the channel hold trivially. At every history the phase is accepted,
-registered as the period's and its record complete, which is the guarantee's event. -/
+construction; it is not a check any deployed system runs. The network attester has no connection, so no cell reaches the
+client, and one secret: the read-back and the channel hold trivially. At every history the phase is accepted, registered
+as the period's and its record complete, which is the guarantee's event. The prover is the one that sends nothing, so
+the witness shows the premises jointly satisfiable at an accepting instance, not that an honest prover of a real program
+passes. -/
 theorem PooledLeakRegisteredChecked_honest :
     (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧
       PhasesAdaptive x₂ P₂ ops₂ ∧
