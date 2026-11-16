@@ -21,7 +21,7 @@ names the record's digest as its commitment (it rejects the toy's v2 case, which
 does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
 tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
-unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
+fresh input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
 case that isn't the audit's, which refuses SPOT's too), and an answer that isn't the window's record's is
 written nowhere, its refusal saying the
