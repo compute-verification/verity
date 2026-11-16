@@ -176,8 +176,8 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-# a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
-# --timed lease would otherwise freeze a train's check for the whole window. The check's directory either way a tree spells it
+# a candidate's check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
+# --timed lease would otherwise freeze a candidate's check for the whole window. The check's directory either way a tree spells it
 # (slot_only.CHECK_DIRS; this file is installed alone), as a whole path (slot_only.check_file)
 CHECK_DIRS = ("tools/check/", "tools/verity/check/")
 CHECK_PY = rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))})(?:check|slot)\.py(?![\w.-])"
@@ -195,7 +195,7 @@ class Quiet:
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
     (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
-    anything under GNU `timeout` (it would lose the paused time), train checks (slot.py, check.py), every process a GPU lease runs
+    anything under GNU `timeout` (it would lose the paused time), candidates' checks (slot.py, check.py), every process a GPU lease runs
     (`in_lease_scope`), the descendants of those in groups of their own, and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
