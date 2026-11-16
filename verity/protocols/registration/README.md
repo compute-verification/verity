@@ -8,6 +8,17 @@ reads what it accepted.
 Think of it as a ledger that only grows. Each entry names the head of the log before it, so the head names the whole
 log. The check reads the entries in order and refuses the first one that fails, by name.
 
+## Try it
+
+~~~sh
+uv run tools/check/suites.py verity/protocols/registration/verifier/lean --quick
+~~~
+
+It builds the Lean check and holds the Python verifier to it on generated logs and their refusals, and the Site's check
+to its Python mirror.
+
+## What a log holds
+
 A log holds three kinds of entry:
 
 | format | what it registers |
