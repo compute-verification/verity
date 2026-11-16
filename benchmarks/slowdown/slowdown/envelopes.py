@@ -209,8 +209,8 @@ class Detection:
         return out
 
     def tail(self) -> float:
-        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
+        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's incorrect proof blocks escape
+        past `K` (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()
