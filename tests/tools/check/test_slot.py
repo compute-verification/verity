@@ -68,12 +68,6 @@ def no_copy_named(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def outside_a_run(monkeypatch):
-    """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
-    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-
-
-@pytest.fixture(autouse=True)
 def outside_a_slot(monkeypatch):
     """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
     `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
