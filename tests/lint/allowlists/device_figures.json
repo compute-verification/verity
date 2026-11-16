@@ -61,8 +61,6 @@
     {"file": "verity/protocols/resource_accounting/memory/poub/verifier/timing.py", "count": 8, "lane": "memory-accounting"},
     {"file": "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/WipeProtocol.lean", "count": 1, "lane": "memory-accounting"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py", "count": 6, "lane": "compute-accounting"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "count": 1, "lane": "compute-accounting"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog.lean", "count": 1, "lane": "proofs"},
     {"file": "verity/protocols/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean", "count": 9, "lane": "proofs"},
     {"file": "verity/protocols/interface/CoreProtocol/Account.lean", "count": 1, "lane": "proofs"}
