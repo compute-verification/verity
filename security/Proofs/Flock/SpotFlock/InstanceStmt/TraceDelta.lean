@@ -127,6 +127,7 @@ theorem count_T (x j : ℕ) : (EX ++ OX).count (x, j) =
       (run 0 512 (778240 + ·)).count (x, j) + (run 262712 8 (786560 + ·)).count (x, j) +
       (run 262704 8 (786568 + ·)).count (x, j) := by
   simp only [EX, OX, List.count_append]
+  omega
 
 theorem consts_count_zero {x : ℕ} (hx : x ≠ 508928 ∧ x ≠ 780288 ∧ x ≠ 786688) (j : ℕ) :
     consts.count (x, j) = 0 :=
