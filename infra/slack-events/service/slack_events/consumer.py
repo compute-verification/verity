@@ -1,7 +1,8 @@
 """The queue's consumer: one message is a Slack event (or an interactivity payload), routed by `research msg`'s own code.
 
 It keeps no state of its own.  The queue's lease keeps a message invisible while it runs (the SDK renews it), the
-`event_id` idempotency key drops Slack's retries, and Slack is the record:
+idempotency key (a message's channel and ts, `deps.message_key`) drops Slack's retries and a post reconciliation finds
+after Slack's event, and Slack is the record:
 
 - A person's post that names no one gets a routing line in its thread, posted by `router` before any doorbell, naming the
   lanes picked and carrying the post's ts and those names in its metadata (ROUTING_LINE).  With no model, a chat's person
