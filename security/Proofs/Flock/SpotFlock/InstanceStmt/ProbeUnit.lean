@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.InstanceStmt.RecordFits
+public import Proofs.Flock.SpotFlock.InstanceStmt.ReadyZk
 
 @[expose] public section
 open Flock RecDeploy.VStarNets
