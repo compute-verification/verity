@@ -56,7 +56,6 @@ ALLOWED: dict[str, int] = {
     "tests/tools/research/test_retention.py": 2,
     "tests/tools/research/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
-    "tests/benchmarks/network_traces/fixtures/certifier-period-answers.json": 1,
     "tests/benchmarks/pouw/fixtures/challenger-key.json": 1,
     "tests/benchmarks/tc_probe_fp4/fixtures/tc-sm100-f8-2026-10-19.json": 1,
     "tests/benchmarks/one_stage/interfaces/fixtures/block-record-b71a-w30.json": 7,

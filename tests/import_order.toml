@@ -490,7 +490,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py",
-    "verity/protocols/resource_accounting/network/prover/egress_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
@@ -788,13 +787,11 @@ paths = [
     "verity/protocols/resource_accounting/network/attester",
 ]
 loads = [
-    "verity/channel.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/network/verifier",
-    "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",
@@ -848,7 +845,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/resource_accounting/network/prover/egress.py",
-    "verity/protocols/resource_accounting/network/prover/egress_zk.py",
     "verity/protocols/resource_accounting/network/prover/ingress_scan.py",
     "verity/protocols/resource_accounting/network/prover/io_ids.py",
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
@@ -901,6 +897,5 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
-    "verity/protocols/resource_accounting/network/prover/block_certifier.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
 ]
