@@ -7,9 +7,8 @@ committed them with, so the proof's committed rows have the b ‖ c the entry's 
 row.  The stager (`Stager.stage`: `class_statement.stage_unit`) writes circuit.txt, inst.bin and pub.bin under OUT; this
 writes pin.txt, stage.json and opening.json (the prover's: the entry, its salt and path to the window root, and each row's
 frame-v3 path to the entry's side root).  As `hidden_zk/stage.py`'s hiding tile, the PoUW word primitives lower through
-`hash_scratch`'s pieces, checked against their primitives first, so a result is labelled 'hash scratch'; `main`'s
-``staging`` (``fast``, the default, or ``library``) as `HZ_STAGE` there.  A window committed before side rows carried their
-index is refused.
+`hash_scratch`'s pieces, checked against their primitives first, so a result is labelled 'hash scratch'; ``staging``
+(``fast``, the default, or ``library``) as there.  A window committed before side rows carried their index is refused.
 
 Flock's staging is `verity_flock`'s and `hidden_zk`'s, which verity does not import: `Stager.stage` raises here, and
 `benchmarks/pouw/hidden_zk/served_stage.py`, which runs this with its own `Stager`, supplies it.
