@@ -70,7 +70,7 @@ def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
-    """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
+    """Every input with its mark and source: the compute audit's from its rows of record, the network attester's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
@@ -87,6 +87,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     def one(part: str, name: str, value: Any, unit: str, mark: str, source: str) -> dict:
         return {"part": part, "input": name, "value": value, "unit": unit, "mark": mark, "source": source}
 
+    # `exfiltration/v3`'s part names, held until a format version; the print says the Glossary's (`render`'s `_said`)
     audit, both, net = "compute audit", "both", "network certifier"
     priced = head["priced"] or {"ways": {}}
     default = (priced.get("sources") or {}).get("default")
@@ -135,12 +136,12 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                        + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
                                    + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved: {v['open']}")
                                    for v in stop["verdicts"])
-                       + ". Without them the server chooses a response's output count, which the network certifier's "
+                       + ". Without them the server chooses a response's output count, which the network attester's "
                        f"row `{OUTPUT_COUNT}` charges {charged}"))
     elif under:
         out.append(one(net, "output_count", 0, "bit/request", "assumed",
                        f"not counted in the sums under {under}: until a served audit has sampled a "
-                       "stop block the server chooses a response's output count, which the network certifier's row "
+                       "stop block the server chooses a response's output count, which the network attester's row "
                        f"`{OUTPUT_COUNT}` charges {charged}"))
     if served["run"] is not None:
         gaps = {g["field"]: g for g in served["missing"]}
@@ -203,23 +204,23 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
           local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
     the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
     summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
-    certifier's part counts.
+    attester's part counts.
 
     Every figure carries the error summed over everything it covers, and one whose error is 1 or more carries no
-    amount (`NO_BOUND`). A scope's monitoring period holds the network certifier's ε (`eps`), the one its rows over
+    amount (`NO_BOUND`). A scope's monitoring period holds the network attester's ε (`eps`), the one its rows over
     that scope and period carry, their scans' δ summed over every link's execution phases; the compute audit's δ
     over the period (its `compute_audit`'s `delta`); and the sum of the two (`error`), what the two together fail
-    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network certifier's figures
+    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network attester's figures
     of that scope and period, the output count among them, are None, and where `error` is, the sums are. A row of the
-    network certifier's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
+    network attester's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
 
-    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    A sum is at the network attester's jitter bound of record. Its `label` is its row's own (None on most): where
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
-    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    bound, with the label the network attester's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
     the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
     never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the
@@ -281,7 +282,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
         "runs": list(labelled), "superseded": [run for run, by in labelled.items() if by]}
     if unnamed := [name for name in charged["rows"] if name in TOGETHER and name not in WHOLE]:
-        raise ValueError(f"the network certifier's rows {_names(unnamed)} are read from verdict records, and this "
+        raise ValueError(f"the network attester's rows {_names(unnamed)} are read from verdict records, and this "
                          "command has no name for their sums where the stop class is charged its whole schedule: name "
                          "each in `WHOLE` (benchmarks/harness/verity_bench/exfiltration.py)")
     at_zero = [name for name in TOGETHER if name in charged["rows"]] if charged["held_phases"] else []
@@ -289,7 +290,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     weights = term["inputs"]["weights"]["value"]
     if not _same(head["weights_bits"], weights):
         raise ValueError(f"the two parts are shares of different weights: the rows of record hold {head['weights_bits']:,} "
-                         f"bits and the network certifier's calculator {weights:,}")
+                         f"bits and the network attester's calculator {weights:,}")
     seen = {(r["scope"], r["period"]): r for r in term["rows"]}
     order = {f"{compute} {period}": n for n, (compute, period) in enumerate(seen)}
     periods = []
@@ -300,10 +301,10 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                                    ("requests", None if point is None else point["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
                 raise ValueError(f"the two parts cover different compute over the {scope}: {mine:.6g} {name} on the compute "
-                                 f"audit's side and {theirs:.6g} on the network certifier's")
+                                 f"audit's side and {theirs:.6g} on the network attester's")
         rows = {r["row"]: r for r in term["rows"] if (r["scope"], r["period"]) == (compute, period)}
         if len(several := sorted({r["eps"] for r in rows.values()})) != 1:
-            raise ValueError(f"the network certifier's rows over the {scope} carry {len(several)} different ε "
+            raise ValueError(f"the network attester's rows over the {scope} carry {len(several)} different ε "
                              f"({', '.join(map(_n, several))}), and this command prints one a scope and monitoring "
                              "period, its scans' δ summed over every link's execution phases (read each row's own in "
                              "benchmarks/harness/verity_bench/exfiltration.py)")

@@ -101,7 +101,9 @@ def apply(capsys, node: Node, which: str = "nebius-1", *args: str, other: Node |
 
 def _args(args: tuple[str, ...]) -> tuple:
     a = list(args)
-    get = lambda flag: a[a.index(flag) + 1] if flag in a else None
+
+    def get(flag: str) -> str | None:
+        return a[a.index(flag) + 1] if flag in a else None
     return get("--key"), "--apply" in a, get("--as"), get("--reason")
 
 

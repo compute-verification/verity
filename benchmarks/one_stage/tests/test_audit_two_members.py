@@ -15,9 +15,10 @@ stops included (`_kept_prover`).
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
   are no auditor's.
-* **The sessions' coin trees.** Under FLOCK_CHALLENGER=1 the two sessions run on that same challenger session
-  (`a5.window_trees`): each of the kept prover's verifiers takes its tree through the audit's relay, and each
-  session's tree is closed there after its evidence before the next session starts. The audit then writes its case in
+* **The sessions' coin trees.** By default the two sessions run on that same challenger session
+  (`a5.window_trees`), as a served window's audit runs them: each of the kept prover's verifiers takes its tree
+  through the audit's relay, and each session's tree is closed there after its evidence before the next session
+  starts (FLOCK_CHALLENGER=0, a development run's, keeps each on a tree of its own). The audit then writes its case in
   v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
   (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
@@ -53,7 +54,7 @@ import numpy as np
 import pytest
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
 from verity.circuits.codec import descriptor_id
@@ -66,7 +67,7 @@ HERE = (Path(__file__).resolve().parents[1])
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
@@ -185,7 +186,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert RA.verifier_window(window, RULE, None)[0].law == D.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
         RA.verifier_window(window, DESIGN, None)
-    rc, row, out, said = _audit(tmp_path, window, binaries)
+    rc, row, out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
     assert rc == 0 and row.get("ok") is True, said
     assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row
     assert [(m["template"], m["n"]) for m in row["members"]] == [(descriptor_id(t), 1) for t in TEMPLATES]
@@ -206,7 +207,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
+    assert record["case_v2"]["written"] is False and "this audit sampled 2 members" in record["case_v2"]["why"]
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert answer["public"]["case_v2"] == record["case_v2"]
@@ -215,18 +216,19 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
     assert _kept_verifier(out) == [(0, True), (1, True)]
-    # with no FLOCK_CHALLENGER each verifier samples its session's coin tree itself, and the summary says whose it is
+    # with FLOCK_CHALLENGER=0, a development run's, each verifier samples its session's coin tree itself, and the
+    # summary says whose it is
     assert _coin_trees(out) == ("own", False)
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
     # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
     assert not (out / "window" / "case-v2.json").exists()
-    assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
+    assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
-    """Under FLOCK_CHALLENGER=1 the audit's two sessions take their coin trees from the session the sample's coins came
-    from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
+    """By default, FLOCK_CHALLENGER unset, the audit's two sessions take their coin trees from the session the
+    sample's coins came from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
     window's session's. On that case Lean's check accepts, with exit 0; with one proof file of the first session
@@ -235,7 +237,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     (`challenger.UNUSED_TREE`). The Python run of the form (`members.members_run`) answers the same on all three:
     every session accepted with the units it proved, the changed file's reason, and the unused tree's."""
     window = _window(tmp_path / "window")
-    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key")
     assert rc == 0 and row.get("ok") is True, said
     assert row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in (*VERDICTS, "challenger") for k in (0, 1)}
@@ -299,7 +301,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value. No registered read
     is refused, so ``read_refused`` is false."""
     window = _window(tmp_path / "window", flipped=True)
-    rc, row, out, said = _audit(tmp_path, window, binaries, "--forged")
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--forged", more={"FLOCK_CHALLENGER": "0"})
     assert rc == 0 and row.get("ok") is True, said
     forged = row["forged"]
     assert forged["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,

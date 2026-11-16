@@ -96,9 +96,9 @@ server at `N` with `SAt N` bits of state, fixed before the capacity coins, that 
 (`PassesAt N`, at the designated id, on the payload `W`) on every capacity coin where the
 capacity account holds at most `B` bits at every tick of the capacity window and the period is certified at `pt`. It
 is the deployed device's modeling, not a property of a Lean function; it is meaningful at `N = pt.params.blocks`. -/
-def RingDeviceAt (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : Accounting.Device ι}
+def RingDeviceAt (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ) : Prop :=
   ∀ (o : ΩW × ΩQ) (B : ℕ), B + d.chip + ∑ i, d.cap i * round ≤ SAt N →
     ∃ A : ServerAt N (SAt N) D Q L,
@@ -119,8 +119,8 @@ def PeriodHeldAt : Prop :=
     (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
-        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+          (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
           RingDeviceAt N pt r P D Q L round →
             S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ SAt N →
@@ -138,8 +138,8 @@ def PeriodHeldDemo : Prop :=
     (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
-        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+          (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
           RingDeviceAt N pt r P D Q L round →
             S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ 1060008348186 →

@@ -71,7 +71,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Callable
 
@@ -111,7 +111,7 @@ def iso(t: float) -> str:
 
 
 def pt(t: float) -> str:
-    return slack.pacific(datetime.fromtimestamp(t, timezone.utc))
+    return slack.pacific(datetime.fromtimestamp(t, UTC))
 
 
 def plain(rich: list | None) -> str:
@@ -375,7 +375,7 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
                                  data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
                                  headers={"Authorization": f"Bearer {(token or gh_token)()}", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (the request's URL is the fixed https one above)
             out = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code in GH_REFUSED:
@@ -388,7 +388,7 @@ def gh_main(token: Callable[[], str] | None = None) -> dict:
 
 
 def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
-    """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
+    """main's head unchanged for STALL_S. A landed candidate's commit carries the time drive built it on `next`, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head. A refused read rings infra once,
     and again only after a read that worked: until it reads, a stalled main rings nobody."""
     try:

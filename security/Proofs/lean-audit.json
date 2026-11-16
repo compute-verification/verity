@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": [
   "Proofs.Core",
   "Proofs.Core.Rec",
@@ -11,7 +11,7 @@
   "Proofs.Certifier",
   "Proofs.Flock",
   "Proofs.Hash",
-  "Proofs.Accounting",
+  "Proofs.ResourceAccounting",
   "Proofs.Slowdown",
   "Proofs.Poub",
   "Proofs.Compose",
@@ -78,10 +78,10 @@
   "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Pous.InProofs",
   "Proofs.Properties.Pous.SetupInProofs",
-  "Proofs.Properties.Accounting.InProofs",
+  "Proofs.Properties.ResourceAccounting.InProofs",
   "Proofs.Properties.Poub.Remote.InProofs",
   "Proofs.Properties.Pous.Wipe",
-  "Proofs.Properties.Accounting.Requirement",
+  "Proofs.Properties.ResourceAccounting.Requirement",
   "Proofs.Properties.Poub.Remote",
   "Proofs.Properties.Poub.Remote.Coins",
   "Proofs.Properties.Poub.Remote.Frozen",
@@ -89,7 +89,7 @@
   "Proofs.Properties.Poub.Remote.Shared",
   "Proofs.Properties.Poub.Remote.SharedLink",
   "Proofs.Properties.Poub.Remote.Pooled",
-  "Proofs.Properties.Accounting.Served",
+  "Proofs.Properties.ResourceAccounting.Served",
   "Proofs.Properties.Poub.Remote.Line",
   "Proofs.Properties.Poub.Remote.Schedule",
   "Proofs.Properties.Poub.Remote.Live",
@@ -449,7 +449,7 @@
    },
    "generate": [
     "python3",
-    "{repo}/verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"

@@ -20,14 +20,14 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity_torch.pouw.h1 import receipts as RC
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 M32 = (1 << 32) - 1
 R, C = TILE = (32, 32)

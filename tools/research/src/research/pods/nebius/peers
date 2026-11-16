@@ -3,5 +3,4 @@
 # `research deploy` writes this file from the register of machines, one line for each machine of a pattern below at the
 # address the register gives it, so nothing here is edited on a node: a machine joins every node's list, and every node takes
 # the key from it, by `research deploy roll /etc/vy/peers`. Host keys go to a file of this list's own, taken at first sight.
-{{vy-nebius-[0-9]*}} -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/research/.ssh/known_hosts.peers research@{{vy-nebius-[0-9]*:host}}
 {{vy-nebius-cpu-*}} -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/research/.ssh/known_hosts.peers research@{{vy-nebius-cpu-*:host}}

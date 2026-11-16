@@ -19,11 +19,11 @@ import pytest
 
 from verity.commitments import MerkleTree
 from verity.circuits.silicon import fp32
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.verifier import audit as AU
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 FIXTURE = Path(__file__).resolve().parents[1] / "prover" / "kernels" / "fixture.py"
 M, N, K = 128, 128, 1024

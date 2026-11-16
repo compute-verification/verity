@@ -1,0 +1,644 @@
+# Every test in the tree to the root's `tests/`, mirrored by path: `X/tests/REST` becomes `tests/X/REST` (a `tests/`
+# package its modules import as `tests` keeps its level: `tests/X/tests/REST`). Written by `tools/move/tests_root.py
+# maps` from the tree it ran on; `tools/move/layout.py --map tools/move/tests_root_map.toml` moves and rewrites.
+
+[roots]
+old = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", research = "tools/research/src/research", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_landq = "tools/verity/landq/verity_landq", verity_machine_model = "benchmarks/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_torch = "adapters/torch/verity_torch", verity_vllm = "adapters/vllm/verity_vllm" }
+
+
+[paths]
+"adapters/torch/tests/" = "tests/adapters/torch/tests/"
+"adapters/vllm/tests/" = "tests/adapters/vllm/tests/"
+"adapters/vllm/verity_vllm/definitions/tests/" = "tests/adapters/vllm/verity_vllm/definitions/"
+"benchmarks/bandwidth/tests/" = "tests/benchmarks/bandwidth/"
+"benchmarks/certifier_term/tests/" = "tests/benchmarks/certifier_term/"
+"benchmarks/certifier_timing/tests/" = "tests/benchmarks/certifier_timing/"
+"benchmarks/circuit_properties/tests/" = "tests/benchmarks/circuit_properties/"
+"benchmarks/codec_tensor/tests/" = "tests/benchmarks/codec_tensor/"
+"benchmarks/commitments/tests/" = "tests/benchmarks/commitments/"
+"benchmarks/compute/tests/" = "tests/benchmarks/compute/"
+"benchmarks/datacenter/tests/" = "tests/benchmarks/datacenter/"
+"benchmarks/demo_minutes/tests/" = "tests/benchmarks/demo_minutes/"
+"benchmarks/dsa_topk/tests/" = "tests/benchmarks/dsa_topk/"
+"benchmarks/harness/specs/tests/" = "tests/benchmarks/harness/specs/"
+"benchmarks/harness/tests/" = "tests/benchmarks/harness/"
+"benchmarks/hash/dither/tests/" = "tests/benchmarks/hash/dither/"
+"benchmarks/inference_only/tests/" = "tests/benchmarks/inference_only/"
+"benchmarks/int8_class_rate/tests/" = "tests/benchmarks/int8_class_rate/"
+"benchmarks/kernels/exactlin/tests/" = "tests/benchmarks/kernels/exactlin/"
+"benchmarks/kernels/numabind/tests/" = "tests/benchmarks/kernels/numabind/"
+"benchmarks/kernels/s8_linear/tests/" = "tests/benchmarks/kernels/s8_linear/"
+"benchmarks/kv_filler/tests/" = "tests/benchmarks/kv_filler/"
+"benchmarks/landing/tests/" = "tests/benchmarks/landing/"
+"benchmarks/lean_records/tests/" = "tests/benchmarks/lean_records/"
+"benchmarks/machine_model/tests/" = "tests/benchmarks/machine_model/"
+"benchmarks/memory/tests/" = "tests/benchmarks/memory/"
+"benchmarks/native_peak/tests/" = "tests/benchmarks/native_peak/"
+"benchmarks/nci/tests/" = "tests/benchmarks/nci/"
+"benchmarks/network_e2e/encodings/tests/" = "tests/benchmarks/network_e2e/encodings/"
+"benchmarks/network_e2e/tests/" = "tests/benchmarks/network_e2e/"
+"benchmarks/network_e2e/traces/tests/" = "tests/benchmarks/network_e2e/traces/"
+"benchmarks/network_sim/workload/tests/" = "tests/benchmarks/network_sim/workload/"
+"benchmarks/network_traces/tests/" = "tests/benchmarks/network_traces/"
+"benchmarks/numerical/tests/" = "tests/benchmarks/numerical/"
+"benchmarks/one_stage/interfaces/tests/" = "tests/benchmarks/one_stage/interfaces/"
+"benchmarks/one_stage/tests/" = "tests/benchmarks/one_stage/"
+"benchmarks/pous/tests/" = "tests/benchmarks/pous/"
+"benchmarks/pouw/exact_kit/tests/" = "tests/benchmarks/pouw/exact_kit/"
+"benchmarks/pouw/filler/tests/" = "tests/benchmarks/pouw/filler/"
+"benchmarks/pouw/pearlplus_lean/tests/" = "tests/benchmarks/pouw/pearlplus_lean/"
+"benchmarks/pouw/tests/" = "tests/benchmarks/pouw/"
+"benchmarks/ppl/tests/" = "tests/benchmarks/ppl/"
+"benchmarks/prod_repro/tests/" = "tests/benchmarks/prod_repro/"
+"benchmarks/proof_throughput/tests/" = "tests/benchmarks/proof_throughput/"
+"benchmarks/property_redteam/tests/" = "tests/benchmarks/property_redteam/"
+"benchmarks/prove_path/tests/" = "tests/benchmarks/prove_path/"
+"benchmarks/rate_squaring/tests/" = "tests/benchmarks/rate_squaring/"
+"benchmarks/recursion_e2e/tests/" = "tests/benchmarks/recursion_e2e/"
+"benchmarks/recursion_figures/tests/" = "tests/benchmarks/recursion_figures/"
+"benchmarks/remote_session/tests/" = "tests/benchmarks/remote_session/"
+"benchmarks/replay_determinism/tests/" = "tests/benchmarks/replay_determinism/"
+"benchmarks/replay_ladder/tests/" = "tests/benchmarks/replay_ladder/"
+"benchmarks/route_capture/tests/" = "tests/benchmarks/route_capture/"
+"benchmarks/sampling_plan/tests/" = "tests/benchmarks/sampling_plan/"
+"benchmarks/scan_cost/tests/" = "tests/benchmarks/scan_cost/"
+"benchmarks/security_findings/tests/" = "tests/benchmarks/security_findings/"
+"benchmarks/serve_tax/tests/" = "tests/benchmarks/serve_tax/"
+"benchmarks/served_commit/tests/" = "tests/benchmarks/served_commit/"
+"benchmarks/served_errors/tests/" = "tests/benchmarks/served_errors/"
+"benchmarks/served_units/tests/" = "tests/benchmarks/served_units/"
+"benchmarks/slowdown/tests/" = "tests/benchmarks/slowdown/"
+"benchmarks/spot_figures/tests/" = "tests/benchmarks/spot_figures/"
+"benchmarks/spot_proved/tests/" = "tests/benchmarks/spot_proved/"
+"benchmarks/stacked_share/tests/" = "tests/benchmarks/stacked_share/"
+"benchmarks/tc_probe/tests/" = "tests/benchmarks/tc_probe/"
+"benchmarks/tc_probe_fp4/tests/" = "tests/benchmarks/tc_probe_fp4/"
+"benchmarks/tensor_duty/tests/" = "tests/benchmarks/tensor_duty/"
+"benchmarks/torch_gpu/p2_stage/tests/" = "tests/benchmarks/torch_gpu/p2_stage/"
+"benchmarks/training_slowdown/grader/tests/" = "tests/benchmarks/training_slowdown/grader/"
+"benchmarks/training_slowdown/tests/" = "tests/benchmarks/training_slowdown/"
+"benchmarks/tree/tests/" = "tests/benchmarks/tree/"
+"benchmarks/two_stage/tests/" = "tests/benchmarks/two_stage/"
+"benchmarks/unit_lowering/tests/" = "tests/benchmarks/unit_lowering/"
+"benchmarks/verifier_cost/tests/" = "tests/benchmarks/verifier_cost/"
+"benchmarks/vllm_encoded/tests/" = "tests/benchmarks/vllm_encoded/"
+"benchmarks/word_codec/tests/" = "tests/benchmarks/word_codec/"
+"infra/cluster/tests/" = "tests/infra/cluster/"
+"infra/dashboard/tests/" = "tests/infra/dashboard/"
+"infra/ops/tests/" = "tests/infra/ops/"
+"infra/slack-events/tests/" = "tests/infra/slack-events/"
+"tools/agent-guard/tests/" = "tests/tools/agent-guard/"
+"tools/check/tests/" = "tests/tools/check/"
+"tools/config/tests/" = "tests/tools/config/"
+"tools/difftest/tests/" = "tests/tools/difftest/"
+"tools/move/tests/" = "tests/tools/move/"
+"tools/research/tests/" = "tests/tools/research/"
+"tools/verity/circuit_check/tests/" = "tests/tools/verity/circuit_check/"
+"tools/verity/cli/tests/" = "tests/tools/verity/cli/"
+"tools/verity/graph/tests/" = "tests/tools/verity/graph/"
+"tools/verity/landq/tests/" = "tests/tools/verity/landq/"
+"tools/verity/lean/tests/" = "tests/tools/verity/lean/"
+"verity/circuits/evaluate/tests/" = "tests/verity/circuits/evaluate/"
+"verity/circuits/ops/tests/" = "tests/verity/circuits/ops/"
+"verity/circuits/private_circuits/tests/" = "tests/verity/circuits/private_circuits/"
+"verity/circuits/requirement/tests/" = "tests/verity/circuits/requirement/"
+"verity/circuits/tests/" = "tests/verity/circuits/"
+"verity/commitments/attest/tests/" = "tests/verity/commitments/attest/"
+"verity/commitments/cuda/commit_slots/tests/" = "tests/verity/commitments/cuda/commit_slots/"
+"verity/commitments/cuda/sha512_rows/tests/" = "tests/verity/commitments/cuda/sha512_rows/"
+"verity/commitments/cuda/tests/" = "tests/verity/commitments/cuda/"
+"verity/commitments/identity/tests/" = "tests/verity/commitments/identity/"
+"verity/commitments/periods/tests/" = "tests/verity/commitments/periods/"
+"verity/commitments/randomness/tests/" = "tests/verity/commitments/randomness/"
+"verity/commitments/tests/" = "tests/verity/commitments/"
+"verity/protocols/compose/verifier/lean/tests/" = "tests/verity/protocols/compose/verifier/lean/"
+"verity/protocols/compose/verifier/live_challenger/tests/" = "tests/verity/protocols/compose/verifier/live_challenger/"
+"verity/protocols/experimental/dither/tests/" = "tests/verity/protocols/experimental/dither/"
+"verity/protocols/experimental/pearl_c4/tests/" = "tests/verity/protocols/experimental/pearl_c4/"
+"verity/protocols/proofs/flock/prover/tests/" = "tests/verity/protocols/proofs/flock/prover/"
+"verity/protocols/proofs/flock/verifier/sigma/tests/" = "tests/verity/protocols/proofs/flock/verifier/sigma/"
+"verity/protocols/proofs/recursion/verifier/vstar_cli/tests/" = "tests/verity/protocols/proofs/recursion/verifier/vstar_cli/"
+"verity/protocols/proofs/recursion/verifier/zk_server/tests/" = "tests/verity/protocols/proofs/recursion/verifier/zk_server/"
+"verity/protocols/proofs/spot/prover/tests/" = "tests/verity/protocols/proofs/spot/prover/"
+"verity/protocols/proofs/spot/verifier/challenger/tests/" = "tests/verity/protocols/proofs/spot/verifier/challenger/"
+"verity/protocols/proofs/spot/verifier/lean/tests/" = "tests/verity/protocols/proofs/spot/verifier/lean/"
+"verity/protocols/proofs/spot/verifier/tests/" = "tests/verity/protocols/proofs/spot/verifier/"
+"verity/protocols/registration/verifier/lean/tests/" = "tests/verity/protocols/registration/verifier/lean/"
+"verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/"
+"verity/protocols/resource_accounting/compute/pouw/prover/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/prover/"
+"verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/"
+"verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/"
+"verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/"
+"verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/"
+"verity/protocols/resource_accounting/compute/pouw/verifier/tests/" = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/"
+"verity/protocols/resource_accounting/memory/poub/attester/live_verifier/tests/" = "tests/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/"
+"verity/protocols/resource_accounting/memory/poub/tests/" = "tests/verity/protocols/resource_accounting/memory/poub/"
+"verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/" = "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/"
+"verity/protocols/resource_accounting/memory/poub/verifier/tests/" = "tests/verity/protocols/resource_accounting/memory/poub/verifier/"
+"verity/protocols/resource_accounting/memory/pous/attester/lean/tests/" = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean/"
+"verity/protocols/resource_accounting/memory/pous/tests/" = "tests/verity/protocols/resource_accounting/memory/pous/"
+"verity/protocols/resource_accounting/memory/pous/verifier/check/tests/" = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check/"
+"verity/protocols/resource_accounting/memory/pous/verifier/tests/" = "tests/verity/protocols/resource_accounting/memory/pous/verifier/"
+"verity/protocols/resource_accounting/network/attester/tests/" = "tests/verity/protocols/resource_accounting/network/attester/"
+"verity/protocols/resource_accounting/network/prover/tests/" = "tests/verity/protocols/resource_accounting/network/prover/"
+"verity/protocols/resource_accounting/network/verifier/network/tests/" = "tests/verity/protocols/resource_accounting/network/verifier/network/"
+"verity/protocols/resource_accounting/network/verifier/tests/" = "tests/verity/protocols/resource_accounting/network/verifier/"
+"verity/protocols/tests/" = "tests/verity/protocols/"
+"verity/protocols/workload_classification/training_detection/inference_only/verifier/tests/" = "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/"
+"verity/runtime/tests/" = "tests/verity/runtime/"
+"verity/tests/" = "tests/verity/"
+# [keep_files]: each stays where it is
+"verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py" = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py"
+
+[keep_files]
+# under a tests/, no test: code outside the tests runs it, so it stays where its reader reaches it
+"verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py" = "the package's lock runs it (`lean-audit.json`'s `generate`, `tests/difftest_vectors.py` from the package)"
+
+[retired]
+# the paths this map empties
+paths = [
+    "adapters/torch/tests/",
+    "adapters/vllm/tests/",
+    "adapters/vllm/verity_vllm/definitions/tests/",
+    "benchmarks/bandwidth/tests/",
+    "benchmarks/certifier_term/tests/",
+    "benchmarks/certifier_timing/tests/",
+    "benchmarks/circuit_properties/tests/",
+    "benchmarks/codec_tensor/tests/",
+    "benchmarks/commitments/tests/",
+    "benchmarks/compute/tests/",
+    "benchmarks/datacenter/tests/",
+    "benchmarks/demo_minutes/tests/",
+    "benchmarks/dsa_topk/tests/",
+    "benchmarks/harness/specs/tests/",
+    "benchmarks/harness/tests/",
+    "benchmarks/hash/dither/tests/",
+    "benchmarks/inference_only/tests/",
+    "benchmarks/int8_class_rate/tests/",
+    "benchmarks/kernels/exactlin/tests/",
+    "benchmarks/kernels/numabind/tests/",
+    "benchmarks/kernels/s8_linear/tests/",
+    "benchmarks/kv_filler/tests/",
+    "benchmarks/landing/tests/",
+    "benchmarks/lean_records/tests/",
+    "benchmarks/machine_model/tests/",
+    "benchmarks/memory/tests/",
+    "benchmarks/native_peak/tests/",
+    "benchmarks/nci/tests/",
+    "benchmarks/network_e2e/encodings/tests/",
+    "benchmarks/network_e2e/tests/",
+    "benchmarks/network_e2e/traces/tests/",
+    "benchmarks/network_sim/workload/tests/",
+    "benchmarks/network_traces/tests/",
+    "benchmarks/numerical/tests/",
+    "benchmarks/one_stage/interfaces/tests/",
+    "benchmarks/one_stage/tests/",
+    "benchmarks/pous/tests/",
+    "benchmarks/pouw/exact_kit/tests/",
+    "benchmarks/pouw/filler/tests/",
+    "benchmarks/pouw/pearlplus_lean/tests/",
+    "benchmarks/pouw/tests/",
+    "benchmarks/ppl/tests/",
+    "benchmarks/prod_repro/tests/",
+    "benchmarks/proof_throughput/tests/",
+    "benchmarks/property_redteam/tests/",
+    "benchmarks/prove_path/tests/",
+    "benchmarks/rate_squaring/tests/",
+    "benchmarks/recursion_e2e/tests/",
+    "benchmarks/recursion_figures/tests/",
+    "benchmarks/remote_session/tests/",
+    "benchmarks/replay_determinism/tests/",
+    "benchmarks/replay_ladder/tests/",
+    "benchmarks/route_capture/tests/",
+    "benchmarks/sampling_plan/tests/",
+    "benchmarks/scan_cost/tests/",
+    "benchmarks/security_findings/tests/",
+    "benchmarks/serve_tax/tests/",
+    "benchmarks/served_commit/tests/",
+    "benchmarks/served_errors/tests/",
+    "benchmarks/served_units/tests/",
+    "benchmarks/slowdown/tests/",
+    "benchmarks/spot_figures/tests/",
+    "benchmarks/spot_proved/tests/",
+    "benchmarks/stacked_share/tests/",
+    "benchmarks/tc_probe/tests/",
+    "benchmarks/tc_probe_fp4/tests/",
+    "benchmarks/tensor_duty/tests/",
+    "benchmarks/torch_gpu/p2_stage/tests/",
+    "benchmarks/training_slowdown/grader/tests/",
+    "benchmarks/training_slowdown/tests/",
+    "benchmarks/tree/tests/",
+    "benchmarks/two_stage/tests/",
+    "benchmarks/unit_lowering/tests/",
+    "benchmarks/verifier_cost/tests/",
+    "benchmarks/vllm_encoded/tests/",
+    "benchmarks/word_codec/tests/",
+    "infra/cluster/tests/",
+    "infra/dashboard/tests/",
+    "infra/ops/tests/",
+    "infra/slack-events/tests/",
+    "tools/agent-guard/tests/",
+    "tools/check/tests/",
+    "tools/config/tests/",
+    "tools/difftest/tests/",
+    "tools/move/tests/",
+    "tools/research/tests/",
+    "tools/verity/circuit_check/tests/",
+    "tools/verity/cli/tests/",
+    "tools/verity/graph/tests/",
+    "tools/verity/landq/tests/",
+    "tools/verity/lean/tests/",
+    "verity/circuits/evaluate/tests/",
+    "verity/circuits/ops/tests/",
+    "verity/circuits/private_circuits/tests/",
+    "verity/circuits/requirement/tests/",
+    "verity/circuits/tests/",
+    "verity/commitments/attest/tests/",
+    "verity/commitments/cuda/commit_slots/tests/",
+    "verity/commitments/cuda/sha512_rows/tests/",
+    "verity/commitments/cuda/tests/",
+    "verity/commitments/identity/tests/",
+    "verity/commitments/periods/tests/",
+    "verity/commitments/randomness/tests/",
+    "verity/commitments/tests/",
+    "verity/protocols/compose/verifier/lean/tests/",
+    "verity/protocols/compose/verifier/live_challenger/tests/",
+    "verity/protocols/experimental/dither/tests/",
+    "verity/protocols/experimental/pearl_c4/tests/",
+    "verity/protocols/proofs/flock/prover/tests/",
+    "verity/protocols/proofs/flock/verifier/sigma/tests/",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/",
+    "verity/protocols/proofs/recursion/verifier/zk_server/tests/",
+    "verity/protocols/proofs/spot/prover/tests/",
+    "verity/protocols/proofs/spot/verifier/challenger/tests/",
+    "verity/protocols/proofs/spot/verifier/lean/tests/",
+    "verity/protocols/proofs/spot/verifier/tests/",
+    "verity/protocols/registration/verifier/lean/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/prover/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/",
+    "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/tests/",
+    "verity/protocols/resource_accounting/memory/poub/tests/",
+    "verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/",
+    "verity/protocols/resource_accounting/memory/poub/verifier/tests/",
+    "verity/protocols/resource_accounting/memory/pous/attester/lean/tests/",
+    "verity/protocols/resource_accounting/memory/pous/tests/",
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/tests/",
+    "verity/protocols/resource_accounting/memory/pous/verifier/tests/",
+    "verity/protocols/resource_accounting/network/attester/tests/",
+    "verity/protocols/resource_accounting/network/prover/tests/",
+    "verity/protocols/resource_accounting/network/verifier/network/tests/",
+    "verity/protocols/resource_accounting/network/verifier/tests/",
+    "verity/protocols/tests/",
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/tests/",
+    "verity/runtime/tests/",
+    "verity/tests/",
+]
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input.
+exclude = [
+    "fixtures/**",
+    "**/fixtures/**",
+    "**/*vectors*.json",
+    "**/*vectors*.txt.gz",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "**/lake-manifest.json.lock",
+    "tools/move/**",
+    "archive/**",
+    "**/numerical/tests/bench/data/**",
+    "**/price_twins.json",
+    "verity/circuits/silicon/captures/**",
+    "verity/circuits/silicon/hawkeye/**",
+    "tools/research/src/research/store/moves.json",
+    "**/network_e2e/tests/data/**",
+    "adapters/vllm/manifests/**",
+    "adapters/vllm/workloads/**",
+    "adapters/vllm/data/**",
+    "adapters/vllm/verity_vllm/pins/**",
+    "adapters/vllm/tools/migrate/superseded_quarantine.py",
+    "**/migrate/test_superseded_quarantine.py",
+    "**/*.lean",
+    "**/lakefile.toml",
+    "tests/tree.toml",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.c",
+    "benchmarks/pouw/pearl_c_sm90/**",
+    "adapters/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
+    "adapters/vllm/verity_vllm/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
+    "benchmarks/numerical/bench-instances/v1/manifest.json",
+    "benchmarks/numerical/bench-instances/v1/tu-k16.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536-neg.index.json",
+    "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json",
+    "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
+    "verity/circuits/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
+    "verity/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30/records.json",
+    "verity/circuits/silicon/discrepancy_log.json",
+    "verity/circuits/silicon/hawkeye/PIN.json",
+]
+include = [
+    "**/fixtures/README.md",
+    "**/fixtures/**/README.md",
+    "tools/move/pyproject.toml",
+]
+# a test's relative paths name a toy's files; its anchors are `tests_root.py anchors`
+keep_relative = [
+    "adapters/torch/tests/*.py",
+    "adapters/vllm/tests/*.py",
+    "adapters/vllm/verity_vllm/definitions/tests/*.py",
+    "benchmarks/bandwidth/tests/*.py",
+    "benchmarks/certifier_term/tests/*.py",
+    "benchmarks/certifier_timing/tests/*.py",
+    "benchmarks/circuit_properties/tests/*.py",
+    "benchmarks/codec_tensor/tests/*.py",
+    "benchmarks/commitments/tests/*.py",
+    "benchmarks/compute/tests/*.py",
+    "benchmarks/datacenter/tests/*.py",
+    "benchmarks/demo_minutes/tests/*.py",
+    "benchmarks/dsa_topk/tests/*.py",
+    "benchmarks/harness/specs/tests/*.py",
+    "benchmarks/harness/tests/*.py",
+    "benchmarks/hash/dither/tests/*.py",
+    "benchmarks/inference_only/tests/*.py",
+    "benchmarks/int8_class_rate/tests/*.py",
+    "benchmarks/kernels/exactlin/tests/*.py",
+    "benchmarks/kernels/numabind/tests/*.py",
+    "benchmarks/kernels/s8_linear/tests/*.py",
+    "benchmarks/kv_filler/tests/*.py",
+    "benchmarks/landing/tests/*.py",
+    "benchmarks/lean_records/tests/*.py",
+    "benchmarks/machine_model/tests/*.py",
+    "benchmarks/memory/tests/*.py",
+    "benchmarks/native_peak/tests/*.py",
+    "benchmarks/nci/tests/*.py",
+    "benchmarks/network_e2e/encodings/tests/*.py",
+    "benchmarks/network_e2e/tests/*.py",
+    "benchmarks/network_e2e/traces/tests/*.py",
+    "benchmarks/network_sim/workload/tests/*.py",
+    "benchmarks/network_traces/tests/*.py",
+    "benchmarks/numerical/tests/*.py",
+    "benchmarks/one_stage/interfaces/tests/*.py",
+    "benchmarks/one_stage/tests/*.py",
+    "benchmarks/pous/tests/*.py",
+    "benchmarks/pouw/exact_kit/tests/*.py",
+    "benchmarks/pouw/filler/tests/*.py",
+    "benchmarks/pouw/pearlplus_lean/tests/*.py",
+    "benchmarks/pouw/tests/*.py",
+    "benchmarks/ppl/tests/*.py",
+    "benchmarks/prod_repro/tests/*.py",
+    "benchmarks/proof_throughput/tests/*.py",
+    "benchmarks/property_redteam/tests/*.py",
+    "benchmarks/prove_path/tests/*.py",
+    "benchmarks/rate_squaring/tests/*.py",
+    "benchmarks/recursion_e2e/tests/*.py",
+    "benchmarks/recursion_figures/tests/*.py",
+    "benchmarks/remote_session/tests/*.py",
+    "benchmarks/replay_determinism/tests/*.py",
+    "benchmarks/replay_ladder/tests/*.py",
+    "benchmarks/route_capture/tests/*.py",
+    "benchmarks/sampling_plan/tests/*.py",
+    "benchmarks/scan_cost/tests/*.py",
+    "benchmarks/security_findings/tests/*.py",
+    "benchmarks/serve_tax/tests/*.py",
+    "benchmarks/served_commit/tests/*.py",
+    "benchmarks/served_errors/tests/*.py",
+    "benchmarks/served_units/tests/*.py",
+    "benchmarks/slowdown/tests/*.py",
+    "benchmarks/spot_figures/tests/*.py",
+    "benchmarks/spot_proved/tests/*.py",
+    "benchmarks/stacked_share/tests/*.py",
+    "benchmarks/tc_probe/tests/*.py",
+    "benchmarks/tc_probe_fp4/tests/*.py",
+    "benchmarks/tensor_duty/tests/*.py",
+    "benchmarks/torch_gpu/p2_stage/tests/*.py",
+    "benchmarks/training_slowdown/grader/tests/*.py",
+    "benchmarks/training_slowdown/tests/*.py",
+    "benchmarks/tree/tests/*.py",
+    "benchmarks/two_stage/tests/*.py",
+    "benchmarks/unit_lowering/tests/*.py",
+    "benchmarks/verifier_cost/tests/*.py",
+    "benchmarks/vllm_encoded/tests/*.py",
+    "benchmarks/word_codec/tests/*.py",
+    "infra/cluster/tests/*.py",
+    "infra/dashboard/tests/*.py",
+    "infra/ops/tests/*.py",
+    "infra/slack-events/tests/*.py",
+    "tools/agent-guard/tests/*.py",
+    "tools/check/tests/*.py",
+    "tools/config/tests/*.py",
+    "tools/difftest/tests/*.py",
+    "tools/move/tests/*.py",
+    "tools/research/tests/*.py",
+    "tools/verity/circuit_check/tests/*.py",
+    "tools/verity/cli/tests/*.py",
+    "tools/verity/graph/tests/*.py",
+    "tools/verity/landq/tests/*.py",
+    "tools/verity/lean/tests/*.py",
+    "verity/circuits/evaluate/tests/*.py",
+    "verity/circuits/ops/tests/*.py",
+    "verity/circuits/private_circuits/tests/*.py",
+    "verity/circuits/requirement/tests/*.py",
+    "verity/circuits/tests/*.py",
+    "verity/commitments/attest/tests/*.py",
+    "verity/commitments/cuda/commit_slots/tests/*.py",
+    "verity/commitments/cuda/sha512_rows/tests/*.py",
+    "verity/commitments/cuda/tests/*.py",
+    "verity/commitments/identity/tests/*.py",
+    "verity/commitments/periods/tests/*.py",
+    "verity/commitments/randomness/tests/*.py",
+    "verity/commitments/tests/*.py",
+    "verity/protocols/compose/verifier/lean/tests/*.py",
+    "verity/protocols/compose/verifier/live_challenger/tests/*.py",
+    "verity/protocols/experimental/dither/tests/*.py",
+    "verity/protocols/experimental/pearl_c4/tests/*.py",
+    "verity/protocols/proofs/flock/prover/tests/*.py",
+    "verity/protocols/proofs/flock/verifier/sigma/tests/*.py",
+    "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/*.py",
+    "verity/protocols/proofs/recursion/verifier/zk_server/tests/*.py",
+    "verity/protocols/proofs/spot/prover/tests/*.py",
+    "verity/protocols/proofs/spot/verifier/challenger/tests/*.py",
+    "verity/protocols/proofs/spot/verifier/lean/tests/*.py",
+    "verity/protocols/proofs/spot/verifier/tests/*.py",
+    "verity/protocols/registration/verifier/lean/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/*.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/*.py",
+    "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/tests/*.py",
+    "verity/protocols/resource_accounting/memory/poub/tests/*.py",
+    "verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/*.py",
+    "verity/protocols/resource_accounting/memory/poub/verifier/tests/*.py",
+    "verity/protocols/resource_accounting/memory/pous/attester/lean/tests/*.py",
+    "verity/protocols/resource_accounting/memory/pous/tests/*.py",
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/tests/*.py",
+    "verity/protocols/resource_accounting/memory/pous/verifier/tests/*.py",
+    "verity/protocols/resource_accounting/network/attester/tests/*.py",
+    "verity/protocols/resource_accounting/network/prover/tests/*.py",
+    "verity/protocols/resource_accounting/network/verifier/network/tests/*.py",
+    "verity/protocols/resource_accounting/network/verifier/tests/*.py",
+    "verity/protocols/tests/*.py",
+    "verity/protocols/workload_classification/training_detection/inference_only/verifier/tests/*.py",
+    "verity/runtime/tests/*.py",
+    "verity/tests/*.py",
+]
+# a moved file a Lean file names as what renders it keeps that name in its own text, as the Lean does
+keep_in = { "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/honest_log.py" = ["verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/honest_log.py"] }
+
+
+# the rename [paths] implies (`layout.py --modules`)
+[modules]
+"adapters.torch.tests" = "tests.adapters.torch.tests"
+"adapters.vllm.tests" = "tests.adapters.vllm.tests"
+"benchmarks.bandwidth.tests" = "tests.benchmarks.bandwidth"
+"benchmarks.certifier_term.tests" = "tests.benchmarks.certifier_term"
+"benchmarks.certifier_timing.tests" = "tests.benchmarks.certifier_timing"
+"benchmarks.circuit_properties.tests" = "tests.benchmarks.circuit_properties"
+"benchmarks.codec_tensor.tests" = "tests.benchmarks.codec_tensor"
+"benchmarks.commitments.tests" = "tests.benchmarks.commitments"
+"benchmarks.compute.tests" = "tests.benchmarks.compute"
+"benchmarks.datacenter.tests" = "tests.benchmarks.datacenter"
+"benchmarks.demo_minutes.tests" = "tests.benchmarks.demo_minutes"
+"benchmarks.dsa_topk.tests" = "tests.benchmarks.dsa_topk"
+"benchmarks.harness.specs.tests" = "tests.benchmarks.harness.specs"
+"benchmarks.harness.tests" = "tests.benchmarks.harness"
+"benchmarks.hash.dither.tests" = "tests.benchmarks.hash.dither"
+"benchmarks.inference_only.tests" = "tests.benchmarks.inference_only"
+"benchmarks.int8_class_rate.tests" = "tests.benchmarks.int8_class_rate"
+"benchmarks.kernels.exactlin.tests" = "tests.benchmarks.kernels.exactlin"
+"benchmarks.kernels.numabind.tests" = "tests.benchmarks.kernels.numabind"
+"benchmarks.kernels.s8_linear.tests" = "tests.benchmarks.kernels.s8_linear"
+"benchmarks.kv_filler.tests" = "tests.benchmarks.kv_filler"
+"benchmarks.landing.tests" = "tests.benchmarks.landing"
+"benchmarks.lean_records.tests" = "tests.benchmarks.lean_records"
+"benchmarks.machine_model.tests" = "tests.benchmarks.machine_model"
+"benchmarks.memory.tests" = "tests.benchmarks.memory"
+"benchmarks.native_peak.tests" = "tests.benchmarks.native_peak"
+"benchmarks.nci.tests" = "tests.benchmarks.nci"
+"benchmarks.network_e2e.encodings.tests" = "tests.benchmarks.network_e2e.encodings"
+"benchmarks.network_e2e.tests" = "tests.benchmarks.network_e2e"
+"benchmarks.network_e2e.traces.tests" = "tests.benchmarks.network_e2e.traces"
+"benchmarks.network_sim.workload.tests" = "tests.benchmarks.network_sim.workload"
+"benchmarks.network_traces.tests" = "tests.benchmarks.network_traces"
+"benchmarks.numerical.tests" = "tests.benchmarks.numerical"
+"benchmarks.one_stage.interfaces.tests" = "tests.benchmarks.one_stage.interfaces"
+"benchmarks.one_stage.tests" = "tests.benchmarks.one_stage"
+"benchmarks.pous.tests" = "tests.benchmarks.pous"
+"benchmarks.pouw.exact_kit.tests" = "tests.benchmarks.pouw.exact_kit"
+"benchmarks.pouw.filler.tests" = "tests.benchmarks.pouw.filler"
+"benchmarks.pouw.pearlplus_lean.tests" = "tests.benchmarks.pouw.pearlplus_lean"
+"benchmarks.pouw.tests" = "tests.benchmarks.pouw"
+"benchmarks.ppl.tests" = "tests.benchmarks.ppl"
+"benchmarks.prod_repro.tests" = "tests.benchmarks.prod_repro"
+"benchmarks.proof_throughput.tests" = "tests.benchmarks.proof_throughput"
+"benchmarks.property_redteam.tests" = "tests.benchmarks.property_redteam"
+"benchmarks.prove_path.tests" = "tests.benchmarks.prove_path"
+"benchmarks.rate_squaring.tests" = "tests.benchmarks.rate_squaring"
+"benchmarks.recursion_e2e.tests" = "tests.benchmarks.recursion_e2e"
+"benchmarks.recursion_figures.tests" = "tests.benchmarks.recursion_figures"
+"benchmarks.remote_session.tests" = "tests.benchmarks.remote_session"
+"benchmarks.replay_determinism.tests" = "tests.benchmarks.replay_determinism"
+"benchmarks.replay_ladder.tests" = "tests.benchmarks.replay_ladder"
+"benchmarks.route_capture.tests" = "tests.benchmarks.route_capture"
+"benchmarks.sampling_plan.tests" = "tests.benchmarks.sampling_plan"
+"benchmarks.scan_cost.tests" = "tests.benchmarks.scan_cost"
+"benchmarks.security_findings.tests" = "tests.benchmarks.security_findings"
+"benchmarks.serve_tax.tests" = "tests.benchmarks.serve_tax"
+"benchmarks.served_commit.tests" = "tests.benchmarks.served_commit"
+"benchmarks.served_errors.tests" = "tests.benchmarks.served_errors"
+"benchmarks.served_units.tests" = "tests.benchmarks.served_units"
+"benchmarks.slowdown.tests" = "tests.benchmarks.slowdown"
+"benchmarks.spot_figures.tests" = "tests.benchmarks.spot_figures"
+"benchmarks.spot_proved.tests" = "tests.benchmarks.spot_proved"
+"benchmarks.stacked_share.tests" = "tests.benchmarks.stacked_share"
+"benchmarks.tc_probe.tests" = "tests.benchmarks.tc_probe"
+"benchmarks.tc_probe_fp4.tests" = "tests.benchmarks.tc_probe_fp4"
+"benchmarks.tensor_duty.tests" = "tests.benchmarks.tensor_duty"
+"benchmarks.torch_gpu.p2_stage.tests" = "tests.benchmarks.torch_gpu.p2_stage"
+"benchmarks.training_slowdown.grader.tests" = "tests.benchmarks.training_slowdown.grader"
+"benchmarks.training_slowdown.tests" = "tests.benchmarks.training_slowdown"
+"benchmarks.tree.tests" = "tests.benchmarks.tree"
+"benchmarks.two_stage.tests" = "tests.benchmarks.two_stage"
+"benchmarks.unit_lowering.tests" = "tests.benchmarks.unit_lowering"
+"benchmarks.verifier_cost.tests" = "tests.benchmarks.verifier_cost"
+"benchmarks.vllm_encoded.tests" = "tests.benchmarks.vllm_encoded"
+"benchmarks.word_codec.tests" = "tests.benchmarks.word_codec"
+"infra.cluster.tests" = "tests.infra.cluster"
+"infra.dashboard.tests" = "tests.infra.dashboard"
+"infra.ops.tests" = "tests.infra.ops"
+"tools.check.tests" = "tests.tools.check"
+"tools.config.tests" = "tests.tools.config"
+"tools.difftest.tests" = "tests.tools.difftest"
+"tools.move.tests" = "tests.tools.move"
+"tools.research.tests" = "tests.tools.research"
+"tools.verity.circuit_check.tests" = "tests.tools.verity.circuit_check"
+"tools.verity.cli.tests" = "tests.tools.verity.cli"
+"tools.verity.graph.tests" = "tests.tools.verity.graph"
+"tools.verity.landq.tests" = "tests.tools.verity.landq"
+"tools.verity.lean.tests" = "tests.tools.verity.lean"
+"verity.circuits.evaluate.tests" = "tests.verity.circuits.evaluate"
+"verity.circuits.ops.tests" = "tests.verity.circuits.ops"
+"verity.circuits.private_circuits.tests" = "tests.verity.circuits.private_circuits"
+"verity.circuits.requirement.tests" = "tests.verity.circuits.requirement"
+"verity.circuits.tests" = "tests.verity.circuits"
+"verity.commitments.attest.tests" = "tests.verity.commitments.attest"
+"verity.commitments.cuda.commit_slots.tests" = "tests.verity.commitments.cuda.commit_slots"
+"verity.commitments.cuda.sha512_rows.tests" = "tests.verity.commitments.cuda.sha512_rows"
+"verity.commitments.cuda.tests" = "tests.verity.commitments.cuda"
+"verity.commitments.identity.tests" = "tests.verity.commitments.identity"
+"verity.commitments.periods.tests" = "tests.verity.commitments.periods"
+"verity.commitments.randomness.tests" = "tests.verity.commitments.randomness"
+"verity.commitments.tests" = "tests.verity.commitments"
+"verity.protocols.compose.verifier.lean.tests" = "tests.verity.protocols.compose.verifier.lean"
+"verity.protocols.compose.verifier.live_challenger.tests" = "tests.verity.protocols.compose.verifier.live_challenger"
+"verity.protocols.experimental.dither.tests" = "tests.verity.protocols.experimental.dither"
+"verity.protocols.experimental.pearl_c4.tests" = "tests.verity.protocols.experimental.pearl_c4"
+"verity.protocols.proofs.flock.prover.tests" = "tests.verity.protocols.proofs.flock.prover"
+"verity.protocols.proofs.flock.verifier.sigma.tests" = "tests.verity.protocols.proofs.flock.verifier.sigma"
+"verity.protocols.proofs.recursion.verifier.vstar_cli.tests" = "tests.verity.protocols.proofs.recursion.verifier.vstar_cli"
+"verity.protocols.proofs.recursion.verifier.zk_server.tests" = "tests.verity.protocols.proofs.recursion.verifier.zk_server"
+"verity.protocols.proofs.spot.prover.tests" = "tests.verity.protocols.proofs.spot.prover"
+"verity.protocols.proofs.spot.verifier.challenger.tests" = "tests.verity.protocols.proofs.spot.verifier.challenger"
+"verity.protocols.proofs.spot.verifier.lean.tests" = "tests.verity.protocols.proofs.spot.verifier.lean"
+"verity.protocols.proofs.spot.verifier.tests" = "tests.verity.protocols.proofs.spot.verifier"
+"verity.protocols.registration.verifier.lean.tests" = "tests.verity.protocols.registration.verifier.lean"
+"verity.protocols.resource_accounting.compute.pouw.prover.kernels.edited_gemm.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.prover.kernels.edited_gemm"
+"verity.protocols.resource_accounting.compute.pouw.prover.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.prover"
+"verity.protocols.resource_accounting.compute.pouw.verifier.lean.check.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.verifier.lean.check"
+"verity.protocols.resource_accounting.compute.pouw.verifier.lean.commit.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.verifier.lean.commit"
+"verity.protocols.resource_accounting.compute.pouw.verifier.lean.commit.tests.difftest_vectors" = "verity.protocols.resource_accounting.compute.pouw.verifier.lean.commit.tests.difftest_vectors"
+"verity.protocols.resource_accounting.compute.pouw.verifier.lean.window.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.verifier.lean.window"
+"verity.protocols.resource_accounting.compute.pouw.verifier.receipts.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.verifier.receipts"
+"verity.protocols.resource_accounting.compute.pouw.verifier.tests" = "tests.verity.protocols.resource_accounting.compute.pouw.verifier"
+"verity.protocols.resource_accounting.memory.poub.attester.live_verifier.tests" = "tests.verity.protocols.resource_accounting.memory.poub.attester.live_verifier"
+"verity.protocols.resource_accounting.memory.poub.tests" = "tests.verity.protocols.resource_accounting.memory.poub"
+"verity.protocols.resource_accounting.memory.poub.verifier.lean.tests" = "tests.verity.protocols.resource_accounting.memory.poub.verifier.lean"
+"verity.protocols.resource_accounting.memory.poub.verifier.tests" = "tests.verity.protocols.resource_accounting.memory.poub.verifier"
+"verity.protocols.resource_accounting.memory.pous.attester.lean.tests" = "tests.verity.protocols.resource_accounting.memory.pous.attester.lean"
+"verity.protocols.resource_accounting.memory.pous.tests" = "tests.verity.protocols.resource_accounting.memory.pous"
+"verity.protocols.resource_accounting.memory.pous.verifier.check.tests" = "tests.verity.protocols.resource_accounting.memory.pous.verifier.check"
+"verity.protocols.resource_accounting.memory.pous.verifier.tests" = "tests.verity.protocols.resource_accounting.memory.pous.verifier"
+"verity.protocols.resource_accounting.network.attester.tests" = "tests.verity.protocols.resource_accounting.network.attester"
+"verity.protocols.resource_accounting.network.prover.tests" = "tests.verity.protocols.resource_accounting.network.prover"
+"verity.protocols.resource_accounting.network.verifier.network.tests" = "tests.verity.protocols.resource_accounting.network.verifier.network"
+"verity.protocols.resource_accounting.network.verifier.tests" = "tests.verity.protocols.resource_accounting.network.verifier"
+"verity.protocols.tests" = "tests.verity.protocols"
+"verity.protocols.workload_classification.training_detection.inference_only.verifier.tests" = "tests.verity.protocols.workload_classification.training_detection.inference_only.verifier"
+"verity.runtime.tests" = "tests.verity.runtime"
+"verity.tests" = "tests.verity"
+"verity_vllm.definitions.tests" = "tests.adapters.vllm.verity_vllm.definitions"
+
+[split]
+"adapters/vllm/tests/properties/glm53_mtp_capture_card.sh: adapters" = { to = "adapters", why = "the code beside the tests, which stays" }

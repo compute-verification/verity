@@ -68,7 +68,6 @@ strings = ["prove-leg verifier (prove_leg.py)", "leg_s=round", "ProveLegRegister
 "**/test_chain_record.py" = ["LEGS", "Legs", "legs", "LEG", "Leg", "leg"]
 "**/served_run/serve_load.py" = ["legs"]
 "**/served_h1/commit_variants.sh" = ["LEGS", "legs", "leg"]
-"**/dither/pin_glm53.sh" = ["leg"]
 "**/verifier_cost/lift.py" = ["leg"]
 "**/one_stage/pouw_piece.py" = ["leg"]
 "tools/research/src/research/telemetry/policy/*.toml" = ["leg"]
