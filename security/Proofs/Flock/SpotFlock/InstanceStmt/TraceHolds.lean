@@ -208,9 +208,11 @@ theorem holds_all (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
       (zIX_h0_past hn (by omega) h7)
   -- hm slot 1
   by_cases h8 : r.val < 262704
-  · exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
-      ⟨srcA (r.val - 262144), mk _ (srcA_lt4 _)⟩
-      (fun j => (delta_R3 F.da ⟨by omega, h8⟩ j).trans (form_flip _ _ j)) (zIX_srcA hn (by omega) h8)
+  · obtain ⟨sA, hsA⟩ : ∃ s, s = srcA (r.val - 262144) := ⟨_, rfl⟩
+    exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
+      ⟨sA, mk _ (by rw [hsA]; exact srcA_lt4 _)⟩
+      (fun j => by rw [delta_R3 F.da ⟨by omega, h8⟩ j, ← hsA, form_flip])
+      (by rw [zIX_srcA hn (by omega) h8, ← hsA])
   by_cases h9 : r.val < 262712
   · exact holds_hmIn_at L regs (zI := zIX) hk R F.hm1 o (off := r.val - 262144) (by omega) (by omega)
       ⟨786568 + (r.val - 262704), mk _ (by omega)⟩
@@ -270,10 +272,11 @@ theorem holds_all (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
       (zIX_sha_past hn (by omega) h22)
   -- the unit slot
   by_cases h23 : r.val < 786448
-  · exact holds_unitLeaf_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
-      ⟨leafX (r.val - 786432), mk _ (by unfold leafX; split <;> omega)⟩
-      (fun j => delta_R5 F.da ⟨by omega, by omega⟩ j)
-      (by rw [zIX_unit_false (i := r.val) (by omega) (by omega)]; exact (zIX_leaf (r.val - 786432) (by omega)).symm)
+  · obtain ⟨sL, hsL⟩ : ∃ s, s = leafX (r.val - 786432) := ⟨_, rfl⟩
+    exact holds_unitLeaf_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
+      ⟨sL, mk _ (by rw [hsL]; unfold leafX; split <;> omega)⟩
+      (fun j => by rw [delta_R5 F.da (x := r.val) ⟨by omega, by omega⟩ j, ← hsL])
+      (by rw [zIX_unit_false (i := r.val) (by omega) (by omega), hsL]; exact (zIX_leaf (r.val - 786432) (by omega)).symm)
   by_cases h24 : r.val < 786560
   · exact holds_unitPad_at L regs (zI := zIX) hk F.tmpl F.unit hs1 F.unitSlot o ⟨by omega, by omega⟩
       (hz0 r.val ⟨by omega, by omega, by omega, by omega, by omega, by omega, by omega⟩)
