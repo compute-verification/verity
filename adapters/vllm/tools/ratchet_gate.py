@@ -1392,26 +1392,35 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
 
 
 def moved_sites(c: Change, found: list[str], to: dict[str, str], had: list[str]) -> list[str]:
-    """For each counted lint's count at a file the change renames (``to``: old path to new) in ``found``, where ``had``, the
-    base's run on its own tree, names none, the base's own count there, as that lint names it (``lint: file: N found, 0 allowed``, then ``lint: file:line what`` for each site):
-    the base's text of the file, counted by the base's lint where the change puts it.  A lint whose terms or reach depend on
-    the path (the retired terms a row keeps in one directory) counts a moved file anew, and what it counts is the base's
-    text, which the move didn't write."""
+    """``had``, the base's run on its own tree named where the change puts each file (``to``: old path to new), with each
+    counted lint's sites at a file the change renames, which ``found`` counts, recounted where the base's text holds more
+    than ``had`` names: the base's text of the file, counted by the base's lint where the change puts it, as that lint
+    names it (``lint: file: N found, M allowed``, M what ``had`` allowed, then ``lint: file:line what`` for each site), in
+    place of what ``had`` names there.  A lint whose terms or reach depend on the path (the retired terms a row keeps in
+    one directory, a directory it leaves out) counts a moved file anew, and what it counts is the base's text, which the
+    move didn't write."""
     back = {n: o for o, n in to.items()}
     named = {s: (sites, noun) for s, sites, noun in COUNTED}
 
-    def counts(vs: list[str]) -> set[tuple[str, str]]:
-        return {(v.partition(": ")[0], m[1]) for v in vs if (m := SITE.match(v)) and not m[2] and COUNT.search(v)}
+    def counts(vs: list[str]) -> dict[tuple[str, str], tuple[int, str]]:
+        return {(v.partition(": ")[0], m[1]): (int(n[1]), n[0]) for v in vs
+                if (m := SITE.match(v)) and not m[2] and (n := COUNT.search(v))}
 
-    out = []
-    for s, f in sorted(counts(found) - counts(had)):
+    have, out = counts(had), list(had)
+    for s, f in sorted(counts(found)):
         if s not in named or f not in back or (lint := counted_lint_at(c.lo, s, *named[s])) is None:
             continue
         holds, count = counter(lint, named[s][0])
         if not holds(f):
             continue
         sites = count(git("show", f"{c.lo}:{back[f]}"), f)
-        out += [f"{s}: {f}: {len(sites)} found, 0 allowed"] + [f"{s}: {f}:{line} {what}" for line, what in sites]
+        n, said = have.get((s, f), (0, ""))
+        if len(sites) <= n:
+            continue
+        allowed = re.search(r"(\d+) allowed", said)
+        out = [v for v in out if not (v.partition(": ")[0] == s and (m := SITE.match(v)) and m[1] == f)]
+        out += [f"{s}: {f}: {len(sites)} found, {allowed[1] if allowed else 0} allowed"]
+        out += [f"{s}: {f}:{line} {what}" for line, what in sites]
     return out
 
 
@@ -1512,8 +1521,8 @@ def judge(c: Change, base: str, every: bool = False) -> None:
                 to = renamed(c)
                 repo = frozenset(PurePosixPath(p).stem.removeprefix("test_")
                                  for p in git("ls-tree", "--name-only", c.lo, f"{REPO_LINT}/").splitlines())
-                at_base = at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]), to, repo)
-                at_base += moved_sites(c, found, to, at_base)
+                at_base = moved_sites(c, found, to, at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection,
+                                                                                    before)[1]), to, repo))
                 inherited, new = beyond(found, at_base)
                 inherited = at_paths(inherited, {n: o for o, n in to.items()}, repo)
                 had, found = set(at_base) | (set(found) - set(new)), new

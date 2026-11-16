@@ -2350,3 +2350,24 @@ def test_a_lint_directory_moved_into_the_lint_directories_brings_its_lists_and_p
                                       G.CALLERS_LIST: _callers({"row": row}), row: "verity-vllm row --x 1\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2), c["why"]
+
+
+def test_a_moved_file_a_lint_counts_anew_by_its_path_holds_the_base_s_uses(repo):
+    """A lint that keeps a key in the files it names (`HELD_KEYS`) counts it in a file moved away from them.  The change
+    moves the file and the lint's name for it together, so the base's lint, which names the old path, counts one more use
+    in the file where the change puts it than at its old path, where the list, behind its tree, allows none; that use is
+    the base's text, which the move didn't write, so the change passes.  A second use the change adds is its own."""
+    lint = (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text()
+    held = lint.replace("HELD_KEYS = {\n", "HELD_KEYS = {\n    \"teapot\": ((\"docs/held.md\",), \"a stored record's key\"),\n", 1)
+    text = '# Held\n\nThe record\'s key is "teapot".\n\nA teapot boils.\n'
+    repo.commit("retired terms, one key held", {REPO_TERMS_LINT: held, "GLOSSARY.md": TOY_GLOSSARY, "docs/held.md": text,
+                                                REPO_TERMS_JSON: _allowlist()})
+    repo.git("checkout", "-q", "-b", "pr")
+    moved = {"docs/held.md": None, REPO_TERMS_LINT: held.replace('(("docs/held.md",)', '(("docs/c/held.md",)')}
+    repo.commit("docs/held.md moves to docs/c/, with the lint's name for it", {**moved, "docs/c/held.md": text})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    repo.commit("and a second use", {"docs/c/held.md": text + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "repo_retired_terms: docs/c/held.md:7 'teapot' is retired; say kettle (GLOSSARY.md)" \
+        in c["fix"], c["why"]
