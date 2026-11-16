@@ -155,7 +155,7 @@ def reserve(gate: str, peer: str, epoch: int, rounds: int | None, minutes: int |
     `epoch` and `rounds`, None for its sample session) and its challenger to listen on `peer`'s 127.0.0.1, where the
     window's client runs; `for_lane` is vy-admin's (``--for``), and `withhold` reserves a withheld session (``--withhold``,
     a sample session's), whose challenger hands out no coin commitment's root until it closes.  The gate's answer,
-    {session, seq, peer, by, for?, expires_utc, period, withheld?}; a refusal (the period's cap among them) raises, and
+    {session, seq, peer, by, for?, expires_utc, period, withheld?}; a refusal (the period's limit among them) raises, and
     so does a reserve asked withheld that the gate didn't mark ``withheld``.  Nothing serves until `open_window`."""
     lay = layout(epoch, rounds)
     args = ["reserve", "--peer", peer, "--scheme", lay["scheme"],
@@ -503,7 +503,7 @@ def audited_window(directory: str | os.PathLike, heads: Sequence[str | os.PathLi
 def ledger_info(audited: Ch.Audited, entries: dict[str, dict]) -> dict:
     """What the auditor's ledger says of a window's session (`audited_window`): its id and prover, its entries' seqs,
     whether its end is complete (every family released all its coins), its refused hellos, and the period holding it
-    with that period's cap and circuit."""
+    with that period's limit and circuit."""
     return {"session": audited.session, "prover": audited.prover,
             **{k: entries[k]["seq"] if k in entries else None for k in Ch.SESSION_KINDS},
             "end_complete": entries["end"]["body"].get("complete"), "refused_hellos": audited.refused_hellos,

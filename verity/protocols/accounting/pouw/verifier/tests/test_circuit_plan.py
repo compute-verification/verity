@@ -210,7 +210,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
 
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
-    """The execution phase pin's `covers_executionPhase` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
+    """The execution phase pin's `covers_executionPhase` holds only when each call's work is in one stratum (`hone`): with the limit K_c ≤ N_c,
     a counterexample (4 units at work 2 and 2 at work 5, K = 8) samples 3 of the first where covering needs 3.6. The
     verifier's own layouts give work to the tile template only, and `work_table`, `WorkSamplingDesign` and `window_sampling_designs`
     refuse any layout that doesn't."""
@@ -248,7 +248,7 @@ def test_the_red_team_s_capped_window_is_refused():
                                   PL.StratumSpec("t1", "tile", (100_000,), 1)), {})
     total, k = call0.work() + call1.work(), 5000
     share = -(-k * call0.work() // total)
-    assert (total, share) == (12_001, 5000) and share > 1010                     # the cap binds
+    assert (total, share) == (12_001, 5000) and share > 1010                     # the limit binds
     assert (-(-1010 * 2000 // call0.work()), -(-k * 2000 // call0.work())) == (169, 834)
     escape = comb(990, 169) / comb(1000, 169)
     assert 0.15 < escape < 0.16 and (1 - 20 / total) ** k < 2.5e-4

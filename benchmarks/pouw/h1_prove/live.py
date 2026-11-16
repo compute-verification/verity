@@ -40,7 +40,7 @@ and each round's honest statement's circuit, public file and sessions; `evidence
 
 **Past T = `live.PIECE_ROWS`** (`R`) a round's live check is cut by rows (`live.PouwLiveRows_v1`, `form`): the Program is
 `live.program_rows` of P = T / R pieces a round, unit u = s·P + j round s's piece j, each statement one piece on its R
-rows of round s's slot table, the first R headers and caps and the known ``base@<j>`` (`live_reads.reads_file_rows`),
+rows of round s's slot table, the first R headers and limits and the known ``base@<j>`` (`live_reads.reads_file_rows`),
 its ok row u of S·P. ``prepare --units`` stages only the units it lists (each a statement of its own, the size of a
 T 64 unit, whatever T is). The checks are the same, each at its unit (``honest-<s>-<j>``), ``m-claimed`` at the piece
 holding row m_0 (or piece 0 when m_0 = T, which every piece refuses), and ``other-piece`` (P > 1): unit 0's honest

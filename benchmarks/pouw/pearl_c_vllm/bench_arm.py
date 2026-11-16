@@ -220,9 +220,9 @@ class PearlCArm:
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         """Headroom for the run's own device memory, which sits beside vLLM's budget: B̃ about a byte per weight, the
         pass's leaf and flag buffers, and the per-shape ring buffers whose A (FP32) and C̃/U scale with the step's rows
-        times n. Without the utilization cap the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB);
-        without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
-        in the gate (93.5 GiB torch-allocated). The step cap applies to
+        times n. Without the utilization limit the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB);
+        without the step limit a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
+        in the gate (93.5 GiB torch-allocated). The step limit applies to
         this arm's engine only, so its chunking differs from the controls'; the per-token ratio stays the metric."""
         return {"gpu_memory_utilization": settings.PEARLC_GPU_UTIL,
                 "max_num_batched_tokens": settings.PEARLC_STEP_TOKENS}

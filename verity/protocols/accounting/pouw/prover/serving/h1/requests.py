@@ -10,7 +10,7 @@
   Round 0's request table comes before the salt: its root is in the window's open root (`salt.window_open_root`, over
   the weights' root, it and the session), which the gate opens the session on and the salt coin opens after
   (`pouw_h1.H1Run.open_window`), so its binding reads no salt (`requests_binding`) and every later round's does.
-* **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
+* **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, limit and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
   table (`slot_table`, T hm96 leaves) names the request whose row is slot i of step s's A tables, or none (`EMPTY_SLOT`). A
   request is keyed by its engine ``req_id``: one resumed after a preemption, which the adapter hands in again as admitted,
@@ -89,7 +89,7 @@ from verity.protocols.proofs.spot.device.challenger import (
 class RequestEntry:
     """An admitted request's entry (`Accounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
     among the window's admitted requests, the round that admitted it (its engine step), its first slot there (the first of
-    its rows in that step's A tables, which round ``round``'s slot table names it at), its token cap and its prompt's token
+    its rows in that step's A tables, which round ``round``'s slot table names it at), its token limit and its prompt's token
     ids. It is a value, a hiding leaf of its round's request table under that round's root."""
 
     index: int
@@ -99,7 +99,7 @@ class RequestEntry:
     prompt: tuple[int, ...]
 
     def row(self) -> bytes:
-        """The leaf's preimage: index, round, slot, cap and prompt length as u32 LE, then the prompt's token ids as u32 LE."""
+        """The leaf's preimage: index, round, slot, limit and prompt length as u32 LE, then the prompt's token ids as u32 LE."""
         return struct.pack("<5I", self.index, self.round, self.slot, self.max_tokens, len(self.prompt)) + \
             np.asarray(self.prompt, dtype="<u4").tobytes()
 

@@ -7,7 +7,7 @@ A rounds case is an honest live execution phase read through its challenger's se
 execution phase's pinned key), its release log (the salt coin opened after a root, sometimes, then each round root recorded in
 order and its coin opened after it, the challenger's `LiveRecord`, in canonical JSON on an integer clock), the session's
 close signed at the next leaf over the log's chain, no refused hellos, and the auditor's v2 ledger opening that session
-for the execution phase (``{root}``) under the key's hash, among others and sometimes inside a period with its cap and circuit,
+for the execution phase (``{root}``) under the key's hash, among others and sometimes inside a period with its limit and circuit,
 and ending it closed, sealing the log and hellos the session's challenger left and naming its record's leaf and
 commitment; its entries up to the session's open sign at leaves 0, 1, …, and those after at `RECORD_LEAF` + 2 on.  Each
 open names a commit the host's pins log `PINS` records and seals a prefix of the log holding it; the verifier holds the
