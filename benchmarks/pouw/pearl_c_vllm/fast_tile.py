@@ -393,9 +393,9 @@ def _native_blake3():
     return (lambda message: native.blake3(message).digest()), (lambda key, message: native.blake3(message, key=key).digest())
 
 
-def install(scheme, debit: bool = True) -> callable:
+def install(scheme, inert_work: bool = True) -> callable:
     """Put the batch forms in place for `scheme` (Pearl-C v1 on a promoted device), and the `blake3` package's BLAKE3 in place
-    of the plain-Python one wherever a loaded module holds it; returns the undo.  ``debit=False`` leaves
+    of the plain-Python one wherever a loaded module holds it; returns the undo.  ``inert_work=False`` leaves
     `pearl_c_inert_work.chain_inert_work` and `tile_inert_work` to the caller (`served_inert_work.py` records the tile rule's through a
     wrapper of its own)."""
     import sys
@@ -442,7 +442,7 @@ def install(scheme, debit: bool = True) -> callable:
     swap(C, "gram", gram)
     swap(C, "peel_factors_a", peel_factors_a)
     swap(C, "peel_factors_b", peel_factors_b)
-    if debit:
+    if inert_work:
         swap(D, "chain_inert_work", chain_inert_work)
         swap(D, "tile_inert_work", tile_inert_work)
     swap(type(scheme), "checked", checked)

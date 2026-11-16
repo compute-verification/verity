@@ -98,12 +98,12 @@ def test_aligned_spike_tile_is_over_the_inert_bound(spike):
     assert (atoms, zeros) == D.chain_inert_work(ops.a.codes, ops.b.codes)
     assert atoms == sum(sum(D.word_flags(a, b)) for a in ops.a.codes for b in ops.b.codes) and zeros == 0
     assert elements == elements_by_definition(ops)
-    debit = D.inert_work_units(atoms, elements, zeros=zeros, mends=mends)
+    inert_work = D.inert_work_units(atoms, elements, zeros=zeros, mends=mends)
     cap = s.cap * s.credit_of(Shape(t, k, t))
     if spike:
-        assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and debit > 14 * cap
+        assert atoms == 1527 and round(atoms / (t * t * k // 32), 3) == 0.746 and inert_work > 14 * cap
     else:
-        assert elements == mends == 0 and debit < cap / 10
+        assert elements == mends == 0 and inert_work < cap / 10
 
 
 def formed(ops, side: str = "a") -> list[tuple[int, list[int], int]]:

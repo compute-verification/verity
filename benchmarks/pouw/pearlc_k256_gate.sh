@@ -28,7 +28,7 @@ for run in 1 2 3; do
     done
   done
 done | xargs -P 40 -L 1 bash -c '$0 benchmarks/pouw/pearlc_census.py --atom hopper --forming s5 --line-norm 16 --deltas 1 \
-  --ks 256 --tile "$2" --families "$4" --run "$1" --debit --cross-words "$3" --transfer-words 64 \
+  --ks 256 --tile "$2" --families "$4" --run "$1" --inert_work --cross-words "$3" --transfer-words 64 \
   --out "$OUT/census_${2}_run${1}_$4.json" > "$OUT/census_${2}_run${1}_$4.log" 2>&1 || echo "census $* rc $?"' "uv run --no-sync python"
 wait "$slices"; echo "slices rc $?"
 $PY $D/pearlc_k256_gate.py --families "" --b-samples "$OUT/glm_w2_samples.npz" --runs 1,2,3 --jobs 24 \

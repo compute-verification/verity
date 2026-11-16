@@ -106,10 +106,10 @@ def test_credit_and_inert_bound_are_the_pinned_twins(twin):
     rows, cols = 2, 3
     share = Fraction(rows * cols, n * n)
     if s.device.g:
-        debit, cap = CW.tile_inert_bound(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows,
+        inert_work, cap = CW.tile_inert_bound(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows,
                                  [(ONE, [0] * n, ONE)] * cols)
         assert cap == rho * credit * share
-        assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
+        assert inert_work >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
     else:
         assert rho * CW.cell_credit(s, record) * rows * cols == rho * credit * share
 

@@ -225,8 +225,8 @@ def tile_inert_bound(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Seq
     so the test is ρ⁻¹·(n·(D + M) + fs·|cols|·E) ≤ `credit_of(1, |K|, n)`·|rows|·|cols|."""
     d, n = scheme.device, record.matmul.shape.n
     atoms, zeros, elements, mends = D.tile_inert_work(a_codes, b_codes, formed, formed_b, d)
-    debit = D.inert_work_units(atoms, Fraction(len(b_codes) * elements, n), scheme.prices, d, zeros=zeros, mends=mends)
-    return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
+    inert_work = D.inert_work_units(atoms, Fraction(len(b_codes) * elements, n), scheme.prices, d, zeros=zeros, mends=mends)
+    return inert_work, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
 def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequence[int]], bool]]:
@@ -295,14 +295,14 @@ def inert_bound_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops: C
     rows, cols = record.credited(tile)
     if rows and cols:
         bound = 1 + Fraction(tol)
-        debit, cap = _inert_work_and_bound(scheme, record, tile, ops, rows, cols)
-        if debit > cap * bound:
-            return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
+        inert_work, cap = _inert_work_and_bound(scheme, record, tile, ops, rows, cols)
+        if inert_work > cap * bound:
+            return f"the replayed inert_work {float(inert_work):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
         widen = row_inert_share_multiple(scheme, k)
         for i in rows if row_inert_bound(scheme) else ():
-            debit, cap = _inert_work_and_bound(scheme, record, tile, ops, [i], cols)
-            if debit > cap * widen * bound:
-                return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
+            inert_work, cap = _inert_work_and_bound(scheme, record, tile, ops, [i], cols)
+            if inert_work > cap * widen * bound:
+                return (f"A row {i}'s replayed inert_work {float(inert_work):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
                         f"cap: {'' if widen == 1 else f'{widen}'}ρ·its credited cells' credit)")
     return None
 
@@ -579,8 +579,8 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                         va[u.index].add(max(over)[1])
                         changed = True
                         continue
-                    debit, cap = _inert_work_and_bound(scheme, cur, tile, ops, rows, cols)
-                    if debit <= cap * tol:
+                    inert_work, cap = _inert_work_and_bound(scheme, cur, tile, ops, rows, cols)
+                    if inert_work <= cap * tol:
                         break
                     options = []
                     if len(va[u.index]) < voluntary_cap(u.shape.m):
@@ -634,11 +634,11 @@ def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                 continue
             pos_a, pos_b = [x for x, i in enumerate(tile.rows) if i in rows], [z for z, j in enumerate(tile.cols) if j in cols]
             w = words_t[np.ix_(pos_a, pos_b)]
-            debit, cap = Fraction(int(w.sum()), scale), cell * len(rows) * len(cols) / scale
+            inert_work, cap = Fraction(int(w.sum()), scale), cell * len(rows) * len(cols) / scale
             over = [(tile.rows[x], Fraction(int(d), scale), row_cell * len(cols) / scale) for x, d in zip(pos_a, w.sum(axis=1))
                     if row_inert_bound(scheme) and int(d) > row_cell * len(cols) * tol]
-            if over or debit > cap * tol:
-                out.append({"record": p, "tile": t, "debit": debit, "cap": cap, "rows": over})
+            if over or inert_work > cap * tol:
+                out.append({"record": p, "tile": t, "debit": inert_work, "cap": cap, "rows": over})
     return out
 
 
@@ -727,15 +727,15 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                     if not (rows and cols):
                         break
                     sub = w[np.ix_(rows, cols)]
-                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
-                    if debit <= cell * nr * nc * tol:
+                    inert_work, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if inert_work <= cell * nr * nc * tol:
                         break
                     options = []
                     if a_left(r) and nr > 1:
-                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                        options += [(inert_work - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
                                     for x, d in enumerate(sub.sum(axis=1))]
                     if b_left(r) and nc > 1:
-                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                        options += [(inert_work - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
                                     for z, d in enumerate(sub.sum(axis=0))]
                     if not options:
                         break

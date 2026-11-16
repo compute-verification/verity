@@ -435,11 +435,11 @@ def _within(e: U._Emit, consts, sums, bound=None):
     integer form (module docstring), as a bit."""
     atom, zero, n_g, elem_g, l_max, table = consts
     atoms, zeros, elems = sums[:3]
-    debit = _add(e, _mul(e, atom, atoms), _mul(e, zero, zeros))
+    inert_work = _add(e, _mul(e, atom, atoms), _mul(e, zero, zeros))
     if bound is None:
         bound = _bound(e, table, sums[3])
-    lhs = _add(e, _mul(e, n_g, debit), _mul(e, elem_g, elems))
-    return _and(e, e.call(I32Le, debit, l_max), e.call(I32Le, lhs, bound))
+    lhs = _add(e, _mul(e, n_g, inert_work), _mul(e, elem_g, elems))
+    return _and(e, e.call(I32Le, inert_work, l_max), e.call(I32Le, lhs, bound))
 
 
 def _row_constants(k: int, tn: int, n: int, rhor: int, dev: str) -> tuple[tuple, int]:

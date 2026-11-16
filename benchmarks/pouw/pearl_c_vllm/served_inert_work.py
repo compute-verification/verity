@@ -236,7 +236,7 @@ def one(item) -> dict:
         try:
             ref = _measure(item)
         finally:
-            _JOB["undo"] = FT.install(_JOB["scheme"], debit=False)
+            _JOB["undo"] = FT.install(_JOB["scheme"], inert_work=False)
             _IMPL["tile_inert_work"] = FT.tile_inert_work
         diff = {k: [out.get(k), ref.get(k)] for k in set(out) | set(ref) if k not in ("seconds", "replay") and out.get(k) != ref.get(k)}
         out["cross_checked"] = True
@@ -315,13 +315,13 @@ def _measure(item) -> dict:
     return out
 
 
-def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
+def tile_numbers(scheme, inert_work: Fraction, cap: Fraction) -> dict:
     """The tile rule's (inert work, inert-work bound) as a tile's line records them: their ratio, and the inert work's share of the credited cells'
     credit, the inert-work bound over ρ.  That credit is `clear_work.tile_inert_bound`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap
-    return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
-            "debit_exact": str(debit), "credit_exact": str(credit)}
+    return {"debit": float(inert_work), "cap": float(cap), "ratio": float(inert_work / cap), "share": float(inert_work / credit),
+            "debit_exact": str(inert_work), "credit_exact": str(credit)}
 
 
 def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
@@ -436,7 +436,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     _JOB.clear()
     _JOB.update(job, cross_check=opts.get("cross_check", 0), undo=None)
     if not opts.get("scalar"):
-        _JOB["undo"] = FT.install(job["scheme"], debit=False)
+        _JOB["undo"] = FT.install(job["scheme"], inert_work=False)
         _IMPL["tile_inert_work"] = FT.tile_inert_work
     gc.collect()
     # the workers share the parent's tile enumeration copy-on-write; frozen, no collection in them touches its pages

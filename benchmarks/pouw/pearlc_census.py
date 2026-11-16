@@ -350,7 +350,7 @@ def group_run(a: np.ndarray, b: np.ndarray, ts: list[int], skip: frozenset = fro
     return C, ids
 
 
-def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
+def inert_work(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
     """The replayed inert work per word, P1's option (A) (`jointFlags`): on the noisy codes and the ticket's schedule (groups of G
     atoms from +0, each promoted into an FP32 total), flag every atom of every nonempty subset of one group whose joint
     skip leaves the word's final total unchanged. It contains the identities, the groups whose promotion is an identity,
@@ -693,7 +693,7 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                     hits += bool(S_sim) and float(C[0]) == float(words[0][p])
                 row.update({"transfer_words": len(sample), "transfer_nonempty_sim_sets": nonempty, "transfer_hits": hits})
         if G and with_inert_work:
-            flags, eF = debit(A, B, G)
+            flags, eF = inert_work(A, B, G)
             per_word = flags.sum(1)
             # Every tile identity is flagged in every word, so under the debited credit only exact runs remain skippable.
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
@@ -732,12 +732,12 @@ def main() -> None:
     ap.add_argument("--run", type=int, default=1)
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
-    ap.add_argument("--debit", action="store_true",
+    ap.add_argument("--inert_work", action="store_true",
                     help="replay each word's inert work (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--cross-words", type=int, default=0,
-                    help="with --debit: run P1's greedy cross-group search on this many words per cell")
+                    help="with --inert_work: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--transfer-words", type=int, default=0,
-                    help="with --debit and --forming s5: the reviewer's transfer test (greedy sets found on a simulated noise sample, "
+                    help="with --inert_work and --forming s5: the reviewer's transfer test (greedy sets found on a simulated noise sample, "
                          "skipped on the real one)")
     ap.add_argument("--atom", choices=tuple(ATOMS), default="hopper",
                     help="the accumulator step: HOPPER_E4M3_K32, or the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32")
@@ -753,11 +753,11 @@ def main() -> None:
     for delta in map(float, args.deltas.split(",")):
         for k in map(int, args.ks.split(",")):
             for fam in args.families.split(","):
-                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit, args.cross_words,
+                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.inert_work, args.cross_words,
                               args.transfer_words):
                     rows_out.append(r)
                     print(json.dumps(r), flush=True)
-    key = "residual_share" if args.debit else "skippable_share"
+    key = "residual_share" if args.inert_work else "skippable_share"
     scored = [r for r in rows_out if r["in_domain"] and key in r]
     worst = max((r[key] for r in scored), default=0.0)
     worst_row = max(scored, key=lambda r: r[key], default=None)

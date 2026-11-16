@@ -1786,7 +1786,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
     k = 128 with no flagged atom, so its tile, and it alone, fails; without the term every tile passes."""
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", spike=300.0)[0]
     p = VR.load(path, published(path))
-    assert _replay_every_tile(p) == {0: "A row 9's replayed debit 64 exceeds its cap 41 (the row cap: ρ·its credited "
+    assert _replay_every_tile(p) == {0: "A row 9's replayed inert_work 64 exceeds its cap 41 (the row cap: ρ·its credited "
                                         "cells' credit)"}
     monkeypatch.setattr(CW.D, "inert_elements", lambda flags, dead, device=None: 0)
     assert _replay_every_tile(p) == {}
@@ -1802,7 +1802,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     coins, before = published(path), json.loads(path.read_text())
     p = VR.load(path, coins)
     failed = _replay_every_tile(p)
-    assert failed and all("replayed debit" in r and "the row cap" in r for r in failed.values()), failed
+    assert failed and all("replayed inert_work" in r and "the row cap" in r for r in failed.values()), failed
     out = VP.volunteer(path, coins, 1)
     after = json.loads(path.read_text())
     assert {x["tile_id"] for x in out["over"]} == set(failed)
@@ -1832,7 +1832,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     coins = published(path)
     p = VR.load(path, coins)
     over = _replay_every_tile(p)
-    assert over and all("replayed debit" in r for r in over.values()), over
+    assert over and all("replayed inert_work" in r for r in over.values()), over
     d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
     (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
     takes = {}
@@ -1847,10 +1847,10 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
                 drawn = {v["tile"] for v in doc["verdicts"]}
-                rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
+                rejects = answer["verdict"] == "reject" and "replayed inert_work" in answer["reason"]
             else:
                 r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
-                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed inert_work" in r["line"]
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
@@ -1863,7 +1863,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
 
 
 class _StandInInertWork:
-    """`debit.InertWork` without a card: `fast_tile.words_inert_work` (module `ft`) on the whole of A′ by B̃, with the words `bad`
+    """`inert_work.InertWork` without a card: `fast_tile.words_inert_work` (module `ft`) on the whole of A′ by B̃, with the words `bad`
     names in the first call marked non-finite and their counts wrong, and one added to the first call's atoms at `off`."""
 
     def __init__(self, ft, device, bad=(), off=None):
@@ -1896,7 +1896,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     cubin.write_bytes(b"stand-in")
     # call 0's row 17 is in its second row tile (tile id 1), which no cross-check at every 2^20th tile replays
     stand = _StandInInertWork(VP.FT, p.scheme.device, bad=[(17, 3)])
-    VP._DEBIT[str(cubin.resolve())] = stand
+    VP._INERT_WORK[str(cubin.resolve())] = stand
     VP._B_CODES.clear()
     try:
         got, on = VP.words_device(VP.VR.load(path, coins), 1, cubin, cross_check=1 << 20)
@@ -1904,16 +1904,16 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
         assert all(np.array_equal(got[t][0], want[t][0]) and np.array_equal(got[t][1], want[t][1]) for t in want)
         assert [a for a, _ in stand.calls] == [(r.real_rows, r.matmul.shape.k) for r in p.records]
         assert on["bad_tiles"] == 1 and on["replayed"] == 2 and on["cross_check"] == 1 << 20
-        VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device, off=(0, 0))
+        VP._INERT_WORK[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device, off=(0, 0))
         with pytest.raises(RuntimeError, match="differ from the CPU replay's on 1 of 1 tiles"):
             VP.volunteer(path, coins, 1, cubin, 1 << 20)
         assert path.read_text() == before
-        VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device)
+        VP._INERT_WORK[str(cubin.resolve())] = _StandInInertWork(VP.FT, p.scheme.device)
         out = VP.volunteer(path, coins, 1, cubin, 1)
         assert out["ok"] and out["device"]["replayed"] == len(want) and "counted on the device" in out["line"]
         dev_root = out["records_root"]["after"]
     finally:
-        VP._DEBIT.clear()
+        VP._INERT_WORK.clear()
         VP._B_CODES.clear()
     path.write_text(before)
     cpu = VP.volunteer(path, coins, 1)
@@ -2138,14 +2138,14 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
     try:
         for check in ("2", None):
             path.write_text(before)
-            VP._DEBIT[str(cubin.resolve())] = _StandInInertWork(VP.FT, device)
+            VP._INERT_WORK[str(cubin.resolve())] = _StandInInertWork(VP.FT, device)
             VP._B_CODES.clear()
             more = ["--device-check", check] if check else []
             assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1", "--device", str(cubin),
                             *more]) == 0
             got[check] = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
     finally:
-        VP._DEBIT.clear()
+        VP._INERT_WORK.clear()
         VP._B_CODES.clear()
     path.write_text(before)
     assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
@@ -2824,15 +2824,15 @@ def _volunteer_words_one_row_at_a_time(scheme, records, words):
                     if not (rows and cols):
                         break
                     sub = w[np.ix_(rows, cols)]
-                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
-                    if debit <= cell * nr * nc * tol:
+                    inert_work, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if inert_work <= cell * nr * nc * tol:
                         break
                     options = []
                     if a_left(r) and nr > 1:
-                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                        options += [(inert_work - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
                                     for x, d in enumerate(sub.sum(axis=1))]
                     if b_left(r) and nc > 1:
-                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                        options += [(inert_work - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
                                     for z, d in enumerate(sub.sum(axis=0))]
                     if not options:
                         break
@@ -3132,10 +3132,10 @@ def test_served_inert_work_records_the_tile_rules_own_inert_work_and_bound(hones
         ctx = Context(epoch.salt, u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
         ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
         rows, cols = rec.credited(ref.tile)
-        debit, cap = CW._inert_work_and_bound(s, rec, ref.tile, ops, rows, cols)
+        inert_work, cap = CW._inert_work_and_bound(s, rec, ref.tile, ops, rows, cols)
         credit = CW.cell_credit(s, rec) * len(rows) * len(cols)
-        assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
-        assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
+        assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(inert_work), float(inert_work / cap), str(credit))
+        assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(inert_work / credit)}
         pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
         a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
         formed = [(ops.a.alpha[pos_a[i]], ops.a.x[pos_a[i]], ops.a.beta[pos_a[i]]) for i in rows]
@@ -3207,8 +3207,8 @@ def test_served_inert_work_fresh_draws_measure_each_input_under_salts_of_its_own
     ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
     ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
     rows, cols = records[ref.matmul].credited(ref.tile)
-    debit, cap = CW._inert_work_and_bound(s, records[ref.matmul], ref.tile, ops, rows, cols)
-    assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
+    inert_work, cap = CW._inert_work_and_bound(s, records[ref.matmul], ref.tile, ops, rows, cols)
+    assert t["debit_exact"] == str(inert_work) and t["ratio"] == float(inert_work / cap)
     again = tmp_path / "again"
     resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
     assert SD.main([*args, "--out", str(again), *resume]) == 0
@@ -3568,14 +3568,14 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
         return (ops, s.checked(ctx, ops), CW.D.chain_inert_work(ops.a.codes, ops.b.codes, s.device),
                 CW.D.tile_inert_work(ops.a.codes, ops.b.codes, formed, formed_b, s.device))
 
-    debits = (CW.D.chain_inert_work, CW.D.tile_inert_work)
-    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3)
+    inert_work = (CW.D.chain_inert_work, CW.D.tile_inert_work)
+    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *inert_work, type(s).checked, C.blake3)
     undo = FT.install(s)
     assert C.form_v1 is FT.form_v1 and (CW.D.chain_inert_work, CW.D.tile_inert_work) == (FT.chain_inert_work, FT.tile_inert_work)
     fast = run()
     undo()
-    debits = (CW.D.chain_inert_work, CW.D.tile_inert_work)
-    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3) == before
+    inert_work = (CW.D.chain_inert_work, CW.D.tile_inert_work)
+    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *inert_work, type(s).checked, C.blake3) == before
     ref = run()
     for side in ("a", "b"):
         for field in ("codes", "alpha", "beta", "s", "rho", "ep", "x"):
@@ -3625,13 +3625,13 @@ def test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_cred
     def codes(r):
         return [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
                                   for _ in range(r - 1)]
-    debit, cap = CW.tile_inert_bound(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows,
+    inert_work, cap = CW.tile_inert_bound(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows,
                              [(0x3F800000, [0] * shape.k, 0x3F800000)] * cols)
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
-    assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
-    got = SD.tile_numbers(s, debit, cap)
-    assert (got["debit_exact"], got["credit_exact"], got["ratio"]) == (str(debit), str(credit), float(debit / cap))
-    assert {key: got[key] for key in got if key.startswith("share")} == {"share": float(debit / credit)}
+    assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and inert_work > 0
+    got = SD.tile_numbers(s, inert_work, cap)
+    assert (got["debit_exact"], got["credit_exact"], got["ratio"]) == (str(inert_work), str(credit), float(inert_work / cap))
+    assert {key: got[key] for key in got if key.startswith("share")} == {"share": float(inert_work / credit)}
 
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------

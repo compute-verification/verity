@@ -222,8 +222,8 @@ def _reference(dev: str, k: int, n: int, rho: int, ac, bc, ok, sd) -> bool:
     except P.Reject:
         return False
     elems = sum(32 if all(flags[i, j][t] for j in range(len(bc))) else sd[i][t] for i in rows for t in range(k // 32))
-    debit = D.inert_work_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
-    return debit <= _rev1_inert_bound(dev, k, n, rho, len(rows), len(bc))
+    inert_work = D.inert_work_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
+    return inert_work <= _rev1_inert_bound(dev, k, n, rho, len(rows), len(bc))
 
 
 def _peel_rows(k: int, tile):

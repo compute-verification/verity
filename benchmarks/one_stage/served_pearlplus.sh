@@ -4,7 +4,7 @@
 #   POUW_CMD='bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
 # Everything but PIECE_DIR's files goes to SERVE_DIR/private/pearlplus, each step's log among it:
-#   1. benchmarks/harness/setup/pearl_c_sm90.sh builds pearl_c_sm90's cubin and its inert work cubin (debit/debit_sm90.cubin)
+#   1. benchmarks/harness/setup/pearl_c_sm90.sh builds pearl_c_sm90's cubin and its inert work cubin (inert_work/debit_sm90.cubin)
 #      from this tree, with the SASS gates build.sh enforces; the cubin line also names the harness's .FTZ and FP32 MUFU
 #      gate's verdict (harness_gate.json), which build.sh records and doesn't enforce, its pins being sm_120a's;
 #   2. under `gpu-lease 1` (PEARLPLUS_LEASE_MIN, default 30), `served_passes.py serve` serves PEARLPLUS_SPEC's Pearl-C arm
@@ -169,7 +169,7 @@ d = json.load(open(sys.argv[1]))
 print("pass" if d.get("ok") else "FAIL, " + str(d.get("error")).split(".cubin: ", 1)[-1][:160])' \
     "${PEARLC_CUBIN%/*}/harness_gate.json" 2>/dev/null) || harness="no harness_gate.json read"
   say "cubin: pearl_c_sm90.sh built it and the SASS gates build.sh enforces passed after $(took "$t") (cubin sha256" \
-    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), debit cubin $(sha256sum "${PEARLC_CUBIN%/*}/debit/debit_sm90.cubin" | cut -c1-16));" \
+    "$(sha256sum "$PEARLC_CUBIN" | cut -c1-16), inert_work cubin $(sha256sum "${PEARLC_CUBIN%/*}/inert_work/debit_sm90.cubin" | cut -c1-16));" \
     "the harness's .FTZ and FP32 MUFU gate, recorded and not enforced on sm_90a: $harness"
 else
   say "cubin: pearl_c_sm90.sh failed (exit $rc after $(took "$t")): $(tail -1 "$Q/setup.log" | cut -c1-400)"
@@ -289,15 +289,15 @@ if [ -n "$GO" ] && [ -n "$VOLUNTEER" ]; then
     timeout "${VMIN}m" "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" \
       --out "$Q/volunteer.json" --jobs "$JOBS" > "$Q/volunteer.log" 2>&1
   else
-    how=--device DEBIT=$(dirname "${PEARLC_CUBIN:-.}")/debit/debit_sm90.cubin
+    how=--device INERT_WORK=$(dirname "${PEARLC_CUBIN:-.}")/inert_work/debit_sm90.cubin
     # shellcheck disable=SC2016
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-pearlplus} gpu-lease 1 --wait --max-min "$VMIN" -- bash -c '
-      "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/debit.json" > "$2/debit.log" 2>&1 || {
-        echo "debit.py refused the debit cubin on the leased card, so no row is given up: $(tail -1 "$2/debit.log")"
+      "$1/bin/python" benchmarks/pouw/pearl_c_sm90/debit.py --cubin "$3" --out "$2/inert_work.json" > "$2/inert_work.log" 2>&1 || {
+        echo "debit.py refused the inert_work cubin on the leased card, so no row is given up: $(tail -1 "$2/inert_work.log")"
         exit 3; }
       exec "$1/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$2/passes" \
         --out "$2/volunteer.json" --jobs "$4" --device "$3" ${5:+--device-check "$5"}' \
-      _ "$VENV" "$Q" "$DEBIT" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" > "$Q/volunteer.log" 2>&1
+      _ "$VENV" "$Q" "$INERT_WORK" "$JOBS" "${PEARLPLUS_DEVICE_CHECK:-}" > "$Q/volunteer.log" 2>&1
   fi
   rc=$?
   say "volunteer: served_passes.py volunteer $how exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"

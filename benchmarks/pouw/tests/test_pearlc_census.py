@@ -40,7 +40,7 @@ def test_inert_work_flags_joint_skips_inside_a_group():
     a[0, 32], b[0, 32] = 0x30, 0x38          # 0.5 * 1
     a[0, 64:66], b[0, 64:66] = [0x7E, 0xFE], [0x7E, 0x7E]   # 448^2 - 448^2 sets the grid to 2^3 and truncates to +0
     a[0, 96], b[0, 96] = 0x38, 0x38          # 1 * 1
-    flags, eF = C.debit(a, b, 4)
+    flags, eF = C.inert_work(a, b, 4)
     # No atom is an identity, but skipping {0, 1}, {0, 1, 2} or {1, 2, 3} jointly leaves the group's word 1: all four flagged.
     assert eF.tolist() == [0] and flags.tolist() == [[True, True, True, True]]
 
@@ -62,7 +62,7 @@ def test_cross_group_finds_cancelling_groups():
     a, b = np.zeros((1, 256), dtype=np.uint8), np.zeros((1, 256), dtype=np.uint8)
     a[0, 0:128:32], b[0, 0:128:32] = 0x38, 0x38      # +1 in each atom of group 0
     a[0, 128:256:32], b[0, 128:256:32] = 0xB8, 0x38  # -1 in each atom of group 1: the output is 0 (joint_cross_group)
-    flags, _ = C.debit(a, b, 4)
+    flags, _ = C.inert_work(a, b, 4)
     size, beyond = C.cross_group(a, b, flags, np.array([0]), 4)
     assert not flags.any() and size[0] == 8 and beyond[0] == 8
 

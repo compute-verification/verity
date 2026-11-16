@@ -140,7 +140,7 @@ def test_cross_group_joint_skips_stay_within_the_gap():
     fragment (`h100S8Frags`: 64 rows by at least 64 columns), so a program saves an atom only by skipping it for every word
     the instruction covers. With the products in hand (more than any program has before computing them), each word's
     greedy set (`greedy_set`) is intersected over the tile's 4 x 4 words, which over-approximates what one fragment's
-    words share, the intersection replayed on every word, and its atoms outside each word's inert work (`debit`'s flags) priced
+    words share, the intersection replayed on every word, and its atoms outside each word's inert work (`inert_work`'s flags) priced
     at a MAC each against the tile's rev1 credit: the event never fires. Priced word by word instead, the same sets do
     fire, so the test reaches the class and the bound rests on the fragment."""
     C.set_atom("hopper")
@@ -154,7 +154,7 @@ def test_cross_group_joint_skips_stay_within_the_gap():
         A, B, ok, _, _ = _tile(fam, k)
         assert ok, fam
         P = A.shape[0]
-        flags, _ = C.debit(A, B, G)
+        flags, _ = C.inert_work(A, B, G)
         honest = C.group_sums(A, B, G)[1]
         sets = [C.greedy_set(A[p:p + 1], B[p:p + 1], G) for p in range(P)]
         for p, S in enumerate(sets):
@@ -305,16 +305,16 @@ def _tile_inert_work(A: np.ndarray, B: np.ndarray, XA: np.ndarray, XB: np.ndarra
     """The tile's replayed rev1 inert work and its terms: flagged atom-words at 32 + fadd/G each, later promotions into +0 at
     fadd, the forming of every element that could be salt-dead and of every unread element at its share of B's columns,
     and the mends (`_mends`) at one MAC each."""
-    flags, _ = C.debit(A, B, G)
+    flags, _ = C.inert_work(A, B, G)
     flagged = int(flags.sum())
     later_zero = int((_running(C.group_sums(A, B, G)[0])[:, :-1] == 0).sum())
     dead = _dead_over_count(XA, groups)
     unread = 32 * int(flags.reshape(len(XA), len(XB), -1).all(1).sum())
     mends = _mends(XA, XB)
-    debit = ((32 + Fraction(H100.prices.fadd, G)) * flagged + H100.prices.fadd * later_zero
+    inert_work = ((32 + Fraction(H100.prices.fadd, G)) * flagged + H100.prices.fadd * later_zero
              + H100.prices.forming_credited * Fraction(64, n) * (dead + unread) + mends)
     return {"flags": flags, "flagged": flagged, "later_zero": later_zero, "dead": dead, "unread": unread,
-            "mends": mends, "debit": debit}
+            "mends": mends, "debit": inert_work}
 
 
 def _running(group_words: np.ndarray) -> np.ndarray:

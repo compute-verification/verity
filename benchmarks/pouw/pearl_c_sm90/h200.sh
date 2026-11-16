@@ -70,7 +70,7 @@ tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha2
 echo "ship rc $?" >> "$O/rc.txt"
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/pearl_c_sm90.cubin" "$K/" && rm -rf "$K/check" && cp -r "$S/check" "$K/check"
-export DEBIT=$S/debit/debit_sm90.cubin
+export INERT_WORK=$S/inert_work/debit_sm90.cubin
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version > "$O/nvcc.txt" 2>&1
@@ -114,10 +114,10 @@ if [ "$VOLUNTEER" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 elif [ "$VOLUNTEER" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
   # shellcheck disable=SC2016
   gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
-    "$PY" "$D/debit.py" --cubin "$DEBIT" --out "$O/debit.json" > "$O/debit.log" 2>&1
-    rc=$?; echo "debit rc $rc" >> "$O/rc.txt"
+    "$PY" "$D/inert_work.py" --cubin "$INERT_WORK" --out "$O/inert_work.json" > "$O/inert_work.log" 2>&1
+    rc=$?; echo "inert_work rc $rc" >> "$O/rc.txt"
     [ "$rc" = 0 ] || exit "$rc"
-    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$DEBIT" \
+    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$INERT_WORK" \
       --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1'
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
@@ -131,6 +131,6 @@ if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 fi
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-tail -4 "$O/capture.log" "$O/debit.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
+tail -4 "$O/capture.log" "$O/inert_work.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" "$O/timing-h3.log" "$O/whole.log" 2>/dev/null | head -80
 ! grep -qv " rc 0$" "$O/rc.txt"

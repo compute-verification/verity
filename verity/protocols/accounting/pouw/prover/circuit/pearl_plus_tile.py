@@ -407,10 +407,10 @@ def _cap_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
         return False
     elems = sum(SLICE if all(flags[i, j][t] for j in range(len(bc))) else sd[i][t]
                 for i in range(len(ac)) for t in range(k // SLICE))
-    debit = D.inert_work_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
+    inert_work = D.inert_work_units(atoms, Fraction(len(bc) * elems, n), device=d, zeros=zeros)
     at, m = replace(d, cap=Fraction(1, rho)), 64
     bound = at.cap * C.PearlC(forming="v1", device=at, hashing="h0").credit_of(Shape(m, k, n)) * len(ac) * len(bc) / (m * n)
-    return debit <= bound
+    return inert_work <= bound
 
 
 def leaf_reference(digest: bytes, hsalt: bytes, root: bytes, domain: bytes, pos: int, path: Sequence[bytes]) -> int:

@@ -159,14 +159,14 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     c_words = np.array(checked.c, dtype=np.uint32).ravel()
     assert (final[0] == c_words.view(np.float32)).all(), "the census's atom disagrees with the served chain"
     keeps = final == final[0]
-    flags_k, _ = K.debit(A, B, 4)
+    flags_k, _ = K.inert_work(A, B, 4)
     served = [D.word_inert_work(ops.a.codes[i], ops.b.codes[j], s.device) for i in range(rows) for j in range(cols)]
     flags = np.array([f for f, _ in served], dtype=bool)
     zeros = np.array([z for _, z in served], dtype=np.int64)
-    assert (flags == flags_k).all(), "pearlc_census.debit disagrees with the served word_inert_work"
+    assert (flags == flags_k).all(), "pearlc_census.inert_work disagrees with the served word_inert_work"
     au = D.atom_units(s.device, s.prices)
     word_inert_work = [D.inert_work_units(int(f.sum()), 0, s.prices, s.device, zeros=int(z)) for f, z in zip(flags, zeros)]
-    debit = sum((d for d, c in zip(word_inert_work, cred) if c), Fraction(0))
+    inert_work = sum((d for d, c in zip(word_inert_work, cred) if c), Fraction(0))
     cap = s.cap * credit * int(cred.sum())
     row_over = []
     for i in range(rows):
@@ -174,7 +174,7 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
         if sel.any():
             d_i = sum((word_inert_work[i * cols + j] for j in np.flatnonzero(sel)), Fraction(0))
             row_over.append(d_i > s.row_inert_share_at(k) * credit * int(sel.sum()))
-    tile_ok = bool(cred.any()) and debit <= cap
+    tile_ok = bool(cred.any()) and inert_work <= cap
     accepted = tile_ok and not any(row_over)
     fb = (flags.astype(np.int64) << np.arange(8)).sum(1)
     masks = np.arange(256)
@@ -217,7 +217,7 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     peel_f = Fraction(step_units * int(peel_frag.sum())) / (credit * nc)
     exact_runs = K.exact_run_atoms(tex)
     row.update({
-        "accepted": accepted, "tile_cap_ok": tile_ok, "debit_share_of_credit": float(debit / (credit * nc)), "rows_over_row_cap": int(sum(row_over)),
+        "accepted": accepted, "tile_cap_ok": tile_ok, "debit_share_of_credit": float(inert_work / (credit * nc)), "rows_over_row_cap": int(sum(row_over)),
         "debit_atom_share": round(float(flags[cred].mean()), 6) if cred.any() else 0.0,
         "later_zero_promotions": int(zeros[cred].sum()),
         "xg_words_with_undebited_set": int((word_best > 0).sum()),

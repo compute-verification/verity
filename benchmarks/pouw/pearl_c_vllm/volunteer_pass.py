@@ -3,7 +3,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
 (`clear_work.volunteer_words`), and the manifest's records rewritten with them.
 
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
-                                                         [--device DEBIT_CUBIN [--cross-check N]]
+                                                         [--device INERT_WORK_CUBIN [--cross-check N]]
 
 - **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited inert work, or a credited row's, is
   over its inert-work bound, its over-cap rule ``reject`` (`served_passes.over_inert_bound_rule`): the pipelines ask ``served_passes.py
@@ -21,7 +21,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   (`fast_tile.words_inert_work`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
   each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
-  B̃ kept across the passes of one salt), every word's counts taken by `debit.InertWork` and cut into the tiles in
+  B̃ kept across the passes of one salt), every word's counts taken by `inert_work.InertWork` and cut into the tiles in
   `scheme.tiles`' order, filler rows zero.  A tile with a word the device marks non-finite is replayed (the reference
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
   counts stops the step.
@@ -62,7 +62,7 @@ FORM_ROWS = 64
 _JOB: dict = {}
 #: B̃ by (salt, the fixed operand's root): a fixed operand's codes are the same in every pass of one salt
 _B_CODES: dict[tuple[bytes, bytes], np.ndarray] = {}
-_DEBIT: dict[str, object] = {}
+_INERT_WORK: dict[str, object] = {}
 
 
 def _words(tid: int) -> tuple[int, np.ndarray, np.ndarray]:
@@ -141,14 +141,14 @@ def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np
 
 
 def _inert_work(cubin: Path):
-    """The device's `debit.InertWork` on `cubin`, one a process."""
+    """The device's `inert_work.InertWork` on `cubin`, one a process."""
     key = str(Path(cubin).resolve())
-    if key not in _DEBIT:
+    if key not in _INERT_WORK:
         sys.path.insert(0, str(HERE.parent / "pearl_c_sm90"))
-        import debit
+        import inert_work
 
-        _DEBIT[key] = debit.InertWork(Path(cubin).read_bytes())
-    return _DEBIT[key]
+        _INERT_WORK[key] = inert_work.InertWork(Path(cubin).read_bytes())
+    return _INERT_WORK[key]
 
 
 def words_device(p: VR.Pass, jobs: int, cubin: Path, cross_check: int = CROSS_CHECK
@@ -183,12 +183,12 @@ def words_device(p: VR.Pass, jobs: int, cubin: Path, cross_check: int = CROSS_CH
         for w, pos in weight_at.items():
             _B_CODES.setdefault(b_key[w], codes.pop(("b", pos), None))
         t1 = time.perf_counter()
-        debit, counts, bad = _inert_work(cubin), {}, set()
+        inert_work, counts, bad = _inert_work(cubin), {}, set()
         first = _first(p)
         for pos, u in enumerate(matmuls):
             atoms, zeros, off = (np.zeros((u.shape.m, u.shape.n), np.uint16) for _ in range(3))
             real = p.records[pos].real_rows
-            atoms[:real], zeros[:real], off[:real] = debit.words(codes.pop(("a", pos)), _B_CODES[b_key[u.weight]])
+            atoms[:real], zeros[:real], off[:real] = inert_work.words(codes.pop(("a", pos)), _B_CODES[b_key[u.weight]])
             for t, tile in enumerate(p.scheme.tiles(u.shape)):
                 r, c = slice(tile.rows[0], tile.rows[-1] + 1), slice(tile.cols[0], tile.cols[-1] + 1)
                 counts[(pos, t)] = (atoms[r, c], zeros[r, c])

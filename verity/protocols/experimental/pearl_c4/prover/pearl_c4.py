@@ -78,7 +78,7 @@ corrections: one FFMA per word for each of the M_w blocks whose realised byte is
 `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at one tile byte,
 per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its lower-bound add
 count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`). They are the rows
-`base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
+`base-split-inert_work/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-inert_work/nvfp4` (F2 charges the masked
 int8 route's saving per sampled tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
 `scale-flatness/nvfp4`.  A tile whose inert work passes the bound fails the tile rule outright (`clear_work.check_opened`),
 and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
