@@ -45,7 +45,7 @@ SNAPSHOT_KIND = "dataset-snapshot/v1"
 
 _HERE = Path(__file__).resolve()
 #: tests/adapters/vllm/tests/regression/store_io.py -> the repository root
-REPO_ROOT = _HERE.parents[4]
+REPO_ROOT = _HERE.parents[5]
 
 
 class StoreUnavailable(RuntimeError):

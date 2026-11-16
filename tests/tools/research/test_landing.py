@@ -287,9 +287,9 @@ def test_a_collection_error_names_its_test_module(tmp_path):
     d = tmp_path / "run"
     (d / "suites").mkdir(parents=True)
     (d / "steps.jsonl").write_text('{"step": "pytest", "status": "failed"}\n')
-    (d / "suites.json").write_text(json.dumps([{"name": "filler", "suite": "benchmarks/pouw/filler", "status": "failed",
+    (d / "suites.json").write_text(json.dumps([{"name": "filler", "suite": "tests/benchmarks/pouw/filler", "status": "failed",
                                                 "failed_tests": [], "log": "/x/suites/filler.log"}]))
-    (d / "suites" / "filler.log").write_text("ERROR tests/test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
+    (d / "suites" / "filler.log").write_text("ERROR test_capacity_of.py - KeyError: 'VF3r-16'\n1 error in 2.1s\n")
     assert "tests/benchmarks/pouw/filler/test_capacity_of.py" in implicated(d)
 
 

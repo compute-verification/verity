@@ -300,7 +300,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
         doc["prover"]["keep"] = {"rc": keep.returncode, "out": (keep.stdout + keep.stderr)[-1000:]}
     try:
         with open(out.parent / "serve.log", "wb") as log:
-            doc["serving_rc"] = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1]).returncode
+            doc["serving_rc"] = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[4] / "adapters" / "vllm").returncode
             doc["serving_exit_unix"] = round(time.time(), 3)
             fd = holder.take()
             doc["stream_taken"] = fd is not None
@@ -310,7 +310,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
             try:
                 doc["close_rc"] = subprocess.run([*gpu, "--close-from", str(prover / PV.STATE), "--stream-fd", str(fd),
                                                   "--gate", shlex.join(gate.argv)],
-                                                 stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[1], pass_fds=(fd,),
+                                                 stdout=log, stderr=subprocess.STDOUT, cwd=HERE.parents[4] / "adapters" / "vllm", pass_fds=(fd,),
                                                  env={**os.environ, "CUDA_VISIBLE_DEVICES": ""}).returncode
             finally:
                 os.close(fd)

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import block_census as B  # noqa: E402
 
 
@@ -148,7 +148,7 @@ def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_
     """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit or a key rows' writer
     its Boolean form), the cut `chain_ways` gives the row, so the planner rerun cuts the row as the served partition does.  It
     reads `chain_ways`, not the planner's card on the tree."""
-    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
+    served = json.loads((HERE.parents[2] / "benchmarks" / "one_stage" / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
     assert sorted(B.ST.template(t).word for t in served) == sorted(u for u, _n in dict(B.ST.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
 
 
