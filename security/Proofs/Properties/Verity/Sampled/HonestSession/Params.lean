@@ -356,22 +356,25 @@ private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun
   rw [printable_iff_chars]
   intro c hc
   rw [mkObj_eq, Firewall.jsonChars] at hc
-  rcases List.mem_cons.1 hc with rfl | hc1
-  · decide
-  rcases List.mem_append.1 hc1 with hmid | hbr
-  · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
-    · rw [List.mem_singleton] at hsep; subst hsep; decide
-    · rw [jsonCharsObj_eq] at hx
-      obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
-      obtain ⟨e', he', rfl⟩ := List.mem_map.1 ((perm_ofList hd).mem_iff.1 he)
-      rw [memberChars] at hcx
-      rcases List.mem_append.1 hcx with hkey | hval
-      · rcases List.mem_cons.1 hkey with rfl | hk2
-        · decide
-        rcases List.mem_append.1 hk2 with hkk | hqc
-        · exact (h e' he').1 c hkk
-        · fin_cases hqc <;> decide
-      · exact (printable_iff_chars.1 (h e' he').2) c hval
+  rcases List.mem_append.1 hc with hhd | htl
+  · rcases List.mem_cons.1 hhd with rfl | hmid
+    · decide
+    · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
+      · rw [List.mem_singleton] at hsep; subst hsep; decide
+      · rw [jsonCharsObj_eq] at hx
+        obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
+        obtain ⟨e', he', rfl⟩ := List.mem_map.1 ((perm_ofList hd).mem_iff.1 he)
+        rw [memberChars] at hcx
+        rcases List.mem_append.1 hcx with hkey | hval
+        · rcases List.mem_cons.1 hkey with rfl | hk2
+          · decide
+          · rcases List.mem_append.1 hk2 with hkk | hqc
+            · exact (h e' he').1 c hkk
+            · rcases List.mem_cons.1 hqc with rfl | hqc2
+              · decide
+              · rw [List.mem_singleton] at hqc2; subst hqc2; decide
+        · exact (printable_iff_chars.1 (h e' he').2) c hval
+  · rw [List.mem_singleton] at htl; subst htl; decide
 
 /-- A digest's hex name prints to ASCII: every hex digit is below `0x7f`, as are the enclosing quotes. -/
 private theorem printable_hexOf (b : ByteArray) : JsonCanon.Printable (.str (hexOf b)) := by
