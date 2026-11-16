@@ -59,6 +59,9 @@ fi
 mkdir -p "$OUT" "$WORK/wheels"
 log() { echo "[bootstrap] $(date -u +%FT%TZ) $*"; }
 fail() { echo "BOOTSTRAP_FAIL_$1: ${*:2}" | tee -a "$OUT/bootstrap.fail" >&2; exit 3; }
+# the fetches below and in the taps retry with `curl --retry`, which waits out a 429 from 7.66.0 on
+cv=$(curl -V 2>/dev/null | awk 'NR == 1 {print $2}')
+[ "$(printf '%s\n' 7.66.0 "$cv" | sort -V | head -n 1)" = 7.66.0 ] || fail CURL "the bootstrap needs curl 7.66.0 or later, whose --retry waits out a 429; PATH has ${cv:+curl }${cv:-no curl}"
 
 # ---- 1. Python 3.12 venv ---------------------------------------------------------------------------------------------------
 if ! command -v uv >/dev/null 2>&1; then
@@ -78,7 +81,7 @@ WSHA=7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3
 # torchcodec from PyPI (0.17.0, built for another torch) breaks `import vllm` and cuteDSL on H200: the cu129 build
 TORCHCODEC="torchcodec==0.16.0+cu129"
 if ! $PY -c "import vllm, torch" 2>/dev/null; then
-  [ -f "$WORK/wheels/$W" ] || curl -fL --retry 5 --retry-all-errors -o "$WORK/wheels/$W" \
+  [ -f "$WORK/wheels/$W" ] || curl -fL --retry 5 -o "$WORK/wheels/$W" \
     "https://wheels.vllm.ai/d9105ea8001e0a6d77a96327d17515bb5791fb36/vllm-0.28.1rc1.dev472%2Bgd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl" \
     || fail WHEEL "vLLM wheel download"
   echo "$WSHA  $WORK/wheels/$W" | sha256sum -c >/dev/null || fail WHEEL_SHA "vLLM wheel sha256 != $WSHA"

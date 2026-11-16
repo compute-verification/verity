@@ -291,6 +291,21 @@ def test_a_header_in_neither_the_toolkit_nor_the_wheels_fails_before_any_build(t
     assert (tmp_path / "out" / "bootstrap.fail").read_text().splitlines() == [line]
 
 
+@pytest.mark.parametrize("version", ["7.65.3", "7.9.1"])
+def test_a_curl_older_than_7_66_is_refused_before_any_fetch(tmp_path: Path, version: str) -> None:
+    """Its `--retry` does not wait out GitHub's 429, which the taps' and the wheel's fetches rely on."""
+    fake = tmp_path / "fake"
+    fake.mkdir()
+    (fake / "curl").write_text(f"#!/bin/sh\necho 'curl {version} (x86_64-pc-linux-gnu) libcurl/{version}'\n")
+    (fake / "curl").chmod(0o755)
+    r = subprocess.run([BASH, str(SCRIPT), "--cpu", "--out", str(tmp_path / "out")], capture_output=True, text=True,
+                       env={"PATH": f"{fake}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(tmp_path / "home"),
+                            "WORK": str(tmp_path / "work")})
+    line = f"BOOTSTRAP_FAIL_CURL: the bootstrap needs curl 7.66.0 or later, whose --retry waits out a 429; PATH has curl {version}"
+    assert r.returncode == 3 and r.stderr.splitlines() == [line], f"stdout: {r.stdout}\nstderr: {r.stderr}"
+    assert not (tmp_path / "work" / "venv312").exists()
+
+
 def test_the_launcher_it_writes_lets_a_spawned_child_start(tmp_path: Path) -> None:
     """serve-openai spawns its seal process, which imports the launcher again as `__mp_main__`: an unguarded `main()` there
     ran the CLI a second time in the child, which exited before its ready and took the server down."""
