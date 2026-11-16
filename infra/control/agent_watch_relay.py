@@ -48,8 +48,8 @@ after it) leads with the integrator's lane's handle and rings it, once per such 
 signed the comment, how many wait with it, and the command that signs a comment as the integrator's own, without which its
 answers don't count. A read of the watch's own that GitHub refused (`github_refused`: the open PRs, read with a
 token GitHub doesn't take or with none) leads with infra's handle and rings it, once until a read works again, saying
-what the watch misses meanwhile and how to find the reason on the pod. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
-posted.
+what the watch misses meanwhile and how to find the reason on the pod. The pod frees held runs whether or not this runs;
+this relay stops with the pod, and resumes from the offset it last posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
 notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`, or a run's end,
