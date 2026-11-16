@@ -161,16 +161,82 @@ def test_rows_past_kept_are_leftover_inputs(phi):
     assert sel is run.nodes[-1] and run.s0.hidden is not None
 
 
-def test_steps_past_the_first_refuse_at_the_top_k_reuse(phi):
-    """Draft step 1 emits its prepare kernel's position, the embedding shard and all-reduce, the eh-norm cut, eh_proj and the
-    input norm, then refuses at the attention that reads step 0's compacted top-k (mtp/speculator.py:50-54)."""
+def _fp8(phi: Phi) -> Phi:
+    return Phi.from_json({**phi.to_json(), "engine": {**phi.engine, "kv_cache_dtype": "fp8_ds_mla"}})
+
+
+def _attention_spans(monkeypatch) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    attention = MTP.Draft.attention
+
+    def spanned(self, *a, **kw):
+        start = len(self.B.nodes)
+        out = attention(self, *a, **kw)
+        spans.append((start, len(self.B.nodes)))
+        return out
+
+    monkeypatch.setattr(MTP.Draft, "attention", spanned)
+    return spans
+
+
+F, LR, BG, Q = "FlashInferFp8Linear_v1", "DsaLatentRowDsMla_v1", "BatchedGemm_v1", "RoPEHeadGptJ_v2"
+NORM, K32, MLA = "DsaRMSNorm_v1", "Const32", "FlashMlaV32Decode_v1"
+INDEXER = {"DsaIndexerKRow_v1", "DsaIndexerQ_v1", "DsaMqaLogits_v3", "DsaTopKShortRow_v1"}
+NH = 8
+
+STEP0_ATTENTION = ([F] * 3 + ["Gemm_v2"] * 3 + [NORM] * 3 + [LR] * 3 + ["DsaIndexerKRow_v1"] * 3 + [F] * 3 + [BG] * 3 + [F] * 3
+                   + [Q] * (3 * NH) + ["DsaIndexerQ_v1"] * 3 + ["DsaMqaLogits_v3", K32, "DsaTopKShortRow_v1"] * 3
+                   + [K32, K32] + [MLA] * 3 + [BG] * 3 + [F] * 3)
+STEP1_ATTENTION = [F, NORM, LR, F, BG, *[Q] * NH, K32, K32, MLA, BG, F]
+
+
+def test_a_drafted_step_reads_step_0s_selection_with_its_indexer_off(phi, monkeypatch):
+    from verity_vllm.definitions.numerics import flashmla_twin as FT
+
+    spans = _attention_spans(monkeypatch)
+    run = Run(_fp8(phi), 3, 3, steps=1)
+    mark = len(run.B.nodes)
+    s1 = run.draft.decode(run.s0, 1, 3)
+    (a0, b0), (a1, b1) = spans
+    nodes = run.B.nodes
+    assert [_family(n.fn.id) for n in nodes[a0:b0]] == STEP0_ATTENTION
+    assert [n.fn.bindings["N"] for n in nodes[a0:b0] if _family(n.fn.id) == "DsaMqaLogits_v3"] == [1, 2, 3]
+    assert [_family(n.fn.id) for n in nodes[a1:b1]] == STEP1_ATTENTION
+    assert not INDEXER & {_family(n.fn.id) for n in nodes[mark:]}
+    assert run.s0.keys == s1.keys == 3 and s1.topk is None and _family(nodes[-1].fn.id).startswith("TokenSelect_")
+    assert s1.token.refs[0][:2] == ("n", len(nodes) - 1)
+    TOPK = int(run.net.C["INDEX_TOPK"])
+    mla = nodes[b1 - 3]
+    meta, ns = FT.sched_meta([TOPK], topk=TOPK, parts=FT.num_sm_parts(64, s_q=1, num_sms=int(phi.target_profile().num_sms)))
+    assert mla.fn.bindings["SPLITS"] == FT.request_splits(meta, ns, 0, TOPK // 64)
+    _, nope, _, _, idx = (a.refs for a in mla.args)
+    latent = [i for i in range(a0, b1) if _family(nodes[i].fn.id) == LR]
+    assert [nope[j * 512][:2] for j in range(3)] == [("n", i) for i in latent[:3]]
+    assert ("n", latent[3]) not in {r[:2] for r in nope}
+    valid, pad = (nodes[b1 - 5 + k] for k in (0, 1))
+    assert [r[:2] for r in idx[:3]] == [("n", b1 - 5)] * 3 and {r[:2] for r in idx[3:]} == {("n", b1 - 4)}
+    assert len(idx) == TOPK and valid.fn.id != pad.fn.id
+    logs = run.draft.logs[run.net.NL]
+    assert (len(logs["latent"]), len(logs["ik"])) == (4, 3)
+
+
+def test_a_drafted_step_over_the_default_cache_reads_step_0s_rows(phi, monkeypatch):
+    spans = _attention_spans(monkeypatch)
     run = Run(phi, 3, 3, steps=1)
     mark = len(run.B.nodes)
-    with pytest.raises(Unexpressible, match="reads draft step 0's compacted top-k"):
-        run.draft.decode(run.s0, 1, 3)
-    fam = [_family(n.fn.id) for n in run.B.nodes[mark:]]
-    assert fam[:2] == ["Const64", "EmbeddingShard_v1"] and fam[3:3 + 195] == [_family(i) for i in _eh_cut_ids()]
-    assert len(fam) == 3 + 195 + 2
+    run.draft.decode(run.s0, 1, 3)
+    a1, b1 = spans[1]
+    split = [n for n in run.B.nodes[a1:b1] if _family(n.fn.id) == "SparseMlaSplit_v1"]
+    assert len(split) == 1 and split[0].fn.bindings["T"] == 3
+    assert not INDEXER & {_family(n.fn.id) for n in run.B.nodes[mark:]}
+
+
+def test_a_drafted_step_reusing_a_row_past_index_topk_is_refused(phi):
+    run = Run(_fp8(phi), 3, 3, steps=1)
+    TOPK = int(run.net.C["INDEX_TOPK"])
+    with pytest.raises(Unexpressible, match=re.escape(f"a row reusing the selection of a row of {TOPK + 1} keys, past INDEX_TOPK "
+                                                      f"({TOPK})")):
+        run.draft.decode(run.s0._replace(keys=TOPK + 1), 1, 3)
 
 
 def test_the_weights_record_is_the_targets_then_the_draft_layers(phi, tmp_path):

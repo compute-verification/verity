@@ -23,10 +23,9 @@ Draft step 0 (`Draft.step0`) runs over the target step's rows, its padded batch 
 - the compacted top-k (`compact_topk_indices`, mtp.py:195-202, `mtp/speculator.py:43-48`), wires: the sampled row's selection.
 
 A draft step k from 1 on (`Draft.decode`) takes one row a request (`_prepare_decode_inputs_kernel`, speculator.py:796-847, wires):
-step 0's token, the position after the sampled row's, and step 0's hidden row.  It emits the embedding shard and its all-reduce,
-the eh-norm cut, eh_proj and the layer's input norm, then refuses (`REUSE`): its attention skips the indexer and reads step 0's
-compacted top-k (`mtp/speculator.py:50-54`, `models/deepseek_v32/attention.py:426-461`), a form `dsa._Model.attention` does not
-have.
+the previous step's token, the position after its row's, and its hidden row.  It emits what step 0 does at one row, but its
+attention skips the indexer and reads step 0's compacted top-k (`mtp/speculator.py:50-54`, `models/deepseek_v32/attention.py:
+289-461`): `dsa._Model.attention` with `reuse`, the sampled row's key count, so FlashMLA reads that row's keys and not its own.
 
 The weights record is the target's (`dsa.Net`) and then the draft layer's, under its checkpoint names `model.layers.NL.*`: its
 `enorm`, `hnorm`, `eh_proj` and `shared_head.norm` (mtp.py:66-68, 81-83), then its decoder layer's parameters in the family's
@@ -50,7 +49,7 @@ Premises, each unsettled at the pin and taken here rather than read:
 from __future__ import annotations
 
 import copy
-from typing import Any, NamedTuple, NoReturn
+from typing import Any, NamedTuple
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, Refs, concat
@@ -64,11 +63,6 @@ from .phi import Phi
 #: the draft layer's own parameters beside its decoder layer's (mtp.py:66-68, 81-83), in module order: checkpoint suffix -> key
 OWN = {"enorm.weight": "enorm", "hnorm.weight": "hnorm", "eh_proj.weight": "eh_proj", "shared_head.norm.weight": "shared_head_norm"}
 
-#: the refusal of a draft step past the first, at its layer's attention
-REUSE = ("a draft step past the first, whose layer skips its indexer and reads draft step 0's compacted top-k "
-         "(index_share_for_mtp_iteration): dsa._Model.attention has no form that reads another step's top-k")
-
-
 class Leftover(NamedTuple):
     """A row of draft step 0 past the kept rows, as Program inputs: its id (I32) and position (I64) as the prepare kernel's buffers
     hold them, and its RoPE row ([QK_ROPE] bf16), advice."""
@@ -79,10 +73,12 @@ class Leftover(NamedTuple):
 
 class Step0(NamedTuple):
     """Draft step 0's outputs: the sampled token (I32), the draft's hidden row at the sampled row, which step 1 reads, and that
-    row's compacted top-k selection (None for a row of at most INDEX_TOPK keys, which keeps every key)."""
+    row's compacted top-k selection (None for a row of at most INDEX_TOPK keys, which keeps every key).  A later step's are its
+    token and hidden row beside step 0's selection and key count."""
     token: Coll
     hidden: Refs
     topk: Coll | None
+    keys: int
 
 
 class DraftLayer(NamedTuple):
@@ -194,20 +190,20 @@ class Draft(_Model):
         finally:
             self.w["cos_sin"] = table
         token = self.sample(x[kept - 1], 0, pos0 + kept, None)
-        return Step0(token, x[kept - 1], self.topk.get(pos0 + kept - 1))
+        keys = len(self.logs[self.net.NL]["latent"]) - M + kept
+        return Step0(token, x[kept - 1], self.topk.get(pos0 + kept - 1), keys)
 
-    def decode(self, s0: Step0, k: int, pos: int) -> NoReturn:
-        """Draft step k >= 1 at position `pos` (the sampled row's + k): its row is step 0's token and hidden row.  Its layer reads
-        step 0's compacted top-k, which is refused (`REUSE`) after the layer's input norm."""
+    def decode(self, prev: Step0, k: int, pos: int) -> Step0:
+        """Draft step k >= 1 at position `pos` (the sampled row's + k) over the previous step's token and hidden row."""
         if self.launch.ctx is not None:
             _refuse("a draft step past the first in a launch batch (it runs at the requests' one row each, which the target "
                     "step's batch does not state)")
         if not 1 <= k < self.net.steps:
             raise ValueError(f"draft step {k}: the steps past the first are 1..{self.net.steps - 1}")
-        self._layer([s0.token.refs], [self.call(self.k("const", W=64, BITS=pos)).refs], [s0.hidden], pos, reuse=True)
-        raise AssertionError("unreachable: _layer refuses a step that reuses step 0's top-k")
+        x = self._layer([prev.token.refs], [self.call(self.k("const", W=64, BITS=pos)).refs], [prev.hidden], pos, reuse=prev.keys)
+        return Step0(self.sample(x[0], 0, pos + 1, None), x[0], prev.topk, prev.keys)
 
-    def _layer(self, rows: list[Refs], pos: list[Refs], prev: list[Refs], pos0: int, reuse: bool = False) -> list[Refs]:
+    def _layer(self, rows: list[Refs], pos: list[Refs], prev: list[Refs], pos0: int, reuse: int | None = None) -> list[Refs]:
         """The draft layer over token rows at positions pos0.. (`pos` each as an I64 value), the previous hidden rows `prev` ->
         the draft's hidden rows, normed by `shared_head.norm`."""
         from verity_vllm.definitions.registry import mtp_draft as MD
@@ -220,9 +216,7 @@ class Draft(_Model):
         res = self.cublas(eh, w(OWN["eh_proj.weight"]))
         norm = self.k("rmsnorm", N=H, EPS=self.EPS, TARGET=self.net.tp, M=self.launch.tokens(len(rows)))
         x = [self.call(norm, r, w("ln1").refs).refs for r in res]
-        if reuse:
-            _refuse(REUSE)
-        x, res = self.reduce_norm(self.attention(NL, x, pos0), res, w("ln2"))
+        x, res = self.reduce_norm(self.attention(NL, x, pos0, reuse), res, w("ln2"))
         mlp = self.moe(NL, x) if int(self.C["FIRST_DENSE"]) <= NL else self.mlp(NL, x)
         x, _ = self.reduce_norm(mlp, res, w(OWN["shared_head.norm.weight"]))
         return x

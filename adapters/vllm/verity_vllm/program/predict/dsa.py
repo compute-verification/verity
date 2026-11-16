@@ -394,9 +394,10 @@ class _Model(_Calls):
 
     # -- the layer
 
-    def attention(self, L: int, x: list[Refs], pos0: int) -> list[Refs]:
+    def attention(self, L: int, x: list[Refs], pos0: int, reuse: int | None = None) -> list[Refs]:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
-        over the rows) -> the o projection's partials."""
+        over the rows) -> the o projection's partials.  `reuse`: the key count of an earlier row whose selection every row reads
+        in place of its own, with the indexer off (vLLM's `skip_topk`)."""
         from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
         from verity_vllm.program.frontend.rules.vllm_dsa import (
@@ -411,12 +412,16 @@ class _Model(_Calls):
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
-        D, indexer, E = NOPE + R, L in self.net.indexers, self.launch.entry(M)
+        D, indexer, E = NOPE + R, L in self.net.indexers and reuse is None, self.launch.entry(M)
         w = lambda f: self.w[(L, f)]  # noqa: E731
         prefills = self.launch.prefills((E, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog(), "scale": PartLog(), "rope": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
+        if reuse is not None:
+            if reuse > TOPK:
+                _refuse(f"a row reusing the selection of a row of {reuse} keys, past INDEX_TOPK ({TOPK})")
+            keys = [reuse] * M
         fp8 = self.net.kv_layout is not None
         if fp8 and keys[-1] > TOPK:
             _refuse(f"a row of {keys[-1]} keys, past INDEX_TOPK ({TOPK}), over an {self.net.kv_layout} cache (FlashMLA's sparse fp8 "
