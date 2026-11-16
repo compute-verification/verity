@@ -17,8 +17,6 @@ CALL = re.compile(r"\bM\.(?:read|write|lines|line|append|body)\(")
 
 FLAG = "a flag whose value names a file, a directory or a command that another site reads; it carries no body"
 IN_PROCESS = "a Python call inside the adapter's process: no body crosses between two processes"
-TO_CONVERT = "raw file I/O, to convert"
-STALE_FIND = "its find no longer matches its file"
 
 #: The adapter's sites that don't go through the declarations, ``"TYPE SIDE FILE"`` (a second form keeps its type), with
 #: why; one entry a site.
@@ -29,38 +27,28 @@ LEFT: list[tuple[str, str]] = [
      "installs step_trace's writer, which writes the trace"),
     ("CanonicalServing reader adapters/vllm/verity_vllm/settings.py", "environment variables: no body"),
     ("Circuit reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
-    ("Circuit reader adapters/vllm/verity_vllm/pipeline/serve_seal.py", TO_CONVERT),
     ("Circuit writer adapters/vllm/verity_vllm/program/predict/aot.py", "the circuits lane's file"),
     ("Circuit writer adapters/vllm/verity_vllm/records/predicted_row.py", "declares the record, which aot.py writes"),
     ("CommitmentScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", "flags whose values are the scheme's "
      "settings, read by the parser"),
-    ("H1Registration writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", STALE_FIND),
     ("H1RunCommitment reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
     ("H1RunCommitment writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", "runs the prover's command; the record it "
      "writes is read as H1Registration"),
     ("H1State reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
-    ("MonitoringPeriodDeclaration reader adapters/vllm/verity_vllm/pipeline/serve_day.py", TO_CONVERT),
     ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/__init__.py", IN_PROCESS),
     ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
     ("PoUSStore writer adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
-    ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", TO_CONVERT),
     ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
-    ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_pearl.py", TO_CONVERT),
     ("PoUWValues writer adapters/vllm/verity_vllm/pipeline/serve_pearl.py", IN_PROCESS),
     ("PoUWValues writer adapters/vllm/verity_vllm/protocols/pouw/__init__.py", "the compute-accounting lane's file"),
     ("RegisteredCompiler reader adapters/vllm/verity_vllm/pipeline/advice.py", "flags whose values are the compiler's "
      "name and digest, which the advice binds"),
-    ("RegisteredWeights writer adapters/vllm/verity_vllm/pipeline/match_capture.py", TO_CONVERT),
     ("RegisteredWeights writer adapters/vllm/verity_vllm/pipeline/serve_seal.py", "calls match_capture's writer"),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py", IN_PROCESS),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/scan_state.py", "the circuits lane's file"),
     ("ReportedAdvice writer adapters/vllm/verity_vllm/program/predict/window_rows.py", "the circuits lane's file"),
-    ("Request writer adapters/vllm/verity_vllm/pipeline/serve_commit.py", STALE_FIND),
-    ("RequestProgram writer adapters/vllm/tools/advice_compile.py", STALE_FIND),
-    ("Run writer adapters/vllm/verity_vllm/pipeline/serve_commit.py", STALE_FIND),
-    ("Run writer adapters/vllm/verity_vllm/pipeline/serve_commit.py", STALE_FIND),
     ("RunTotals reader adapters/vllm/tools/served_run/serve.sh", "a shell script that copies the file; it reads no body"),
-    ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", f"{IN_PROCESS}; {STALE_FIND}"),
+    ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", IN_PROCESS),
 ]
 
 
