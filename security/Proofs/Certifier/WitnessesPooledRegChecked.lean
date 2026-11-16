@@ -251,4 +251,87 @@ theorem PooledLeakRegisteredChecked_nontrivial :
   simp only [twoL_εregX, twoL_bopsX]
   norm_num
 
+/-! ## A check missed by an invalid run at a phase that accepts on half its tapes -/
+
+/-- A prover on a tape of one bit: both messages empty on `true`, so `twoL` accepts, and `[0]` on `false`, so it
+rejects. -/
+def coinP₂ : Prover Bool := ⟨fun _ _ b => .ret (if b then [] else [0])⟩
+
+/-- `twoL` accepts `coinP₂` exactly on the tape `true`, at any coins. -/
+theorem coinP_acc (H : Msg → Msg) (x : Msg) (b : Bool) (r : Fin ((twoL Bool).V.k x) → Bool) :
+    (run H coinP₂ (twoL Bool).V x b r).out = .acc ↔ b = true := by
+  have h : (run H coinP₂ (twoL Bool).V x b r).out =
+      Claims.Witness.SamplingGeneric.twoOut (Claims.Witness.SamplingGeneric.twoMsg H coinP₂ x b 0)
+        (Claims.Witness.SamplingGeneric.twoMsg H coinP₂ x b 1) :=
+    congrArg Seen.out (Claims.Witness.SamplingGeneric.twoL_run H coinP₂ x b r)
+  rw [h]
+  cases b <;> simp [Claims.Witness.SamplingGeneric.twoOut, Claims.Witness.SamplingGeneric.twoMsg,
+    Claims.Witness.SamplingGeneric.twoHist, coinP₂, OC.eval]
+
+/-- A tape bit is `true` with probability `1/2`, beside any finite coins. -/
+theorem pr_fst_true {β : Type} [Fintype β] [Nonempty β] : Pr (fun p : Bool × β => p.1 = true) = 1 / 2 := by
+  classical
+  have hβ : (Fintype.card β : ℝ) ≠ 0 := Nat.cast_ne_zero.2 Fintype.card_ne_zero
+  unfold Pr Claims.prUniform
+  rw [Finset.card_filter, Fintype.sum_prod_type, Fintype.sum_bool, Fintype.card_prod, Fintype.card_bool]
+  simp only [if_true, Bool.false_eq_true, if_false, Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_one,
+    Finset.sum_const_zero, add_zero]
+  push_cast
+  field_simp
+  ring
+
+/-- At the registered openings `certOps`, which open both gates of `twoStmt`, `twoL`'s incorrect set at the trace
+with the registered openings is empty, at every prover. -/
+theorem twoL_FregR_certOps (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
+    FregR H (twoL Bool) P x (fun _ => certOps) = ∅ := by
+  have hp : (twoL Bool).parse x = some twoStmt := rfl
+  have hb : ((twoL Bool).part twoStmt).blocks = [[0], [1]] := rfl
+  simp only [FregR, hp, hb]
+  refine Finset.filter_eq_empty_iff.2 fun v hv => ?_
+  rw [not_not]
+  have hv2 : v < 2 := by simpa using hv
+  refine ⟨[v], ?_, regValR H (twoL Bool) P x certOps, fun _ => true, fun _ _ => rfl, ?_⟩
+  · interval_cases v <;> rfl
+  · interval_cases v <;>
+      simp [Prog.Correct, Prog.refIn, Prog.Boundary, Prog.runIn, Prog.read, BGate.val, BGate.reads, regValR,
+        certOps, certifierVal, twoStmt, twoProg]
+
+/-- The run at the trace with the registered openings at `coinP₂`. -/
+noncomputable abbrev coinRun₂ : ℕ → Bool :=
+  regRunR shaD (twoL Bool) coinP₂ [] (fun _ => certOps) (fun _ => twoLay) (fun _ => 1) twoStmt twoPart
+
+/-- The check that pins the gate `1` to the negation of `coinRun₂`'s value there: `coinRun₂` fails it. -/
+noncomputable abbrev coinValid₂ : AuditStatement → (ℕ → Bool) → Prop :=
+  fun _ ρ => ∀ g ∈ ({1} : Finset ℕ), ρ g = !coinRun₂ g
+
+/-- **`PhaseChecks` holds below `1` at a run that fails the check.** Toy code: one execution phase audited by `twoL`,
+the program of two inputs sampled whole, the registered openings `certOps`, the prover `coinP₂`, whose tape is one bit
+and which `twoL` accepts on the tape `true` only. The check pins the gate `1` to the negation of the run at the trace
+with the registered openings (`coinValid₂`): a check that pins a checked input to a constant (`CheckedUnique`, by
+`checkedUnique_pin`), which that run fails. That run reads no tape, so it fails the check on every tape. The incorrect
+set `FregR` is empty, so the miss is not charged to the phase's error: it is the acceptance probability, `1/2`, and
+`PhaseChecks` holds at `εchk = 1/2` and at no smaller value. So the premise is more than "the run passes the check": it
+bounds how often a phase accepts while its run fails. Toy code, one phase, no secret: the check is not one a deployed
+system runs, and the prover is not an honest prover of a real program. -/
+theorem PhaseChecks_invalid :
+    (∀ _ : Fin 1, CheckedUnique twoStmt.prog twoPart twoStmt.design twoLay 1 {1} (coinValid₂ twoStmt)) ∧
+      ¬coinValid₂ twoStmt coinRun₂ ∧
+      PrCheckMissR shaD (twoL Bool) (fun _ => twoLay) (fun _ => 1) (fun _ => coinValid₂ twoStmt) [] coinP₂
+        (fun _ => certOps) = 1 / 2 ∧
+      PhaseChecks (kV := 2) (Sec := Unit) shaD (fun _ => twoL Bool) (fun _ => twoLay) (fun _ => 1) coinValid₂
+        (fun _ : Fin 1 => twoStmt) (fun _ _ _ => []) (fun _ _ _ => coinP₂) (fun _ _ _ _ => certOps) fun _ => 1 / 2 := by
+  have hnot : ¬coinValid₂ twoStmt coinRun₂ := fun h => by simpa using h 1 (Finset.mem_singleton_self 1)
+  have hmiss : PrCheckMissR shaD (twoL Bool) (fun _ => twoLay) (fun _ => 1) (fun _ => coinValid₂ twoStmt) []
+      coinP₂ (fun _ => certOps) = 1 / 2 := by
+    unfold PrCheckMissR
+    rw [← pr_fst_true (β := Fin ((twoL Bool).V.k []) → Bool)]
+    congr 1
+    funext p
+    refine propext ⟨fun h => (coinP_acc shaD [] p.1 p.2).1 h.1, fun h => ⟨(coinP_acc shaD [] p.1 p.2).2 h,
+      twoStmt, twoPart, rfl, rfl, ?_, hnot⟩⟩
+    rw [twoL_FregR_certOps]
+    exact Finset.disjoint_empty_left _
+  exact ⟨fun _ => checkedUnique_pin twoPart _ twoLay_fits (Finset.singleton_subset_iff.2 one_mem_freeInputs)
+    fun g => !coinRun₂ g, hnot, hmiss, fun _ _ _ => hmiss.le⟩
+
 end NetTiming.Witness
