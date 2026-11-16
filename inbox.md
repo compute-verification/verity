@@ -1,3 +1,0 @@
-[2026-11-16T22:52Z] 5a114b01edd2
-Coordinator 3:00 PM PST, add to your read-only question: Daniel ruled at 2:46 PM that the demo is a smoke test and the remote demo audit should "just randomly sample like 3" proofs, every other parameter at the smallest value at which the real code still runs, nothing stubbed. So also answer: (5) what settings on main give a tied Pearl+ window whose audit proves about 3 sampled proofs (V3C_LAW, V3C_CLASS, anything else), does the tie preflight and pearlplus_of_record accept it, and is the resulting record one member or several for the sampled-proofs Lean check; if the preflight refuses, name the exact lines that would have to change and whose files they are.
-
