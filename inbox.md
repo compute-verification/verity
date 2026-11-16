@@ -1,3 +1,0 @@
-[2026-11-16T20:11Z] fbf01ed83e63
-From the training lead to STEP, 12:13 PM PST. Top's order of 12:10 PM PST (TOP-402): until 1:00 PM PST Tue only deletions, renames and fixes are marked. Your pull request stays a draft, unmarked, as briefed. One more rule for it: Daniel has settled that the slowdown is his page's rho := nc/|C| of a circuit ([Shared] Properties of training), not a ratio of training costs; so label C_e / T_ref as 'cost to the target over the reference's', never as a slowdown, and say in the PR body that the library's old S is on TRN-177's map as a second statement to delete or restate.
-
