@@ -6,7 +6,7 @@ check holds to the records' own reading of the same cells and refuses when a reg
 record isn't the run's; the registrations' file, which a check that found no problem writes when it is handed the
 SHA-512 of the network attester's public key and its session: a first line that names the two, then a line for
 each registration it held and each the publisher's own bytes, which the reader of the stop verdicts takes its
-heads from (its side: `certifier/prover/tests/test_network_certifier_serve.py`), so that a deployment record of
+heads from (its side: `certifier/prover/tests/test_network_attester_serve.py`), so that a deployment record of
 another session or a registration with tables that aren't its records' leaves no file, and a check handed neither
 is refused the file; an execution phase that isn't handed has no line; under the lengths rows' form 2
 every execution phase has one line, its registration or the network attester's word that it has no head, the run's
@@ -26,11 +26,11 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
-from verity.protocols.resource_accounting.network.verifier.network_certifier import REFUSED, Released, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import REFUSED, Released, NetworkCertifierParams
 
 from verity.protocols.resource_accounting.network.attester.tests.relay_runs import _run, ws
 from verity.protocols.resource_accounting.network.attester import connection_rows_run, runner_parts as rp
-from verity.protocols.resource_accounting.network.verifier import link_frame, network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier import link_frame, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier import (connection_rows_check as CRC, record_files as RF,
     relay_check as RC)
 

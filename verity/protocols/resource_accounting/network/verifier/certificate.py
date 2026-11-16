@@ -900,7 +900,7 @@ class Issuer:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
         `certify_start` the session's start, `mark` a salted mark,
-        and the network attester's cell rows their head's digest (`network_certifier_rows`)."""
+        and the network attester's cell rows their head's digest (`network_attester_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

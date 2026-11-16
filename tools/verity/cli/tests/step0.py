@@ -4,7 +4,7 @@ entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
 `verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
-stand-in gives them, and the network attester's entry (`network_certifier`) and every other subprotocol's period check
+stand-in gives them, and the network attester's entry (`network_attester`) and every other subprotocol's period check
 (`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
@@ -24,7 +24,7 @@ from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkCertifierParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
@@ -135,7 +135,7 @@ def _json_if(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
+def network_attester(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     """The network attester's entry: no relay serves here (module docstring)."""
     print("network-certifier: no relay serves at step 0 here", flush=True)
     return 2
@@ -275,7 +275,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
-    "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
+    "certifier": {"network-certifier": network_attester, "verifier": LIVE},
     **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}

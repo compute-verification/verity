@@ -101,16 +101,16 @@ service, in the clear. That is a provisional exception to the four public kinds,
 `TransferBlocks.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
 root, each end's head check accepts (`head_check.reference`), the opening's certificates hold (`certified`) and both
-heads met their deadline. The records' cells are the scan's (`network_certifier.audit`
+heads met their deadline. The records' cells are the scan's (`network_attester.audit`
 reads them in the clear), and the certifier's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
-**The link** (`TransferBlocks(network_certifier=NetworkCertifierProfile(…))`) is the network attester's (`network_certifier.NetworkCertifier`) own two records of
+**The link** (`TransferBlocks(network_attester=NetworkCertifierProfile(…))`) is the network attester's (`network_attester.NetworkCertifier`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`network_certifier.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_attester.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
-cells, r for each live connection and the rest padding (`network_certifier.audit` reads them in the clear, the scan's proof blocks
+cells, r for each live connection and the rest padding (`network_attester.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network attester runs no shaper clock, so a window declares
 no sync and the charge is 0. Each head check holds its end's head to the network attester's grid and digest and to its
@@ -121,13 +121,13 @@ them. A `TransferBlocks` without a `NetworkCertifierProfile` raises `ValueError`
 (`verity/protocols/resource_accounting/network/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
-the Lean refuses the case. The Lean reads the network attester's parameters digest (`lean_case`'s ``network_certifier``) for
+the Lean refuses the case. The Lean reads the network attester's parameters digest (`lean_case`'s ``network_attester``) for
 both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds of link (`Kind.plain`, `Kind.served`)
 are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
 - the network attester's parameters digest (`NetworkCertifierProfile.digest`, which the network attester's deployment publishes
-  as its schedule's, `network_certifier.NetworkCertifierParams.digest`), which neither derives;
+  as its schedule's, `network_attester.NetworkCertifierParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -452,8 +452,8 @@ class Hidden:
 
 @dataclass(frozen=True)
 class NetworkCertifierProfile:
-    """A network attester link's profile (`TransferBlocks.network_certifier`, the module docstring's "A network attester link"): the
-    link's windows and the network attester's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads
+    """A network attester link's profile (`TransferBlocks.network_attester`, the module docstring's "A network attester link"): the
+    link's windows and the network attester's parameters digest (`network_attester.NetworkCertifierParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -471,7 +471,7 @@ class TransferBlocks:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network attester's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and
-    the network attester's profile (`network_certifier`: its records, its key and session the certifier's here, its counts its
+    the network attester's profile (`network_attester`: its records, its key and session the certifier's here, its counts its
     schedule's). It declares no sync, so `sync_set` is read only as the Lean case's ``sync_set``."""
 
     link: str
@@ -482,11 +482,11 @@ class TransferBlocks:
     certifier_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
-    network_certifier: NetworkCertifierProfile | None = None
+    network_attester: NetworkCertifierProfile | None = None
 
     def __post_init__(self) -> None:
-        if self.network_certifier is None:
-            raise ValueError("a link is the network certifier's: TransferBlocks(network_certifier=NetworkCertifierProfile(windows, digest))")
+        if self.network_attester is None:
+            raise ValueError("a link is the network certifier's: TransferBlocks(network_attester=NetworkCertifierProfile(windows, digest))")
         if self.ingress_params != self.params:
             raise ValueError("a network certifier link's two ends are on the network certifier's one grid")
 
@@ -503,12 +503,12 @@ class TransferBlocks:
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network attester's grid under
         its parameters digest (`NetworkCertifierProfile.digest`)."""
-        return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_certifier.digest)
+        return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_attester.digest)
 
     @property
     def windows(self) -> int:
         """The link's windows, which `network_verdict` takes by default: its `NetworkCertifierProfile`'s."""
-        return self.network_certifier.windows
+        return self.network_attester.windows
 
     @cached_property
     def unit(self):
@@ -547,7 +547,7 @@ class TransferBlocks:
             "certifier_session": self.certifier_session.hex(), "charge": 0.0,
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
-            "occupancy": [None, None], "warden": [self.network_certifier.windows, self.network_certifier.digest.hex()]})
+            "occupancy": [None, None], "warden": [self.network_attester.windows, self.network_attester.digest.hex()]})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
@@ -833,7 +833,7 @@ class TransferBlocks:
             "session": bytes(self.certifier_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": None},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": None},
-            "warden": self.network_certifier.digest.hex()}
+            "warden": self.network_attester.digest.hex()}
         return case
 
     def lean_verdict(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
