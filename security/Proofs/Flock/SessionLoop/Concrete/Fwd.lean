@@ -10,8 +10,7 @@ public meta import Lean
 
 `fwd_walk [rules] block [consts]` proves `m = r` for a computation `m : Except ε γ`, `r` usually `.ok ?v`, by stepping
 through `m` in order: a `let` goes into the context (a value with a free variable of the goal is substituted instead,
-after the rules rewrite it; a `let` applied to arguments, as a state computation run on its state, takes them under it),
-a jump to a join point takes the join point's body, a bind's computation is evaluated (by a
+after the rules rewrite it), a jump to a join point takes the join point's body, a bind's computation is evaluated (by a
 rule, by the kernel's `whnf`, or by walking it), an `if` takes the branch its condition decides, a `match` the branch its
 discriminants' values select, and the walk ends at `pure a`, with `?v := a`. Each step's proof is a term the kernel
 rechecks; nothing is unfolded into both arms of a branch. A constant in `block`, or one whose definition reads one, is
@@ -60,8 +59,25 @@ meta partial def constTainted (c : Name) : M Bool := do
   cfg.taint.modify (·.insert c r)
   return r
 
+/-- Whether reducing `e` to weak head normal form would force `Array.qsort` (`Spot.sortStrings`, `Spot.keys?`), whose
+well-founded recursion the kernel cannot reduce, so the walk must rewrite the sort away (a rule such as
+`sortStrings_of_sorted`) rather than hand `e` to the kernel. A sort buried inside a JSON object or array is a value no
+field read forces, so this does not descend into the arguments of `Json.mkObj`/`.obj`/`.arr`; only a sort in a position
+the reduction forces (the head of `e`, or of an argument it eliminates) counts. Folded into `exprTainted`, so every
+kernel site the walk guards with it (`kwhnf`, `Kernel.isDefEqGuarded`) skips such an `e` alike. -/
+meta partial def reachesSlow (e : Expr) : Bool :=
+  let e := e.consumeMData
+  let fn := e.getAppFn
+  match fn with
+  | .const c _ =>
+    if c == ``Array.qsort || c == `Spot.sortStrings || c == `Spot.keys? then true
+    else if c == ``Lean.Json.mkObj || c == ``Lean.Json.obj || c == ``Lean.Json.arr then false
+    else e.getAppArgs.any reachesSlow
+  | _ => e.getAppArgs.any reachesSlow
+
 meta partial def exprTainted (e : Expr) : M Bool := do
   let cfg ← read
+  if reachesSlow e then return true
   if e.getUsedConstants.any cfg.shallow.contains then return true
   if ← e.getUsedConstants.anyM constTainted then return true
   for fv in (collectFVars {} e).fvarIds do
@@ -69,7 +85,9 @@ meta partial def exprTainted (e : Expr) : M Bool := do
       if b then return true
     else
       let b ← match ← fv.getValue? with
-        | some v => exprTainted (← instantiateMVars v)
+        | some v => do
+          let v ← instantiateMVars v
+          if reachesSlow v then pure true else exprTainted v
         | none => pure false
       cfg.ftaint.modify (·.insert fv b)
       if b then return true
@@ -78,6 +96,7 @@ meta partial def exprTainted (e : Expr) : M Bool := do
 /-- The first constant that taints `e`, through let-bound variables. -/
 meta partial def taintReason (e : Expr) : M (Option Name) := do
   let cfg ← read
+  if reachesSlow e then return some ``Array.qsort
   for c in e.getUsedConstants do
     if cfg.shallow.contains c then return some c
     if ← constTainted c then return some c
@@ -174,6 +193,31 @@ meta def matchArgs (l e : Expr) : M Bool := do
     unless Kernel.isDefEqGuarded (← getEnv) (← getLCtx) a b do return false
   return true
 
+/-- A maximal subterm of `e` the sort taint does not cover whose weak-head form is a different constructor application:
+the first one, left to right, descending only through tainted subterms. Its use is the argument of a sort (`keys?`,
+`sortStrings`) that a field read (`getD`/`field?` of a literal object) produced — untainted under the tainted sort, and a
+`.obj …` once reduced — so a rule keyed on that constructor (`keys?_obj`) can then rewrite the sort away. -/
+meta partial def findReducible (e : Expr) : M (Option Expr) := do
+  if ← exprTainted e then
+    for a in e.getAppArgs do
+      if let some s ← findReducible a then return some s
+    return none
+  if e.isFVar || e.isMVar || e.isSort || e.isLit || e.getAppFn.isFVar then return none
+  let v ← kwhnf e
+  if v != e && (← isCtorApp v) then return some e
+  return none
+
+/-- `(e', p : e = e')` by reducing one such subterm (`findReducible`) to its weak-head form; `none` when none reduces.
+The reduction is a kernel defeq step, so this is sound wherever the rules and projections are stuck. -/
+meta def normStep (e : Expr) : M (Option (Expr × Expr)) := do
+  let some s ← findReducible e | return none
+  let s' ← kwhnf s
+  let ea ← kabstract e s
+  unless ea.hasLooseBVars do return none
+  let motive := Expr.lam `y (← inferType s) ea .default
+  let pf ← mkCongrArg motive (← hint (← mkEqRefl s) (← mkEq s s'))
+  return some (ea.instantiate1 s', pf)
+
 mutual
 
 /-- Close a side condition of a rule: an assumption, an equation the kernel checks (after the rules rewrite both
@@ -239,6 +283,7 @@ meta partial def ruleAt (e : Expr) : M (Option (Expr × Expr)) := do
     try
       let (_, _, p) ← openAbstractMVarsResult ar
       let (mvs, _, ty) ← forallMetaTelescopeReducing (← inferType p)
+      let ty ← instantiateMVars ty
       let some (_, l, r) := ty.eq? | do s.restore; continue
       unless l.getAppFn.isConst && e.getAppFn.isConst && l.getAppFn.constName! == e.getAppFn.constName! do
         s.restore; continue
@@ -262,12 +307,19 @@ meta partial def rewriteIn (e : Expr) : M (Option (Expr × Expr)) := do
   while progress && n < 64 do
     progress := false
     n := n + 1
+    -- `kabstract` only abstracts a subterm whose syntactic head index equals the rule's left side's; so a rule whose left
+    -- head constant does not occur in `e` abstracts nothing. Collect `e`'s constants once and skip those rules without
+    -- the full `kabstract` traversal, which is otherwise the walk's cost over a large value (a parser's key array, say).
+    let eConsts : NameSet := e.getUsedConstants.foldl (·.insert ·) {}
     for ar in (← read).rules do
       let s : Meta.SavedState ← Meta.saveState
       try
         let (_, _, p) ← openAbstractMVarsResult ar
         let (mvs, _, ty) ← forallMetaTelescopeReducing (← inferType p)
+        let ty ← instantiateMVars ty
         let some (_, l, r) := ty.eq? | do s.restore; continue
+        if let .const lc _ := l.getAppFn then
+          unless eConsts.contains lc do s.restore; continue
         let ea ← withReducible (kabstract e l)
         if !ea.hasLooseBVars then
           s.restore; continue
@@ -524,9 +576,6 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
       return none
     if v.isAppOfArity ``Except.error 3 then
       throwError "fwd: evaluates to an error{indentExpr v}"
-  if let .letE n t v b nd := fn.consumeMData then
-    let args := lhs.getAppArgs.map (·.liftLooseBVars 0 1)
-    return some (← g.replaceTargetDefEq (eqT (.letE n t v (mkAppN b args) nd) rhs))
   if let some e' ← withTransparency .all (unfoldDefinition? lhs) then
     return some (← g.replaceTargetDefEq (eqT e' rhs))
   let why ← taintReason lhs
@@ -568,7 +617,9 @@ meta partial def decideCond (c inst : Expr) : M (Bool × Expr) := do
     if let some r ← attempt cur pc then return r
     let s ← match ← projStep cur with
       | some s => pure (some s)
-      | none => rewriteIn cur
+      | none => match ← rewriteIn cur with
+        | some s => pure (some s)
+        | none => normStep cur
     let some (c2, p) := s | break
     pc := some (← match pc with | some q => mkEqTrans q p | none => pure p)
     cur := c2
