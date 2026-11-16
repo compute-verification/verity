@@ -1,7 +1,8 @@
 # The retired word family DRAW in PoUW's own tree (compute accounting): every draw identifier, string and docstring
 # of `verity/protocols/resource_accounting/compute/pouw/`, `benchmarks/pouw/` and `benchmarks/compute/` (Python), renamed
 # to the Glossary's sample, sampled, samples and sampling (a coin is flipped), at its definition and at every user in
-# every lane's files (`[[words_in]]` of each outside file, whole phrases: `alias.name`, `name=`, an imported name).
+# every lane's files (`[[words_in]]` of each outside file, whole phrases: `alias.name`, `name=`, an imported name, a
+# name given to setattr, and the text of each of our messages that file's tests match).
 # Kept as spelled ([keep]): every quoted token of the family (a record key, a coin label, a Lean subcommand, a difftest
 # port, a wire reply), but a quoted identifier name (a lazy export, a setattr); the flags a README, another lane's script
 # or a Lean executable calls (`--draws`, `--draw-session`) and their parsed attributes; other CLIs' flags; SPOT's `Draw`
@@ -60,6 +61,7 @@ patterns = [
   "``draw_k``",
   "the open's draw_k\\b",
   "the proof system's draw_k\\b",
+  "(?<![\\w-])drawn(?:_cost)?\\.(?:py|sh)\\b",
   "(?<=\\ \\ \\ \\ record\\[\"windows\"\\]\\[w1\\]\\.update\\(registration=reg\\.hex\\(\\),\\ )draw_opening(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ out\\.update\\()draw(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_wref(?==)",
@@ -442,6 +444,7 @@ files = ["adapters/vllm/tests/pipeline/test_serve_h1.py"]
 "PHC.draw_families" = "PHC.sample_families"
 "PHC.drawn_of" = "PHC.sampled_of"
 "drawn_units" = "sampled_blocks"
+"\"draw_k\"" = "\"sample_k\""
 
 # adapters/vllm/tests/protocols/challenger_host.py: our names it uses
 [[words_in]]
@@ -468,6 +471,7 @@ files = ["adapters/vllm/tests/protocols/pouw_h1_rehearsal.py"]
 "pouw_h1_challenger.draw_k" = "pouw_h1_challenger.sample_k"
 "PHC.draw_families" = "PHC.sample_families"
 "PHW.DrawSession" = "PHW.SampleSession"
+"draw_reserved" = "sample_reserved"
 "RQ.draw_root" = "RQ.sample_root"
 "PHC.draw_k" = "PHC.sample_k"
 
@@ -491,6 +495,7 @@ files = ["adapters/vllm/tests/protocols/test_credit_gate.py"]
 [[words_in]]
 files = ["adapters/vllm/tests/protocols/test_pouw_h1.py"]
 [words_in.words]
+"the window's draw session is not trusted" = "the window's sample session is not trusted"
 "PHC.NO_DRAW_SESSION" = "PHC.NO_SAMPLE_SESSION"
 "PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
 "draw_directory=" = "sample_directory="
@@ -501,6 +506,7 @@ files = ["adapters/vllm/tests/protocols/test_pouw_h1.py"]
 [[words_in]]
 files = ["adapters/vllm/tests/protocols/test_pouw_h1_absent_parts.py"]
 [words_in.words]
+"the window's draw coin is malformed" = "the window's sampling coin is malformed"
 "drawn_of" = "sampled_of"
 
 # adapters/vllm/tests/protocols/test_pouw_h1_commit.py: our names it uses
@@ -537,18 +543,35 @@ files = ["adapters/vllm/tests/protocols/test_pouw_h1_ranks.py"]
 [[words_in]]
 files = ["adapters/vllm/tests/protocols/test_pouw_h1_refusals.py"]
 [words_in.words]
+"the window's record names no served trees: drawn rebuilds the values they registered" = "the window's record names no served trees: sampled rebuilds the values they registered"
+"the window's record names no draw root, under which a leaf's partials are committed" = "the window's record names no sample root, under which a leaf's partials are committed"
+"draw session {sid}'s layout is not a draw session's, its draw coin alone" = "sample session {sid}'s layout is not a sample session's, its sampling coin alone"
+"the window's draw session is not one the ledger opens on its draw root" = "the window's sample session is not one the ledger opens on its sample root"
+"the window's draw session is opened once: a retry never" = "the window's sample session is opened once: a retry never"
+"a window hands off before its draw session opens" = "a window hands off before its sample session opens"
+"the window's draw root is not 128 lowercase hex" = "the window's sample root is not 128 lowercase hex"
+"no draw K: give --k, or a serve dir whose" = "no sample K: give --k, or a serve dir whose"
+"the gate's answer is not draw session" = "the gate's answer is not sample session"
+"the window's draw coin is malformed" = "the window's sampling coin is malformed"
+"the window's draw root is malformed" = "the window's sample root is malformed"
+"the gate reserved draw session" = "the gate reserved sample session"
+"the window's draw session" = "the window's sample session"
 "PHD.draw_session_reason" = "PHD.sample_session_reason"
+"opened on the draw root" = "opened on the sample root"
 "`draw_session_reason`" = "`sample_session_reason`"
 "PHD.NO_DRAW_SESSION" = "PHD.NO_SAMPLE_SESSION"
 "PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
 "Wd.draw_challenger" = "Wd.sample_challenger"
+"\"draw_challenger\"" = "\"sample_challenger\""
 "`NO_DRAW_SESSION`" = "`NO_SAMPLE_SESSION`"
 "PHW.reserve_draw" = "PHW.reserve_sample"
 "PHD.draw_reason" = "PHD.sample_reason"
 "PHW.DrawSession" = "PHW.SampleSession"
+"draw_challenger" = "sample_challenger"
 "draw_directory=" = "sample_directory="
 "PHD.draw_files" = "PHD.sample_files"
 "`reserve_draw`" = "`reserve_sample`"
+"s drawn leaves" = "s sampled leaves"
 "RQ.draw_root" = "RQ.sample_root"
 "`draw_files`" = "`sample_files`"
 "resumed.draw" = "resumed.sample"
@@ -567,6 +590,10 @@ files = ["adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py"]
 [[words_in]]
 files = ["adapters/vllm/tests/protocols/test_rt4_h1_challenger.py"]
 [words_in.words]
+"the window's draw root is not over its manifest, its last round's receipts and every round's root and coin" = "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin"
+"the draw session closed with no draw coin opened, so the window has no draw of the challenger's" = "the sample session closed with no sampling coin opened, so the window has no sample of the challenger's"
+"the window's draw session is not trusted" = "the window's sample session is not trusted"
+"the window's draw session" = "the window's sample session"
 "Wd.draw_challenger" = "Wd.sample_challenger"
 "Wd.DRAW_FAMILIES" = "Wd.SAMPLE_FAMILIES"
 "draw_directory=" = "sample_directory="
@@ -641,7 +668,9 @@ files = ["benchmarks/one_stage/pouw_piece.py"]
 [[words_in]]
 files = ["benchmarks/one_stage/served_verdicts.py"]
 [words_in.words]
+"the record's draw is malformed" = "the record's sample is malformed"
 "window.draw_epoch_reason" = "window.sample_epoch_reason"
+"the run's draw session" = "the run's sample session"
 "Wd.draw_epoch_reason" = "Wd.sample_epoch_reason"
 "verify_run.node_draw" = "verify_run.node_sample"
 "bench_arm.LiveDraw" = "bench_arm.LiveSample"
