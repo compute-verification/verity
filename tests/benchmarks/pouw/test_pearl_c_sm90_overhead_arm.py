@@ -47,7 +47,7 @@ def _load(name: str, path: Path):
 OA = _load("pearl_c_sm90_overhead_arm", POUW / "pearl_c_sm90" / "overhead_arm.py")
 DOOR = _load("verity_bench_overhead_door", ROOT / "benchmarks" / "harness" / "verity_bench" / "overhead.py")
 #: the host twin's build of hash_host.cpp (`host`, a module fixture) and its `Dev`
-HH = _load("pearl_c_hash_host_test", POUW / "tests" / "test_pearl_c_hash_host.py")
+HH = _load("pearl_c_hash_host_test", POUW.parents[1] / "tests" / "benchmarks" / "pouw" / "test_pearl_c_hash_host.py")
 host = HH.host
 LINEARS = DOOR.MODELS[DOOR.KERNEL_MODEL]
 CTX = {"device": None, "arch": "sm_90a"}
@@ -100,7 +100,7 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 
     V = _load("pouw_harness_verify", POUW / "harness" / "verify.py")
-    T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW / "tests" / "test_pearl_c_vllm.py")
+    T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW.parents[1] / "tests" / "benchmarks" / "pouw" / "test_pearl_c_vllm.py")
     SP = T.load("pearl_c_vllm_served_passes", ROOT / OA.SERVED_PASSES)
     monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 8)[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
