@@ -1,0 +1,20 @@
+{"event": "open", "parts": ["L0", "L1"], "seq": 0, "session": "r0000", "stream": "s"}
+{"event": "finish", "part": "inner", "seq": 1, "session": "r0000"}
+{"event": "open", "parts": ["L0"], "release": {"start_ms": 1792557114603, "windows_ms": [60000]}, "seq": 2, "session": "r0001", "stream": "t"}
+{"event": "finish", "part": "inner", "seq": 3, "session": "r0001"}
+{"event": "open", "parts": ["L0"], "release": {"start_ms": 0, "windows_ms": [1]}, "seq": 4, "session": "r0002", "stream": "u"}
+{"event": "finish", "part": "inner", "seq": 5, "session": "r0002"}
+{"event": "open", "parts": ["L0"], "seq": 6, "session": "r0003", "stream": "v"}
+{"event": "slot", "part": "L0", "seq": 7, "session": "r0000"}
+{"event": "release", "part": "L0", "seq": 8, "session": "r0000"}
+{"event": "slot", "part": "L0", "seq": 9, "session": "r0001"}
+{"event": "release", "part": "L0", "seq": 10, "session": "r0001"}
+{"event": "slot", "part": "L0", "seq": 11, "session": "r0000"}
+{"event": "stop", "part": "L1", "seq": 12, "session": "r0000", "why": "never opened: L0 was asked in its place"}
+{"event": "refused", "part": "L0", "seq": 13, "session": "r0000"}
+{"event": "slot", "part": "L1", "seq": 14, "session": "r0000"}
+{"event": "refused", "part": "L1", "seq": 15, "session": "r0000"}
+{"event": "slot", "part": "L0", "seq": 16, "session": "r0003"}
+{"event": "refused", "part": "L0", "seq": 17, "session": "r0003"}
+{"event": "slot", "part": "L0", "seq": 18, "session": "r0002"}
+{"event": "stop", "part": "L0", "seq": 19, "session": "r0002", "why": "missed its release time (1792557325871 ms, after 1 ms)"}

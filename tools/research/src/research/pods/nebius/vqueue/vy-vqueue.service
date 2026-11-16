@@ -1,0 +1,29 @@
+[Unit]
+Description=the verified queue's loop, a tick a minute as vy-vqueue (pods/nebius/vqueue/loop.sh; dry-run unless its mode file says live)
+Wants=network-online.target vy-vqueue-token.timer
+After=network-online.target vy-vqueue-token.service
+
+[Service]
+Type=exec
+User=vy-vqueue
+Group=vy-vqueue
+UMask=0027
+StateDirectory=vy-vqueue
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/vy-vqueue
+ExecStart=/usr/local/lib/vy-vqueue/loop.sh run
+Restart=on-failure
+RestartSec=60
+# 78: what the node holds can't run a tick (no log for live, no clone, no pin, no args); it stays failed until that is put right
+RestartPreventExitStatus=78
+# A launch outlives the tick that started it and stays attached to its run (train.sh, then check.py), and the loop judges it
+# by its pid on this host: a stop or restart ends the loop alone, after the tick in progress, and leaves every launch running
+KillMode=process
+TimeoutStopSec=30min
+# the node's check slot can take most of the memory: a launch is never its OOM victim
+OOMScoreAdjust=-500
+# a launch runs the candidate's own check.py as this user, which has no sudo: it never gains root
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

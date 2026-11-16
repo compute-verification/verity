@@ -1,0 +1,16 @@
+# Adafactor on every parameter, the embedding included: a matrix's second moment is kept as its row and column
+# means, so the optimizer carries a vector a side where AdamW carries two matrices; E is the trained tensors.
+start = "s-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 838, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "*"
+opt = "adafactor"
+lr = 1e-2
+weight_decay = 0.0
+warmup = 0.02
+decay = 0.4

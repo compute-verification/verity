@@ -1,0 +1,80 @@
+# Declared entry points of adapters/vllm: the roots of tests/dead_code_census.py and tests/test_no_dead_modules.py.
+#
+# One entry per line (paths relative to adapters/vllm; `#` starts a comment):
+#   <path>.sh or a glob of shells   a shell entry point: every module it runs (`-m mod`, `python path.py`, `<name>.py`, `from mod import`
+#                                   / `import mod` in heredocs and `-c` strings) is live, and so is every shell it names (transitively)
+#   <dir>/                          every module under the directory is a root
+#   <dotted.module>                 a Python entry point
+#
+# A shell entry point is live because it is declared here, not because something imports it.  Add new runners here (or match the rules
+# below); never let the census decide that a runner is dead.  Shells matched by no entry are still never deleted by the census -- a
+# module only such a shell runs stays non-live and must be named in dead_code_keep.json.
+
+# --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
+verity_vllm/ops/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)
+verity_vllm/ops/epoch_row.sh     # the re-baseline epoch's row job (runs epoch_store.sh, epoch_failfast.sh and `verity-vllm epoch`)
+verity_vllm/ops/epoch_store.sh
+verity_vllm/ops/epoch_failfast.sh
+verity_vllm/ops/fa3_row_negatives.sh
+verity_vllm/ops/pod_fa2_tap.sh
+verity_vllm/ops/pod_fa3_tap.sh
+verity_vllm/ops/pod_norm_tap.sh
+verity_vllm/ops/pod_router_tap.sh
+verity_vllm/ops/stoch_negatives.sh
+**/*_negatives.sh
+
+# --- pod runtime and acquisition gates
+verity_vllm/ops/pod_bootstrap.sh
+verity_vllm/ops/pod_gate.sh
+verity_vllm/ops/served_build.sh  # a served Build's acquire job (`verity-vllm served-match`, no Commit stage); its build.json is served_commit.sh's manifest
+
+# --- Python entry points
+verity_vllm.pipeline.research_tools
+verity_vllm.pipeline.cli
+verity_vllm.definitions.numerics.torch_kernels      # the training step's torch kernels: a library entry point, read by adapters/torch (verity_torch.frontend.rules)
+# the node window's family sets: library entry points (each module's `FAMILIES`), which a caller joins in `node_window.node_window(fn, families=...)`
+verity_vllm.program.predict.node_window_dense
+verity_vllm.program.predict.node_window_sparse
+verity_vllm.program.predict.node_window_multimem
+verity_vllm.program.predict.node_window_embed
+verity_vllm.program.predict.node_window_select
+verity_vllm.program.predict.node_window_reads       # a node window's boundary reads: a library entry point (`boundary_reads`, `written_once`), for the class's Definition
+verity_vllm.program.predict.node_window_values      # a node window's value check: a library entry point (`made_up`, `Values`, `Check`, `run`)
+verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
+verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
+verity_vllm/pipeline/advice_code/      # advice v1, the network certifier's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
+verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
+verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
+verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
+verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
+verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
+verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
+verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
+verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by benchmarks/one_stage/two_stage.py
+verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on the scheduler: a library entry point, installed by benchmarks/serve_tax's plugin
+verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
+verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
+verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
+verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
+verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), no serve calls it yet
+verity_vllm.program.predict.class_window   # a request's Program at its size class and its node window: a library entry point (`class_request`, `class_window`), not built
+verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
+verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
+verity_vllm.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
+# the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
+# and code outside the package call
+verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
+verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
+# the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
+# (protocol_options.adapter)
+verity_vllm.protocols
+verity_vllm.protocols.interface
+verity_vllm.protocols.pous
+verity_vllm.protocols.pouw
+verity_vllm.protocols.pouw.h1_hooks
+verity_vllm.protocols.pouw.h1_ranks
+verity_vllm.protocols.pouw.h1_settings
+verity_vllm.protocols.spot
+tests/regression/
+verity_vllm/protocols/poub/      # PoUB's node store on the engine, imported by the protocol driver and the benchmarks

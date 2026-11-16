@@ -1,0 +1,3 @@
+{"owner": "@compute-accounting", "expires": "7d", "priority": "normal",
+ "regenerate": "research run --on vy-dc-b200 -- bash benchmarks/tc_probe_fp4/f8_sm100.sh",
+ "why": "B200 FP8 capture: operands and captured D words, re-scored by f8_sm100.sh eval"}

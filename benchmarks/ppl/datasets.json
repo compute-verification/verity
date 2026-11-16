@@ -1,0 +1,16 @@
+{
+ "c4": {
+  "file": "c4-validation.00000-of-00008.json.gz",
+  "format": "jsonl.gz",
+  "sha256": "1f25b6af12da84115301d4ee93ea5246c8fea5bb4a2008472794d95b917cc97f",
+  "art": "art:4f1d50dbe8fcd38c898cc0999dfbaf2a824719406ea0243c1496fe8dfe8a501b",
+  "source": "allenai/c4 en/c4-validation.00000-of-00008.json.gz; the bench reads its first 3000 documents"
+ },
+ "wikitext2": {
+  "file": "wikitext-2-raw-v1-test.json",
+  "format": "json",
+  "sha256": "5c8877eeabb3b8afc09f8ec35194fdac8c55acaa25de738d27000876d7c73e4c",
+  "art": "art:9146c691f144f88cf77c498fe2974fe1b4606cbd3cc3bb3854a964e63a61d999",
+  "source": "Salesforce/wikitext wikitext-2-raw-v1, test split: the text column of the HF datasets arrow (sha256 2b8a3efac7b468cbe6432edba5f55c21e435d93873acc6727431f08d5ed328ea) as a JSON list of its 4358 lines"
+ }
+}

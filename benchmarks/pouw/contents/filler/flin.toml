@@ -1,0 +1,3 @@
+order = 60
+tool = "The fused linears with filler warps, FILL's arms"
+files = "`flin.sh`, `fused_score.py` on `fscore.cu`, `fused_arm.py`, and in PoUW's prover `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh`"

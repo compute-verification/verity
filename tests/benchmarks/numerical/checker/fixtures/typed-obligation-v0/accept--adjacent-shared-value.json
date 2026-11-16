@@ -1,0 +1,704 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "58c65e1e43e78b4bfee96840c3d1eb851a6d93efc3bfe6f75198f69e2d90dcb3",
+  "public_values": "58c65e1e43e78b4bfee96840c3d1eb851a6d93efc3bfe6f75198f69e2d90dcb30539479bb128f0a08de886abeca3a75838db8dd6b4838d0f376a351d70fb99a901",
+  "statement_digest": "0539479bb128f0a08de886abeca3a75838db8dd6b4838d0f376a351d70fb99a9"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"bias\",\"layout\":{\"value\":32},\"leaf\":4,\"position\":4,\"root\":\"boundary\"},{\"id\":\"s8\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"sum\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"u7\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"x/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"x/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"x/2\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"x/3\",\"layout\":{\"value\":8},\"leaf\":3,\"position\":3,\"root\":\"boundary\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"x/0\",\"x/1\",\"x/2\",\"x/3\"],\"out\":[\"sum\",\"s8\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb\",\"target\":{\"encoding\":\"region\",\"id\":\"region=0\"}},{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":1},\"boundary\":{\"in\":[\"sum\",\"bias\"],\"out\":[\"u7\"]},\"roots\":[\"boundary\",\"ru0\"],\"subcircuit\":\"e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067\",\"target\":{\"encoding\":\"region\",\"id\":\"region=1\"}}],\"references\":[{\"leaf\":\"bias\",\"offset\":[],\"ref\":\"bias\"},{\"leaf\":\"s8\",\"offset\":[],\"ref\":\"s8\"},{\"leaf\":\"sum\",\"offset\":[],\"ref\":\"sum\"},{\"leaf\":\"u7\",\"offset\":[],\"ref\":\"u7\"},{\"leaf\":\"x/0\",\"offset\":[],\"ref\":\"x/0\"},{\"leaf\":\"x/1\",\"offset\":[],\"ref\":\"x/1\"},{\"leaf\":\"x/2\",\"offset\":[],\"ref\":\"x/2\"},{\"leaf\":\"x/3\",\"offset\":[],\"ref\":\"x/3\"}],\"roots\":[{\"count\":5,\"domain\":\"3f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd\"},{\"count\":3,\"domain\":\"be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd\"}],\"subcircuits\":[{\"definition\":{\"name\":\"q7/dot2-requant-s8-opened-sum\"},\"digest\":\"9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1]],\"op\":\"mul8\"},{\"args\":[[\"in\",2],[\"in\",3]],\"op\":\"mul8\"},{\"args\":[[\"gate\",0],[\"gate\",1]],\"op\":\"add32\"},{\"args\":[[\"gate\",2]],\"op\":\"requant_s8\"}],\"in\":[8,8,8,8],\"out\":[2,3]},{\"definition\":{\"name\":\"q7/add32-requant\"},\"digest\":\"e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1]],\"op\":\"add32\"},{\"args\":[[\"gate\",0]],\"op\":\"requant_u7\"}],\"in\":[32,32],\"out\":[1]}]}",
+ "description": "Two adjacent regions: unit 0 produces the 32-bit sum (outgoing), unit 1 reads the same value 'sum' (incoming). One produced value, one reference, two boundaries.",
+ "digest": "58c65e1e43e78b4bfee96840c3d1eb851a6d93efc3bfe6f75198f69e2d90dcb3",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "x/0",
+      "schema": "u8"
+     },
+     {
+      "ref": "x/1",
+      "schema": "u8"
+     },
+     {
+      "ref": "x/2",
+      "schema": "u8"
+     },
+     {
+      "ref": "x/3",
+      "schema": "u8"
+     },
+     {
+      "ref": "sum",
+      "schema": "u32"
+     },
+     {
+      "ref": "s8",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "kind": "add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e28",
+    "outputs": [
+     4,
+     5
+    ],
+    "ranges": 0,
+    "slots": 6
+   },
+   {
+    "entries": [
+     {
+      "ref": "sum",
+      "schema": "u32"
+     },
+     {
+      "ref": "bias",
+      "schema": "u32"
+     },
+     {
+      "ref": "u7",
+      "schema": "u8"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652",
+    "outputs": [
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "port",
+        2
+       ],
+       [
+        "port",
+        3
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ],
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        2
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e28",
+    "outputs": [
+     2,
+     3
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     },
+     {
+      "ordinal": 2,
+      "width": 8
+     },
+     {
+      "ordinal": 3,
+      "width": 8
+     }
+    ],
+    "subcircuit": "9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     },
+     {
+      "ordinal": 1,
+      "width": 32
+     }
+    ],
+    "subcircuit": "e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "kind": "add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e28",
+    "outputs": [
+     4,
+     5
+    ],
+    "positions": [
+     "x/0",
+     "x/1",
+     "x/2",
+     "x/3",
+     "sum",
+     "s8"
+    ]
+   },
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652",
+    "outputs": [
+     2
+    ],
+    "positions": [
+     "sum",
+     "bias",
+     "u7"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "port",
+        2
+       ],
+       [
+        "port",
+        3
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ],
+       [
+        "local",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        2
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "kind": "add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e28",
+    "outputs": [
+     2,
+     3
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     },
+     {
+      "ordinal": 2,
+      "width": 8
+     },
+     {
+      "ordinal": 3,
+      "width": 8
+     }
+    ],
+    "subcircuit": "9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb"
+   },
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "local",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "kind": "d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652",
+    "outputs": [
+     1
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 32
+     },
+     {
+      "ordinal": 1,
+      "width": 32
+     }
+    ],
+    "subcircuit": "e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067"
+   }
+  ]
+ },
+ "name": "accept/adjacent-shared-value",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "bias",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "boundary"
+   },
+   {
+    "id": "s8",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "sum",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "u7",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "x/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "x/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "x/2",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "x/3",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "boundary"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "x/0",
+      "x/1",
+      "x/2",
+      "x/3"
+     ],
+     "out": [
+      "sum",
+      "s8"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb",
+    "target": {
+     "encoding": "region",
+     "id": "region=0"
+    }
+   },
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 1
+    },
+    "boundary": {
+     "in": [
+      "sum",
+      "bias"
+     ],
+     "out": [
+      "u7"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "ru0"
+    ],
+    "subcircuit": "e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067",
+    "target": {
+     "encoding": "region",
+     "id": "region=1"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "bias",
+    "offset": [],
+    "ref": "bias"
+   },
+   {
+    "leaf": "s8",
+    "offset": [],
+    "ref": "s8"
+   },
+   {
+    "leaf": "sum",
+    "offset": [],
+    "ref": "sum"
+   },
+   {
+    "leaf": "u7",
+    "offset": [],
+    "ref": "u7"
+   },
+   {
+    "leaf": "x/0",
+    "offset": [],
+    "ref": "x/0"
+   },
+   {
+    "leaf": "x/1",
+    "offset": [],
+    "ref": "x/1"
+   },
+   {
+    "leaf": "x/2",
+    "offset": [],
+    "ref": "x/2"
+   },
+   {
+    "leaf": "x/3",
+    "offset": [],
+    "ref": "x/3"
+   }
+  ],
+  "roots": [
+   {
+    "count": 5,
+    "domain": "3f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd"
+   },
+   {
+    "count": 3,
+    "domain": "be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "q7/dot2-requant-s8-opened-sum"
+    },
+    "digest": "9840785580fdf8129914f105fa18439f37f7aae297e3e42ef892bd88e838abbb",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "in",
+        2
+       ],
+       [
+        "in",
+        3
+       ]
+      ],
+      "op": "mul8"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ],
+       [
+        "gate",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        2
+       ]
+      ],
+      "op": "requant_s8"
+     }
+    ],
+    "in": [
+     8,
+     8,
+     8,
+     8
+    ],
+    "out": [
+     2,
+     3
+    ]
+   },
+   {
+    "definition": {
+     "name": "q7/add32-requant"
+    },
+    "digest": "e6bef3d516ad1e3089bf75ecc0379824667fc7dd1b436d1e70be7d2fd102d067",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "add32"
+     },
+     {
+      "args": [
+       [
+        "gate",
+        0
+       ]
+      ],
+      "op": "requant_u7"
+     }
+    ],
+    "in": [
+     32,
+     32
+    ],
+    "out": [
+     1
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000002add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e2800000004000000040000000000000001000000020000000300000004000000046d756c380000000200000000000000000001000000046d756c38000000020000000002000000000300000005616464333200000002010000000001000000010000000a72657175616e745f7338000000010100000002000000020000000200000003d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652000000020000000200000000000000010000000200000005616464333200000002000000000000000000010000000a72657175616e745f75370000000101000000000000000100000001000000021111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e280000000200000000000000013f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd00000000000000050000000000000002be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd0000000000000003000000060000000000000000000000000000000000000000000000027538000000000000000000000000010000000000000001000000027538000000000000000000000000020000000000000002000000027538000000000000000000000000030000000000000003000000027538000000000100000000000000000000000000000000000000037533320000000001000000000000000100000000000000010000000275380000000004000000000000000100000002000000030000000200000004000000051111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000010000000000000000d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d6520000000200000000000000013f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd00000000000000050000000000000002be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd00000000000000030000000300000001000000000000000000000000000000000000000375333200000000000000000000000004000000000000000400000003753332000000000100000000000000020000000000000002000000027538000000000200000000000000010000000100000002",
+ "statement_digest": "0539479bb128f0a08de886abeca3a75838db8dd6b4838d0f376a351d70fb99a9",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000002add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e2800000004000000040000000000000001000000020000000300000004000000046d756c380000000200000000000000000001000000046d756c38000000020000000002000000000300000005616464333200000002010000000001000000010000000a72657175616e745f7338000000010100000002000000020000000200000003d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d652000000020000000200000000000000010000000200000005616464333200000002000000000000000000010000000a72657175616e745f75370000000101000000000000000100000001000000021111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000add07d64aa6a576e475eb4808ae4f0c36262fafb90e0f7517e95eee5e0113e280000000200000000000000013f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd00000000000000050000000000000002be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd0000000000000003000000060000000000000000000000000000000000000000000000000275380000000000000000000000000001000000000000000100000002753800000000000000000000000000020000000000000002000000027538000000000000000000000000000300000000000000030000000275380000000000010000000000000000000000000000000000000003753332000000000001000000000000000100000000000000010000000275380000000004000000000000000100000002000000030000000200000004000000051111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000010000000000000000d365b77f56364245a90afd38e7aa5d4b8501490c7237750aba29b0999e42d6520000000200000000000000013f2e3ff7b07da2f400f45fda7d253953f323dfe2b6512d42bbcd4e69b861aae4c085e16497381c5a884d310acef08b0b52ca7e2ba81bd5c8516c99206e8d5ccd00000000000000050000000000000002be6d350cebb8847a2f6782779502b20a198d4afd562919641e030c43255a4c31f4e42295162f83be43e85e6ae3b3ca130a469f2a5687b10458e1ff7f891eb3bd00000000000000030000000300000000010000000000000000000000000000000000000003753332000000000000000000000000000400000000000000040000000375333200000000000100000000000000020000000000000002000000027538000000000200000000000000010000000100000002",
+ "statement_v3_digest": "dbc17d7b7024e52cc741ff566054144dc23a8b113353f1614cbfe7ce977e0145",
+ "subcircuits_well_formed": [
+  true,
+  true
+ ],
+ "tags": [
+  "stage-1",
+  "sharing",
+  "witness"
+ ],
+ "values": [
+  [
+   16,
+   32,
+   48,
+   64,
+   3584,
+   28
+  ],
+  [
+   3584,
+   256,
+   30
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f7632000000000200000006000000011000000003eaf5aa7399a1854f16d826145c3d8777cc2ff314116e95ae1da482b6f603742eecd0002f912d3f90e3ce4342445c0625d7d631e7ad7dbfce20a2548f412e22b06d0cbacc740763f1f435c60f91bf3b55da79207a55fa40f02f4cd24fff882adb000000012000000003a3e516275a53166af49ebdbec918c6e926b3628e11eeacae2b331f5d61b19055ecd0002f912d3f90e3ce4342445c0625d7d631e7ad7dbfce20a2548f412e22b06d0cbacc740763f1f435c60f91bf3b55da79207a55fa40f02f4cd24fff882adb000000013000000003aba69de7466bb896aa4b2c4850070d876f0bbf65e4aef710d8582154accbe8b11d7969692ded382661afa7a5f451764e9475879dc0bfe1a509eb520cff818b036d0cbacc740763f1f435c60f91bf3b55da79207a55fa40f02f4cd24fff882adb000000014000000003b53b5bcf544acaf82c55adff9de1c911ebffc8808adc08ae6de64c40f5fdd86a1d7969692ded382661afa7a5f451764e9475879dc0bfe1a509eb520cff818b036d0cbacc740763f1f435c60f91bf3b55da79207a55fa40f02f4cd24fff882adb0000000400000e00000000026e770701211dc4415d75a31d79ca23fd4988ce865283a4f7ebd39c4c957d7d6ed89446ce8a96f57c4b237d94a3fc5ca7cf1e1e6edc1d8e4ec99c8899accc9678000000011c000000024fcfbdb9c738eb9f954aa11f6e30219aa19e30ca7a3e2f1ebb245ce4c939e0c3d89446ce8a96f57c4b237d94a3fc5ca7cf1e1e6edc1d8e4ec99c8899accc9678000000030000000400000e00000000026e770701211dc4415d75a31d79ca23fd4988ce865283a4f7ebd39c4c957d7d6ed89446ce8a96f57c4b237d94a3fc5ca7cf1e1e6edc1d8e4ec99c8899accc9678000000040000010000000003a58bfd307bfcc2491034e5d637f85e1bb568616011bf2e57ad1df672d8c526681bcd0545f537e2fbfe7436c45f40960f2f285c3c6e3be90631d7ed2b283a72c05c5557818d366a4e96378868ac4d4dffc66a3d0386fc90453aa44faca3be6a0d000000011e00000002ddd4f4c5d581360e77b70bf60c2470884c125c0c4b418867c0616cee0aee0a552f073d127d4962d3c0a8d411082a6e565e67cab189299763208988c9703d7ffc",
+ "witness_verdict": "accept"
+}
