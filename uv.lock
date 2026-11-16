@@ -54,8 +54,6 @@ members = [
     "verity-flock-tests",
     "verity-graph",
     "verity-graph-tests",
-    "verity-landq",
-    "verity-landq-tests",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-machine-model-tests",
@@ -2691,22 +2689,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
-
-[[package]]
-name = "verity-landq"
-version = "0.0.0"
-source = { editable = "tools/verity/landq" }
-
-[[package]]
-name = "verity-landq-tests"
-version = "0.0.0"
-source = { virtual = "tests/tools/verity/landq" }
-dependencies = [
-    { name = "verity-landq" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity-landq", editable = "tools/verity/landq" }]
 
 [[package]]
 name = "verity-lean-audit"

@@ -784,7 +784,6 @@
         "tools/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
-        "tools/verity/landq/",
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
