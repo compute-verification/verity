@@ -363,7 +363,7 @@ PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdi
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
-WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {law}, not a stratified "
+WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
               "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
               "values at W's roots, not that every table W registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
@@ -2028,8 +2028,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
-    law = summary.get("law")
-    weaker = {} if str(law).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(law=law)}
+    design = summary.get("sampling_design")
+    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},

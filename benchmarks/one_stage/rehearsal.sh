@@ -118,7 +118,7 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
     # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
     if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den='' design=${V3C_LAW-} rule=${V3C_LAW-}
+      num='' den='' design=${V3C_LAW-}; rule=$design
       [ "${PEARLPLUS_TIE_UNIFORM-}" != 1 ] || [[ $rule != rate:* ]] || rule=stratified-$rule
       [[ $rule =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
       [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
