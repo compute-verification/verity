@@ -2,7 +2,7 @@
  "source": "verifier/tests/lean/ExfiltrationTwoVectors.lean via verifier/tests/lean/generate.sh",
  "statement": "Claims.Sampling.card_influenceTwo_le_uniform",
  "inputs": {
-  "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean": "fad30fe90224356a4d41e3cb49a0abe062386fb7325ea7e985137f00da50a97b",
+  "tests/verity/protocols/proofs/spot/verifier/lean/ExfiltrationTwoVectors.lean": "fad30fe90224356a4d41e3cb49a0abe062386fb7325ea7e985137f00da50a97b",
   "security/Definitions/Claims/SamplingTwo.lean": "ab065721add873b51d1b2eaee1113f383958055fc9c9628cb119056a6447fec1",
   "security/Proofs/Flock/SamplingGeneric/TwoCount.lean": "c820464f240ec38b32d996dec9347cbdf268ed732e3a8da1e2cea34b06eac8e7",
   "security/Proofs/Flock/SamplingGeneric/TwoTable.lean": "69a83bac804c09746b5c5705f00c404bf37e52068dc9e7aa7953712df93d3395",

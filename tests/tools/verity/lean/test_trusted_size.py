@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_trusted_size", HERE.parent / "trusted_size.py")
+spec = importlib.util.spec_from_file_location("lean_trusted_size", HERE.parents[3] / "tools" / "verity" / "lean" / "trusted_size.py")
 T = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(T)
 
