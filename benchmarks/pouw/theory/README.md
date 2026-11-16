@@ -15,8 +15,7 @@ uv run python benchmarks/pouw/theory/nosum.py
 ~~~
 
 This checks that no fixed-function unit on sm_120 writes a fresh committed sum-of-products word, on a CPU, and ends
-with `19/19 checks OK`. Every check prints its count of checks passed and exits nonzero when one
-fails.
+with `19/19 checks OK`. Every check prints its count of checks passed and exits nonzero when one fails.
 
 `run.py` runs every check, each in its own process, and passes when each exits 0:
 
