@@ -38,7 +38,7 @@ import tarfile
 from fractions import Fraction
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction

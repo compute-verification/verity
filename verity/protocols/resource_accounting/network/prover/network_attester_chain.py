@@ -57,9 +57,9 @@ from verity.protocols.resource_accounting.network.verifier.schedule import SyncS
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a certifier rehearsal's run (its records through the older certifier's proxy in front of the endpoint): "
          "the network certifier path reads an active network certifier's own run (network_attester_serve.py's, or the gate's warden-rehearse)")

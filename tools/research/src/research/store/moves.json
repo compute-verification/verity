@@ -5130,6 +5130,14 @@
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml",
         "verity/runtime/pyproject.toml": "tests/verity/runtime/pyproject.toml"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/network_attester_chain.py": "verity/protocols/resource_accounting/network/prover/network_attester_chain.py",
+        "benchmarks/network_traces/wipe_egress.py": "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
+        "tests/benchmarks/network_traces/test_network_attester_chain.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_chain.py",
+        "tests/benchmarks/network_traces/test_wipe_egress.py": "tests/verity/protocols/resource_accounting/network/prover/test_wipe_egress.py"
+      }
     }
   ]
 }

@@ -25,17 +25,17 @@ from types import SimpleNamespace
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/verifier/live_challenger"))
+sys.path.append(str(Path(__file__).resolve().parents[6]))  # the root, for benchmarks.network_traces
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "verity/protocols/compose/verifier/live_challenger"))
 
 import auditor as G  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.attester.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.prover.test_scan_zk import published, sz  # noqa: E402
 
-from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import blob_files as bf  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import record_files as RF  # noqa: E402
 

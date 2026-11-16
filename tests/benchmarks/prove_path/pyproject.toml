@@ -36,7 +36,7 @@ inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/
           # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "benchmarks/network_traces/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
+          "verity/protocols/resource_accounting/network/prover/network_attester_chain.py", "verity/protocols/resource_accounting/network/attester/network_attester_serve.py",
           "verity/protocols/resource_accounting/network/attester/connection_rows_run.py",
           "verity/protocols/resource_accounting/network/attester/runner_parts.py", "verity/protocols/resource_accounting/network/attester/certifier_key.py",
           "verity/protocols/resource_accounting/network/attester/runner_cli.py",

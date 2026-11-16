@@ -251,7 +251,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for a network attester run (`served_endpoint`), on the certified I/O read off its
     cells (`network_attester_chain.io`)."""
-    from benchmarks.network_traces import network_attester_chain as WC
+    from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC
 
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
@@ -330,7 +330,7 @@ def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: 
     """A network-certifier-path step held to the network attester run the certificates step read (``run_id``): refused
     by name (`network_attester_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
-    from benchmarks.network_traces.network_attester_chain import PROXY
+    from verity.protocols.resource_accounting.network.prover.network_attester_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
         return step
@@ -1037,7 +1037,7 @@ def main(argv=None) -> int:
     if a.command == "custody":
         doc = custody(a.gates)
     elif a.command == "certs":
-        from benchmarks.network_traces import network_attester_chain as WC
+        from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC
         doc, private = WC.checked(a.network_certifier_run, a.deployed)
         doc |= {"in_the_clear": CLEAR["warden_certificates"]}
         if a.witness is not None:

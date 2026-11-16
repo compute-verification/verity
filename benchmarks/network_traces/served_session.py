@@ -621,7 +621,7 @@ def certified_io(fetch: Path) -> tuple[dict, dict]:
     """The kept network attester run's deployment.json and certified I/O (`network_attester_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
-    from benchmarks.network_traces import network_attester_chain as WC
+    from verity.protocols.resource_accounting.network.prover import network_attester_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
         with tarfile.open(fetch, "r:gz") as tar:
             tar.extractall(d, filter="data")

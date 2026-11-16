@@ -51,7 +51,7 @@
   },
   {
    "name": "the chain's certificates step",
-   "writer": "benchmarks/network_traces/network_attester_chain.py (checked; chain_record.py certs adds in_the_clear)",
+   "writer": "verity/protocols/resource_accounting/network/prover/network_attester_chain.py (checked; chain_record.py certs adds in_the_clear)",
    "files": [
     "certs.json"
    ],
