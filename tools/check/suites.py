@@ -33,7 +33,8 @@ the same inputs key alike on every node. The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
-`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine or, through a
+`~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine (a check
+slot's cache, `tests-slot-NAME`, finds the passes its machine's other slots keep: `slot_caches`) or, through a
 verdict pack (`verdicts.py`; a recorded check imports the newest recorded checks' packs), on any other. A pass names the
 recorded run that earned it (`--run`, which check passes), and a reuse prints that run.
 
@@ -254,6 +255,8 @@ _spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settin
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
 CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
+#: a check slot's test cache is `tests-slot-NAME` (`slot.py`)
+SLOT_CACHE = "tests-slot-"
 #: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer, and the
 #: layout rule it names and keys suites by (`LAYOUT`). Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
@@ -1068,9 +1071,26 @@ def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dic
     return _digest(c)
 
 
+def slot_caches() -> list[Path]:
+    """The test caches of this machine's other check slots, beside ``CACHE`` where it is one (`slot.py` gives each slot its
+    own, `tests-slot-NAME`); none for any other cache."""
+    if not CACHE.name.startswith(SLOT_CACHE):
+        return []
+    return sorted(p for p in CACHE.parent.glob(f"{SLOT_CACHE}*") if p != CACHE and p.is_dir())
+
+
 def cached(k: str) -> dict | None:
+    """The pass kept under ``k``: here, else in another slot's cache on this machine (`slot_caches`), read and never written
+    there; a pass file that is being written or is gone reads as none."""
     f = CACHE / f"{k}.json"
-    return json.loads(f.read_text()) if f.exists() else None
+    if f.exists():
+        return json.loads(f.read_text())
+    for d in slot_caches():
+        try:
+            return json.loads((d / f"{k}.json").read_text())
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 def holds(hit: dict, tree: str, lock: dict[str, dict], provided: set[str]) -> bool:

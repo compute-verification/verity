@@ -1291,6 +1291,31 @@ def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp
     assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
 
 
+def test_a_check_slot_reuses_a_pass_another_slot_of_its_machine_keeps_and_writes_nothing_there(tmp_path):
+    """A check slot's cache (`tests-slot-NAME`) finds a pass the machine's other slot keeps under the same key, cites the run
+    that earned it, and leaves that slot's cache as it was; a pass file there that doesn't parse (one being written) is no
+    pass, so its suite runs.  A cache that isn't a slot's reads no other."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"one": "def test_one():\n    pass\n", "two": "def test_two():\n    pass\n"})
+    caches = tmp_path / "home" / ".cache" / "verity"
+    a, b = ({"VERITY_TEST_CACHE": str(caches / f"tests-slot-{n}")} for n in "ab")
+    p = _run_suite(root, tmp_path, "--run", "r-a", extra=a)
+    assert p.returncode == 0 and "passed  one" in p.stdout and "passed  two" in p.stdout, p.stdout + p.stderr
+    kept = {f: f.read_bytes() for f in (caches / "tests-slot-a").rglob("*") if f.is_file()}
+    [one] = [f for f in (caches / "tests-slot-a").glob("*.json") if json.loads(f.read_text()).get("suite") == "one"]
+    one.write_bytes(kept[one][: len(kept[one]) // 2])
+    kept[one] = one.read_bytes()
+
+    p = _run_suite(root, tmp_path, "--run", "r-b", extra=b)
+    assert p.returncode == 0 and "passed  one" in p.stdout, p.stdout + p.stderr
+    assert re.search(r"cached  two +passed at \S+ \S+ \S+ in run r-a\n", p.stdout), p.stdout
+    assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
+    assert {f: f.read_bytes() for f in (caches / "tests-slot-a").rglob("*") if f.is_file()} == kept
+
+    p = _run_suite(root, tmp_path, "--run", "r-c", extra={"VERITY_TEST_CACHE": str(caches / "tests")})
+    assert p.returncode == 0 and "2 suites: 2 passed (0 cached)" in p.stdout, p.stdout + p.stderr
+
+
 def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp_path):
     """check's verity-flock and verity-lean-audit run after its lean-build step, with `lake` on the PATH; run on their own they
     skipped the Lean tests or found no `verity-verify-proof`. So suites.py builds the verifier first, only for those suites, not when
