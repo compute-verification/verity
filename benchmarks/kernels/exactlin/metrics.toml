@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "kernels/exact-linear-decode-over-stock"
+title = "Exact linear time over stock"
+owner = "kernels"
+unit = "times stock"
+axis = "The int8-exact linears' time for one decode step of Llama 3.2 1B at batch 32 over vLLM's stock W8A8 int8 on one H200."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b"
+every = "7d"
+goal = "kernels/code-at-overhaul-bar"
