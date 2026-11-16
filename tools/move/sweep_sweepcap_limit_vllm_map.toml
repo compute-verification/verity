@@ -1,0 +1,168 @@
+# The plainer word for "cap" in vllm's prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_limit_vllm_map.toml`
+# renames, "cap" where a comment, a docstring or Markdown's text says a limit or a bound that is not Pearl's (GLOSSARY.md,
+# Cap: Pearl's cap is its inert-work bound, and the word keeps its other senses where the Glossary says so).
+#
+# Prose only (`scope = "prose"`), and only in the files listed, whose every "cap" is of one sense: a request's or a compiler's
+# length limit, a tooling limit, a session's or a chunk's, which this lane's prose says "limit" for, and a slowdown's or a
+# stacking gate's, which it says "bound" for. SPOT's served cap, the certifier's response cap, a soft cap and Flock's Merkle cap
+# keep the word ([keep]); the names (`max_tokens_cap`, `HIT_CAP`, `rekey_cap`) are not prose and stay. The other way to clear
+# these sites is `OWN_CAPS` in the retired-terms lint; the note says which suits each file.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = [
+    "adapters/vllm/tests/check/test_commit_tokens.py",
+    "adapters/vllm/tests/check/test_compare_skipped_entries.py",
+    "adapters/vllm/tests/check/test_global_match.py",
+    "adapters/vllm/tests/check/test_oracle_compare.py",
+    "adapters/vllm/tests/check/test_prescribed_input_linkage.py",
+    "adapters/vllm/tests/check/test_replay_length_rule.py",
+    "adapters/vllm/tests/check/test_sampled_replay.py",
+    "adapters/vllm/tests/check/test_verdict.py",
+    "adapters/vllm/tests/compiler/test_network_certifier_replay_chain.py",
+    "adapters/vllm/tests/lint/test_p09_layering.py",
+    "adapters/vllm/tests/lint/test_p10_size.py",
+    "adapters/vllm/tests/pipeline/test_advice.py",
+    "adapters/vllm/tests/pipeline/test_advice_windows.py",
+    "adapters/vllm/tests/pipeline/test_boundary_rows.py",
+    "adapters/vllm/tests/pipeline/test_boundary_tables.py",
+    "adapters/vllm/tests/pipeline/test_circuit_db.py",
+    "adapters/vllm/tests/pipeline/test_commit_arb.py",
+    "adapters/vllm/tests/pipeline/test_done_source.py",
+    "adapters/vllm/tests/pipeline/test_engine_schedule.py",
+    "adapters/vllm/tests/pipeline/test_global_program_regress.py",
+    "adapters/vllm/tests/pipeline/test_node_window_rows.py",
+    "adapters/vllm/tests/pipeline/test_row_chain.py",
+    "adapters/vllm/tests/pipeline/test_row_tables.py",
+    "adapters/vllm/tests/pipeline/test_serve_h1.py",
+    "adapters/vllm/tests/pipeline/test_serve_seal.py",
+    "adapters/vllm/tests/pipeline/test_serving_rows_experts.py",
+    "adapters/vllm/tests/pipeline/test_tp_build_width.py",
+    "adapters/vllm/tests/pipeline/test_tp_token_budget.py",
+    "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py",
+    "adapters/vllm/tests/protocols/test_credit_gate.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_commit.py",
+    "adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py",
+    "adapters/vllm/tests/protocols/test_rt4_h1_challenger.py",
+    "adapters/vllm/tests/records/test_commit_binding.py",
+    "adapters/vllm/tests/records/test_declared_stop.py",
+    "adapters/vllm/tests/records/test_served_tokens.py",
+    "adapters/vllm/tests/regression/checks/executed_prefix.py",
+    "adapters/vllm/tests/regression/checks/replay_partition.py",
+    "adapters/vllm/tests/regression/checks/step_segmentation.py",
+    "adapters/vllm/tests/regression/rebaseline.py",
+    "adapters/vllm/tests/regression/test_regression.py",
+    "adapters/vllm/tests/test_target_family.py",
+    "adapters/vllm/tools/ratchet_gate.py",
+    "adapters/vllm/tools/wgbench/wgbench.py",
+    "adapters/vllm/verity_vllm/check/c2_rules.py",
+    "adapters/vllm/verity_vllm/check/commit_tokens.py",
+    "adapters/vllm/verity_vllm/check/executed_prefix.py",
+    "adapters/vllm/verity_vllm/check/match/chronology.py",
+    "adapters/vllm/verity_vllm/check/match/declaration.py",
+    "adapters/vllm/verity_vllm/check/match/global_match.py",
+    "adapters/vllm/verity_vllm/check/match/global_match_fast.py",
+    "adapters/vllm/verity_vllm/check/match/sampler_geometry.py",
+    "adapters/vllm/verity_vllm/check/oracle_compare.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.circuit-check.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+    "adapters/vllm/verity_vllm/compiler/replay_chain.py",
+    "adapters/vllm/verity_vllm/compiler/replay_step.py",
+    "adapters/vllm/verity_vllm/llm.py",
+    "adapters/vllm/verity_vllm/ops/canary.sh",
+    "adapters/vllm/verity_vllm/ops/cov_pod.sh",
+    "adapters/vllm/verity_vllm/pipeline/advice.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/derived.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
+    "adapters/vllm/verity_vllm/pipeline/circuit_db.py",
+    "adapters/vllm/verity_vllm/pipeline/commit_arb.py",
+    "adapters/vllm/verity_vllm/pipeline/config_record.py",
+    "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/global_program.py",
+    "adapters/vllm/verity_vllm/pipeline/launch_context.py",
+    "adapters/vllm/verity_vllm/pipeline/research.py",
+    "adapters/vllm/verity_vllm/pipeline/row.py",
+    "adapters/vllm/verity_vllm/pipeline/row_config.py",
+    "adapters/vllm/verity_vllm/pipeline/row_tp.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
+    "adapters/vllm/verity_vllm/pipeline/tp/commit.py",
+    "adapters/vllm/verity_vllm/pipeline/vu_export.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+    "adapters/vllm/verity_vllm/records/boundary_commit.py",
+    "adapters/vllm/verity_vllm/records/boundary_tables.py",
+    "adapters/vllm/verity_vllm/records/global_match.py",
+    "adapters/vllm/verity_vllm/records/served_tokens.py",
+    "adapters/vllm/verity_vllm/records/workload.py",
+    "verity/commitments/periods/interface.py",
+    "verity/commitments/periods/rows.py",
+    "verity/commitments/periods/tests/test_interface.py",
+]
+
+[words_in.words]
+"a cap" = "a limit"
+"A cap" = "A limit"
+"caps" = "limits"
+"Caps" = "Limits"
+"cap" = "limit"
+"Cap" = "Limit"
+
+[keep]
+patterns = [
+    '''(?i:served[ -]cap|response[ -]cap|soft[ -]cap|merkle[ -]cap|capability|cap ℓ|max_tokens cap)''',
+    '''(?<![\w])cap-\w|\w-cap(?![\w])''',
+]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]

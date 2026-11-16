@@ -1,0 +1,83 @@
+# The plainer word for "cap" in network-accounting's prose: what `tools/move/rename.py --map tools/move/sweep_sweepcap_limit_network_accounting_map.toml`
+# renames, "cap" where a comment, a docstring or Markdown's text says a limit or a bound that is not Pearl's (GLOSSARY.md,
+# Cap: Pearl's cap is its inert-work bound, and the word keeps its other senses where the Glossary says so).
+#
+# Prose only (`scope = "prose"`), and only in the files listed, whose every "cap" is of one sense: a request's or a compiler's
+# length limit, a tooling limit, a session's or a chunk's, which this lane's prose says "limit" for, and a slowdown's or a
+# stacking gate's, which it says "bound" for. SPOT's served cap, the certifier's response cap, a soft cap and Flock's Merkle cap
+# keep the word ([keep]); the names (`max_tokens_cap`, `HIT_CAP`, `rekey_cap`) are not prose and stay. The other way to clear
+# these sites is `OWN_CAPS` in the retired-terms lint; the note says which suits each file.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = [
+    "benchmarks/datacenter/datacenter/memory.py",
+    "benchmarks/datacenter/tests/test_datacenter.py",
+    "benchmarks/datacenter/tests/test_memory.py",
+    "benchmarks/prove_path/prove_path.py",
+    "benchmarks/prove_path/tests/test_prove_path.py",
+    "benchmarks/prove_path/tests/test_records_audit.py",
+    "benchmarks/prove_path/window_cost.py",
+]
+
+[words_in.words]
+"a cap" = "a limit"
+"A cap" = "A limit"
+"caps" = "limits"
+"Caps" = "Limits"
+"cap" = "limit"
+"Cap" = "Limit"
+
+[keep]
+patterns = [
+    '''(?i:served[ -]cap|response[ -]cap|soft[ -]cap|merkle[ -]cap|capability|cap ℓ|max_tokens cap)''',
+    '''(?<![\w])cap-\w|\w-cap(?![\w])''',
+]
+
+[rewrite]
+exclude = [
+    "GLOSSARY.md",
+    "tests/lint/test_repo_retired_terms.py",
+    "tests/test_retired_terms.py",
+    "tools/move/**",
+    "tools/research/**",
+    "tools/sweep/**",
+    "tools/check/tests/test_move_check.py",
+    "archive/**",
+    ".agents/skills/friction/SKILL.md",
+    "**/CHANGELOG.md",
+    "fixtures/**",
+    "**/fixtures/**",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/lake-manifest.json",
+    "**/*.lean",
+    "**/lean-audit.json",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+    "benchmarks/pouw/harness/price_twins.json",
+    "benchmarks/slowdown/**",
+    "benchmarks/nci/**",
+    "benchmarks/training_slowdown/**",
+    "benchmarks/circuit_properties/**",
+    "benchmarks/inference_only/**",
+    "verity/protocols/policy/inference_only/**",
+    "verity/protocols/accounting/certifier/**",
+    "benchmarks/network_traces/**",
+    "benchmarks/network_e2e/**",
+    "benchmarks/certifier_*/**",
+    "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "**/*.sha256",
+]
