@@ -202,11 +202,6 @@
    "digest": "1b59b565636655353a14b0e1e88b8f4667cd698ef05191011f5a8b68d8b18137",
    "why": "The certificates the bound speaks of: S bits a tick over the capacity window, with the device's on-chip state and its side channels' capacity over a round, within the state bound S₀."
   },
-  "Properties.NetworkScan.Flattens": {
-   "owner": "@network-accounting",
-   "digest": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055",
-   "why": "The circuits the scan's fit is stated of: each Boolean-profile circuit that is the scan's Program flattened in its canonical layout."
-  },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
    "digest": "a626c0050b97025f8ee1dcdc0e4f0e81e36d77e3e5cf55a2a2d43325a95dd547",
@@ -513,6 +508,12 @@
   "Properties.NetworkRecords.FramesOf": {
    "owner": "@network-accounting",
    "digest": "15939184318b9517079ed653af45cc40bfc707ff19a88343c31ce50a25ce0549",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Properties.NetworkScan.Flattens": {
+   "owner": "@network-accounting",
+   "digest": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -6744,8 +6745,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Properties.NetworkScan.Flattens"],
-    "open": [],
+    "domain": [],
+    "open": ["Properties.NetworkScan.Flattens"],
     "reads": []
    },
    "type_hash": "3bc0c8f7cfb2d13135dd40e28b4c705bdbbc93fe4b623452ba8387bbcb3288b2",
