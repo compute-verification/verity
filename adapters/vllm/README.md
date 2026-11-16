@@ -162,10 +162,15 @@ vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh`
 relative to this directory, so run them from here. The suite runs remotely like every suite
 (`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
 
-To serve on a machine of your own, clone this repository (`git clone --filter=blob:none
-https://github.com/compute-verification/verity`, which leaves out the history's file contents) and
-run `bash adapters/vllm/verity_vllm/ops/serve_fresh.sh [--work DIR] [--gpu N]` from the clone's root (`--dry-run` first
-shows every path and step). It builds the environment, fetches the public Llama 3.2 1B and makes its INT8 checkpoint, serves
+To serve on a machine of your own, clone this repository without the history's file contents and run the script from the
+clone's root (`--dry-run` first shows every path and step):
+
+```bash
+git clone --filter=blob:none https://github.com/compute-verification/verity && cd verity
+bash adapters/vllm/verity_vllm/ops/serve_fresh.sh
+```
+
+It builds the environment, fetches the public Llama 3.2 1B and makes its INT8 checkpoint, serves
 one request with every value committed, and seals it, all under `./.verity-work` (or `--work DIR`), whatever your environment
 names. `--gpu N` picks the card by its `nvidia-smi` index; without it the script takes `CUDA_VISIBLE_DEVICES`, else the
 first card of compute capability 9.0. The tree does not make the machine:
