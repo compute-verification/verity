@@ -29,7 +29,7 @@ where its command says (`--verdict`, `--json`, `--out`).
 
   It passes when every script exits 0, and `NAME ...` runs those alone. Without `--quick`, `fold_wide32.py` searches
   for CPU-hours. `--verdict PATH` writes the run's verdict there and each script's beside it.
-- **A check** runs on `exact_kit`'s registry (`exact_kit/README.md`):
+- **A check** runs on `exact_kit`'s registry (`exact_kit/DESIGN.md`):
 
   ```text
   uv run python benchmarks/pouw/theory/NAME.py [--quick] [--mutations] [--verdict PATH]
