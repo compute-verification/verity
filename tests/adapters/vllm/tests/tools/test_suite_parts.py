@@ -31,8 +31,8 @@ def test_every_module_of_the_suite_is_in_exactly_one_part(n):
 
 def test_the_suite_has_its_test_modules_and_none_of_its_helpers():
     names = SP.modules()
-    assert "tests/conftest.py" not in names and "tests/program/crosscheck.py" not in names
-    assert "tests/tools/test_suite_parts.py" in names
+    assert "conftest.py" not in names and "program/crosscheck.py" not in names
+    assert "tools/test_suite_parts.py" in names
     assert all(Path(m).name.startswith("test_") or m.endswith("_test.py") for m in names)
 
 

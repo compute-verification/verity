@@ -24,7 +24,7 @@ def _load(name, path):
     return mod
 
 
-PC = _load("enc_pool_cut", HERE.parent / "pool_cut.py")
+PC = _load("enc_pool_cut", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "pool_cut.py")
 RI, RP = PC.RI, PC.RP
 
 KEYS = ("steps", "windows", "cut", "closed windows", "hit", "take", "alloc", "cache", "free", "max carried keys",

@@ -5,7 +5,7 @@ import importlib.util
 import subprocess
 from pathlib import Path
 
-MOVE = Path(__file__).resolve().parents[1]
+MOVE = Path(__file__).resolve().parents[3] / "tools" / "move"
 spec = importlib.util.spec_from_file_location("flock_base_for_tests", MOVE / "flock_base.py")
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)

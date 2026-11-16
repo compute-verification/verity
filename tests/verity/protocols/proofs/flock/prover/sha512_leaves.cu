@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-#include "../cuda/sha512.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/sha512.cuh"
 
 static void launch_leaves(int path, const uint8_t* d, uint8_t* tree, long long n, int leaf_size) {
     const int tpb = 256, wpb = tpb >> 5;

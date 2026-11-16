@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 

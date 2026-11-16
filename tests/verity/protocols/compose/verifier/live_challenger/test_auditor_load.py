@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[5] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger"))
 import auditor as A  # noqa: E402
 
 T0 = datetime(2026, 10, 26, 4, 0, 0, tzinfo=UTC)
