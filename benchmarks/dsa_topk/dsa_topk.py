@@ -19,19 +19,14 @@ The canonical row's selection is the registered relation's top-k set (`verity_vl
 The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``. Reading the row once, it
 writes the keys at or above ``tau`` in ascending order and counts them, then checks the candidate
 (``#{key > tau} < k <= #{key >= tau}``): with no tie across the k-th key the row stands as written; with one, the row
-is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again. In a row
-split over programs, a failed row's programs count its keys in the candidate's window (its top 13 bits and their
-two neighbours: the fast kernels' fp16 coarse bin and what rounds into it) by their offset in it, so where the k-th
-key is in that window the row's programs find it and write the row in three more reads of their segments; any
-other failed row, and every failed row of one program, is bisected over the keys by one program. Every way the
-output is the row's canonical one. ``VERITY_DSA_TOPK=canonical-bisect`` bisects every failed row (`MODES`). Rows of
+is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by refinement
+or bisection over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
 ``VERITY_DSA_TOPK_LOG=DIR`` keeps, per process, ``DIR/dsa_topk.PID.json`` (`log_to`), from the plugin's load on and
 whatever ends the process: each op's calls and canonicalizing launches as of its last call, and the rows rewritten,
-those with a tie across the k-th key, those bisected and those refined from the table, as its devices counted them
-when they were last read.
+those with a tie across the k-th key, and those bisected or refined, as its devices counted them when they were last read.
 """
 from __future__ import annotations
 

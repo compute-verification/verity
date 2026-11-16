@@ -45,9 +45,6 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   On another load it is the cost over the passes taken as independent, by vLLM's client the benchmark's paired
   ratio at the rung where stock is saturated (`serve_tax.serving_cost`), by the corpus client its tax over reps
   (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals; that has no verdict;
-- ``layers``, on a sessions load, in no verdict: the cost split by layer (`LAYERS`), each arm the job served over the
-  arm it adds one change to (the seeds sent, the step trace and ids, the canonical top-k, its refinement), the
-  benchmark's own cost with its interval over lifetimes;
 - ``advice``: what the schedule of the pass the replay re-ran costs as advice, in bits a request, by the scheduler
   replay's loader (`ENCODINGS`: its ``draft_table`` of that pass's records): the arrivals, which a serve under the
   certified tick does not send, and the count of drafts each row kept, charged at the bits of its code, which the

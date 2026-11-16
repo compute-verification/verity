@@ -3,11 +3,7 @@ that `dsa_topk` imports without Triton and Triton resolves the helpers through t
 
 A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum and one reduction a block serve both;
 ``BLOCK`` must stay below 2**15, and canon_row reads it as 32-key words. A row's counts accumulate per lane and
-reduce once.
-
-A split row's failed candidate is refined (``fix_find``, ``fix_count``, ``fix_emit`` under REFINE) where the k-th key
-lies within the candidate's 13-bit key prefix or a neighbour's, since fp16 rounds a key just below a coarse bin's edge
-into the bin; elsewhere one program bisects it. The window tables are all zeros between calls."""
+reduce once."""
 import triton
 import triton.language as tl
 from triton.language.extra import libdevice

@@ -105,10 +105,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   sampled pass of each beside ``prod`` and ``prod-record`` says which moves a figure, the share of draft tokens
   accepted among them: ``prod-seeded`` against ``prod`` is the seed, ``prod-record`` against ``prod-trace`` the
   canonical top-k, and ``prod-trace`` against ``prod-seeded`` the record and its ids. Neither is an arm a replay is
-  promised for;
-- ``prod-record-bisect``: ``prod-record`` with its top-k bisecting every wrong fast selection by one program (the
-  plugin's ``canonical-bisect``) where ``prod-record``'s refines a split row's in parallel: against it, what the
-  refinement saves. The two write the same rows.
+  promised for.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -474,8 +471,9 @@ MODELS = {
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
                        Part("the canonical top-k", 8.37, ("the canonical top-k",),
-                            "prod-record over prod-trace on the agentic load at 4 users, its pass bisecting every "
-                            "wrong fast selection by one program", "measured"),
+                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
+                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
