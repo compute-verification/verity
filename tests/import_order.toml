@@ -781,6 +781,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
+    "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
 ]
 
 [[place]]
@@ -820,6 +821,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
 ]
@@ -854,6 +856,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
+    "verity/protocols/resource_accounting/network/prover/network_attester_chain.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
@@ -861,6 +864,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/prover/window_chain.py",
     "verity/protocols/resource_accounting/network/prover/window_charge.py",
+    "verity/protocols/resource_accounting/network/prover/wipe_egress.py",
 ]
 
 [[place]]
