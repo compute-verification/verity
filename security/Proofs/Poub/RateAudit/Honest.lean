@@ -51,6 +51,33 @@ def readBits (a : ℕ) : (n : ℕ) → (Bits n → Chip N b h ρ α) → Chip N 
   | 0, k => k Fin.elim0
   | n + 1, k => .ingress a (fun x => readBits (a + 1) n (fun v => k (Fin.cons x v)))
 
+theorem readBits_eq (w : World N b h ρ) (a n : ℕ) (k : Bits n → Chip N b h ρ α) :
+    let v : Bits n := fun i => w.mem (a + i)
+    (readBits a n k).run w = (k v).run w ∧ (readBits a n k).ingressBits w = (k v).ingressBits w + n ∧
+    (readBits a n k).addrs w = Finset.Ico a (a + n) ∪ (k v).addrs w ∧
+    (readBits a n k).linkBits w = (k v).linkBits w ∧ (readBits a n k).rebuilds w = (k v).rebuilds w ∧
+    (readBits a n k).queries w = (k v).queries w := by
+  induction n generalizing a with
+  | zero =>
+    have : (fun i : Fin 0 => w.mem (a + i)) = Fin.elim0 := funext (fun i => i.elim0)
+    simp [readBits, this]
+  | succ n ih =>
+    have hc : (Fin.cons (w.mem a) (fun i : Fin n => w.mem (a + 1 + i)) : Bits (n + 1)) =
+        fun i : Fin (n + 1) => w.mem (a + i) := by
+      funext i
+      refine Fin.cases ?_ (fun i => ?_) i
+      · simp
+      · simp only [Fin.cons_succ, Fin.val_succ]
+        congr 1
+        omega
+    have hI : insert a (Finset.Ico (a + 1) (a + 1 + n)) = Finset.Ico a (a + (n + 1)) := by
+      ext x
+      simp only [Finset.mem_insert, Finset.mem_Ico]
+      omega
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ := ih (a + 1) (fun v => k (Fin.cons (w.mem a) v))
+    simp only [readBits, Chip.run, Chip.ingressBits, Chip.addrs, Chip.linkBits, Chip.rebuilds, Chip.queries]
+    rw [h1, h2, h3, h4, h5, h6, hc, ← Finset.insert_union, hI]
+    exact ⟨rfl, by omega, rfl, rfl, rfl, rfl⟩
 
 /-- Query the oracle at each listed word of `V` under the stream `R`, recording the tag. -/
 def tagAll (R : Bits ρ) (V : Store N b) : List (Fin N) → (Fin N → Bits h) → Chip N b h ρ (Fin N → Bits h)

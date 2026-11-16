@@ -236,6 +236,7 @@ theorem mul_le_width (N : ℕ) : N * 2 ^ 64 ≤ 2 ^ width N := by
     _ = 2 ^ (Nat.size N + 64) := by rw [pow_add]
     _ ≤ 2 ^ width N := Nat.pow_le_pow_right (by norm_num) h2
 
+theorem bitsVal_lt {L : ℕ} (b : Pous.Bits L) : Pous.bitsVal b < 2 ^ L := (Pous.bitsEquiv L b).isLt
 
 theorem bitsVal_symm {w : ℕ} (x : Fin (2 ^ w)) : Pous.bitsVal ((Pous.bitsEquiv w).symm x) = x := by
   simp [Pous.bitsVal]

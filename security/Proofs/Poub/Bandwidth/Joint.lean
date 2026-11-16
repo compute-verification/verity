@@ -150,6 +150,21 @@ noncomputable def named (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r 
     (code : Bits S × Bits r × Finset ℕ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ y, (decoded A O r code)[p]? = some y ∧ y.1 = j)
 
+theorem card_fib (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
+    (fib A O r code).card ≤ (2 ^ b) ^ (N - (named A O r code).card) := by
+  classical
+  calc (fib A O r code).card ≤ (Finset.univ : Finset (↥(named A O r code)ᶜ → Bits b)).card := by
+        refine Finset.card_le_card_of_injOn (fun x j => x.1 j) (fun _ _ => Finset.mem_univ _) ?_
+        intro x₁ h₁ x₂ h₂ he
+        simp only [fib, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at h₁ h₂
+        refine Prod.ext (funext fun j => ?_) (h₁.1.trans h₂.1.symm)
+        by_cases hj : j ∈ named A O r code
+        · simp only [named, Finset.mem_filter, Finset.mem_univ, true_and] at hj
+          obtain ⟨p, hp, y, hy, rfl⟩ := hj
+          rw [h₁.2 p hp y hy, h₂.2 p hp y hy]
+        · exact congrFun he ⟨j, by simpa using hj⟩
+    _ = (2 ^ b) ^ (N - (named A O r code).card) := by
+        simp
 
 theorem card_compress_le (A : JointDevice N b h S c G q n) (hA : A.Recovers) (O : Oracle N b h) (k lam : ℕ)
     [DecidablePred (fun x : Store N b × Bits n =>

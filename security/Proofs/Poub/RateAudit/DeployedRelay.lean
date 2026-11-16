@@ -151,6 +151,7 @@ noncomputable def memWorld (w : IWorld N b h ρ) : IWorld N b h ρ :=
 @[simp] theorem memWorld_oracle (w : IWorld N b h ρ) : (memWorld w).oracle = w.oracle := rfl
 @[simp] theorem memWorld_side (w : IWorld N b h ρ) : (memWorld w).side = w.side := rfl
 @[simp] theorem memWorld_stream (w : IWorld N b h ρ) : (memWorld w).stream = w.stream := rfl
+@[simp] theorem memWorld_store (w : IWorld N b h ρ) : (memWorld w).store = w.store := rfl
 
 theorem memWorld_mem_even (w : IWorld N b h ρ) (a : ℕ) : (memWorld w).mem (2 * a) = w.mem a := by
   simp [memWorld, memOf]

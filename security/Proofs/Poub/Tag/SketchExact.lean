@@ -55,6 +55,11 @@ theorem bitLength_bounds {n : ℕ} (h : n ≠ 0) :
   rw [ite_eq_right h, Nat.add_sub_cancel]
   exact ⟨Nat.le_add_left _ _, Nat.log2_self_le h, Nat.lt_log2_self⟩
 
+theorem bitLength_le {n m : ℕ} (h : n ≠ 0) (hn : n < 2 ^ m) : bitLength n ≤ m := by
+  obtain ⟨h1, h2, -⟩ := bitLength_bounds h
+  have : 2 ^ (bitLength n - 1) < 2 ^ m := lt_of_le_of_lt h2 hn
+  have := (Nat.pow_lt_pow_iff_right (by norm_num)).1 this
+  omega
 
 theorem bitLength_mul_pow {n : ℕ} (h : n ≠ 0) (r : ℕ) : bitLength (n * 2 ^ r) = bitLength n + r := by
   obtain ⟨h1, h2, h3⟩ := bitLength_bounds h
