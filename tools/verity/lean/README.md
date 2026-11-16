@@ -200,11 +200,14 @@ keeps or drops from and never adds to.
   `claims.witnesses`, a reason under `claims.not`, or its guarantee under `claims.generic` (`claim_failures`).
 - `witnesses`, `unwitnessed`, `witnesses_assumed`: a guarantee of an acceptance or an exclusion has `honest` and
   `nontrivial` witnesses, or an `unwitnessed` entry, which only shrinks (`witness_failures`, `witness_scope`,
-  `assumed_failures`). Where an honest witness is bounded by the vocabulary's published error, each target (its
-  vocabulary, parameters and subprotocol, `Facts.lean`'s `targets`) has a lemma under the entry's `below_one`
-  concluding `Verity.Vocab.ErrorBelowOne` there, at the witness's own parameters, or is listed in an `unwitnessed`
-  entry {type_hash, missing: below_one, targets, owner, why}: a bound of 1 or more holds of every prover
-  (`error_failures`, refused as `witnesses.honest-error`).
+  `assumed_failures`). Where an honest witness is bounded by the vocabulary's published error (a direct use of
+  `Vocab.error` or `Vocab.delta`), each target (its vocabulary, parameters, files and commitments, and subprotocol,
+  `Facts.lean`'s `targets`) has a lemma under the entry's `below_one` concluding `Verity.Vocab.ErrorBelowOne` of
+  `Properties.Verity.Game` there, the bound below 1 at the honest strategy, or is listed in an `unwitnessed` entry
+  {type_hash, missing: below_one, targets, owner, why}: a bound of 1 or more holds of every prover (`error_failures`,
+  refused as `witnesses.honest-error`). The lemma binds the witness's own parameters and vocabulary by `∀` or names
+  them, and may choose the files and commitments by `∃` only where the witness binds them. A walk that runs out of
+  depth or budget or raises is `witnesses.targets-unread`, and `--update` keeps the entry whole.
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,
   so a proof-only tactic belongs in a module of its own. The package has a `lakefile.toml`, not a `lakefile.lean`.
