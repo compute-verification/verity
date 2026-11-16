@@ -5,7 +5,7 @@ for the dot products GLM-5.3 serves. The report is the throughput frontier over 
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
-verity bench proof_throughput workloads                       the VU families and their B caps
+verity bench proof_throughput workloads                       the proof-block families and their B caps
 verity bench proof_throughput plan  [--workload W] [--store]  each point's identity (and its passing prover run)
 verity bench proof_throughput run   [--workload W] [--lo B] [--hi B] [--store] [--dry-run]   one recorded prover run per point
 verity bench proof_throughput verify --prove-run RUN [--node N]   the Lean verifier point on that run's bundle (vy-nebius-cpu-3)

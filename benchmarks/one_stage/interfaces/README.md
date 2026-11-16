@@ -26,7 +26,7 @@ reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
 docket, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
-prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
+prover can't pick it), a subset sample of other than its k proof blocks, and a `draw.record` that isn't a sample of the
 bundle's units under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
 refuses to sample one).
 

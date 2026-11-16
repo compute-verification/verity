@@ -176,7 +176,7 @@ port, are what makes a verifier proven. All protocols share one Lake package for
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
 round trips and refusals; `core-protocol-example` runs it.
 
-## Periods (`CoreProtocol/Period.lean`)
+## Ticks, spans and monitoring periods (`CoreProtocol/Period.lean`)
 
 The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
 verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
