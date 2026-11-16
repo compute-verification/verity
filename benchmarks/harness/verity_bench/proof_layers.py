@@ -1,6 +1,6 @@
 """`verity bench prove layers`: the proof benchmark by layer, one table of its four benchmark results (Flock, Flock
 with zero knowledge, with sampling, with recursion), each read from what its own command wrote
-(benchmarks/prove/README.md, "The proof system by layer").
+(benchmarks/prove/README.md, "The proof benchmark by layer").
 
     verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
 
