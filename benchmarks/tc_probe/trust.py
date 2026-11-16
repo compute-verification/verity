@@ -194,16 +194,16 @@ class IndependentReference:
 
 
 _HAWKEYE = ("verity/circuits/silicon/hawkeye/PIN.json", "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
-            "benchmarks/numerical/tests/reference/test_hawkeye_close.py")
+            "tests/benchmarks/numerical/reference/test_hawkeye_close.py")
 INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     "sm80.mma.m16n8k16.bf16": (
         IndependentReference("hawkeye-source-close", "simulator", _HAWKEYE, note="Hawkeye's pinned A100 simulator, ported source-close"),
         IndependentReference("veritor-tc-total-a100-specials", "second-harness",
-                             ("verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",),
+                             ("tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",),
                              replay="a100/mma_special", note="veritor's tc-total A100 captures (31,290 structured cases) replayed by tc_probe"),
     ),
     "sm89.mma.m16n8k16.bf16": (
-        IndependentReference("veritor-golden-ada-bf16", "second-harness", ("verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",),
+        IndependentReference("veritor-golden-ada-bf16", "second-harness", ("tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",),
                              replay="golden/ada_bf16_m16n8k16.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-source-close", "simulator", _HAWKEYE),
     ),
@@ -212,14 +212,14 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     ),
     "sm90.wgmma.m64n8k16.bf16": (
         IndependentReference("veritor-h100-wgmma-bf16", "second-compiled-path",
-                             ("verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
-                              "verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/summary.json"),
+                             ("tests/verity/circuits/ops/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
+                              "tests/verity/circuits/ops/fixtures/tc-hopper-2026-09-07/summary.json"),
                              replay="tc-hopper-2026-09-07/special.reduced",
                              note="veritor: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
                                   "(14 families, non-finite included) replayed by tc_probe --replay-capture"),
     ),
     "sm89.mma.m16n8k32.e4m3": (
-        IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",),
+        IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json",),
                              replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
