@@ -29,7 +29,7 @@ is ``adv``'s count. What holds ``cert`` to the certified record is a stand-in: t
 under the network attester's salt (`compile_slice_zk`), until max_tokens is read from the certified body. The circuit bounds
 max_tokens only from above, so until then a lower max_tokens the output still fits passes at a lower charge. H = O = 0: the
 slice's class runs inside the pool bound with the network attester's ingress, so its windows send no hits and no order
-entries, and a window that sends either is CompileSlice_v1's stand-in, the
+entries, and an execution phase that sends either is CompileSlice_v1's stand-in, the
 still-sent fields, as before.
 
 **The reference** is `check` and `case`: `compile_slice`'s with `CODE`, on a `Slice` that carries each arrival's

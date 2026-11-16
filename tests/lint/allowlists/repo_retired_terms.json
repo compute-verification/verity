@@ -3146,7 +3146,7 @@
     {"file": "tests/verity/protocols/proofs/spot/prover/test_cost_glm53.py", "count": 3},
     {"file": "tests/verity/protocols/proofs/spot/prover/test_cost_recursion.py", "count": 2},
     {"file": "tests/verity/protocols/proofs/spot/prover/test_cost_transformer.py", "count": 8},
-    {"file": "verity/protocols/proofs/spot/verifier/README.md", "count": 51},
+    {"file": "verity/protocols/proofs/spot/verifier/README.md", "count": 52},
     {"file": "verity/protocols/proofs/spot/verifier/consumers.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot.lean", "count": 1},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerCoins.lean", "count": 8},

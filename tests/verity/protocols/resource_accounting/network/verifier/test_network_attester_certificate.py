@@ -1,4 +1,4 @@
-"""Network certificates (record v2 on SHA-512): the layout restated from `certificate`'s docstring, the frame tree, what the digest
+"""Network attestations (record v2 on SHA-512): the layout restated from `certificate`'s docstring, the frame tree, what the digest
 and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
 audit's on every scenario of the audit and commitment tests. The mark certificate: what it signs, each refusal of
 its opening by name, the issuer signing none when its signer refuses or its coins repeat, and no second one of a mark

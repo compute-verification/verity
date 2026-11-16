@@ -90,7 +90,7 @@ The constant-rate Program adds these:
 15. **One clock per spatial unit.** Every egress link reads the same execution phase's sync, and the audit enforces it
     (`Audit.syncs`). A clock per link is a different advice type, covered by `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
-17. **In-set advice.** The check's advice ranges over the values of Σ_sync: a run whose declared sync is outside the
+17. **In-set advice.** The audit's advice ranges over the values of Σ_sync: a run whose declared sync is outside the
     set is an `advice` violation and rejected, so its advice is never counted. That an earlier execution phase's grid
     doesn't depend on a later one's sync, in the set or not, has no Lean statement; the rest of an execution phase's
     verdict reads only its own records and syncs.

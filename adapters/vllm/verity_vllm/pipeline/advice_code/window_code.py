@@ -13,7 +13,8 @@ order its reader asks for them:
   the run (`Residual.order`);
 - `lag`: async mode's bit per request (`Residual.lag`).
 
-Which window a value is charged to is the caller's, by I1's rule: no later than the first window whose rows it can change.
+Which execution phase a value is charged to is the caller's, by I1's rule: no later than the first execution phase whose
+rows it can change.
 
 **The code.** Each window's part is one segment of `arith`'s 32-bit arithmetic coder: the window's count of each field,
 then the field's values, under the registered `Book`. Each count and integer is coded with an Exp-Golomb bin table
@@ -56,7 +57,7 @@ or less) holds when the charge is at least the length of a prefix-free encoding.
 
 **The registered codebook.** `Book` holds the caps and every model, and is fit on historical traces, never on the
 run: a codebook fit to the run would be advice. Its digest (`Book.digest`, SHA-512 of its canonical JSON) is
-registered with the codec, `compile` and the cap c before the audit's first window. The
+registered with the codec, `compile` and the cap c before the audit's first execution phase. The
 decoder reads the book that digest names. It is integer only and uses no hash.
 """
 

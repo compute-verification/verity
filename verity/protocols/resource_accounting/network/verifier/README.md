@@ -13,7 +13,7 @@ bounds, per execution phase, the probability that an accepted audit leaves the a
 registered Program accepts, and over a monitoring period the bits of a covert sender's secrets a decoder recovers from
 the client's view. `NetTiming.Guarantees.PooledLeakAccepted` (`.../Guarantees/PooledLeak.lean`) is the pooled count,
 with the incorrect proof blocks paid for once over the monitoring period. Both are stated over the network attester's
-code as `security/Definitions/Certifier` models it, not over the Lean check here. Their premises are their records in
+code as `security/Definitions/Certifier` models it, not over the Lean verifier here. Their premises are their records in
 `security/lean-audit.json`; the model's trusted layer and modelling choices are `security/Proofs/Certifier/README.md`.
 
 The network attester is auditor-trusted (`trusted-device`): it runs on a host the developer doesn't control, with the
@@ -45,7 +45,7 @@ protocol, `id | check PARAMS COMMITMENT EVIDENCE | serve`, and its module's docs
   N2's verdict of record (`NetworkCheck.TransferBlocks`), the process `service` asks; `VERITY_NETWORK_RECORDS_EXE`
   names a built one;
 - `network-period`: `verity/certifier/v0` (`NetworkCheck.Period`), an attestation period, onsite's network attestation
-  subprotocol. It reads the inference-only policy's layout check, which the public tree withholds, so the public tree
+  subprotocol. It reads the inference-only policy's Lean verifier, which the public tree withholds, so the public tree
   doesn't build it;
 - `network-span`: `verity/certifier/span/v0` (`NetworkCheck.Span`);
 - `network-rows`: `verity/network-rows/v1` (`NetworkCheck.RowsAudit`), an active network attester's run as rows, held
@@ -63,8 +63,8 @@ from verity.protocols.resource_accounting.network.verifier.audit import Audit
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Certifier
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
-params = GridParams(buckets=600, allocation=1024, frame_bytes=4096)   # 1-min windows of 100 ms buckets
-sync_set = SyncSet(tuple(range(16)), tuple(range(1, 9)))              # 7 bits per window
+params = GridParams(buckets=600, allocation=1024, frame_bytes=4096)   # 1-min execution phases of 100 ms buckets
+sync_set = SyncSet(tuple(range(16)), tuple(range(1, 9)))              # 7 bits per execution phase
 frames = [LogicalFrame(b"\0" * 4096, anchor=3, index=i) for i in range(5)]
 syncs = [ClockSync(delta=2, rho=4)]
 records = run_shaper(frames, ready=[4] * 5, syncs=syncs, certifier=Certifier("responses", params))

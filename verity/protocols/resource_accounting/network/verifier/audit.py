@@ -8,13 +8,13 @@ An egress execution phase (`check_link`) is **accepted** if three things hold:
 It must also have exactly one record, settled by the verdict deadline: an execution phase with more than one record is a
 `duplicate` violation, whatever the records say. Anything else is a **violation**. It is recorded and the run is
 rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every capacity bound
-(the `NetTiming` guarantees) holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
+(the `NetTiming` guarantees) holds on accepted runs only; a rejected execution phase may already have carried up to its unbound capacity before it
 was rejected.
 
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
 accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows
-(`security/Proofs/Certifier/README.md`, modelling choice 15): 7 bits per window at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
+(`security/Proofs/Certifier/README.md`, modelling choice 15): 7 bits per execution phase at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
 set, or other than the unit's, is an `advice` violation in its own window only. A window's grid reads only the syncs of
