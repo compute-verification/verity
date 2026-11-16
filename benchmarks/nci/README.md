@@ -2,7 +2,7 @@
 
 Data and a calculator for the question negotiators will ask about the
 [inference-only policy](../../verity/protocols/workload_classification/training_detection/inference_only/verifier/README.md) ("bounding accumulation"): if both sides
-adopt it, how fast can a determined actor still advance frontier capability? Four parts:
+adopt it, how fast can a malicious developer still advance frontier capability? Four parts:
 
 - every source we rely on, each claim quoted verbatim (`sources/`);
 - the parameters the bounds depend on, each estimate saying which findings it merges and how (`parameters.json`);
@@ -44,8 +44,8 @@ assumption; and `catalog.py`'s category id `efficiency-metrics`.
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `counted_share`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `counted_share` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
-| `fit.py` | the fit bound: the memory limit when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
-| `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
+| `fit.py` | the fit bound: the memory limit when no server block holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
+| `statement.py` | every number that the published statement of `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
@@ -81,7 +81,7 @@ Every command above prints, and none writes a file.
 Agents writing from memory produce plausible but wrong citations. Every source here was found and checked by a
 web-search agent.
 
-- An auditor re-fetched a seeded random sample of the findings. A finding the audit corrected carries an `audit` field
+- A reviewer re-fetched a seeded random sample of the findings. A finding the audit corrected carries an `audit` field
   saying what changed.
 - The scaling corpus (findings marked `from_review: scaling-corpus`) was checked by its agent's script against the
   fetched pages but not yet audited.
@@ -91,7 +91,7 @@ web-search agent.
 An estimate answers one question in one context, such as "bits per activation crossing a training pipeline boundary at
 retained quality". Its three values follow one convention:
 
-- `low` is what an attacker could reach on the best published evidence, however thin.
+- `low` is what a malicious developer could reach on the best published evidence, however thin.
 - `central` is what the strongest measurement at the largest scale supports.
 - `high` is what standard practice uses.
 
@@ -192,10 +192,10 @@ pretraining's at the rollout's length: 0.39 on-policy at R1-Zero's 32k limit (0.
 reference-model and off-policy forwards give 0.47). Expert-specialized fine-tuning's frozen weights are committed in
 θ, so their products are in the denominator only and they take no weight gradients: 0.11. Evolution strategies run
 forwards alone: 0.58 at 32k. A lower \(\kappa\) is
-the defender's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A cheater's
+the auditor's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A malicious developer's
 own lower-\(\kappa\) recipe (longer contexts, more heads) buys gates that aren't the reference recipe's work: what they
 are worth enters through `m`. An incorrect proof block is worth at most the counted multiplications a block can hold, and a
-cheater can declare blocks of weight matmuls, so `tiers.py` takes such a block's own \(\kappa_{\text{block}} = 1\)
+malicious developer can declare blocks of weight matmuls, so `tiers.py` takes such a block's own \(\kappa_{\text{block}} = 1\)
 (each multiply-add's multiplication counted) rather than the recipe's average. The cheating share \(\chi\) grows as
 \(\sqrt{\kappa_{\text{block}}}\): 1.27x what 0.60 gives, and 1.77x at 2, a block of multiplications alone whose
 additions are left to another block. A proof block's outputs fit its Definition's public size class, a power of two
@@ -207,7 +207,7 @@ there, and bounds something only at a lower proving cost (`statement.py`'s known
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
 `train.compute_multiplier`, and gives each recipe's multiplier over the construction's slowdown,
-\(m/\text{slowdown}\), for the rows that update every weight of their model. The attacker picks the best recipe.
+\(m/\text{slowdown}\), for the rows that update every weight of their model. The malicious developer picks the best recipe.
 
 The invariant `lower <= upper` is tested on every row. The two limits on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
@@ -234,7 +234,7 @@ Each claim lists:
 - **what comes next.**
 
 What registered hardware computes is one circuit, built by appending as it streams, over one registration up front. The
-red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
+red teams' top attack, recommitting θ partway through, is closed by that: nothing computed on registered hardware ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
 would let a rule that charges partial sums apply to the registered circuit directly. The proposed evidence carries the
@@ -283,7 +283,7 @@ All values below are from `parameters.json`; render the index for the findings b
 - **60 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
   reference, citing its findings, with the full `scaling` evidence beside it.
 - **Each algorithm states its `convention`.** `as-published` keeps the method's state at its stored precision
-  (weights and optimizer moments). `attacker` assumes the cheapest rates at about the same quality. Queries default
+  (weights and optimizer moments). `attacker` assumes the cheapest rates a malicious developer could use at about the same quality. Queries default
   to the attacker convention, which limits every algorithm's state and boundary bits to the literature's central rates,
   so all compare alike.
 

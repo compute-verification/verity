@@ -20,7 +20,7 @@ conversions are exact over a whole cover, and per block they assume each block d
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
 (`FlopBudget`), its count in counted products. `per_block` turns one into the slowdown lower bound's inference-block yield
 `q(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which the
-overhead is normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×`
+slowdown is normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×`
 (`data/exclusion.toml`), with `s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
 """
 
@@ -59,7 +59,7 @@ def per_block(a: Allowance, units: Units) -> Yield:
 
 def weight_per_gate(p: Profile, units: Units) -> float:
     """`w = κ / 2G`, the reference's counted weight per gate (its counted products, `κ/2` a FLOP, over its gates): what
-    the overhead is normalized by. The most a gate holds under a bound is `Structure.weight`."""
+    the slowdown is normalized by. The most a gate holds under a bound is `Structure.weight`."""
     return p.kappa / (2 * units.gates_per_flop)
 
 
