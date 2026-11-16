@@ -39,7 +39,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | `verity_graph/local.py` | the serial reference executor |
 | `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
 | `tasks.toml` | `[slot]`, `[env.<name>]` and `[family.<name>]` tables |
-| `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
+| `tests/tools/verity/graph/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
 In a module's name a family's or kind's `-` is written `_`: family `test-file` is `families/test_file.py`, kind
 `circuit-binding` is `runners/circuit_binding.py`. Both registries find their modules themselves, so a new family adds its
@@ -115,7 +115,7 @@ env digest   = "sha512:" + hex(SHA-512(b"verity-env/v1\n" + canonical(sorted [[p
 Sorting is by code point (Python's string order, which is UTF-8's byte order). `id`, `about`, `resources`, `timeout_s` and
 `priority` stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its
 readers' keys unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as
-{read task: its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
+{read task: its result's `outputs`}. `tests/tools/verity/graph/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
 unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python
 tests/tools/verity/graph/test_contract.py --write` rewrites it from the cases in that file, which is a change to the contract.
 
@@ -219,8 +219,8 @@ template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars
 input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, a path two things land on, and
 resources (a table's or a task's) past `[slot]`, the largest slot an executor leases a task, which no slot would ever take.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
-(`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
-whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.
+(`tests/tools/verity/graph/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
+whole tree's invariants (`tests/tools/verity/graph/test_invariants.py`) cover it once it lists.
 
 A runner returns `{"status": "pass"|"fail"|"error", "detail": {...}, "undeclared_reads": [...]}` (the last two optional) and
 runs its commands through `runners.call(argv, work, cwd)`, which logs them and stops them at the task's timeout.
@@ -232,10 +232,10 @@ Each but 5 has a test: `test_invariants.py` on the whole tree (slow), `test_grap
 1. `verity graph` gives the same bytes in two checkouts of one commit at different paths (two `git worktree`s, listed from
    different working directories and environments).
 2. It opens nothing outside the tree but the interpreter's own files (an audit hook on `open`, `os.listdir`, `os.scandir`).
-3. Keys reproduce `tests/key_vectors.json`.
+3. Keys reproduce `tests/tools/verity/graph/key_vectors.json`.
 4. No `owner` field.
 5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
-   its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
+   its modules are `module` files (`tests/tools/verity/graph/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
    module). It is measured on an idle machine (`verity graph --json` and `ported_listing.py` under `getrusage`), not in a
    suite: on a node at load 160 the same listing takes twice the CPU seconds it takes idle (72 against 36), so a suite run
    beside other work fails it whatever the tree.
