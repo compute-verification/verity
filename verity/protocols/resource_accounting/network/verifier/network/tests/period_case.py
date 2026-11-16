@@ -1,10 +1,10 @@
-"""The network certifier's period check (`NetworkCheck.Period`, `verity/certifier/v0`) in Python, for every difftest
+"""The network attester's period check (`NetworkCheck.Period`, `verity/certifier/v0`) in Python, for every difftest
 that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and `case`.
 
 `answer(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
-reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates, each under the listed
+reads them (`pouw.core_check.answer_of` and `integrity`), the network attester's certificates, each under the listed
 entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its session, and that
 session's own number for the execution phase, the period's less the entry's start; a signer that is another listed key,
 outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`, `UNLISTED`), each listed entry's
@@ -45,10 +45,10 @@ a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
 shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
 `first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
-(`network_certifier_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
+(`network_certifier_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network attester session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
-(`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
+(`past-slots`: none of them and neither registration, as the network attester leaves a window in which it refused a
 connection), and
 the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
 and domain of chunk j's entries port of that execution phase's slot entries' template (`slot_entry`,
@@ -981,7 +981,7 @@ def _follows(xb: CertifiedStart, x: CertifiedStart) -> bool:
 
 def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: CertifiedStart) -> Finding | None:
     """`startCheck`: listed entry `i`'s start's finding. The start shown for it is its session's
-    certified start, read as the network certifier's own verifier reads it (`CertifiedStart.refusal`: under the
+    certified start, read as the network attester's own verifier reads it (`CertifiedStart.refusal`: under the
     entry's key, in its session, for the link, under the period's schedule's parameters digest); the entry starts
     where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself; and its
     session is the one right after that of its key's entry listed before it (`_follows`)."""

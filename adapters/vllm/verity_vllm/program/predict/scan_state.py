@@ -1,4 +1,4 @@
-"""The network certifier's scan state as a window class's Programs read it: the one place the window's lowering knows it.
+"""The network attester's scan state as a window class's Programs read it: the one place the window's lowering knows it.
 
 The Programs at a boundary b read the scan's state row S_{b − 1} (`ingress_scan`'s "The token-id row"), the empty
 state's at b = 0: NS u16 words, its fields bit-packed least significant bit first in `ingress_scan.layout`'s order, slot
@@ -10,7 +10,7 @@ slot it carries on. The window's registered `SCAN_STATE` is the rows
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
 read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt bound ``KI`` changes
 no field: a slot's ``ids`` are its C cells' whatever the bound. `scan_state` gives a window those rows off the scan of the
-network certifier's ingress rows, with the request each slot's Program starts.
+network attester's ingress rows, with the request each slot's Program starts.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from verity.protocols.resource_accounting.network.verifier import blocks as BK
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = BK.SCAN_STATE
-#: the network certifier's cells at the class of record (w63,
+#: the network attester's cells at the class of record (w63,
 #: `verity.protocols.resource_accounting.network.prover.scan_zk.W63`): B-byte cells, r a connection a bucket, C cells a
 #: request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
@@ -74,11 +74,11 @@ def scan_anchors(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Seque
 
 def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]],
                t0: int = 0) -> tuple[list[list[int]], list[int | None]]:
-    """The network certifier's scan as a window of ``cls`` (a `window_circuit.WindowClass`) from scan bucket ``t0`` reads
+    """The network attester's scan as a window of ``cls`` (a `window_circuit.WindowClass`) from scan bucket ``t0`` reads
     it: its state rows
     (`window_rows.state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts,
     slot k's the ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row
-    there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the network certifier's
+    there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the network attester's
     registered ingress rows ``ingress`` (a row a bucket, `network_certifier_rows.window_rows`) from the empty state at bucket 0 to
     the window's last row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses
     the rows."""

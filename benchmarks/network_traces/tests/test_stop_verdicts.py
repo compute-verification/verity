@@ -1,7 +1,7 @@
 """The stop class's verdict records as the calculator's rows read them (`stop_verdicts`): a head is the
 registration's own, held to the digest its certificate names; a record is its verifier's, and which of the four
 verdicts it is is its verdict's format; the answer counts the execution phases held, those of a head read in which
-every class that holds a row has its four verdicts by the network certifier's rule, each on that head; every other
+every class that holds a row has its four verdicts by the network attester's rule, each on that head; every other
 execution phase is charged its whole schedule, so one left out of a run's files charges what it would refused;
 a registration that doesn't read, or no record at all, holds none, with a line that says why; an execution phase the
 rule charges below is held only where each verifier that accepted refused its negative control at the same commit

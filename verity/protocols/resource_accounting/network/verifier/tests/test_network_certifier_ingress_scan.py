@@ -1,5 +1,5 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanStart`) and the egress buckets on the views it writes
-(`egress.EgressBucket`), on the network certifier's own records: the network certifier, driven tick by tick
+(`egress.EgressBucket`), on the network attester's own records: the network attester, driven tick by tick
 (`test_network_certifier`'s harness), carries three network-certifier-form id requests on two lanes, the third
 queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
 state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
@@ -7,7 +7,7 @@ admission bucket and its anchor until the anchor (two requests anchored at one b
 outputs from then until its last egress bucket, gives each slot's occupancy word 1 in the state its Program reads and 0
 in every other (the token-id row, `token_row`: the occupancy word, the prompt's length and its prompt in order, each
 where `slot_row` puts it in the state row), and reuses a slot only past it; egress bucket t computes the
-network certifier's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged
+network attester's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged
 one) from a view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random
 flips (S_t and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
 `END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
@@ -21,7 +21,7 @@ entry's padding, a due slot's entry whose occupancy word is 0, which takes no ou
 refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the ingress circuit at the
 empty state is the reference from no state; the egress circuit is its reference on the views;
-`scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
+`scan_traffic.serve`, the zk run's driver, ticks the same rows as the network attester; and the w63 class's state is
 the scan's sized layout, with the outputs N2's view reads; and the carried start's unit (`IngressScanStart`) outputs
 the state row it is given, bit for bit."""
 from __future__ import annotations

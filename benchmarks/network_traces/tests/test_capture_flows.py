@@ -1,4 +1,4 @@
-"""capture-flows, a packet capture summed by flow and direction and held against the network certifier's record. On the
+"""capture-flows, a packet capture summed by flow and direction and held against the network attester's record. On the
 fixture capture (`fixtures/capture_flows.pcap`, made by `fixtures/capture_flows.py` beside it): the sums of each flow
 and direction, a retransmitted segment on the wire twice and in the stream once, the server's flows beside the
 certifier's listed under names with no address printed or written, and the foreign flow refused, or counted and
@@ -7,7 +7,7 @@ and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreeme
 every capture format read to the same sums, a Linux cooked capture's VLAN tags walked where a type names them, and
 each thing the reader doesn't read refused by its name, a packet kept too short with the least length that reads it
 and with no length for every capture, a packet shorter than the headers it states by its own name, a cooked frame's
-tag that no type names by its own. Then a run of the network certifier on a `VirtualClock`, published as `serve`
+tag that no type names by its own. Then a run of the network attester on a `VirtualClock`, published as `serve`
 publishes one, with a capture of exactly the bytes its server's side saw: the two counts agree in each direction, the
 watermark stream's among them and the server's answer on it in no sum; a run of two execution phases is counted
 across both phases' records; a run in the id egress form, at the id front's cell, agrees as one in the bytes form
@@ -671,7 +671,7 @@ def test_a_foreign_fragment_and_a_frame_that_isnt_ip_are_skipped_only_when_told_
         "capture: 19 packets in 1 file(s); skipped 1 packets of 1 foreign flow(s) and 2 frame(s) that aren't IP"
 
 
-# --- against a run of the network certifier ---------------------------------------------------------------------------
+# --- against a run of the network attester ---------------------------------------------------------------------------
 
 class _Uncommitted(ws.Publisher):
     """`Publisher` with no commitment to a record's rows (`attest`): each record kept and certified, as `keep` does."""
@@ -683,15 +683,15 @@ class _Uncommitted(ws.Publisher):
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
             watermark: bool = True, params: NetworkCertifierParams = PARAMS, order=None, phases: int = 1,
             arrive: tuple[int, ...] = ()) -> tuple[NetworkCertifier, list[_Writer], _Writer]:
-    """`phases` execution phases of the network certifier at `params` on a `VirtualClock`, one unless given, published
+    """`phases` execution phases of the network attester at `params` on a `VirtualClock`, one unless given, published
     as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
     `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
     or with `arrive` request k before tick `arrive[k]`, none earlier than the one before it. The server answers
     connection k (in connect order, from 0) `responses[k]` and ends, or for k in `held` sends it and never ends. With
-    `order`, the network certifier's connections are sorted by it once they are admitted, so it cuts each bucket's
+    `order`, the network attester's connections are sorted by it once they are admitted, so it cuts each bucket's
     cells, and releases its `END`s, in that order and not in their ordinals'; its records are then kept and certified
     with no commitment to their rows, which refuses cells that aren't where the schedule lays them. Returns the
-    network certifier, the server's side of each connection in connect order, and its side of the watermark stream."""
+    network attester, the server's side of each connection in connect order, and its side of the watermark stream."""
     tau = params.bucket_ms / 1000
     starts = arrive or (0,) * len(requests)
     assert len(starts) == len(requests) and list(starts) == sorted(starts)
@@ -777,7 +777,7 @@ def _three(tmp_path: Path):
 
 
 def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each_direction(tmp_path, capsys):
-    """Three requests through the network certifier, and the watermark stream. The record's count of each connection
+    """Three requests through the network attester, and the watermark stream. The record's count of each connection
     is what the server's side saw: the request with its release headers one way, the response's bytes the other, and
     the watermark stream's head, lines and end. A capture of those bytes agrees in each direction and pairs every
     connection, the watermark's by its bytes to the server; the server's answer on it is given and is in no sum."""
@@ -824,7 +824,7 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
 
 
 def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp_path):
-    """Two execution phases of the network certifier, the watermark stream through both, and four requests: one
+    """Two execution phases of the network attester, the watermark stream through both, and four requests: one
     served whole in the first phase, one whose response starts in the first and ends in the second, one whose request
     does, and one served whole in the second. Each phase's ingress record and egress record hold some of the bytes,
     and the record's count in each direction is their sum over both: each connection's is what its server's side
@@ -986,7 +986,7 @@ def test_a_capture_kept_at_the_least_a_tcp_packets_headers_are_holds_no_content_
 
 
 def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
-    """Twelve requests at once through a network certifier of twelve lanes, six that end their ingress in one bucket
+    """Twelve requests at once through a network attester of twelve lanes, six that end their ingress in one bucket
     and six in the next. A request's place N in the release order is a decimal header of the request as the server
     gets it, so past ten releases its length follows its place. The device keeps its connections in the order it
     admitted them, their ordinals'; its audit flags a bucket whose cells are in any other, and its commitment to a
@@ -1127,7 +1127,7 @@ def test_a_capture_that_holds_none_of_the_runs_packets_is_read_and_says_every_by
 
 
 def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(tmp_path):
-    """The server sends 100 bytes of a response and never ends it, so the network certifier fails the connection
+    """The server sends 100 bytes of a response and never ends it, so the network attester fails the connection
     (late) with one cell of them in its record and stops reading. The record's count of that connection is a floor
     from the server and a ceiling to it: the capture's 100 bytes are inside it, the flow pairs inside the bounds, and
     each direction says the range, never that it agrees. A record with no certificates is counted as one."""

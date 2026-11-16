@@ -1,9 +1,9 @@
-"""The ingress tie in zero knowledge: each ingress execution phase's T bucket rows of the network certifier's cells,
+"""The ingress tie in zero knowledge: each ingress execution phase's T bucket rows of the network attester's cells,
 each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean ZK server with each proof block's
-witness row read off the network certifier's
+witness row read off the network attester's
 root (`network_certifier_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
-and the network certifier's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+and the network attester's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
@@ -11,22 +11,22 @@ through `tie_service.Ties`, the verifier's tie source).
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
-  served through the network certifier's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes
+  served through the network attester's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes
   of r = 2 512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice
-  is v0 of one prefill step, each request one kept output, with the link's `received`; it and the network certifier's release are
+  is v0 of one prefill step, each request one kept output, with the link's `received`; it and the network attester's release are
   public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
   instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
-* **A network certifier's run** (``--class warden --warden-run RUN``, `network_certifier_link`): the gate's ``warden-rehearse``'s
+* **A network attester's run** (``--class warden --warden-run RUN``, `network_certifier_link`): the gate's ``warden-rehearse``'s
   real ingress in place of the served link, its first K execution phases (``--windows``, 1 by default), every connection
   in them starting and ending there. The verifier reads ``deployment.json`` (the schedule, its digest, the network
-  certifier's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
+  attester's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
   that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_certifier_run`
-  reads them. The release is the cells' headers (each connection's first bucket, checked against the network certifier's
+  reads them. The release is the cells' headers (each connection's first bucket, checked against the network attester's
   wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
   bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
   and ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
-  network certifier never signed, so Lean's registered reads refuse it ("does not open").
+  network attester never signed, so Lean's registered reads refuse it ("does not open").
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but whose
   ``pub`` row is no public row of the verifier's, so Lean's registered read of it refuses window 1; ``forged``, an
@@ -37,10 +37,10 @@ through `tie_service.Ties`, the verifier's tie source).
 * **The statement and the rounds** follow `network_certifier_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
   the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
-  of which is a registered read, ``wit`` the window's bucket rows under the network certifier's salts and paths, and ``pub`` and
+  of which is a registered read, ``wit`` the window's bucket rows under the network attester's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
   behind the ZK server, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
-  (`IngressTie.registered`: the network certifier's root, and at known content its own lanes from the advice and the release
+  (`IngressTie.registered`: the network attester's root, and at known content its own lanes from the advice and the release
   and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run, Lean
   included). The members run one after another, one ZK server session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
@@ -113,13 +113,13 @@ CLASSES = {
                "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
     "warden": None,
 }
-#: the network certifier run ``--class warden`` reads (`network_certifier_link`), None at the other classes
+#: the network attester run ``--class warden`` reads (`network_certifier_link`), None at the other classes
 REAL = None
 
 
 def use(name: str, run: Path | None = None, windows: int = 1) -> None:
-    """Set the driver's size class to `CLASSES` [name]: its B, network certifier parameters, windows, and members with
-    their verdicts; ``network_certifier`` reads them off the network certifier run `run`'s first `windows` execution phases
+    """Set the driver's size class to `CLASSES` [name]: its B, network attester parameters, windows, and members with
+    their verdicts; ``network_certifier`` reads them off the network attester run `run`'s first `windows` execution phases
     (`network_certifier_link`), the forged member's window 0 refused and the rest tied."""
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
@@ -156,7 +156,7 @@ def advice(prompt_lens, got) -> TS.LinkAdvice:
 
 
 def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
-    """The requests through the network certifier's own ingress over the class's windows."""
+    """The requests through the network attester's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
@@ -166,7 +166,7 @@ def received(link: Q.ServedIngress) -> tuple[int, ...]:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
+    """A network attester run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
     (the gate's ``warden-rehearse``)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
@@ -175,8 +175,8 @@ def _found(run: Path, name: str) -> Path:
 
 
 def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
-    """The network certifier run's ingress execution phases 0 … windows − 1 (the module docstring, "A network
-    certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
+    """The network attester run's ingress execution phases 0 … windows − 1 (the module docstring, "A network
+    attester's run"): each window's rows under the network attester's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
     from verity.protocols.resource_accounting.network.verifier import blob_files as bf, record_files as RF
@@ -219,7 +219,7 @@ def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
 
 def _released(params: W.NetworkCertifierParams, cells: list) -> tuple[list[Q.Release], tuple[int, ...]]:
     """The windows' release read off their cells' headers, each connection's first bucket and its request cells a
-    bucket to its `END`, its first bucket the network certifier's wiring's; and each request's prompt length, its bytes'
+    bucket to its `END`, its first bucket the network attester's wiring's; and each request's prompt length, its bytes'
     ``prompt``. Refused where a connection's ingress runs past the windows or the ordinals aren't 1, 2, …"""
     B_, T_, seen = params.cell_bytes, params.window, {}
     for c in cells:
@@ -255,7 +255,7 @@ def _released(params: W.NetworkCertifierParams, cells: list) -> tuple[list[Q.Rel
 
 
 class Forge(NamedTuple):
-    """A prover's row in place of the network certifier's: execution phase `window`'s bucket `bucket`, byte `at`
+    """A prover's row in place of the network attester's: execution phase `window`'s bucket `bucket`, byte `at`
     changed."""
 
     window: int
@@ -270,7 +270,7 @@ PROMPT_FIELD = re.compile(rb"[\[,] *[0-9]+")
 
 def forge(link: SimpleNamespace) -> Forge:
     """Window 0's first request cell's first prompt field whole in it, its id's last digit changed: an id request of
-    the same prompt length, so IoTieRequest accepts the row, but not the row the network certifier signed."""
+    the same prompt length, so IoTieRequest accepts the row, but not the row the network attester signed."""
     c = link.cells[0]
     for t, row in enumerate(c.rows):
         for s in range(0, len(row), B):
@@ -313,13 +313,13 @@ def members() -> dict[str, tuple]:
 
 
 def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
-    """Every execution phase of the member as the network certifier and the prover hold it before it registers: the network certifier's cells
-    (`network_certifier_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
+    """Every execution phase of the member as the network attester and the prover hold it before it registers: the network attester's cells
+    (`network_certifier_rows.Cells`: a network attester run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
-    tuple, the lanes of those prompt lengths), the prover's rows (the network certifier's, or a `Forge`'s), each proof
+    tuple, the lanes of those prompt lengths), the prover's rows (the network attester's, or a `Forge`'s), each proof
     block's arguments on the prover's lanes and rows and the verifier's public arguments on its own, each output word by
     the gate's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
-    registered rows (``held``, `network_certifier_rows.refusal`: None where every row opens the network certifier's root)."""
+    registered rows (``held``, `network_certifier_rows.refusal`: None where every row opens the network attester's root)."""
     out = []
     for w, rec in enumerate(link.records):
         cells = link.cells[w] if getattr(link, "cells", None) else \
@@ -398,7 +398,7 @@ def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every execution phase's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
-    ``wit`` table the window's bucket rows under the network certifier's salts and paths (`network_certifier_rows.Cells.statement`), and its
+    ``wit`` table the window's bucket rows under the network attester's salts and paths (`network_certifier_rows.Cells.statement`), and its
     ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
     must open to its output word, and each ``pub`` row to the verifier's own copy exactly where the prover's lanes are
     the verifier's. Beside it, the verifier's own registered reads (`IngressTie.registered`, null where it has no
@@ -444,7 +444,7 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
-    """The member's execution phases on its own stream, in order: the network certifier registers, the challenger
+    """The member's execution phases on its own stream, in order: the network attester registers, the challenger
     selects, the prover proves the statement live behind the ZK server and delivers, and the verifier decides
     on the proof (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes
     what the verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
@@ -512,7 +512,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                          "max_child_rss_gb": proc["max_child_rss_gb"], "cpu_s": proc["cpu_s"]},
                "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
-        # every row is a registered read (the network certifier's root, the verifier's lanes, the output word 1), so a window the
+        # every row is a registered read (the network attester's root, the verifier's lanes, the output word 1), so a window the
         # reference refuses is Lean's to refuse, whatever the unit says of it
         held = (proof["proved"] and opened == x.words) if x.expect else not proof["lean_accepted"]
         row["registered_read"] = x.held

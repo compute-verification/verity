@@ -40,7 +40,7 @@ sample. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 records.
 
 **Public items**, each with its reason (`PUBLIC`): the population (one), the window (its index, the order), the
-committed value's leaf count and domain, its salted root, the parameters digests, the network certifier's schedule and
+committed value's leaf count and domain, its salted root, the parameters digests, the network attester's schedule and
 the link's windows (fixed before the run, bound by the spec's context), and the check's two public outputs, `verdict`
 and `deadline`. A rejected execution phase shows only the service's `reject`: the violation's kind stays in the
 verifier.
@@ -87,7 +87,7 @@ alone. It accepts when
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
   root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
-- the certificates' check accepts (`certified`: each verifies under the network certifier's public key in its certifier
+- the certificates' check accepts (`certified`: each verifies under the network attester's public key in its certifier
   session over its public fields and its signed digest, and names the registered execution phase).
 
 What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
@@ -106,14 +106,14 @@ reads them in the clear), and the certifier's host audit doesn't read them. `Tra
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
-**The link** (`TransferBlocks(network_certifier=NetworkCertifierProfile(…))`) is the network certifier's (`network_certifier.NetworkCertifier`) own two records of
+**The link** (`TransferBlocks(network_certifier=NetworkCertifierProfile(…))`) is the network attester's (`network_certifier.NetworkCertifier`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
 schedule's parameters digest (`network_certifier.NetworkCertifierParams.digest`, which its deployment publishes) rather than a certifier's
-(`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
+(`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`network_certifier.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
-charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network certifier runs no shaper clock, so a window declares
-no sync and the charge is 0. Each head check holds its end's head to the network certifier's grid and digest and to its
+charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network attester runs no shaper clock, so a window declares
+no sync and the charge is 0. Each head check holds its end's head to the network attester's grid and digest and to its
 signed digest. N2 takes no frames: the frames, their content and their order, are the scan's, and N2 says nothing of
 them. A `TransferBlocks` without a `NetworkCertifierProfile` raises `ValueError`.
 
@@ -121,12 +121,12 @@ them. A `TransferBlocks` without a `NetworkCertifierProfile` raises `ValueError`
 (`verity/protocols/resource_accounting/network/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
-the Lean refuses the case. The Lean reads the network certifier's parameters digest (`lean_case`'s ``network_certifier``) for
+the Lean refuses the case. The Lean reads the network attester's parameters digest (`lean_case`'s ``network_certifier``) for
 both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds of link (`Kind.plain`, `Kind.served`)
 are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- the network certifier's parameters digest (`NetworkCertifierProfile.digest`, which the network certifier's deployment publishes
+- the network attester's parameters digest (`NetworkCertifierProfile.digest`, which the network attester's deployment publishes
   as its schedule's, `network_certifier.NetworkCertifierParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
@@ -452,8 +452,8 @@ class Hidden:
 
 @dataclass(frozen=True)
 class NetworkCertifierProfile:
-    """A network certifier link's profile (`TransferBlocks.network_certifier`, the module docstring's "A network certifier link"): the
-    link's windows and the network certifier's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads
+    """A network attester link's profile (`TransferBlocks.network_certifier`, the module docstring's "A network attester link"): the
+    link's windows and the network attester's parameters digest (`network_certifier.NetworkCertifierParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -469,9 +469,9 @@ class NetworkCertifierProfile:
 @dataclass(frozen=True)
 class TransferBlocks:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
-    network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
+    network attester's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and
-    the network certifier's profile (`network_certifier`: its records, its key and session the certifier's here, its counts its
+    the network attester's profile (`network_certifier`: its records, its key and session the certifier's here, its counts its
     schedule's). It declares no sync, so `sync_set` is read only as the Lean case's ``sync_set``."""
 
     link: str
@@ -501,7 +501,7 @@ class TransferBlocks:
         return len(self.link.encode("utf-8")), g.buckets, 0
 
     def grid(self, direction: int) -> bytes:
-        """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network certifier's grid under
+        """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network attester's grid under
         its parameters digest (`NetworkCertifierProfile.digest`)."""
         return HC.grid_bytes((self.params, self.ingress_params)[direction], self.network_certifier.digest)
 
@@ -791,7 +791,7 @@ class TransferBlocks:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync, the key and session, each end's grid with no
-        profile, and the network certifier's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
+        profile, and the network attester's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
         reg, p = sample.docket.record, self.key.params

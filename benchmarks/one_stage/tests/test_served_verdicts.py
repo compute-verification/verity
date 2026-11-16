@@ -5,7 +5,7 @@ wrote no answer errs; and SPOT's accepted answer composes, with the others missi
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The block record's verdict is the Lean check's answer, so with none here it is undecided (the window's
 pending) even when every subprotocol accepted on its node; the record names each one missing, rejecting, malformed or
-about another server. An accepted network certifier's clause names the one link K counts and every other
+about another server. An accepted network attester's clause names the one link K counts and every other
 link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
 when its answer accepts on the record's server. Remote's product runs no onsite piece and composes SPOT and
 PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
@@ -14,9 +14,9 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
 CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the network certifier's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the network attester's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
-certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
+attester's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
 serve-openai the tie's command, which, run as `serve_tie` runs it at an H1 window's close, writes the window's advice and
 commits it chained after H1's W, its docket the window's record R, and writes no R when the advice is pending or the
@@ -709,7 +709,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 @pytest.mark.parametrize("key", ["trusted-device", "trusted-host"])
 def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path, key):
-    """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
+    """The network attester's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
     the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
     machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it. A record
     made before the premise's rename holds it under its old key, and reads the same."""
@@ -728,7 +728,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests
 
 
 def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
-    """The network certifier's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
+    """The network attester's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
     K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
     the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
     states the premise alone."""
@@ -912,7 +912,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
 
 def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
-    each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
+    each; the record names PoUS, the bandwidth audit, the network attester and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and SPOT's and PoUW's accepts on its node leave it pending with nothing
     missing, the block record undecided until the remote check answers. The same pieces composed for onsite reject on the
     wipe's answer. The report and the line say they were composed on the

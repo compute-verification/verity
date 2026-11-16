@@ -143,10 +143,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
-* **Transfer gates opened under the network certifier's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a network certifier execution phase's cells, `certifier.network_certifier_rows`), committed under that value's salts
+* **Transfer gates opened under the network attester's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
+  registered value's (a network attester execution phase's cells, `certifier.network_certifier_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
-  the root the network certifier signed, which the caller read under the network certifier's key), the same reads, record and negatives as a row
+  the root the network attester signed, which the caller read under the network attester's key), the same reads, record and negatives as a row
   table's (below). `a5_network_certifier.py` is their stand-in.
 * **Row tables** (`ml.windows.rows.Binding.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
@@ -829,7 +829,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary and whether it was accepted with every negative refused. ``sets``: each template's input set and Definition, or
     a callable composing its circuit (``(out, partition digest, program digest) -> {"pin", "class_sha512", ...}``) and its
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
-    registered value, at the root its owner signed (a network certifier's cells), which the caller read before calling. ``ports``: how
+    registered value, at the root its owner signed (a network attester's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     docket (a two-stage design's second stage of its interior docket), its sample, sampling design and receipt, proved in
@@ -1414,7 +1414,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 
 def own_replay():
     """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on
-    its path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
+    its path, as the audit over a network attester's run has, holds that directory's `replay` under the name."""
     return LC._module("one_stage_replay", HERE / "replay.py")
 
 
