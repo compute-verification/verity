@@ -177,7 +177,7 @@ first card of compute capability 9.0. The tree does not make the machine:
 - an H100 or H200 (the row is H200's, compute capability 9.0) and an NVIDIA driver that runs CUDA 12.9;
 - the CUDA 12.9 toolkit with `nvcc`, at `/usr/local/cuda-12.9` or `/usr/local/cuda` or where `CUDA_HOME` names (where it
   lacks the math headers the script takes them from the environment's NVIDIA wheels), and a C++ compiler (`g++`) for it;
-- `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` on the `PATH`;
+- `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` 7.66 or later on the `PATH`;
 - 35 GB free at the work directory (the install holds the environment twice until it removes its cache, where the disk
   can't hardlink);
 - network access to GitHub, PyPI, download.pytorch.org, Hugging Face (no token) and the store's public site, from which

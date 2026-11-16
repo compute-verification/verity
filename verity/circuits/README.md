@@ -73,7 +73,8 @@ Definitions' fast evaluators are `verity_vllm.definitions.numerics`'s, registere
 
 [`circuit-check`](../../tools/verity/circuit_check/README.md) holds every circuit to the property checks: correspondence
 with the reference on every realization, the declared port intervals, redundant and dead gates, and the partition. A
-change that adds or modifies a circuit passes `uv run circuit-check <definition|template|row>`, with its report in the PR.
+change that adds or modifies a circuit passes `uv run circuit-check <definition|template|request-program>`, with its
+report in the PR.
 
 - `check` runs it as its `circuit-check` step (`tools/check/check.py`): `circuit-check --all`, every registered
   Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
