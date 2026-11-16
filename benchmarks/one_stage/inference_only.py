@@ -27,7 +27,7 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
 - n, the H200's capacity in sessions over the serve's registered span at the declared utilization (`capacity`):
   ⌈u·θ·T / W⌉ rounded up to the public grid (`partition_v2.grid`), θ the card's dense int8 MAC rate at its tensor clock
   (`served_shares.RHO`), T the GPU lease's limit (``--lease-min``, `served_verdicts.sh`'s LEASE_MIN, which no serve
-  outlasts), u the declared utilization (``--utilization``, `UTILIZATION` by default) and W one session's declared work
+  outlasts), u the declared utilization (``--utilization``, `UTILIZATION` by default) and W one session's the registered circuit's work
   at θ: the class's fixed load (`window_class.Tables.schedule`, one slot) priced as `served_shares.step_macs` prices a
   served step, its linears at θ and its attention and LM head at θ/2.
 

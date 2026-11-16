@@ -32,11 +32,11 @@ replays every tile of its passes, as much work as checking every tile, to give u
 ``served_passes.py volunteer`` document (`served_verdicts.pearlplus`), against its timed call's wall.
 
 Pearl+'s own served run (`pearlplus_shares`, from `served_passes.py`'s serve and verify documents, the POUW=pearlplus
-piece's) has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs
+piece's) has no step trace: its wall is its timed ``generate`` call's, its the registered circuit's work that call's passes' linear MACs
 alone, and its credited work the verdict's credit over those passes (the verify document's ``timed``), both at θ. Every
 pass of that run is written whole for the verdict inside its step; the same load served with no pass retained
 (`served_passes.py serve --no-retain`) gives the declared utilization without that write (`pearlplus_unretained`): the
-retained run's declared work over the unretained run's wall.
+retained run's the registered circuit's work over the unretained run's wall.
 """
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ LOAD = ("arm", "requests", "prompt_tokens", "output_tokens")
 
 
 def pearlplus_unretained(shares: dict[str, Any], served: dict[str, Any], unretained: dict[str, Any]) -> dict[str, Any]:
-    """The declared utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its declared work
+    """The declared utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its the registered circuit's work
     over the wall of ``unretained``, `served_passes.py serve --no-retain`'s document of the same load, at each reading;
     ValueError when ``unretained`` retained its passes or served another load (`LOAD` and the engine's batched tokens)."""
     if unretained.get("retained") is not False:
