@@ -39,12 +39,12 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import salt_of
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import (
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import salt_of
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     LiveCommitment,
     record_message,
 )
@@ -52,9 +52,9 @@ from verity.protocols.proofs.spot.device.challenger import (
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -746,7 +746,7 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
         PHC.pinned_key(SMOKE / sid / "out" / R.KEY, "00" * 64)
 
 
-def test_a_windows_own_session_holds_no_draw_coin_and_its_draw_session_is_the_ledgers_withheld_one_on_its_root(
+def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_is_the_ledgers_withheld_one_on_its_root(
         tmp_path, monkeypatch):
     """A window's own challenge phase holds no sampling coin (its challenger refuses one), so no sampling coin opens
     from it early, after a root of the prover's; the window's sampling coin is its sampling session's, the one the
@@ -776,7 +776,7 @@ def _draw_of(host, root: bytes) -> LC.LiveOpening:
     return client.opened[(Wd.DRAW, 0)]
 
 
-def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_path, monkeypatch):
+def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tmp_path, monkeypatch):
     """The honest window's sample passes; its sampling coin swapped for a round coin, a sample root not over the
     window's parts, and a sampling challenge phase closed with no sample opened are refused."""
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=14, reserved=True)

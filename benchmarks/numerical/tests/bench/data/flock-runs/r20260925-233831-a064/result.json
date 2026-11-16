@@ -123,7 +123,7 @@
   "n_units": 1572864,
   "rtt_method": "net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
   "verifier": {
-   "placement": "64.247.206.241:19127",
+   "placement": "203.0.113.13:19127",
    "process": "flock-pure serve (separate process)"
   }
  },
@@ -376,8 +376,8 @@
  },
  "interaction": {
   "rtt_method": "net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the verifier (answered Ok by the verifier's server, no session state), 30 probes right after connecting and before Hello, in every timed session; median over all of them",
-  "tcp_connect_method": "live.tcp_connect_rtt_ms = TCP connect time to the verifier pod's sshd (64.247.206.241:19125), median of 30, before the sweep",
-  "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, median over the timed sessions; verifier 64.247.206.241:19127",
+  "tcp_connect_method": "live.tcp_connect_rtt_ms = TCP connect time to the verifier pod's sshd (203.0.113.13:19125), median of 30, before the sweep",
+  "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, median over the timed sessions; verifier 203.0.113.13:19127",
   "loopback_method": "loopback probe in this run: 10 timed sessions (5 per sub-batch) of the plateau point's instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait ((wait_s - verify_s) / calls)",
   "hello_rtt_ms": 0.40508750000000004,
   "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",

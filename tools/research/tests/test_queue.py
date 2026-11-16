@@ -341,8 +341,8 @@ def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
 
 
 def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
-    """A fix for a test that fails on `main` needn't sit behind the next train: drive's priority list restacks `next` so the
-    next train starts with the fix.  A PR in the list that isn't ready is passed over, and another queue's sync without the
+    """A fix for a test that fails on `main` needn't sit behind the next candidate: drive's priority list restacks `next` so the
+    next candidate starts with the fix.  A PR in the list that isn't ready is passed over, and another queue's sync without the
     list keeps the new order."""
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -2890,7 +2890,7 @@ def test_ready_sha_waits_for_github_to_show_the_pushed_head_and_never_marks_anot
 
 
 def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, capsys):
-    """A head ejected for a lean-audit failure and marked ready again would fail a second train on the same line, holding up
+    """A head ejected for a lean-audit failure and marked ready again would fail a second candidate on the same line, holding up
     the PRs without Lean in it."""
     from research.queue import MarkOnly, StoreLabels, ready
 
@@ -3043,7 +3043,7 @@ def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_
 
 def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(world, capsys):
     """Four torch-importing collections reach about 8 GB of a marker's 16 GB VM. Under a quarter of memory free,
-    the preflight collects nothing, says so, and still marks; the train's check collects."""
+    the preflight collects nothing, says so, and still marks; the candidate's check collects."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     _preflight_main(world)
@@ -3380,14 +3380,14 @@ def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_c
     assert _git(world.origin, "show", f"refs/heads/next:{packages}") == counts(355, 185).strip()
 
 
-#: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time
+#: what the head writes -> what the refusal says: each a way a candidate breaks that the merged tree shows at mark time
 PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
     "module string": ({"BROKEN_MODULE_STRING": ""}, "the invariant tests in . fail on the merged tree: FAILED "
                       "tests/test_module_strings.py::test_broken_module_string_absent"),
     "pythonpath": ({"BROKEN_REAL_ROOTS": ""}, "the invariant tests in tools/research fail on the merged tree: FAILED "
                    "tests/test_pythonpath.py::test_broken_real_roots_absent"),
-    # a report-genre name fails a train's preflight-lints
+    # a report-genre name fails a candidate's preflight-lints
     "repository lint": ({"REPORT_GENRE_NAME": ""}, "the invariant tests in . fail on the merged tree: FAILED "
                         "tests/test_repository.py::test_report_genre_name_absent"),
     # a test reads a vector row that a PR queued before it refits away: a KeyError at import on the merged tree only
@@ -3396,7 +3396,7 @@ PREFLIGHT_REFUSALS = {
                          "`pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7'"),
     "stale lock": ({"LOCK_STALE.txt": ""}, "`uv sync --locked` on the merged tree: error: The lockfile at `uv.lock` needs to be "
                    "updated"),
-    # time.perf_counter in a test fixture, or numpy's rng in vllm (P3), costs a train its check
+    # time.perf_counter in a test fixture, or numpy's rng in vllm (P3), costs a candidate its check
     "wall-clock lint": ({"pkg/tests/test_slow.py": "def test_slow():\n    pass\n", "WALL_CLOCK": ""},
                         "the invariant tests in tests/test_no_wall_clock.py fail on the merged tree: FAILED "
                         "tests/test_no_wall_clock.py::test_wall_clock_absent"),
@@ -3471,7 +3471,7 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
 
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
     """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
-    stand-in without touching adapters/vllm is marked, and the train's check runs the lint."""
+    stand-in without touching adapters/vllm is marked, and the candidate's check runs the lint."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     _preflight_main(world)
@@ -4401,7 +4401,7 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     main = _move_main(world, {"tools/move/l_map.toml": '[paths]\n"old/" = "new/"\n"kept.py" = "kept.py"\n'
                                                        '[retired]\npaths = ["gone/"]\n[drop]\npaths = ["x.toml"]\n'
                                                        '[modules]\n"old" = "new"\n"pkg.old" = "pkg.new"\n',
-                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkCertifier"\n'
+                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkAttester"\n'
                                                        '[[words_in]]\nfiles = ["a/*"]\nwords = { tap = "certifier" }\n',
                               "tools/move/bad_map.toml": "[paths\n"})
     layout, words = (Q.map_retires(world.origin, main, f"tools/move/{m}_map.toml") for m in ("l", "w"))
@@ -5329,7 +5329,7 @@ def _lock_world(world: World) -> None:
 @pytest.mark.parametrize("case", list(LOCK_DROPS))
 def test_a_lock_merge_onto_next_names_each_premise_and_frozen_key_it_drops_that_next_still_needs(world, case):
     """A head's regenerated lock, merged onto `next` by the record driver as the sync merges it, dropped `shape.inline` premises
-    of guarantees `next` still states unchanged, and the train's Lean check failed on each.  What it may drop: a removed or
+    of guarantees `next` still states unchanged, and the candidate's Lean check failed on each.  What it may drop: a removed or
     restated guarantee's, one renamed, or re-keyed at a restated statement."""
     from research.queue import lock_drops
 

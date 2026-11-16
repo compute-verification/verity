@@ -1,10 +1,10 @@
-"""kind_scan: what the network certifier's piece releases holds only fields of the four public kinds and the network
-certifier's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the execution
+"""kind_scan: what the network attester's piece releases holds only fields of the four public kinds and the network
+attester's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the execution
 phase's certificates as `certifier_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s
 accept) scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
 it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no declaration names is a finding too: a
 count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
-rebuild), or any step the network certifier path doesn't run, is a finding naming the check.
+rebuild), or any step the network attester path doesn't run, is a finding naming the check.
 
 What a verifier on another machine receives of a served run's OUT (``--received``: the certifier's piece, V3c's audit,
 the registered compiler, the advice and weights registrations and the window circuit's count) scans clean as the run
@@ -33,7 +33,7 @@ from verity.circuits.codec import canonical_json  # noqa: E402
 sys.path.append(str(ROOT / "benchmarks" / "one_stage"))
 import served_verdicts as SV  # noqa: E402
 
-PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = ROOT / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "tests" / "period_case.py"
 #: V3c's committed window's provenance: `prove_path.py window-commit`'s class and scan state, `rows.registration`'s kind
 #: and run root, `Window.write`'s circuit record and registered roots, `rows.write`'s index leaf and order
 V3C_WINDOW = {"kind": "served", "run": "ab" * 64, "window_circuit": {"class": [4, 32, 4, 4, 16]},
@@ -84,7 +84,7 @@ def _paths(found: list[KS.Finding]) -> list[tuple[str, str]]:
 
 def test_the_pieces_answer_and_certificates_are_of_the_public_kinds(tmp_path, period):
     """The answer's fields are structure, the protocol's outputs and a hiding commitment, and the certificates' the
-    network certifier's; the piece releases none of the verifier's coins or samples."""
+    network attester's; the piece releases none of the verifier's coins or samples."""
     d = _dir(tmp_path / "d", *_case(period))
     signed = json.loads((d / CP.CERTIFICATES).read_text())
     assert signed["records"] and signed["rows"]
@@ -128,7 +128,7 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
 
 
 def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
-    """The report's steps are the network certifier path's (`STEPS`, the five `chain_record.report` writes there, which
+    """The report's steps are the network attester path's (`STEPS`, the five `chain_record.report` writes there, which
     test_certifier_piece holds a published report to): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
     and its tie negatives beside it) is `ENDPOINT`'s finding, and a step of no other name is one of no declared kind."""
     def found(steps: dict, name: str) -> list[tuple[str, str, str]]:

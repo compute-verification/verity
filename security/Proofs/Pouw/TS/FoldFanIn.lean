@@ -52,9 +52,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Finset
+open ResourceAccounting.TS Finset
 
 namespace Fold
 
@@ -131,7 +131,7 @@ end Fold
 
 open Fold
 
-theorem FoldFanIn : Accounting.Guarantees.TS.FoldFanIn := by
+theorem FoldFanIn : ResourceAccounting.Guarantees.TS.FoldFanIn := by
   intro w N c f g s D out
   by_cases hrun : ∃ x v, D.Runs x v ∧ (fun o => v (out o)) ≠ foldRun (fun i => (g i).1) s x
   · exact Or.inl hrun
@@ -144,7 +144,7 @@ theorem FoldFanIn : Accounting.Guarantees.TS.FoldFanIn := by
     hsrc
   simpa using h
 
-theorem DuoFoldFanIn : Accounting.Guarantees.TS.DuoFoldFanIn := by
+theorem DuoFoldFanIn : ResourceAccounting.Guarantees.TS.DuoFoldFanIn := by
   intro n L f k a r s D out
   by_cases hrun : ∃ x v, D.Runs x v ∧ (v (out 0), v (out 1)) ≠ Pouw.Receipt.duoRun k (fun j => (a j).1) r x s
   · exact Or.inl hrun
@@ -163,7 +163,7 @@ theorem DuoFoldFanIn : Accounting.Guarantees.TS.DuoFoldFanIn := by
     hsrc
   simpa using h
 
-theorem Fx1FoldFanIn : Accounting.Guarantees.TS.Fx1FoldFanIn := by
+theorem Fx1FoldFanIn : ResourceAccounting.Guarantees.TS.Fx1FoldFanIn := by
   intro n L f k a r m s D out
   by_cases hrun : ∃ x v, D.Runs x v ∧
       (v (out 0), v (out 1)) ≠ Pouw.Receipt.fx1Run k (fun j => (a j).1) r (fun j => (m j).1) x s
@@ -183,4 +183,4 @@ theorem Fx1FoldFanIn : Accounting.Guarantees.TS.Fx1FoldFanIn := by
     hsrc
   simpa using h
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

@@ -344,8 +344,9 @@ def workload_in(pgid: int, run_dir: Path) -> bool:
             if int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid \
                     and want in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
                 return True
-        except (OSError, IndexError, ValueError):
-            continue
+        except (OSError, IndexError, ValueError) as e:
+            if Path(f"/proc/{pid}").exists():
+                print(f"keeper: pid {pid} unread, so not counted in group {pgid} ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return False
 
 

@@ -30,7 +30,7 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``verity/protocols/accounting/certifier/prover/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
+  (``verity/protocols/resource_accounting/network/prover/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
   at G = 1 in the slice's class, 8 bytes) is found whole (`leak_scan.find_whole`).
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO)]
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402

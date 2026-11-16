@@ -277,8 +277,9 @@ def _eval_vu(task: tuple[int, bytes, bytes]) -> dict:
 def _eval_stale(task: tuple[int, bytes, bytes, int]) -> dict:
     i, xb, wb, prev = task
     x, w = _words(xb), _words(wb)
-    alt = G.variant_chain("c0-stale", x, w, {"previous_final": prev})
-    if alt is None:
+    try:
+        alt = G.variant_chain("c0-stale", x, w, {"previous_final": prev})
+    except InvalidArtifact:
         return {"i": i, "y": None, "acc_differs": None}
     accs = G.chain_accs(x, w)
     return {"i": i, "y": G.epilogue(alt[-1]), "acc_differs": alt != accs}

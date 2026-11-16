@@ -291,3 +291,26 @@ def test_row_range_reads_are_the_slices_of_the_whole_tensor(ckpt):
             assert np.array_equal(ck.array(name, rows=(lo, hi)), whole[lo:hi])
     with pytest.raises(ValueError, match="rows"):
         ck.array("lm_head.weight", rows=(2, 1))
+
+
+def test_a_pin_under_another_hf_home_is_its_entry_by_repo_and_revision(tmp_path):
+    """The manifest's local_path is absent (the pin was made on another machine): the same revision's snapshot under this host's HF
+    cache is that entry's, its shard still held to the entry's sha256, and another revision's snapshot is no entry's."""
+    rev, shard = "a" * 40, "model.safetensors"
+    snap = tmp_path / "hf" / "hub" / "models--org--m" / "snapshots" / rev
+    snap.mkdir(parents=True)
+    (snap / shard).write_bytes(b"w")
+    man = tmp_path / "checkpoints.json"
+    man.write_text(json.dumps({"checkpoints": [{"repo": "org/m", "revision": rev, "local_path": f"/absent/hub/models--org--m/snapshots/{rev}",
+                                                "safetensors_sha256": {shard: hashlib.sha256(b"w").hexdigest()}}]}))
+
+    def pin(d: Path) -> dict:
+        return CI.shard_pin(str(d), checkpoints_manifest=str(man), model=None, revision=None, shards=[shard])
+
+    assert pin(snap)["entry"] == {"repo": "org/m", "revision": rev} and pin(snap)["shards"][shard]["pinned"] is True
+    (snap / shard).write_bytes(b"x")
+    assert pin(snap)["shards"][shard]["pinned"] is False
+    other = snap.parent / ("b" * 40)
+    other.mkdir()
+    (other / shard).write_bytes(b"w")
+    assert pin(other)["entry"] is None and pin(other)["shards"][shard]["pinned"] is None

@@ -18,9 +18,9 @@ else:
     TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
 OPS = importlib.import_module("verity_vllm.engine.int8_ops")
 CG = importlib.import_module("verity_torch.pouw.credit_gate_device")
-PH = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1")
+PH = importlib.import_module("verity.protocols.resource_accounting.compute.pouw.prover.serving.h1")
 PHK = importlib.import_module("verity_vllm.protocols.pouw.h1_hooks")
-SV = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1.served")
+SV = importlib.import_module("verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served")
 T = importlib.import_module("tests.protocols.test_pouw_h1_served")
 
 

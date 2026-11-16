@@ -31,7 +31,7 @@ namespace Verity.SampledTwo
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Runs alike where the first has a message**: from one history and messages, against one verifier, where the
 second prover sends the first's message wherever the first run has one, the two runs have the same messages and the

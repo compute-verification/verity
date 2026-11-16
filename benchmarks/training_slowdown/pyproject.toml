@@ -24,7 +24,7 @@ untraced = ["tests/test_command.py", "tests/test_grade.py", "tests/test_job_shel
 # imports; and
 # `benchmarks/circuit_properties/circuit_properties`, the reading of a Program's work it holds beside a trace's. The
 # library writes its metric into the run's result with the harness kit's writer (`benchmarks/harness/verity_bench`)
-inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
           "benchmarks/harness/verity_bench/settings.py",
           "verity", "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "adapters/torch/tests/frontend/train_step_lf.py",

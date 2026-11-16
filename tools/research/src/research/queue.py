@@ -341,7 +341,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
-from . import linear, quick_tier, waitcap
+from . import linear, quick_tier, suite_layout, waitcap
+from .telemetry import end_state
 from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
@@ -1377,8 +1378,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
     that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
     a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
     it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
-    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
-    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  A directory holds its tests under the root's `tests/` too, and
+    `tests/` holds only the root suite's own (`suite_layout.held`).  ``files`` are the PR's own change, against its merge
+    base with `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
     dirs, paths, names = [], set(), []
     for x in excludes:
         if x.endswith("/"):
@@ -1387,9 +1389,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
             paths.add(x)
         else:
             names.append(x)
-    files = list(files)
+    files, dirs = list(files), tuple(dirs)
     return bool(files and (dirs or paths or names)) and not any(
-        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        suite_layout.held(f, dirs) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
         for f in files)
 
 
@@ -3225,9 +3227,9 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
-                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
-                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
-                  "verity/protocols/accounting/poub/verifier/commitments/",
+                  "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/resource_accounting/memory/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+                  "verity/protocols/resource_accounting/memory/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
@@ -4108,13 +4110,14 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
 
 def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
     """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
-    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
-    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: exit 0 and validation passed
+    when it found no failure, exit 1 and validation failed when every one it found is allowed; and it ended in the state the
+    runner records for that exit (`end_state`: `done`, `failed`)."""
     tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
     if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
-    if (status.get("state"), status.get("rc"), res.validation_status) != want:
+    rc, validation = (0, "passed") if quick_tier.judge(tier, head, output) is None else (1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != (end_state(rc), rc, validation):
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None
@@ -5106,9 +5109,16 @@ def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
                 r, why = run(list(sync), wt)
                 if r is None or r.returncode:
                     return why or f"`{' '.join(sync)}` exited {r.returncode}: {r.stdout.strip()[-300:]}"
-            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, CROSS_ROOT_SUITE)
+            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, root_suite(wt))
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return f"{type(e).__name__}: {e}"
+
+
+def root_suite(wt: Path) -> list[str]:
+    """`CROSS_ROOT_SUITE` on the tree at ``wt``, less each directory of its `tests/` the root suite doesn't own
+    (`suite_layout.root_owns`): the suites mirrored there, which `pytest tests` would otherwise collect as the root suite's."""
+    under = sorted(d.relative_to(wt).as_posix() for d in (wt / suite_layout.MIRROR).iterdir() if d.is_dir())
+    return [*CROSS_ROOT_SUITE, *(f"--ignore={d}" for d in under if not suite_layout.root_owns(d + "/"))]
 
 
 @dataclass

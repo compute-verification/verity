@@ -641,7 +641,7 @@ def test_a_published_derive_is_restored_whole_and_the_first_publisher_stands(tmp
 
 # ---------------------------------------------------------------------------------------------------------------- the replay sample
 
-def test_family_strata_draw_k_units_with_every_family_at_least_once():
+def test_family_strata_sample_k_units_with_every_family_at_least_once():
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r{i % 3}|rank0|mid|op{i}|fresh-window"}
            for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
     keyed, per = family_strata(vus, 256)
@@ -655,7 +655,7 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
     assert family_strata(vus, None, 2) == (vus, 2), "without k: the row's per-stratum sample, untouched"
 
 
-def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
+def test_the_uniform_sample_is_k_units_from_one_stratum_of_every_unit():
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
            for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
     keyed, per = family_strata(vus, 460, design="uniform")

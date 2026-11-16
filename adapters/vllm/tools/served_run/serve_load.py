@@ -1,5 +1,5 @@
 """A short varied load on a `verity-vllm serve-openai` endpoint, in bursts the server's idle closes into Commit windows, or
-as the network certifier's varied traffic.
+as the network attester's varied traffic.
 
     python adapters/vllm/tools/served_run/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
     python adapters/vllm/tools/served_run/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
@@ -17,7 +17,7 @@ finished and the engine has idled. One JSON line a request goes to ``--out``: it
 endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-range``, so prompts share cached prefixes;
 ``max_tokens`` uniform in 1 … ``--max-tokens``, greedy, a seed of its own, streamed; ``user`` ``varied.<j>``. With
 ``--release RUN`` request j carries ``x-verity-release: j`` and ``x-verity-release-run: RUN`` (its place in the arrival
-order, as the network certifier numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
+order, as the network attester numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 
 ``--fixed N`` is one full window of fixed length: N requests whose prompts are sampled as ``--varied`` samples them

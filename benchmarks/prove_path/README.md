@@ -1,71 +1,105 @@
 # prove_path
 
-The prove path (`prove_path.py`, `run.sh`), the window's audit from its records alone (`records_audit.py`) and the cost
-model's class-of-record window (`window_cost.py`, `class_rows.py`), and what they read from the measurements and the
-served-rows tie's runs on a sealed served window:
+The prove path (`prove_path.py`, `run.sh`), an execution phase's audit from its records alone (`records_audit.py`) and the cost
+model's class-of-record execution phase (`window_cost.py`, `class_rows.py`), and what they read from the measurements and the
+served-rows tie's runs on a sealed served execution phase:
 
 - `sources.json` and the checkpoint manifests it names: the served models' sources, which `prove_path.py` reads.
 - The class probes (`llama32_1b_*.json`, `glm53_silu_mul_v2_*.json`), each a Program lowered at a small class, which
   `window_cost.py` projects.
-- `served_tie_window.py`: the served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
+- `served_tie_window.py`: the served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served execution phase's real rows.
 - `served_tie_zk.py`, `served_statics_zk.py`, `served_tie_zk.sh`: the routed served-rows tie, and the served rows held to
-  their Programs' statics, proved in zero knowledge on a sealed served window, on a CPU machine.
+  their Programs' statics, proved in zero knowledge on a sealed served execution phase, on a CPU machine.
 - `e2e_chains/`: the status of every protocol's end-to-end chain behind the prove path's "What an accepted audit means".
 
 ## The shell entry points
 
-- `../one_stage/a5.sh`: the window audit's entry point on a CPU machine. It audits a deferred Commit's window, a stand-in linked to its run root, the
+- `../one_stage/a5.sh`: the one-stage audit's entry point on a CPU machine. It audits a deferred Commit's execution phase, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture, committed under rows-sha512
-  (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its window from `verity-vllm serving-rows`
+  (`COMMIT_SCHEME` names no other: vllm-v1 is kept only to read recorded runs), its execution phase from `verity-vllm serving-rows`
   (with `WINDOW=served`, the in-Commit hook's), and the circuit prover and Lean built from the run's tree. With `A5_ROW_DIR` it takes a
-  single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the window its C2
+  single-GPU deferred Commit's row dir and sealed bundle in place of the fixture, and with `WINDOW=served` the execution phase its C2
   site committed (`A5_WINDOW`).
 - `../one_stage/prove_bundle.sh`: a sampled-proof-block replay bundle (`benchmarks/one_stage/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
-  `../one_stage/prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `bundle-window` (a W8A8 MLP's window under a
-  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
-  `../one_stage/tests/test_prove_bundle.py` holds that bundle to the window's public part (`../one_stage/tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
+  `../one_stage/prove_bundle.py`: `PB_BUNDLE` of the execution phase `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `bundle-window` (a W8A8 MLP's execution phase under a
+  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under its registered `subset:4`).
+  `../one_stage/tests/test_prove_bundle.py` holds that bundle to the execution phase's public part (`../one_stage/tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's execution phase: its own check (the sample's
   sampling design the registered one among it), its run, docket and partition, each sampled member's public body and a live
   sample's receipt and record. Each sampled member is one `prove --zk` session (behind the Lean ZK server with `ZK_SERVER=1`), one at a time, served the bundle's
   sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `verity/protocols/proofs/flock/prover/agreement/zk_mutants.py`'s one-bit
-  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, refused by Lean (and with
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered execution phase's member, refused by Lean (and with
   `ZK_SERVER=1` stopped by the ZK server as well). `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
-  source, so M3's reserved window doesn't spend time on the build.
+  source, so M3's reserved time isn't spent on the build.
 
 ## The prove path
 
-Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
+Network certification under arbitrary vLLM usage proves a served run's step proof blocks after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
-units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
+proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
-served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
+served execution phase's the server committed) and each rank's execution phase over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`, of the row `LROW` names, the bf16
+RTX PRO 6000 B4 row by default; its workload the stored one of that name) or on a served execution phase
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
+
+The single-GPU arm proves only a Commit made under I2's Programs, whose Builds (`build_request_<shape>_<policy>*`) are in its
+row dir. A row dir `verity-vllm row run` made (`../one_stage/a5_llama1b_h200.sh`'s among them) can't be proved by it: its
+Commit is under the row's declared Programs, and I2's request Programs end in their length rule (`steps.stop_of`). `run.sh`
+refuses such a row dir before any build. The way to prove such a row is a serve-openai run's sealed execution phase, the served arm,
+which reads the serve run's own records and never a row dir's Builds. On the node holding the serve dir `D` (for
+`../one_stage/served_verdicts.sh`, `/dev/shm/vllm-servedproof/<run id>`), with `K` the execution phase it picked (its `window`):
+
+~~~bash
+K=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["window"])' $D/private/window.json)
+# Flock (plain sessions, a stratified sample of every unit of layer 0's SiluMul_v2 at step 1)
+OUT=$RESEARCH_RUN_DIR/flock/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_PLAIN=1 \
+  PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all_stratified.json \
+  env -u PYTHONPATH bash benchmarks/prove_path/run.sh
+# zero knowledge (--zk behind the Lean ZK server, every unit sampled, audited from the window's records alone)
+OUT=$RESEARCH_RUN_DIR/zk/out PP_SERVE_RUN=$D PP_WINDOW=$K PP_SERVE_ROWS=$D/windows/w$K PP_RECORDS=1 \
+  PP_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  PP_FORGED_PARTITION=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1_all.json \
+  env -u PYTHONPATH bash benchmarks/prove_path/run.sh
+~~~
+
+`PP_PLAIN=1` goes without `PP_RECORDS=1`: `records_audit.py` runs `--zk` sessions only, so a plain run is audited by
+`prove_path.py audit --plain`, whose partition's rule must be a stratified rate. Each run writes `$OUT/ran_with.txt`, the
+line naming its coins and parameters (`prove_path.py ran-with`).
+
+The forged run commits its own execution phase with one proof block's value flipped (`--forge`, default member 0's
+proof block 0), so its partition needs that proof block in the execution phase and sampled, not proof blocks other than
+the honest run's. A served execution phase of steps 1 to 2 has no proof block at step 24, so the forged partition above
+is the honest one's steps with every proof block sampled, which is also
+what the served arm derives when `PP_FORGED_PARTITION` is unset (`prove_path.py forged-partition`, kept as
+`$OUT/forged-partition.json`). One naming steps outside the honest partition's is refused before any build. A run with
+`PP_ONLY=honest` prints `PROVE-PATH {"name": "…-forged", "ran": false, "why": "PP_ONLY=honest: no forged run"}`.
 
 ## What changes when Programs come from advice
 
 A declared run's audit (`../one_stage/a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.protocols.accounting.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.resource_accounting.network.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
-1. **Docket binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
+1. **Docket binds the compiler and the advice's hiding root, not a workload.** The rank's `window` provenance (core's
    `verity/registration/v1` item `window`, which the record's digest covers) carries `compiler: {name, digest}` and
    `advice: {root, bits}` (`pipeline.advice_windows.binding`). The compiler's digest is `Capped`'s: the inner compiler's digest
-   and ℓ, the public cap on the advice's length. The root is the advice's hiding commitment (`advice_windows.commit_advice`:
+   and ℓ, the public limit on the advice's length. The root is the advice's hiding commitment (`advice_windows.commit_advice`:
    I1's canonical encoding in 256-bit rows, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the compiler).
-   `bits` is the advice's length, the leak the certifier charges. Every rank binds the same root: the prover commits the advice
+   `bits` is the advice's length, the leak network certification charges. Every rank binds the same root: the prover commits the advice
    once. The record gains no field.
-2. **Each step's Programs are the compiler's output.** The window's `served_programs` are the digests the compiler produced
+2. **Each step's Programs are the compiler's output.** The `window` item's `served_programs` are the digests the compiler produced
    for the advice, and the population program and partition the docket is checked against (R1–R7) are over those
-   Programs. The Stream's Check names the unit templates' Program digests, as it does for a declared run.
+   Programs. The Stream's Check names the proof blocks' templates' Program digests, as it does for a declared run.
 3. **Named gap: the advice is opened to the verifier until the compile slice's proof block exists.** The verifier is handed the
    commitment's opening (the advice and its salts, `advice_windows.opening`), the way the demo opens the wiring. It recomputes
-   the root, compiles the advice with its own copy of the registered compiler, derives its own window
+   the root, compiles the advice with its own copy of the registered compiler, derives its own `window`
    (`advice_windows.window_of_advice`, reading no committed value), and holds the docket to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile slice's proof block below replaces the opening and the recompile. Nothing else in the audit changes.
@@ -88,19 +122,19 @@ commitments and never published.
    A malformed opening is refused the same way (`open_advice`). The compile slice's proof block's statement quantifies over every advice string
    up to ℓ, not just the honest one, and a refused string has no Programs, so it has no accepting proof.
 6. **What the advice can and can't do.**
-   - Advice that names a request the Commit didn't serve, or a served one at another arrival, commits no window, because the
+   - Advice that names a request the Commit didn't serve, or a served one at another arrival, commits no execution phase, because the
      committed store holds no such value (`LookupError` at the prover).
-   - A unit committed under other advice and spliced in fails R4.
+   - A proof block committed under other advice and spliced in fails R4.
    - Each of these fails `source` before any coin is read (`more_negatives`, as a5's `advice_negatives`): a docket naming
-     another compiler, another advice root, another cap, or none; the opening under another salt; another rank's docket;
+     another compiler, another advice root, another limit, or none; the opening under another salt; another rank's docket;
      the docket under the compiler listing no transfer gates.
-   - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
+   - The advice can only choose among Programs the compiler emits. Every proof block's values are still committed under hiding leaves
      and opened only inside the proof.
-7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's work sampling design (`work-rate:NUM/DEN`, the
-   stream's rule) samples every unit of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose proof blocks hold
+   transfer gates (the I/O shell's), and its digest covers the list. The execution phase's work sampling design (`work-rate:NUM/DEN`, the
+   stream's rule) samples every proof block of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a docket sampling them as the rest. Until the compiler lists the I/O shell's
-   units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
+   proof blocks, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
 - the sample: the service's rule, the partition file's sampling design, on live coins read after the receipt, with ε surfaced at δ by the
@@ -123,57 +157,57 @@ are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live ve
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
 compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
-step units are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
+step proof blocks are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
 Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
 the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
-- no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
+- no incorrect proof block is in a class sampled `all`: the transfer-gate proof blocks and the network attester's head checks
   (`allSlots`);
 - the advice (`traceVal`, free), its inputs pinned to the trace's committed values and `free` holding values exactly at
   the incorrect proof blocks' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation
-  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no unit incorrect,
+  sequence the trace's transfer gates carry (`Carries`), with every status complete (`Covered`). With no proof block incorrect,
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
 (`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
 verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
-audit's carried sequences, cut at the horizon, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
+audit's carried sequences, cut at the monitoring period's end, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
-- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
+- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the monitoring period's end lists as
   ingress, and the registered inputs, the weights among them, don't count;
-- λ_δ, which units are incorrect;
+- λ_δ, which proof blocks are incorrect;
 - β_δ, the incorrect proof blocks' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
 
-At δ ≥ miss(1) no unit is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
+At δ ≥ miss(1) no proof block is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
 registered inputs' docket values rather than the trace's, a disagreement being a SHA-512 collision. The bound is
-meaningful only once the advice is the circuit's one free input outside the docket: while a window's circuit is a
-stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than the advice
+meaningful only once the advice is the circuit's one free input outside the docket: while an execution phase's circuit is a
+stand-in partition rather than the whole execution phase, its free inputs are its proof blocks' inputs, far more bits than the advice
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
-Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
-conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
+Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the execution phases. It takes each one's
+conditional miss probability and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at its
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
 `advice_bits`, `c`, `other_inputs`, `bound`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and
 `exfiltration_bound`):
 - c is `c`. It is `advice.bits` (the docket's `window.advice.bits`: the I1 advice's length, which
-  `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
+  `prove_path.py advice` prints as `bits`) only while the execution phase's leak count (`records_audit.leak_count`) is within the
   charge, so the advice is the only free input outside the docket. Otherwise `c` is null and `bound` is `vacuous`,
-  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
-  and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
-  states the leak bound there. Over several windows, c is their sum, and null if any one's is.
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its proof blocks' inputs,
+  and a partial execution phase, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
+  states the leak bound there. Over several execution phases, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/protocols/proofs/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
-  `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
+  `bound` of the `of` proof blocks are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
-- β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
+- β_δ is `harm_bound`: the profile's `harm_bound`, each template's proof blocks weighted by its committed bits (`_template_bits`
   in `verity/protocols/proofs/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
-- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
+- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the network attester's term.
 
-**A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
+**A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each execution phase one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
 `SoundExecH` at hidden outputs, `SoundExecHR` with registered reads), in the game form
 (`security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
@@ -192,7 +226,7 @@ guarantee above.
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
 - `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The network attester's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).
@@ -202,21 +236,21 @@ match is refused. It is never a soundness gap.
 
 ## The compile slice's proof block (the target; not built)
 
-The unit closes the named gap: the advice is never opened, and the verifier never recompiles.
+The proof block closes the named gap: the advice is never opened, and the verifier never recompiles.
 
 - **Selection All.** Each docket has one compile slice's proof block, always proved. Its Spec's selection is `service.All`, so it is
-  never sampled. It reads no coins, and its proof goes through the ZK server like every unit's.
+  never sampled. It reads no coins, and its proof goes through the ZK server like every proof block's.
 - **Public inputs.** Only kinds AGENTS.md allows (protocol structure and hiding commitments):
   - d_C, the registered compiler's digest (`Capped.digest`), which fixes the compiler's code and ℓ;
   - ρ, the advice's root (`window.advice.root`);
-  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term the certifier charges);
-  - Π, what the window's Programs commit to: either the window's `served_programs` (request id ↦ Program digest) with the
+  - b, the advice's length in bits (`window.advice.bits`, which is public and is the length term network certification charges);
+  - Π, what the execution phase's Programs commit to: either the `window` item's `served_programs` (request id ↦ Program digest) with the
     population Program's and partition's digests that R1–R7 hold the docket to, or, with the compiler's padded public
     step templates, the root of a hiding commitment to the routing (which committed row of each step feeds which public template
     instance).
 - **Witness.** The advice a, with |a| = b ≤ ℓ, the salts y_0 … y_{R−1} of its R = ⌈b / 256⌉ rows, and, for a committed routing,
   the routing's rows and salts.
-- **Statement.** The unit outputs one bit, and it is 1 exactly when all three hold:
+- **Statement.** The proof block outputs one bit, and it is 1 exactly when all three hold:
   1. ρ is the root of a's rows:
      - row i is a[32i … 32i + 31], zero-padded;
      - leaf i is `verity.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
@@ -227,7 +261,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
      encoding, and the compiler's rules.
   3. Its Programs P meet Π: the digest of each request's Program is `served_programs`' entry for it (and P's population Program
      is the registered one), or P's routing is the committed routing under Π's root.
-- **Quantified over every advice string up to ℓ.** For every a ∈ {0,1}^{≤ℓ} and every set of salts: if the unit's proof verifies
+- **Quantified over every advice string up to ℓ.** For every a ∈ {0,1}^{≤ℓ} and every set of salts: if the proof block's proof verifies
   under (d_C, ρ, b, Π), then ρ opens to a (hm96 binding and SHA-512's collision resistance), compile_C(a) is not a refusal, and
   its Programs meet Π. compile_C is total and deterministic, so every ill-formed string has exactly one refusal and no accepting
   proof.
@@ -255,7 +289,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     `own_builds`; no vLLM, and `--vllm-python` is ignored) into `--builds` (default `OUT/builds`, never under the row dir),
     each held to I2's digest. The prover's Builds are its row dir's. The audit summary's `i2` holds I2's Programs beside the
     Build's `build_request_LP*` digests.
-  - on a served window, the same over φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
+  - on a served execution phase, the same over φ of the served engine as vllm's registered compiler compiles under (`phi_of_serve`:
     `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
     seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
@@ -269,22 +303,22 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
     prints the binding's compiler. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
     (`manifest.json`, by I1 id).
-- **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
-  commits the window under the published binding. Before any commit and before the sample (folded into the source check a5
-  gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
-  (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
+- **A served execution phase** binds the root serve-openai published: the advice is committed once, by the server, and the prover
+  commits it under the published binding. Before any commit and before the sample (folded into the source check a5
+  gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another execution phase
+  (`window`), a compiler whose digest carries no limit (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
   (`run_root`), a docket naming another Commit (`commit`), and a carried request that doesn't follow from the close of
-  the window before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that window's
+  the execution phase before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that execution phase's
   close, opened under its docket, naming the request and what doesn't follow: its order, a request dropped with outputs
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
-  lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
-- **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
-  what an integration hands Verity (`verity.commitments.periods.interface`): the window's `circuit.json`, which its docket binds
+  lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its execution phases.
+- **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served execution phase) reads only
+  what an integration hands Verity (`verity.commitments.periods.interface`): the execution phase's `circuit.json`, which its docket binds
   by SHA-512; the registered compiler and the advice's root and length; the docket and the committed values; and the
-  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition one a
+  advice's opening, the named gap. The verifier's `window` is the circuit record's, each template's Definition one a
   catalog registers or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
-  table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
+  table names for it (`prove_path.py circuit` for a served execution phase, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). Of `verity_vllm` it loads only a catalog package
@@ -301,7 +335,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
   forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
   (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.
-- **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
+- **A single-GPU execution phase** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to
   `<row dir>/manifest.json`, checked against the record's sha256.

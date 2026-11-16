@@ -4,19 +4,19 @@ public import Definitions.Compose.Guarantees.ComposeMonitoringPeriod
 public import Proofs.Pouw.TS.Rounds
 public import Proofs.Compose.Compose.CircuitWork
 public import Proofs.Compose.ComposeMonitoringPeriod.Covers
-public import Proofs.Accounting.Lemmas.TS.Receipt
-public import Proofs.Accounting.Lemmas.ComposeMonitoringPeriod
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
+public import Proofs.ResourceAccounting.Lemmas.ComposeMonitoringPeriod
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs
 
-`Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget` is proved here: a window's `serviceGame` is one round
+`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget` is proved here: a window's `serviceGame` is one round
 `.round d pass (fun _ => .done)`, `monitoringPeriodGame` puts the next window's game in place of its end (`consGame`), and
 `RoundGame.BudgetAt` of `.round d pass next` is the round's two conditions and `BudgetAt` of every `next ω`, so the
 period's budget is its windows', by induction on the period. The window's live tiles only pick its weights.
 
-`Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax` is proved here too, by induction on the game for every threshold
+`ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax` is proved here too, by induction on the game for every threshold
 `D` at once (`prob_prefix_le`): a prefix reaching `D > 0` passes its first round and has the rest reach `D − d`, so,
 conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
 `E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
@@ -43,9 +43,9 @@ prefix's live tiles:
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.ComposeMonitoringPeriod
+namespace ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- A window's round then the rest has its budget when the round has and every continuation has. -/
 theorem budgetAt_consGame {Ω : Type} [Fintype Ω] {n : ℕ} {Λ : ℝ} (g : RoundGame Ω 1) (next : Ω → RoundGame Ω n)
@@ -57,7 +57,7 @@ theorem budgetAt_consGame {Ω : Type} [Fintype Ω] {n : ℕ} {Λ : ℝ} (g : Rou
     exact ⟨hg.1, hg.2.1, hn⟩
 
 /-- `MonitoringPeriodBudget`: by induction on the period, `budgetAt_consGame` at each window. -/
-theorem MonitoringPeriodBudget : Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget := by
+theorem MonitoringPeriodBudget : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget := by
   intro C Ξ _ _ N M n stg w a b K Λ Wp h
   induction Wp with
   | done => simp only [monitoringPeriodGame, RoundGame.BudgetAt]
@@ -75,7 +75,7 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
     rcases le_or_gt D 0 with hD | hD
     · exact (prob_le_one _).trans (Real.one_le_exp (neg_nonneg.mpr (mul_nonpos_of_nonneg_of_nonpos hc hD)))
     refine (prob_mono (q := fun _ => False) fun x hx => ?_).trans
-      (Accounting.SecurityProofs.TS.Rounds.prob_false.trans_le (Real.exp_pos _).le)
+      (ResourceAccounting.SecurityProofs.TS.Rounds.prob_false.trans_le (Real.exp_pos _).le)
     obtain ⟨j, -, hj⟩ := hx
     simp only [RoundGame.deficiencyUpTo] at hj
     linarith
@@ -93,7 +93,7 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
       _ = Real.exp (-(c * D)) := mul_one _
     by_cases hpa : pass a
     · rw [ite_eq_left hpa]
-      refine (Accounting.SecurityProofs.TS.Rounds.expect_ind_le_prob (Q := fun y => ∃ j,
+      refine (ResourceAccounting.SecurityProofs.TS.Rounds.expect_ind_le_prob (Q := fun y => ∃ j,
         RoundGame.acceptsUpTo (next a) j y ∧ D - d a ≤ RoundGame.deficiencyUpTo (next a) j y)
         fun y hy => ?_).trans ?_
       · obtain ⟨j, hj1, hj2⟩ := hy
@@ -107,8 +107,8 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
       · calc _ ≤ Real.exp (-(c * (D - d a))) := prob_prefix_le hc (next a) (h2 a) (D - d a)
           _ = Real.exp (-(c * D)) * Real.exp (c * d a) := by rw [← Real.exp_add]; ring_nf
     · rw [ite_eq_right hpa, mul_zero]
-      refine (Accounting.SecurityProofs.TS.Rounds.expect_ind_le_prob (Q := fun _ => False) fun y hy => ?_).trans
-        Accounting.SecurityProofs.TS.Rounds.prob_false.le
+      refine (ResourceAccounting.SecurityProofs.TS.Rounds.expect_ind_le_prob (Q := fun _ => False) fun y hy => ?_).trans
+        ResourceAccounting.SecurityProofs.TS.Rounds.prob_false.le
       obtain ⟨j, hj1, hj2⟩ := hy
       cases j with
       | zero =>
@@ -119,10 +119,10 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
         exact hpa hj1.1
 
 /-- `MonitoringPeriodTailMax`: `prob_prefix_le` at `c = 1/Λ`, whose round bound `BudgetAt` gives. -/
-theorem MonitoringPeriodTailMax : Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax := by
+theorem MonitoringPeriodTailMax : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax := by
   intro Ω _ n g Λ hΛ hB t
   have h := prob_prefix_le (c := 1 / Λ) (by positivity) g
-    (Accounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
+    (ResourceAccounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
   rwa [one_div, inv_mul_cancel_left₀ hΛ.ne'] at h
 
 /-! ## The live weights -/
@@ -178,7 +178,7 @@ theorem liveShare_le_shareCone (t : Fin Np) : liveShare Sc Cd Np live t ≤ shar
   unfold liveShare
   by_cases h0 : liveWords Sc Cd Np live t = 0
   · rw [ite_eq_left h0]
-    exact Accounting.SecurityProofs.Compose.WorkProof.shareCone_nonneg Sc Cd Np t
+    exact ResourceAccounting.SecurityProofs.Compose.WorkProof.shareCone_nonneg Sc Cd Np t
   · rw [ite_eq_right h0]
     have hl : live t = true := by
       by_contra hl
@@ -200,7 +200,7 @@ theorem liveWords_le_liveShare (t : Fin Np) :
   · rw [ite_eq_right h0]
     have hpos : 0 < wordsOf Sc Cd := Nat.lt_of_lt_of_le (Nat.pos_of_ne_zero h0)
       ((liveWords_le_tileWords Sc Cd Np live t).trans
-        (Accounting.SecurityProofs.Compose.CoversProof.tileWords_le_wordsOf Sc Cd Np t))
+        (ResourceAccounting.SecurityProofs.Compose.CoversProof.tileWords_le_wordsOf Sc Cd Np t))
     have hnn : ∀ t' ∈ (Finset.univ : Finset (Fin Np)), 0 ≤ (if Cd.Reaches t.val t'.val then
         (liveWords Sc Cd Np live t' : ℝ) / (wordsOf Sc Cd : ℝ) else 0) := fun t' _ => by
       split_ifs
@@ -270,13 +270,13 @@ theorem luckAt_of_perLiveTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : 
           have e0 : tileLuck0 Sc Cd Np t = Sc.guess k := by simp [tileLuck0, hk, hc, Option.elim]
           rw [e1, e0]
           have hPin : (tileGame mode right same .folded t).Pinned := ⟨fun _ h => h, fun _ => trivial⟩
-          have hL := Accounting.SecurityProofs.TS.LuckOfReceipt (tileGame mode right same .folded t)
+          have hL := ResourceAccounting.SecurityProofs.TS.LuckOfReceipt (tileGame mode right same .folded t)
             (Sc.mu k) (Sc.rB k) hPin
-            (Accounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass (Sc.mu k) _ (h1 t hl ht k hk hc))
+            (ResourceAccounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass (Sc.mu k) _ (h1 t hl ht k hk hc))
             (h2 t hl ht k hk hc) (hLP k).2.2.1
-          exact ⟨Accounting.SecurityProofs.Compose.WorkProof.tileLuck_of mode right same .folded t
+          exact ⟨ResourceAccounting.SecurityProofs.Compose.WorkProof.tileLuck_of mode right same .folded t
               (Sc.foldLuck k) hL,
-            Accounting.SecurityProofs.Compose.WorkProof.tileLuck_of mode right same .whole t (Sc.guess k)
+            ResourceAccounting.SecurityProofs.Compose.WorkProof.tileLuck_of mode right same .whole t (Sc.guess k)
               (h3 t hl ht k hk hc)⟩
     · rw [ite_eq_right hl, ite_eq_right hl]
       exact ⟨hone _, hone _⟩
@@ -306,7 +306,7 @@ theorem budget_executionPhase {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : 
       exact hlk t (lt_of_lt_of_le ht (liveShare_le_shareCone Sc Cd Np live t))
     · rw [liveShare_of_dead Sc Cd Np live hl] at ht
       exact absurd ht (lt_irrefl 0)
-  exact Accounting.SecurityProofs.Compose.Budget.serviceBudget (tileStage Cd Np) W (liveShare Sc Cd Np live)
+  exact ResourceAccounting.SecurityProofs.Compose.Budget.serviceBudget (tileStage Cd Np) W (liveShare Sc Cd Np live)
     (fun t => if live t then tileLuck Sc Cd Np t else 1) (fun t => if live t then tileLuck0 Sc Cd Np t else 1) Kd
     ρ p p0 a b wmax Λ (liveShare_nonneg Sc Cd Np live) hρ hρN' hwmax' hlk'
     (luckAt_of_perLiveTile Sc Cd hLP live W hMu hRB hGs) ha hb hSR
@@ -466,7 +466,7 @@ theorem zeroS_le (hDD : DeadConeDead Sc Cd Np live) : zeroS Sc Cd live md ≤ ze
   refine Finset.sum_le_sum fun u _ => ?_
   have hz : 0 ≤ (if tileWords Sc Cd Np u = 0 then tileCone Sc Cd Np u else 0) := by
     split_ifs
-    · exact Accounting.SecurityProofs.Compose.WorkProof.tileCone_nonneg Sc Cd Np u
+    · exact ResourceAccounting.SecurityProofs.Compose.WorkProof.tileCone_nonneg Sc Cd Np u
     · exact le_rfl
   by_cases hp : md u = .paid
   · rw [ite_eq_left hp]
@@ -715,12 +715,12 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
 (`monitoringPeriodCovers` proves it). Off `SampledRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
 theorem circuitWorkMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt) :
-    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod := by
+    ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn _ hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
   obtain ⟨hWR, hCov⟩ := hC Sc Cd hr hK Wp pr hwf hlc
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd
+  obtain ⟨E, hE, hEoff⟩ := ResourceAccounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd
     (Cd.monitoringPeriodLayer hr hK pr) δbind δks hMoved hJS hPins
   have hBud : RoundGame.BudgetAt Λ (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) :=
     budget_monitoringPeriod Sc Cd hLP hρ hρN hwmax hlk ha hb hSR Wp hMu hRB hGs
@@ -784,7 +784,7 @@ theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j :
 /-- **`CircuitCreditMonitoringPeriod` from the period layer's covers**: `circuitWorkMonitoringPeriod_of_covers` at `a, b > 0`; on an
 accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
 theorem circuitCreditMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt) :
-    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod := by
+    ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   have hW := circuitWorkMonitoringPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
@@ -812,11 +812,11 @@ theorem circuitCreditMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt
   exact (prob_mono hsub).trans hW
 
 /-- `CircuitWorkMonitoringPeriod`: the assembly at the period layer's covers (`monitoringPeriodCovers`). -/
-theorem CircuitWorkMonitoringPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod :=
+theorem CircuitWorkMonitoringPeriod : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod :=
   circuitWorkMonitoringPeriod_of_covers monitoringPeriodCovers
 
 /-- `CircuitCreditMonitoringPeriod`: the assembly at the period layer's covers (`monitoringPeriodCovers`). -/
-theorem CircuitCreditMonitoringPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod :=
+theorem CircuitCreditMonitoringPeriod : ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod :=
   circuitCreditMonitoringPeriod_of_covers monitoringPeriodCovers
 
-end Accounting.SecurityProofs.ComposeMonitoringPeriod
+end ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod

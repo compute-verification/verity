@@ -521,20 +521,22 @@ def _off_node(table: Table) -> dict[str, Any] | None:
     records no CPUs, with their share."""
 
     total = table.gpu_seconds_per_token()
-    priced = [r for r in table.rows if r.cost.steady is not None and r.cost.seconds is not None]
+    priced = [(steady, r.per_token * seconds) for r in table.rows
+              if (steady := r.cost.steady) is not None and (seconds := r.cost.seconds) is not None]
     if not priced:
         return None
 
-    def share(rows: Sequence[Row]) -> float | None:
-        return sum(r.per_token * r.cost.seconds for r in rows) / total if total else None
+    def share(times: Sequence[float]) -> float | None:
+        return sum(times) / total if total else None
 
     def of(off: bool | None) -> dict[str, Any]:
-        mine = [r for r in priced if r.cost.steady.off_node is off]
-        return {"rows": len({r.cost.steady for r in mine}), "time_share": share(mine),
-                "runs": sorted({r.cost.steady.run for r in mine})}
+        mine = [(steady, time) for steady, time in priced if steady.off_node is off]
+        return {"rows": len({steady for steady, _ in mine}), "time_share": share([time for _, time in mine]),
+                "runs": sorted({steady.run for steady, _ in mine})}
 
-    single = [r for r in table.rows if r.cost.source in (SINGLE, MODELED) and r.cost.seconds is not None]
-    return {"rows": len({r.cost.steady for r in priced}), "off": of(True), "on": of(False), "not_recorded": of(None),
+    single = [r.per_token * seconds for r in table.rows
+              if r.cost.source in (SINGLE, MODELED) and (seconds := r.cost.seconds) is not None]
+    return {"rows": len({steady for steady, _ in priced}), "off": of(True), "on": of(False), "not_recorded": of(None),
             "single": {"rows": len(single), "time_share": share(single)}}
 
 
