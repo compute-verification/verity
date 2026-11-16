@@ -7784,9 +7784,10 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     """`check.py --build --artifacts`, as `lean_audit.py`'s warm run and `lean_changed.py`'s slot path run it, on real
     builds of the control fixture: one package and two, each without `--moved` and with it, under the sandbox (the
     build's `staged` a dict) and without (a string).  Each run ends with its report written; without `--moved` the lock
-    `--update` writes is the one written today, and with it each lock is written once at the end, the moved package's
-    under the new name and the other's as it was, nothing left beside either.  Real builds, a few minutes: the build's
-    `staged` and the staged lock meet only in `main` after an audit of a build that read the artifact cache."""
+    `--update` writes is the one written today, and with it a changed lock is written once at the end, the moved
+    package's under the new name, the other's left as it was and nothing left beside either.  Real builds, a few
+    minutes: the build's `staged` and the staged lock meet only in `main` after an audit of a build that read the
+    artifact cache."""
     mk = A.sibling("module_keys")
     pkgs = {n: tmp_path / n for n in ("a", "b")}
     for p in pkgs.values():
@@ -7831,7 +7832,7 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
         assert code == 0 and not any("staged_lock" in r for r in reps.values()) and ": written" not in said, said
         assert {n: (pkgs[n] / A.POLICY).read_bytes() for n in pkgs} == recorded
     code, reps, said = run(["b"], "--update", "--moved", str(moves))
-    assert code == 0 and f"audit: {pkgs['b'] / A.POLICY}: written" in said, said
+    assert code == 0 and ": written" not in said, said
     assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
     thms.write_text(thms.read_text().replace("theorem A.t", "theorem Z.t"))
     pol = A.load(a)
@@ -7839,7 +7840,8 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
         "Control.Z.t" if n == "Control.A.t" else n: e for n, e in pol["shape"]["properties"].items()}}})
     code, reps, said = run(["a", "b"], "--update", "--moved", str(moves), sandbox=False)
     assert code == 0, said
-    assert said.count(": written") == 2 and set(A.load(a)["guarantees"]) == {"Control.main_thm", "Control.Z.t"}
+    assert said.count(": written") == 1 and f"audit: {a / A.POLICY}: written" in said, said
+    assert set(A.load(a)["guarantees"]) == {"Control.main_thm", "Control.Z.t"}
     assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
     assert not [f for p in pkgs.values() for f in p.glob(".*.moved")]
 
