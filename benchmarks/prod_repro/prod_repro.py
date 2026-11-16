@@ -45,6 +45,9 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   On another load it is the cost over the passes taken as independent, by vLLM's client the benchmark's paired
   ratio at the rung where stock is saturated (`serve_tax.serving_cost`), by the corpus client its tax over reps
   (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals; that has no verdict;
+- ``layers``, on a sessions load, in no verdict: the cost split by layer (`LAYERS`), each arm the job served over the
+  arm it adds one change to (the seeds sent, the step trace and ids, the canonical top-k, its refinement), the
+  benchmark's own cost with its interval over lifetimes;
 - ``advice``: what the schedule of the pass the replay re-ran costs as advice, in bits a request, by the scheduler
   replay's loader (`ENCODINGS`: its ``draft_table`` of that pass's records): the arrivals, which a serve under the
   certified tick does not send, and the count of drafts each row kept, charged at the bits of its code, which the
@@ -276,15 +279,17 @@ def topk_counters(dirs: list[Path]) -> dict | None:
     process, written over at the end of each of its calls, so a killed process's calls are in it; its rows are its
     device's as last read, every few thousand calls and at an exit in order): the processes, the calls of the
     indexer's top-k, the rows of more than its keys that were rewritten, those of them with a tie across the k-th
-    key, the rows where vLLM's own kernels may select another set from run to run, and the calls the processes had
-    made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower bound). None where no
-    process kept any."""
+    key, the rows where vLLM's own kernels may select another set from run to run, those whose fast selection was
+    wrong (its k-th key not the row's), bisected by one program or refined by the row's programs, and the calls the
+    processes had made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower
+    bound; the last two only where a process's record holds them). None where no process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
     calls = [sum(r["calls"].values()) for r in recs]
-    return {"processes": len(recs), "calls": sum(calls),
-            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")},
+    devs = [dev for r in recs for dev in r["rows"].values()]
+    kept = ("rows_long", "rows_tied", *(k for k in ("rows_bisected", "rows_refined") if any(k in dev for dev in devs)))
+    return {"processes": len(recs), "calls": sum(calls), **{k: sum(dev.get(k, 0) for dev in devs) for k in kept},
             "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
@@ -791,6 +796,37 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
 
 
+#: the layers of prod-record's cost over prod, each an arm over the arm it adds one change to (`serve_tax.ARMS`); a
+#: layer whose arm is left out where the job served the two finer ones it is the sum of (its fourth)
+LAYERS = (("prod-seeded", "prod", "the seeds sent", None),
+          ("prod-trace", "prod-seeded", "the step trace and ids", None),
+          ("prod-trace", "prod", "the seeds sent, the step trace and ids", "prod-seeded"),
+          ("prod-record", "prod-trace", "the canonical top-k", None),
+          ("prod-record-bisect", "prod-trace", "the canonical top-k, every wrong fast selection bisected", None),
+          ("prod-record", "prod-record-bisect", "the top-k's refinement against bisecting", None))
+
+
+def layers(by: dict[str, dict], load: str, target: float) -> dict:
+    """The cost by layer (`LAYERS`), on a sessions load: for each layer whose two arms served it, the benchmark's own
+    cost of the one over the other (`serve_tax.session_cost`), a fraction of the lower arm's serving time, with its
+    interval over the lifetime pairs (``pairs``) or why the benchmark refuses the pair (``why``)."""
+    if not getattr(S.LOADS.get(load), "sessions", False):
+        return not_measured(f"load {load} is not a sessions load, whose cost alone has an interval over lifetimes")
+    each = []
+    for arm, over, what, finer in LAYERS:
+        if arm not in by or over not in by or finer in by:
+            continue
+        try:
+            c = S.session_cost([by[over], by[arm]], arm, over, target, load)
+        except SystemExit as e:
+            each.append({"arm": arm, "over": over, "what": what, "value": None, "why": str(e)})
+            continue
+        if c is not None:
+            each.append({"arm": arm, "over": over, "what": what, "value": _frac(c["value"]),
+                         "ci95": c["ci95"] and [x / 100 for x in c["ci95"]], "pairs": c["lifetimes"]})
+    return {"measured": bool(each), "each": each, **({} if each else {"why": "no layer's two arms were both served"})}
+
+
 # --------------------------------------------------------------------------------------------------------- the advice
 
 def encodings() -> object:
@@ -933,7 +969,8 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
                     "passes": read("the passes", lambda: passes(out, dirs, per, load, private))},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
-            "tokens": toks, "cost": line, "advice": plan}
+            "tokens": toks, "cost": line, "layers": read("the cost by layer", lambda: layers(by, load, target)),
+            "advice": plan}
 
 
 #: the schema of a run's result.json, whose ``artifacts`` and ``measurement_files`` the store keeps as the run's files
@@ -1241,6 +1278,9 @@ def _topk(c: dict) -> str:
     return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
             f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten"
             + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else "")
+            + (f", {c['rows_bisected']:,} bisected" if "rows_bisected" in c else "")
+            + (f", {c['rows_refined']:,} refined from the candidate's window" if "rows_refined" in c else "")
+            + (" after a wrong fast selection" if "rows_bisected" in c or "rows_refined" in c else "")
             + ("" if at == c["calls"] else f", the rows as read after {at:,} of the calls"))
 
 
@@ -1386,6 +1426,24 @@ def _noise(n: dict | None, stock: str) -> str:
     return f"{who} {_pct(n['value'])}{ends}, over {n['pairs']} pair{'s' * (n['pairs'] != 1)} of server lifetimes"
 
 
+def _layers(ly: dict | None) -> list[str]:
+    """The cost by layer (`layers`), or why it can't be read; nothing where no layer was served or the load has none,
+    or for a report kept before it was."""
+    if ly is None or not ly["measured"] and not ly.get("unread"):
+        return []
+    if not ly["measured"]:
+        return [f"the cost by layer: {ly['why']}"]
+
+    def one(x: dict) -> str:
+        if x["value"] is None:
+            return f"not measured: {x['why']}"
+        ends = (f", 95% interval [{_pct(x['ci95'][0])}, {_pct(x['ci95'][1])}]" if x["ci95"] else " (no interval)")
+        return f"{_pct(x['value'])}{ends} over {x['pairs']} lifetime pair{'s' * (x['pairs'] != 1)}"
+
+    return ["the cost by layer, each arm over the arm it adds one change to, of that arm's serving time "
+            "(serve_tax.session_cost):", *(f"  {x['what']}: {x['arm']} over {x['over']} {one(x)}" for x in ly["each"])]
+
+
 def text(r: dict) -> str:
     a, t, c, ran = r["arms"], r["tokens"], r["cost"], r["ran"]
     stock, ours = a["stock"], a["ours"]
@@ -1465,6 +1523,7 @@ def text(r: dict) -> str:
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")
+    lines += _layers(r.get("layers"))
     lines += _advice(r["advice"]) if r["advice"]["measured"] else [f"advice: not measured: {r['advice']['why']}"]
     done = sum(bool(r[k]["measured"]) for k in ("tokens", "cost", "advice"))
     early = [name for name, s in ran["arms"].items() if not s.get("ok")]

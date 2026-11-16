@@ -783,6 +783,42 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert not c["measured"] and "refuses these arms: cost: the arms were served by different builds of vLLM" in c["why"]
 
 
+def test_the_cost_is_split_by_layer_each_arm_over_the_arm_it_adds_one_change_to():
+    """On a sessions load the report splits the cost by layer (`LAYERS`), each the benchmark's own cost of an arm over
+    the one below it with its interval over lifetimes: with no seeded stock served, the seeds, the step trace and ids
+    are one layer, and the top-k's refinement is a layer of its own where the bisecting pass was served beside it."""
+    rates = {"prod": [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], "prod-trace": [[1.99, 1.99], [2.0, 2.0], [1.98, 1.98]],
+             "prod-record-bisect": [[1.8, 1.8], [1.81, 1.81], [1.79, 1.79]],
+             "prod-record": [[1.9, 1.9], [1.91, 1.91], [1.89, 1.89]]}
+    by = {a["arm"]: a for a in S.lifetimes([x for name, r in rates.items() for x in lifetimes_of(name, r)])}
+    ly = P.layers(by, S.AGENTIC, 1.0)
+    own = {(x, y): S.session_cost([by[y], by[x]], x, y, 1.0, S.AGENTIC) for x, y, _, _ in P.LAYERS if x in by and y in by}
+    assert [(x["arm"], x["over"]) for x in ly["each"]] == [
+        ("prod-trace", "prod"), ("prod-record", "prod-trace"), ("prod-record-bisect", "prod-trace"),
+        ("prod-record", "prod-record-bisect")]
+    for x in ly["each"]:
+        o = own[(x["arm"], x["over"])]
+        assert (x["value"], x["ci95"], x["pairs"]) == (o["value"] / 100, [e / 100 for e in o["ci95"]], 3)
+    text = P._layers(ly)
+    assert text[0].startswith("the cost by layer, each arm over the arm it adds one change to")
+    assert text[1].startswith("  the seeds sent, the step trace and ids: prod-trace over prod +0.50%, 95% interval [")
+    assert text[4].startswith("  the top-k's refinement against bisecting: prod-record over prod-record-bisect -5.26%")
+    assert text[4].endswith(" over 3 lifetime pairs")
+    # seeded stock served splits the first layer in two, and leaves the sum out
+    by |= {a["arm"]: a for a in S.lifetimes([x for name, r in rates.items() for x in lifetimes_of(name, r)]
+                                            + lifetimes_of("prod-seeded", rates["prod"]))}
+    assert [(x["arm"], x["over"]) for x in P.layers(by, S.AGENTIC, 1.0)["each"]][:2] == [
+        ("prod-seeded", "prod"), ("prod-trace", "prod-seeded")]
+    # another load has none, nor does a job with no layer's two arms, and the report says nothing of them; nor of a
+    # report kept before the split
+    assert P.layers(by, "chat", 1.0)["why"] == ("load chat is not a sessions load, whose cost alone has an interval "
+                                                "over lifetimes")
+    assert P.layers({"prod": by["prod"]}, S.AGENTIC, 1.0)["why"] == "no layer's two arms were both served"
+    assert P._layers(P.layers(by, "chat", 1.0)) == P._layers(None) == []
+    assert P._layers(P.read("the cost by layer", lambda: 1 / 0))[0].startswith(
+        "the cost by layer: the cost by layer can't be read from the job's files: ZeroDivisionError")
+
+
 def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The arms of a job the benchmark served in lifetimes are ``<arm>.K``: every lifetime is in what ran, an arm's
     reps are all its lifetimes', and the tokens are those of the lifetime the replay's record names."""
@@ -858,7 +894,7 @@ def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: 
 
 # ------------------------------------------------------------------------------------------------- the replay's engine
 
-def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int], rows_at: int | None = None) -> None:
+def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, ...], rows_at: int | None = None) -> None:
     """One process's counters as the canonical top-k's plugin keeps them (`dsa_topk.log_to`), its rows read at its
     last call or, for a process killed since, when it had made ``rows_at``."""
     d.mkdir(parents=True, exist_ok=True)
@@ -866,6 +902,24 @@ def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int], rows_at:
         "pid": pid, "calls": {"top_k_per_row_decode": calls}, "launches": {"top_k_per_row_decode": calls // 2},
         "rows": {"cuda:0": dict(zip(("rows_long", "rows_tied", "rows_bisected"), rows))},
         "rows_at": calls if rows_at is None else rows_at}))
+
+
+def test_the_top_k_counters_keep_the_rows_bisected_and_refined_where_the_processes_counted_them(tmp_path: Path):
+    """A process whose top-k counted the rows it bisected and refined after a wrong fast selection has them summed and
+    said; a record kept before they were counted holds neither, and the line says nothing of them."""
+    old, new = tmp_path / "old", tmp_path / "new"
+    topk_log(old, 1, 100, (40, 2))
+    assert P.topk_counters([old]) == {"processes": 1, "calls": 100, "rows_long": 40, "rows_tied": 2, "rows_at": 100}
+    assert "bisected" not in P._topk(P.topk_counters([old]))
+    topk_log(new, 2, 300, (90, 3, 7))
+    (new / "dsa_topk.3.json").write_text(json.dumps({"pid": 3, "calls": {"cooperative_topk": 50}, "launches": {}, "rows": {
+        "cuda:0": {"rows_long": 10, "rows_tied": 0, "rows_bisected": 1, "rows_refined": 5}}, "rows_at": 50}))
+    c = P.topk_counters([old, new])
+    assert c == {"processes": 3, "calls": 450, "rows_long": 140, "rows_tied": 5, "rows_bisected": 8, "rows_refined": 5,
+                 "rows_at": 450}
+    assert P._topk(c) == ("3 processes kept counters: at least 450 calls of the indexer's top-k, 140 rows of more than "
+                          "its keys rewritten, 5 of them with a tie across the k-th key, 8 bisected, 5 refined from the "
+                          "candidate's window after a wrong fast selection")
 
 
 #: what a replay of an arm that served on the canonical top-k says its engine ran under (`replay.served_under`)
@@ -901,23 +955,27 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
     # with the job's private directory: serving's processes kept theirs under the arm's name, the replay's under its
     # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
     # a serving worker is killed: its calls are all there, its rows those its device had counted when last read
-    served = {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 8192}
+    served = {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_bisected": 1, "rows_at": 8192}
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1), rows_at=8192)
     txt, engine = said("--private", str(private))
     assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": served}
     assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key, the rows as read after "
+            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key, 1 bisected after a wrong fast "
+            "selection, the rows as read after "
             "8,192 of the calls\n") in txt
     topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
     topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_at": 8000}
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_bisected": 1,
+                                                   "rows_at": 8000}
     assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
-            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key\n") in txt
+            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key, 1 bisected after a wrong fast "
+            "selection\n") in txt
     # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
     kept = json.loads((out / P.TOPK_KEPT).read_text())
-    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_at": 8000},
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2, "rows_bisected": 1,
+                                                   "rows_at": 8000},
                     "served": served}
     shutil.rmtree(private)
     assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
@@ -994,11 +1052,12 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     # with the job's private directory, each directory's processes' counters, kept in OUT for a later reading
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
     counted = ("prod-record 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 rows of more than its "
-               "keys rewritten, 3 of them with a tie across the k-th key; ")
+               "keys rewritten, 3 of them with a tie across the k-th key, 1 bisected after a wrong fast selection; ")
     txt, r = said("--private", str(private))
     assert block + counted + off in txt
     assert json.loads((out / P.TOPK_KEPT).read_text()) == {
-        "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 9000}}}
+        "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_bisected": 1,
+                                 "rows_at": 9000}}}
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1588,7 +1647,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
             "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
-            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
+            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key, 0 bisected after a wrong fast "
+            "selection\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
         "processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2, "rows_at": 7}
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
