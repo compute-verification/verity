@@ -161,3 +161,31 @@ def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows
     assert SS.scheme_refusal(opts) is None
     args = SS.committer_args(opts)
     assert (args.commit_scheme, args.required_manifest, args.hidden_so, args.tap_sources.norm_tap_so) == (SS.ROWS, str(man), "h.so", "n.so")
+
+
+def test_the_committer_is_handed_an_engine_that_carries_its_vllm_config(tmp_path, monkeypatch):
+    """The committer reads the engine's ``vllm_config`` (`native_host._model_geo_digest`), so the engine `serve_seal.committer`
+    builds around an ``LLM`` carries the one that ``LLM``'s engine holds."""
+    from types import SimpleNamespace
+
+    from verity_vllm.engine import handle
+    from verity_vllm.pipeline import commit as C
+
+    class Handed(Exception):
+        pass
+
+    def make_committer(kind: str, eng: Any, args: Any, run_id: str) -> None:
+        raise Handed(eng)
+
+    man = predicted.row(tmp_path)
+    opts = CA.committer_opts(cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--required-manifest",
+                                                      str(man), "--hidden-so", "h.so", "--norm-tap-so", "n.so"], environ={}))
+    config = object()
+    llm = SimpleNamespace(vllm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=config)), model=object(),
+                          pin=SimpleNamespace(model="m", revision="r"))
+    monkeypatch.setattr(handle, "model_runner", lambda _: object())
+    monkeypatch.setattr(SS, "manifest_of_record", lambda _: {})
+    monkeypatch.setattr(C, "make_committer", make_committer)
+    with pytest.raises(Handed) as handed:
+        SS.committer(opts, llm=llm, label="commit-arb")
+    assert handed.value.args[0].vllm_config is config

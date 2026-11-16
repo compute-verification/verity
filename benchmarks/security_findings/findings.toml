@@ -2,15 +2,22 @@
 #
 # A finding is closed only by a check `open_findings.py` runs itself (its `CHECKS`, by the finding's id), and is open
 # otherwise. A finding with a check names it (`check`), says what it reads (`reads`: `tree`, this repository's own files, the
-# thing the finding is about; or `declared`, the tree's declared state of something outside it) and how it decides (`how`).
-# A finding with none says in one line what check would close it (`would_close`).
+# thing the finding is about; `declared`, the tree's declared state of something outside it; `machine`, each machine, the one
+# the check runs on itself and the others through a recorded reading; or `recorded`, a reading of `readings.toml` alone, taken
+# where the thing is) and how it decides (`how`). A finding with none says in one line what check would close it
+# (`would_close`).
 #
 # Never an address, a key, a token, the name of an auditor's machine or a provider's id here.
 
 [[finding]]
 id = "agent-holds-personal-and-cloud-keys"
 statement = "An agent holds Daniel's Linear key and notes token, and the Google Cloud, RunPod and Nebius keys."
-would_close = "A check on a freshly booted agent VM that `compgen -e` names none of LINEAR_API_KEY, RESEARCH_NOTES_TOKEN, GCP_SA_KEY_B64, RUNPOD_API_KEY and NEBIUS_SA_PRIVATE_KEY_B64."
+check = "agent-env-names"
+reads = "recorded"
+how = """Reads the [agent-env] reading: the names of LINEAR_API_KEY, RESEARCH_NOTES_TOKEN, GCP_SA_KEY_B64, RUNPOD_API_KEY \
+and NEBIUS_SA_PRIVATE_KEY_B64 that `compgen -e` printed on a freshly booted agent VM. Closed when it printed none. Cursor \
+puts these in an agent VM's environment and in no machine the metric runs on, so only a reading taken there decides it, and \
+one older than MAX_AGE_DAYS (7) leaves the finding unread."""
 
 [[finding]]
 id = "guard-runs-from-the-branch"
@@ -19,7 +26,10 @@ check = "guard-outside-checkout"
 reads = "declared"
 how = """Reads the hooks the tree declares at the commit the run is at (`.cursor/hooks.json` there), not what a VM runs. \
 Closed only when every hook command starts with a file directly under `/opt/agent-guard/` and no other word of it is a \
-path or names one of the checkout's top-level files or directories; a command that doesn't split into plain words (a \
+path or names one of the checkout's top-level files or directories, or is `/bin/sh -c` of the one wrapper `open_findings.py` \
+holds word for word (`GUARD_WRAPPER`: under a fixed PATH and a scrubbed environment, `/opt/agent-guard`'s hook where it is readable; on a Cursor cloud VM without it, a \
+refusal of all but the command that restores it; on any other machine, origin/main's committed hook.sh out of git, never \
+the working tree's); a command that doesn't split into plain words (a \
 variable, a substitution, quoting that joins, a redirection, `..`) counts as running from the checkout, and a commit that \
 tracks no hooks file declares no hook and stays open. A branch's own copy of the file is exactly the finding: this reads \
 only the copy at the commit it runs at."""
@@ -27,17 +37,34 @@ only the copy at the commit it runs at."""
 [[finding]]
 id = "agents-have-root"
 statement = "Agents have root on the control pod and the older CPU machines."
-would_close = "A check, as the account agents log in with, that `sudo -n id -u` is refused on every CPU machine and on the control pod."
+check = "sudo-refused"
+reads = "machine"
+how = """On each CPU machine of the deploy map (not staged) and the control pod, as the agents' login: closed when no machine \
+gives it root (uid 0, or `sudo -n id -u` prints 0) and each refuses its sudo. The machine the metric runs on is read \
+there, by MACHINE_COMMAND; the others through the [machines] reading, since the run holds no key to another machine. A \
+refusal read with no new privileges or as another login decides nothing, nor does a reading older than MAX_AGE_DAYS: any \
+machine left so makes the finding unread."""
 
 [[finding]]
 id = "security-updates-and-kernel"
 statement = "11 of the 15 CPU machines install only a short list of security updates by themselves, and not every CPU machine runs a kernel that still gets fixes."
-would_close = "A check on each CPU machine that unattended-upgrades allows Ubuntu's security pocket with no strict whitelist, `apt list --upgradable` lists nothing from it, and `uname -r` names a kernel Ubuntu still fixes."
+check = "updates-and-kernel"
+reads = "machine"
+how = """On each CPU machine of the deploy map (not staged): closed when apt's effective configuration (`apt-config dump`) \
+runs unattended upgrades with Ubuntu's security pocket among the origins and no package allow-list (any `Package-Whitelist` entry, `-Strict` or not), and `uname -r`'s \
+series is maintained on the machine's release by kernels.toml (Ubuntu's kernel release schedule, its source). The machine \
+the metric runs on is read there; the others through the [machines] reading, which decides nothing once older than \
+MAX_AGE_DAYS. What security updates are still pending is not read."""
 
 [[finding]]
 id = "store-key-writes"
 statement = "The store key in every agent can write."
-would_close = "A check that a scratch write with the store key an agent VM holds is refused on each bucket."
+check = "store-write-refused"
+reads = "recorded"
+how = """Reads the [store-write] reading: what the store answered an agent VM's store key for a copy into a scratch key from \
+a key that doesn't exist (`--probe-store`), which writes nothing either way. Closed on 403 AccessDenied; open on 404 \
+NoSuchKey, which the store answers a key that may write. The key is on agent VMs and on no machine the metric runs on, so \
+only a reading decides it, and one older than MAX_AGE_DAYS leaves the finding unread. It reads the bucket R2_BUCKET names."""
 
 [[finding]]
 id = "machine-addresses-in-the-tree"

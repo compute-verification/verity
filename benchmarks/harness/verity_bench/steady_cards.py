@@ -9,7 +9,6 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-
 #: where a node lists each NUMA node's CPUs (`nodeN/cpulist`) and each PCI device's NUMA node (`ADDRESS/numa_node`), and
 #: the query that gives each card's index, as gpu-lease counts them, with its PCI address
 NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
