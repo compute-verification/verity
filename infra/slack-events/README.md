@@ -175,10 +175,13 @@ production agents platform. Set `COMMS_RELAY_INBOX` (channel ID/thread timestamp
 closed by default. While Cursor holds the route, only the public coordination thread named by
 `COMMS_RELAY_CANARY_THREAD` can be rehearsed, on a doorbell from Codex containing `[comms relay test]`. Reserve that thread with the Cursor holder first.
 Full delivery requires the verified platform seat to hold the open comms route. The relay handles
-public coordination doorbells only. Private-channel work and other notification types require
-their own handoff before a full cutover.
+public coordination doorbells only. If the platform owns the inbox and an outside-channel
+or Linear doorbell arrives, the relay alerts top with the message timestamp. The original
+stays in Slack. Private-channel work and other notification types need their own handoff
+before a full cutover.
 
 The relay authenticates with its Vercel production identity, checks Slack for an existing receipt
-after an uncertain post, and replies as comms in the verified source thread. Inspect the dead-letter
-queue for a reply with a missing receipt. Pausing the platform seat, restoring the Cursor route and
+after an uncertain post, and replies as comms in the verified source thread. Pending polls and
+temporary failures can retry for 30 minutes from the event. At exhaustion top gets a recovery
+notice and the dead-letter queue records the message identifiers. Pausing the platform seat, restoring the Cursor route and
 clearing the canary or closing the time window stops forwarding.
