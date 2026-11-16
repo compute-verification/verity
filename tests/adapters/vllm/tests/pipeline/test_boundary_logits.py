@@ -223,7 +223,7 @@ def modes(root) -> set[tuple[str, int]]:
 
 def test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_them_at_its_root(tmp_path, check):
     """A serve of ids with no stop rule: requests a (5 prompt ids, 4 served, stopped) and b (3 prompt ids, 3 served, at
-    its max_tokens) close one window in classes (8, 4) and (4, 4). Each class lists ``logits`` after ``o0``, at O·K rows of N
+    its max_tokens) close one window in classes (5, 4) and (3, 4). Each class lists ``logits`` after ``o0``, at O·K rows of N
     words, its root rank 0's; the challenger's copy of the layout from ``commit.json`` alone registers it; its files
     reopen to the same roots; and rank 0's kept rows, readable by their owner only, recommit to that root and are each
     token's logits as its units read them, b's last token's again past its 3 ids."""
@@ -233,7 +233,7 @@ def test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_th
     _bw, logits = serve(tmp_path / "out", check, BL.Logits(), keep, lines, served=served)
     assert all("error" not in x for x in lines) and logits.requests() == []
     run = BR.run_root("s", 0)
-    for rid, (p, o) in (("a", (8, 4)), ("b", (4, 4))):
+    for rid, (p, o) in (("a", (5, 4)), ("b", (3, 4))):
         d = tmp_path / "out" / "w0" / f"p{p}-o{o}"
         pub = json.loads((d / BR.COMMIT).read_text())
         mine = BR.layout_of(pub, check)
@@ -252,27 +252,28 @@ def test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_th
 
 
 def test_under_a_stop_rule_the_stop_class_and_its_sibling_each_commit_and_keep_their_own(tmp_path, check):
-    """Under a stop rule with T = 4: a ends on a stop id after 3 ids, so it is in the stop class p8-o4; c is aborted
-    after 3 ids, so the rule doesn't end it as served and it is in that class's sibling p8-o4-nostop. Each lists
-    ``logits`` after ``o0`` (and the stop class `b.stop` after them), each registers against its layout under the
-    verifier's copy of the rule, and rank 0 keeps each class's rows apart, a's last token's again at its fourth."""
+    """Under a stop rule with T = 4: a ends on a stop id after 3 ids, so it is in the stop class p5-o4; c, of a
+    prompt as long, is aborted after 3 ids, so the rule doesn't end it as served and it is in that class's sibling
+    p5-o4-nostop. Each lists ``logits`` after ``o0`` (and the stop class `b.stop` after them), each registers against
+    its layout under the verifier's copy of the rule, and rank 0 keeps each class's rows apart, a's last token's again
+    at its fourth."""
     lines: list = []
     keep = BL.Kept(tmp_path / "private" / "logits")
-    served = {"a": ([1, 2, 3, 4, 5], [9, 9, 7], "STOP"), "c": ([1, 2, 3, 4, 5, 6], [9, 9, 9], "ABORTED")}
+    served = {"a": ([1, 2, 3, 4, 5], [9, 9, 7], "STOP"), "c": ([1, 2, 3, 4, 6], [9, 9, 9], "ABORTED")}
     serve(tmp_path / "out", check, BL.Logits(), keep, lines, stop=RULE, served=served)
     assert all("error" not in x for x in lines), lines
     run = BR.run_root("s", 0)
-    for rid, sub, held in (("a", "p8-o4", True), ("c", "p8-o4-nostop", False)):
+    for rid, sub, held in (("a", "p5-o4", True), ("c", "p5-o4-nostop", False)):
         pub = json.loads((tmp_path / "out" / "w0" / sub / BR.COMMIT).read_text())
         mine = BR.layout_of(pub, check, RULE)
         assert list(pub["values"]) == [*BR.PARTS, BR.RETURN, BR.LOGITS, *([BR.STOP] if held else [])]
         assert R.check(BR.record(pub, check, DESIGN, stop=RULE), mine.program, mine.grain, DESIGN, CS.SCHEME,
                        mine.ports()).codes == ()
-        port = BL.load(tmp_path / "private", 0, run, 8, 4, held)
+        port = BL.load(tmp_path / "private", 0, run, 5, 4, held)
         assert port.root.hex() == pub["values"][BR.LOGITS]["root"]
         assert np.array_equal(port.rows, BL.span_rows(np.stack([logit(rid, j) for j in range(3)]), 4, N))
     assert sorted(p.name for p in (tmp_path / "private" / "logits").iterdir()) == [
-        BL.stem(0, run, 8, 4, True), BL.stem(0, run, 8, 4, False)]
+        BL.stem(0, run, 5, 4, True), BL.stem(0, run, 5, 4, False)]
 
 
 def test_a_class_registers_nothing_when_rank_0_committed_no_logits(tmp_path, check):
@@ -290,7 +291,7 @@ def test_a_class_registers_nothing_when_rank_0_committed_no_logits(tmp_path, che
     finally:
         hooks.uninstall()
     assert len(lines) == 1 and "rank 0 committed no logits" in lines[0]["error"]
-    assert not (tmp_path / "w0" / "p4-o2" / BR.COMMIT).exists()
+    assert not (tmp_path / "w0" / "p3-o2" / BR.COMMIT).exists()
 
 
 @pytest.mark.parametrize("cfg", [{"ids": False}, {"inline": False}, {"check": f"TokenSelect_v4{{V={V}}}"},

@@ -83,7 +83,7 @@ def _spans(n: int = 5, prompt: int = 3, served: int = 4) -> list[BR.Span]:
 
 
 def _layout(n: int = 5, run: str = "a" * 128) -> BR.Layout:
-    return BR.Layout(PAIR, 0, 1, 4, 4, n, run)
+    return BR.Layout(PAIR, 0, 1, 3, 4, n, run)
 
 
 def _u32s(words: np.ndarray) -> list[int]:
@@ -92,31 +92,42 @@ def _u32s(words: np.ndarray) -> list[int]:
 
 def test_each_span_is_one_ingress_row_and_one_egress_row_laid_out_as_the_spec_says():
     """`b.ingress`: lp, the sampling inputs (floats as f32 bits, a negative top_k two's complement, the seed a u64 low
-    first), then the prompt's ids at the class's cap, zero past it; `b.egress`: the ids served n, the finish's code, then
-    the ids, zero past them; every u32 two u16 words, low first."""
+    first), then the prompt's ids, the class's P being the prompt's length; `b.egress`: the ids served n, the finish's
+    code, then the ids, zero past them; every u32 two u16 words, low first."""
     s = BR.Span("e", (70000, 5), {**GREEDY, "temperature": 0.75, "top_k": -1, "seed": (1 << 40) + 3, "max_tokens": 9},
                 (1, 2, 3), "stop")
-    ing = _u32s(WD.ingress_row(s, 4))
+    ing = _u32s(WD.ingress_row(s, 2))
     f32 = struct.unpack("<I", struct.pack("<f", 0.75))[0]
     assert ing == [2, 9, 0, 1, f32, struct.unpack("<I", struct.pack("<f", 1.0))[0], 0xFFFFFFFF, 0, 0, 0,
-                   struct.unpack("<I", struct.pack("<f", 1.0))[0], 1, 3, 1 << 8, 70000, 5, 0, 0]
-    assert len(ing) == WD.HEAD_U32 + 4 and WD.ingress_row(s, 4)[-8:-6].tolist() == [70000 & 0xFFFF, 70000 >> 16]
+                   struct.unpack("<I", struct.pack("<f", 1.0))[0], 1, 3, 1 << 8, 70000, 5]
+    assert len(ing) == WD.HEAD_U32 + 2 and WD.ingress_row(s, 2)[-4:-2].tolist() == [70000 & 0xFFFF, 70000 >> 16]
     assert _u32s(WD.egress_row(s, 4)) == [3, 1, 1, 2, 3, 0]
     assert _u32s(WD.egress_row(BR.Span("u", (1,), GREEDY), 2)) == [0, 0, 0, 0]
-    with pytest.raises(ValueError, match="past the class"):
-        WD.ingress_row(s, 1)
+    for other in (1, 4):
+        with pytest.raises(ValueError, match="2 prompt ids, not the class's"):
+            WD.ingress_row(s, other)
     with pytest.raises(ValueError, match="u32"):
         WD.egress_row(BR.Span("n", (1,), GREEDY, (-1,), "stop"), 2)
 
 
-def test_a_span_is_classed_by_its_prompt_and_its_outputs_each_capped_at_a_power_of_two():
+def test_a_span_is_classed_by_its_prompts_exact_length_and_its_outputs_capped_at_a_power_of_two():
     assert [BR.cap(n) for n in (0, 1, 2, 3, 4, 5, 255, 256, 257)] == [2, 2, 2, 4, 4, 8, 256, 256, 512]
     spans = [BR.Span("a", (1,) * 3, GREEDY, (2,) * 4), BR.Span("b", (1,) * 9, GREEDY, (2,) * 2),
-             BR.Span("c", (1,) * 4, GREEDY, (2,) * 3)]
-    assert {k: [s.engine_id for s in v] for k, v in BS.filed(spans).items()} == {(4, 4, False): ["a", "c"],
-                                                                                 (16, 2, False): ["b"]}
+             BR.Span("c", (1,) * 4, GREEDY, (2,) * 3), BR.Span("d", (1,) * 3, GREEDY, (2,) * 3)]
+    assert {k: [s.engine_id for s in v] for k, v in BS.filed(spans).items()} == {
+        (3, 4, False): ["a", "d"], (9, 2, False): ["b"], (4, 4, False): ["c"]}
+    assert [WD.prompt_size(v) for v in (0, 1, 3, 4, 257, True, 3.0)] == [False, True, True, True, True, False, False]
     with pytest.raises(ValueError, match="two proof blocks or more"):
-        BR.Layout(PAIR, 0, 0, 4, 4, 1, "a" * 128)
+        BR.Layout(PAIR, 0, 0, 3, 4, 1, "a" * 128)
+    for prompt in (0, -1, True):
+        with pytest.raises(ValueError, match="a class's prompt is a prompt's exact length"):
+            BR.Layout(PAIR, 0, 1, prompt, 4, 1, "a" * 128)
+    for outputs in (3, 1):
+        with pytest.raises(ValueError, match="a class's outputs cap is a power of two"):
+            BR.Layout(PAIR, 0, 1, 3, outputs, 1, "a" * 128)
+    with pytest.raises(ValueError, match="P a prompt's length"):
+        BR.class_signature(0, 4)
+    assert BR.class_signature(3, 4) == BR.class_signature(*spans[0].shape)
 
 
 def test_a_class_commits_under_core_window_domains_and_registers_by_both_verifiers():
@@ -146,7 +157,7 @@ def test_a_class_commits_under_core_window_domains_and_registers_by_both_verifie
 
 def test_a_class_reopens_from_its_files_and_refuses_a_changed_one(tmp_path):
     c = BR.commit(_spans(), _layout(), 3)
-    d = BR.write(c, tmp_path / "w3" / "p4-o4")
+    d = BR.write(c, tmp_path / "w3" / "p3-o4")
     assert sorted(x.name for x in d.iterdir()) == sorted([BR.COMMIT, BR.INDEX, BR.SALTS, CS.INDEX_SALT])
     again = BR.reopen(d, PAIR)
     assert again.roots == c.roots and again.index_leaf == c.index_leaf and again.spans == c.spans
@@ -162,7 +173,7 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     population computes and holding only their outputs; its proof blocks are the templates the body calls, in the order of
     their first call; and the class commits, registers and reopens with ``inline`` in its record, under other domains than
     the population's. A primitive has no body to inline."""
-    L = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128, inline=True)
+    L = BR.Layout(CHAIN, 0, 1, 3, 4, 5, "a" * 128, inline=True)
     assert [P.template_id(t) for t in L.templates] == [P.template_id(PAIR), P.template_id(NOT)]
     assert L.query == P.template_instances_query([PAIR, NOT]) and P.units(Program(L.replay), L.query) == 8
     assert L.replay.signature()[1] == Array(4, Bits(8))
@@ -173,13 +184,13 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     pub = json.loads(json.dumps(c.public()))
     assert pub["inline"] is True and BR.layout_of(pub, CHAIN) == L
     assert V.check(BR.record(pub, CHAIN, DESIGN), L.program, L.grain, DESIGN, CS.SCHEME, L.ports()).codes == ()
-    plain = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128)
+    plain = BR.Layout(CHAIN, 0, 1, 3, 4, 5, "a" * 128)
     assert plain.templates == (CHAIN,) and plain.ports()[BR.INGRESS]["domain"] != L.ports()[BR.INGRESS]["domain"]
-    assert BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), CHAIN).roots == c.roots
+    assert BR.reopen(BR.write(c, tmp_path / "w0" / "p3-o4"), CHAIN).roots == c.roots
     with pytest.raises(ValueError, match="composite"):
         BR.inlined(XOR8, 2)
     with pytest.raises(ValueError, match="calls of templates"):
-        BR.Layout(PAIR, 0, 1, 4, 4, 5, "a" * 128, inline=True)
+        BR.Layout(PAIR, 0, 1, 3, 4, 5, "a" * 128, inline=True)
     bw = BW.BoundaryWindows.of({"check": P.template_id(CHAIN), "inline": True}, tmp_path / "of")
     bw.stop()
     assert bw.inline and not BW.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").inline
@@ -202,7 +213,7 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
         WD.id_rows(BR.Span("e", (1,), GREEDY, (1, 2, 3), "stop"), 2)
     spans = [BR.Span(f"r{i}", (1, 2, 3), GREEDY, tuple(range(70000 + 10 * i, 70000 + 10 * i + n)), "length")
              for i, n in enumerate((4, 3, 4, 3, 4))]
-    L, off = BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128, ids=True), BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128)
+    L, off = BR.Layout(PICK, 0, 1, 3, 4, 5, "a" * 128, ids=True), BR.Layout(PICK, 0, 1, 3, 4, 5, "a" * 128)
     key = descriptor_id(L.replay)
     assert (L.returned, L.values, L.return_rows, L.leaves("o0"), L.words("o0")) == ("o0", (*BR.PORTS, "o0"), (4, 32), 20, 2)
     assert (off.returned, off.values) == (None, BR.PORTS)
@@ -225,7 +236,7 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
     assert R.check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
 
-    d = BR.write(c, tmp_path / "w0" / "p4-o4")
+    d = BR.write(c, tmp_path / "w0" / "p3-o4")
     assert (d / BR.SALTS).read_bytes() == b"".join(c.salts[p] for p in L.values)
     assert [len(c.salts[p]) // CS.SALT_BYTES for p in L.values] == [5, 5, 20]
     assert BR.reopen(d, PICK).roots == c.roots
@@ -245,14 +256,14 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     assert before.public() == {k: v if k != "values" else {p: v[p] for p in BR.PORTS} for k, v in c.public().items()
                                if k not in ("ids", "seconds")} | {"seconds": before.public()["seconds"]}
 
-    tabled = BR.Layout(PICK, 0, 1, 4, 4, 2, "a" * 128, layers=(0,), ids=True)
+    tabled = BR.Layout(PICK, 0, 1, 3, 4, 2, "a" * 128, layers=(0,), ids=True)
     assert "/" in tabled.tables[0] and tabled.returned == f"{key}/o0" == BR.return_port(key, tabled.tables)
     assert list(tabled.ports()) == [*BR.PORTS, f"{key}/o0", *tabled.tables]
     assert SS.replay_links(tabled.program, key, {"roots": [{"port": p} for p in tabled.ports()]})[-1].value == f"{key}/o0"
     with pytest.raises(ValueError, match="one 32-bit id an output"):
-        BR.commit(_spans(), BR.Layout(PAIR, 0, 1, 4, 4, 5, "a" * 128, ids=True), 0)
-    with pytest.raises(ValueError, match="of 8 instances at 4 outputs"):
-        BR.Layout(PICK, 1, 1, 4, 4, 5, "a" * 128, ids=True).ports()
+        BR.commit(_spans(), BR.Layout(PAIR, 0, 1, 3, 4, 5, "a" * 128, ids=True), 0)
+    with pytest.raises(ValueError, match="of 7 instances at 4 outputs"):
+        BR.Layout(PICK, 1, 1, 3, 4, 5, "a" * 128, ids=True).ports()
     bw = BW.BoundaryWindows.of({"check": P.template_id(PICK), "ids": True}, tmp_path / "of")
     bw.stop()
     assert bw.ids and not BW.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").ids
@@ -264,7 +275,7 @@ def test_no_class_commits_its_return_as_verdicts_and_as_ids(tmp_path):
     alone, the serve would start and every window's commit would fail."""
     why = "as verdicts or as ids, not as both"
     with pytest.raises(ValueError, match=why):
-        BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128, verdicts=True, ids=True)
+        BR.Layout(PICK, 0, 1, 3, 4, 5, "a" * 128, verdicts=True, ids=True)
     with pytest.raises(ValueError, match=why):
         BW.BoundaryWindows(tmp_path / "x", PICK, 0, 1, 10.0, clock=lambda: 0.0, verdicts=True, ids=True)
     with pytest.raises(ValueError, match=why):
@@ -278,14 +289,14 @@ def _fixed(L: BR.Layout) -> BR.Committed:
 
 
 @pytest.mark.parametrize("check, inline, commit, registration", [
-    (PAIR, False, "cc5e1cf02bda5916045bf921053142ed", "7daf5f83558aba34b0e3f64220109d48"),
-    (CHAIN, True, "69705bf25879e4b3b06c4e51ed19065a", "dcd0f0222ebc4ebc5f08dd64cfb5328c")])
+    (PAIR, False, "792827cfab8b432799e3d68ecd0a6fc0", "bdb3cb657fe139c98bc594d78dfd9264"),
+    (CHAIN, True, "e250ef886b774d6241e8c4d2a6673813", "d124c6a1e8e0b8aefbd563e8b3cc09a3")])
 def test_a_class_without_verdicts_writes_and_registers_its_two_values_alone(tmp_path, check, inline, commit, registration):
     """A class that doesn't say its block returns verdicts is untouched by the return's value: at fixed salts its
     ``commit.json``, byte for byte, and its registration record are the ones of the two values alone, pinned by the
     first 32 hex digits of the file's SHA-512 and of the record's digest; neither names ``verdicts``."""
-    c = _fixed(BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline))
-    raw = (BR.write(c, tmp_path / "w0" / "p4-o4") / BR.COMMIT).read_bytes()
+    c = _fixed(BR.Layout(check, 0, 1, 3, 4, 5, "a" * 128, inline=inline))
+    raw = (BR.write(c, tmp_path / "w0" / "p3-o4") / BR.COMMIT).read_bytes()
     rec = BR.record(json.loads(raw), check, DESIGN)
     assert (hashlib.sha512(raw).hexdigest()[:32], R.digest(rec)[:32]) == (commit, registration), (
         "a class without verdicts writes another commit.json or registers another record than the pinned ones: pin again "
@@ -312,9 +323,9 @@ def test_a_class_of_verdicts_commits_its_blocks_return_as_a_third_value(tmp_path
     challenger's copies from public items alone, and refuse against copies without it. Its files hold its leaves' salts
     and reopen to its roots, and a commitment without it is no record of the class. The same check in a class that
     doesn't say so keeps its two values."""
-    spans, L = _spans(), BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline, verdicts=True)
+    spans, L = _spans(), BR.Layout(check, 0, 1, 3, 4, 5, "a" * 128, inline=inline, verdicts=True)
     assert L.verdict_rows == (4, bits) and L.values == (*BR.PORTS, BR.RETURN)
-    assert BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline).values == BR.PORTS
+    assert BR.Layout(check, 0, 1, 3, 4, 5, "a" * 128, inline=inline).values == BR.PORTS
     assert _return_links(L, L.values) == [(P.template_id(L.templates[0]), "o0", BR.RETURN, 4)]
     ones = (1 << bits) - 1
     out = evaluate(L.replay, [7, 7] * 4)
@@ -341,7 +352,7 @@ def test_a_class_of_verdicts_commits_its_blocks_return_as_a_third_value(tmp_path
     assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, two).codes != ()
     with pytest.raises(ValueError, match="not its layout's"):
         BR.record({**pub, "values": {p: pub["values"][p] for p in BR.PORTS}}, check, DESIGN)
-    d = BR.write(c, tmp_path / "w0" / "p4-o4")
+    d = BR.write(c, tmp_path / "w0" / "p3-o4")
     assert (d / BR.SALTS).stat().st_size == (5 + 5 + 20) * CS.SALT_BYTES
     assert BR.reopen(d, check).roots == c.roots
     (d / BR.SALTS).write_bytes((d / BR.SALTS).read_bytes()[:10 * CS.SALT_BYTES])
@@ -353,7 +364,7 @@ def test_the_returns_name_is_round_twos_in_a_record_of_either_form():
     """`return_port` names the return as round 2 names the value its return link reads (`second_stage.replay_links`):
     bare in a record none of whose ports has a ``/``, and under the replay block's id in one that has such a port. A
     class whose block returns anything but bits can't say they are verdicts, in either form of its block."""
-    L = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, verdicts=True)
+    L = BR.Layout(SAME, 0, 1, 3, 4, 5, "a" * 128, verdicts=True)
     key, template = P.template_id(L.replay), P.template_id(SAME)
     for others, name in ((BR.PORTS, "o0"), ((*BR.PORTS, f"{key}/table"), f"{key}/o0")):
         assert BR.return_port(key, others) == name
@@ -361,7 +372,7 @@ def test_the_returns_name_is_round_twos_in_a_record_of_either_form():
     assert BR.RETURN == "o0"
     for check, inline in ((PAIR, False), (CHAIN, True)):
         with pytest.raises(ValueError, match="as verdicts where it is bits"):
-            BR.commit(_spans(), BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline, verdicts=True), 0)
+            BR.commit(_spans(), BR.Layout(check, 0, 1, 3, 4, 5, "a" * 128, inline=inline, verdicts=True), 0)
 
 
 def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
@@ -369,7 +380,7 @@ def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
     2 gives its return link's value on that record. The record lists it after the two values and before the tables, the
     challenger's copy from ``commit.json`` alone has it, and both verifiers take the record against that copy and refuse
     it against the copy of the same class without verdicts."""
-    L = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, layers=(0,), verdicts=True)
+    L = BR.Layout(SAME, 0, 1, 3, 4, 5, "a" * 128, layers=(0,), verdicts=True)
     name = f"{P.template_id(L.replay)}/{BR.RETURN}"
     assert len(L.tables) == 5 and all("/" in t for t in L.tables)
     assert L.values == (*BR.PORTS, name) and list(L.ports()) == [*L.values, *L.tables] == list(L.schemas())
@@ -382,7 +393,7 @@ def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
     rec = BR.record(pub, SAME, DESIGN)
     assert [(r["port"], r["leaves"]) for r in rec["roots"]] == [(BR.INGRESS, 5), (BR.EGRESS, 5), (name, 20),
                                                                  *((t, L.capacity) for t in L.tables)]
-    off = BR.Layout(SAME, 0, 1, 4, 4, 5, "a" * 128, layers=(0,))
+    off = BR.Layout(SAME, 0, 1, 3, 4, 5, "a" * 128, layers=(0,))
     for check in (R.check, V.check):
         assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         assert check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
@@ -448,18 +459,51 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
         bw.stop()
         bw.stop()
         got = {(x["window"], x["prompt"], x["outputs"]): x for x in lines}
-        assert sorted(got) == [(0, 4, 4), (1, 16, 4), (2, 2, 2)] and all("error" not in x for x in lines)
-        assert got[(0, 4, 4)]["spans"] == 2 and got[(0, 4, 4)]["carried"] == 1 and got[(1, 16, 4)]["carried"] == 0
+        assert sorted(got) == [(0, 3, 4), (0, 4, 4), (1, 9, 4), (2, 1, 2)] and all("error" not in x for x in lines)
+        assert [got[(0, p, 4)]["spans"] for p in (3, 4)] == [1, 1] and got[(0, 3, 4)]["carried"] == 1
+        assert got[(1, 9, 4)]["carried"] == 0
         for (w, p, o), x in got.items():
             c = BR.reopen(tmp_path / f"w{w}" / f"p{p}-o{o}", PAIR)
             assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}
             assert x["run"] == BR.run_root("s", w)
-        a, c_ = BR.reopen(tmp_path / "w0" / "p4-o4", PAIR).spans
+        (a,), (c_,) = (BR.reopen(tmp_path / "w0" / f"p{p}-o4", PAIR).spans for p in (3, 4))
         assert (a.engine_id, a.served, a.finish, c_.engine_id, c_.finish) == ("a", (7, 8, 9), "length", "c", "stop")
-        assert BR.reopen(tmp_path / "w2" / "p2-o2", PAIR).spans[0].finish == "abort"
+        assert BR.reopen(tmp_path / "w2" / "p1-o2", PAIR).spans[0].finish == "abort"
     finally:
         bw.stop()
         hooks.uninstall()
+
+
+def test_a_prompt_whose_length_is_no_power_of_two_files_in_its_own_class_commits_and_is_read_back(tmp_path):
+    """A 5-id prompt files at P = 5, beside an 8-id prompt's class and not padded into it: its class commits its ingress
+    row at the prompt's 5 ids, registers against the challenger's copy of its layout, and reopens from its files to its
+    sink line's roots with the prompt and ids served as they were."""
+    lines: list[dict] = []
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-exact")
+    bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s").install(sched, hooks)
+    try:
+        sched.add_request(Request("a", [1, 2, 3, 4, 5]))
+        sched.add_request(Request("b", list(range(10, 18))))
+        _step(sched, {"a": ([7, 8, 9], "stop"), "b": ([6, 6, 6], "stop")})
+        bw.stop()
+    finally:
+        bw.stop()
+        hooks.uninstall()
+    got = {(x["prompt"], x["outputs"]): x for x in lines}
+    assert sorted(got) == [(5, 4), (8, 4)] and all("error" not in x for x in lines)
+    d = tmp_path / "w0" / "p5-o4"
+    pub = json.loads((d / BR.COMMIT).read_text())
+    mine = BR.layout_of(pub, PAIR)
+    assert mine.prompt == 5 and mine.outputs == 4
+    assert R.check(BR.record(pub, PAIR, DESIGN), mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    again = BR.reopen(d, PAIR)
+    assert {k: v.hex() for k, v in again.roots.items()} == {k: v["root"] for k, v in got[(5, 4)]["values"].items()}
+    (a,) = again.spans
+    assert (a.engine_id, a.prompt, a.served, a.finish, a.shape) == ("a", (1, 2, 3, 4, 5), (7, 8, 9), "stop", (5, 4))
+    ing = _u32s(WD.ingress_row(a, 5))
+    assert len(ing) == WD.HEAD_U32 + 5 and ing[-5:] == [1, 2, 3, 4, 5]
+    with pytest.raises(ValueError, match="5 prompt ids, not the class's 8"):
+        WD.ingress_row(a, 8)
 
 
 def test_a_scheduler_that_caches_prefixes_commits_the_same_spans(tmp_path):
@@ -477,7 +521,7 @@ def test_a_scheduler_that_caches_prefixes_commits_the_same_spans(tmp_path):
             sched.add_request(hit)
             _step(sched, {"a": ([7], "length"), "b": ([8, 9], "stop")})
             bw.stop()
-            spans[caching] = BR.reopen(tmp_path / str(caching) / "w0" / "p8-o2", PAIR).spans
+            spans[caching] = BR.reopen(tmp_path / str(caching) / "w0" / "p5-o2", PAIR).spans
         finally:
             bw.stop()
             hooks.uninstall()
@@ -509,7 +553,7 @@ def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp
         (got[name],) = lines
     on, off = got["on"], got["off"]
     assert on["verdicts"] is True and list(on["values"]) == [*BR.PORTS, BR.RETURN] and on["values"][BR.RETURN]["leaves"] == 4
-    c = BR.reopen(tmp_path / "on" / "w0" / "p4-o4", SAME)
+    c = BR.reopen(tmp_path / "on" / "w0" / "p3-o4", SAME)
     assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in on["values"].items()}
     assert "verdicts" not in off and list(off["values"]) == list(BR.PORTS)
     assert got["refused"]["error"].startswith("ValueError") and "verdicts" in got["refused"]["error"]
@@ -534,7 +578,7 @@ HELD = [_ended("stop", (9, 9, 7), "stop"), _ended("length", (9, 9, 9, 9), "lengt
         _ended("model", (9, 9), "length", 4, tuple(range(10, 72)))]
 
 
-def _stop_layout(n: int = 3, prompt: int = 4) -> BR.Layout:
+def _stop_layout(n: int = 3, prompt: int = 3) -> BR.Layout:
     return BR.Layout(PAIR, 0, 1, prompt, RULE.outputs, n, "a" * 128, stop=RULE)
 
 
@@ -598,16 +642,16 @@ def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_i
     held = _ended("h", (9, 7), "stop")
     assert RULE.word(heeds) is None and RULE.word(held) == _word(2, 1)
     assert RULE.word(_ended("i", (9, 7), "stop", ignore_eos=True)) is None
-    head = _u32s(WD.ingress_row(heeds, 4))[:WD.HEAD_U32]
+    head = _u32s(WD.ingress_row(heeds, 3))[:WD.HEAD_U32]
     at = WD.FIELD_AT["ignore_eos"]
-    assert head[at] == 0 and _u32s(WD.ingress_row(ignores, 4))[at] == 1
+    assert head[at] == 0 and _u32s(WD.ingress_row(ignores, 3))[at] == 1
     for word, want in ((0, _word(2, 1)), (1, _word(4, 2)), (2, _word(4, 2)), (1 << 31, _word(4, 2)),
                        (stop_check.NOT_AN_ID, _word(4, 2))):
         assert evaluate(RULE.template, [*head[:at], word, *head[at + 1:]], [9, 7, 9, 9]) == (want,)
     for served, mt, lp in (((3, 9, 9, 9), 4, 3), ((9, 9, 9, 7), 3, 1), ((7, 9, 9, 9), 4, 62), ((9, 9, 9, 3), 9, 5)):
         s = _ended("x", served, "length", mt, tuple(range(lp)), ignore_eos=True)
         assert _block(RULE, s) == _block(NO_IDS, s) == stop_rule.reference16(list(served), mt, (stop_check.NOT_AN_ID,), lp, 64)
-    rows = BR.port_rows([held, ignores], BR.Layout(PAIR, 0, 1, 4, RULE.outputs, 2, "a" * 128, stop=RULE))
+    rows = BR.port_rows([held, ignores], BR.Layout(PAIR, 0, 1, 3, RULE.outputs, 2, "a" * 128, stop=RULE))
     assert rows[BR.STOP][:, 0].tolist() == [_word(2, 1), _word(4, 2)]
     assert evaluate(population(RULE.template, 2), _flat(rows[BR.REQUEST]), _flat(rows[BR.EGRESS])) == \
         (_word(2, 1), _word(4, 2))
@@ -693,8 +737,9 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     assert BR.ends(key, ("table/x",)) == {v: f"{key}/{n}" for v, n in BR.ends(key).items()}
     per = {x.value: n for x, n, _rs in SS.link_runs(definitions(program), key)}
     assert per == dict.fromkeys(BR.ends(key).values(), 1)
-    with pytest.raises(ValueError, match="at a class's"):
-        BR.class_signature(3, 2)
+    for prompt, outputs in ((0, 2), (4, 3)):
+        with pytest.raises(ValueError, match="at a class's"):
+            BR.class_signature(prompt, outputs)
     with pytest.raises(ValueError, match="reads or returns a row of"):
         BR.row_type(BR.INGRESS)
 
@@ -719,12 +764,12 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
     rows = BR.port_rows(HELD[:3], L)
     assert list(rows) == [BR.REQUEST, BR.PROMPT, BR.EGRESS, BR.STOP] == list(L.committed) and L.values == BR.PARTS
     for i, s in enumerate(HELD[:3]):
-        assert np.concatenate([rows[BR.REQUEST][i], rows[BR.PROMPT][i]]).tolist() == WD.ingress_row(s, 4).tolist()
+        assert np.concatenate([rows[BR.REQUEST][i], rows[BR.PROMPT][i]]).tolist() == WD.ingress_row(s, 3).tolist()
         assert _u32s(rows[BR.EGRESS][i]) == [*s.served, *[0] * (4 - len(s.served))] == _u32s(WD.egress_row(s, 4))[2:]
         assert rows[BR.STOP][i].tolist() == [RULE.word(s)] == [_block(RULE, s)]
     pub = json.loads(json.dumps(c.public()))
-    assert pub["stop"] == RULE.to_json() and pub["stopped"] is True and (pub["prompt"], pub["outputs"]) == (4, 4)
-    assert {k: v["words"] for k, v in pub["values"].items()} == {BR.REQUEST: 2 * WD.HEAD_U32, BR.PROMPT: 8, BR.EGRESS: 8,
+    assert pub["stop"] == RULE.to_json() and pub["stopped"] is True and (pub["prompt"], pub["outputs"]) == (3, 4)
+    assert {k: v["words"] for k, v in pub["values"].items()} == {BR.REQUEST: 2 * WD.HEAD_U32, BR.PROMPT: 6, BR.EGRESS: 8,
                                                                   BR.STOP: 1}
     mine = BR.layout_of(pub, PAIR, RULE)
     rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
@@ -735,7 +780,7 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
     plain = _layout(n=3)
     assert R.check(rec, plain.program, plain.grain, DESIGN, CS.SCHEME, plain.ports()).codes != ()
     assert not {"stop", "stopped"} & set(BR.commit(_spans(3), plain, 0).public())
-    again = BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), PAIR, stop=RULE)
+    again = BR.reopen(BR.write(c, tmp_path / "w0" / "p3-o4"), PAIR, stop=RULE)
     assert again.roots == c.roots and again.layout == L and again.spans == c.spans
     with pytest.raises(ValueError, match="not 3 of class"):
         BR.commit([*HELD[:2], HELD[3]], L, 0)
@@ -747,13 +792,13 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
         with pytest.raises(ValueError, match=why):
             BR.layout_of(doc, PAIR, RULE)
     unheld = [_ended("abort", (9, 9), "abort"), _ended("running", (9,), None)]
-    U = BR.Layout(PAIR, 0, 1, 4, 2, 2, "a" * 128, stop=RULE, held=False)
+    U = BR.Layout(PAIR, 0, 1, 3, 2, 2, "a" * 128, stop=RULE, held=False)
     u = BR.commit(unheld, U, 0)
     upub = json.loads(json.dumps(u.public()))
     assert list(upub["values"]) == list(BR.PARTS) == list(U.committed) and upub["stopped"] is False
     assert BR.layout_of(upub, PAIR, RULE) == U and U.stop_ports() == {}
     assert _flat(BR.port_rows(unheld, U)[BR.EGRESS]) == [9, 9, 9, 0]
-    assert BR.reopen(BR.write(u, tmp_path / "w0" / "p4-o2-nostop"), PAIR, stop=RULE).roots == u.roots
+    assert BR.reopen(BR.write(u, tmp_path / "w0" / "p3-o2-nostop"), PAIR, stop=RULE).roots == u.roots
     with pytest.raises(ValueError, match="only a stop class has stop blocks"):
         BS.stop_record(upub, PAIR, RULE, STOP_DESIGN, u.record(DESIGN))
 
@@ -807,7 +852,7 @@ def test_a_stop_class_that_commits_its_blocks_return_holds_it_among_its_boundary
     before `b.stop`: T rows a span, a value of the boundary record and none of the stop record's, a salt a row. It
     registers by both verifiers, its files reopen to its roots, and its stop record is accepted over a boundary record
     that holds the return."""
-    L = BR.Layout(PICK, 0, 1, 4, RULE.outputs, 3, "a" * 128, stop=RULE, ids=True)
+    L = BR.Layout(PICK, 0, 1, 3, RULE.outputs, 3, "a" * 128, stop=RULE, ids=True)
     assert (L.values, L.committed) == ((*BR.PARTS, "o0"), (*BR.PARTS, "o0", BR.STOP))
     assert list(L.ports()) == [*BR.PARTS, "o0"] and list(L.stop_ports()) == [BR.STOP] and L.ports()["o0"]["leaves"] == 12
     c = BR.commit(HELD[:3], L, 0)
@@ -819,7 +864,7 @@ def test_a_stop_class_that_commits_its_blocks_return_holds_it_among_its_boundary
     assert mine == L and pub["ids"] is True and [r["port"] for r in rec["roots"]] == [*BR.PARTS, "o0"]
     assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
     assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
-    again = BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), PICK, stop=RULE)
+    again = BR.reopen(BR.write(c, tmp_path / "w0" / "p3-o4"), PICK, stop=RULE)
     assert again.roots == c.roots and again.port("o0").leaves == 12 and again.port(BR.STOP).root == c.roots[BR.STOP]
     reg, srec = BS.stop_registration(pub, PICK, RULE, rec), BS.stop_record(pub, PICK, RULE, STOP_DESIGN, rec)
     assert V.check(srec, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=[rec],
@@ -836,7 +881,7 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
     c = BR.commit(HELD[:3], _stop_layout(), 0)
     pub = json.loads(json.dumps(c.public()))
     rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
-    d = BR.write(c, tmp_path / "w0" / "p4-o4")
+    d = BR.write(c, tmp_path / "w0" / "p3-o4")
     plain = json.loads(json.dumps(BR.commit(_spans(3), _layout(n=3), 0).public()))
     others = (BS.Stop((3,), 64, 4), BS.Stop((3, 7), 128, 4), BS.Stop((3, 7), 64, 8), NO_IDS, None)
     for doc, mine in [*((pub, o) for o in others), (plain, RULE)]:
@@ -852,7 +897,7 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
                 call()
     past = [_ended("past", (9, 7, 9, 9), "length"), *HELD[1:3]]
     assert NO_IDS.word(past[0]) == _word(4, 2) and RULE.word(past[0]) is None
-    serve = BR.commit(past, BR.Layout(PAIR, 0, 1, 4, NO_IDS.outputs, 3, "a" * 128, stop=NO_IDS), 0)
+    serve = BR.commit(past, BR.Layout(PAIR, 0, 1, 3, NO_IDS.outputs, 3, "a" * 128, stop=NO_IDS), 0)
     named = json.loads(json.dumps(serve.public()))
     with pytest.raises(ValueError, match="not the verifier's own"):
         BR.layout_of(named, PAIR, RULE)
@@ -874,7 +919,7 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
     outputs = evaluate(population(RULE.template, 3), _flat(rows[BR.REQUEST]), _flat(rows[BR.EGRESS]))
     assert rows[BR.STOP][:, 0].tolist() == [_word(4, 2), _word(4, 2), _word(2, 2)]
     assert list(outputs) == [_word(2, 1), _word(4, 2), _word(2, 2)]
-    there = BR.write(serve, tmp_path / "w1" / "p4-o4")
+    there = BR.write(serve, tmp_path / "w1" / "p3-o4")
     (there / BR.COMMIT).write_text(json.dumps(relabelled))
     with pytest.raises(ValueError, match="doesn't end this span as it was served"):
         BR.reopen(there, PAIR, stop=RULE)
@@ -903,7 +948,7 @@ def test_no_class_holds_both_a_stop_rule_and_history_tables(tmp_path):
     configuration each refuse the pair."""
     why = "a serve under a stop rule commits no history tables"
     with pytest.raises(ValueError, match=why):
-        BR.Layout(PAIR, 0, 1, 4, RULE.outputs, 3, "a" * 128, layers=(1,), stop=RULE)
+        BR.Layout(PAIR, 0, 1, 3, RULE.outputs, 3, "a" * 128, layers=(1,), stop=RULE)
     with pytest.raises(ValueError, match=why):
         BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0, tables=object(), layers=(1,), stop=RULE)
     with pytest.raises(ValueError, match=why):
@@ -923,8 +968,8 @@ def test_a_class_under_a_stop_rule_commits_its_blocks_return_after_its_three_par
     their inputs its `b.request` and `b.egress`, and a class the rule doesn't end has no stop record."""
     spans = HELD[:3] if held else [_ended("abort", (9, 9), "abort"), _ended("running", (9,), None)]
     n, outputs, last = len(spans), RULE.outputs if held else 2, (BR.STOP,) if held else ()
-    L = BR.Layout(SAME, 0, 1, 4, outputs, n, "a" * 128, stop=RULE, held=held, verdicts=True)
-    off = BR.Layout(SAME, 0, 1, 4, outputs, n, "a" * 128, stop=RULE, held=held)
+    L = BR.Layout(SAME, 0, 1, 3, outputs, n, "a" * 128, stop=RULE, held=held, verdicts=True)
+    off = BR.Layout(SAME, 0, 1, 3, outputs, n, "a" * 128, stop=RULE, held=held)
     assert L.verdict_rows == (outputs, 1) and L.values == (*BR.PARTS, BR.RETURN) and L.committed == (*L.values, *last)
     assert off.values == BR.PARTS and {p: L.ports()[p] for p in BR.PARTS} == off.ports()
     assert L.stop_ports() == off.stop_ports() and list(L.stop_ports()) == list(last)
@@ -990,7 +1035,7 @@ def test_the_hook_commits_the_return_in_each_class_of_a_serve_with_a_stop_rule_a
         for held, x in got.items():
             assert list(x["values"]) == [*BR.PARTS, BR.RETURN, *([BR.STOP] if held else [])]
             assert (x["spans"], x["values"][BR.RETURN]["leaves"]) == (1, RULE.outputs)
-            c = BR.reopen(tmp_path / "w0" / f"p4-o4{'' if held else '-nostop'}", SAME, stop=RULE)
+            c = BR.reopen(tmp_path / "w0" / f"p3-o4{'' if held else '-nostop'}", SAME, stop=RULE)
             assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}
     finally:
         bw.stop()
@@ -1051,7 +1096,7 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
                       "e": ([9, 7, 9, 9], "length"), "f": ([9, 9, 9, 9], "stop")})
         bw.stop()
         got = {(x["prompt"], x["outputs"], x["stopped"]): x for x in lines}
-        assert sorted(got) == [(2, 2, False), (4, 2, False), (4, 4, False), (4, 4, True), (16, 4, True)]
+        assert sorted(got) == [(1, 2, False), (3, 4, False), (3, 4, True), (4, 2, False), (9, 4, True)]
         assert all("error" not in x and x["window"] == 0 and x["stop"] == RULE.to_json() for x in lines)
         assert all(x["filed"] == {"stop": 3, "nostop": 3} for x in lines)
         assert sum(x["spans"] for x in lines if x["stopped"]) == 3
@@ -1059,10 +1104,10 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
             c = BR.reopen(tmp_path / "w0" / f"p{p}-o{o}{'' if held else '-nostop'}", PAIR, stop=RULE)
             assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}
             assert list(x["values"]) == [*BR.PARTS, *([BR.STOP] if held else [])]
-        both = BR.reopen(tmp_path / "w0" / "p4-o4", PAIR, stop=RULE)
+        both = BR.reopen(tmp_path / "w0" / "p3-o4", PAIR, stop=RULE)
         assert [s.engine_id for s in both.spans] == ["a", "e"]
         assert BR.port_rows(both.spans, both.layout)[BR.STOP][:, 0].tolist() == [_word(2, 1), _word(4, 2)]
-        assert [s.engine_id for s in BR.reopen(tmp_path / "w0" / "p4-o4-nostop", PAIR, stop=RULE).spans] == ["f"]
+        assert [s.engine_id for s in BR.reopen(tmp_path / "w0" / "p3-o4-nostop", PAIR, stop=RULE).spans] == ["f"]
         assert BR.reopen(tmp_path / "w0" / "p4-o2-nostop", PAIR, stop=RULE).spans[0].engine_id == "c"
     finally:
         bw.stop()
@@ -1087,26 +1132,26 @@ def test_a_request_the_certifier_did_not_release_is_in_no_stop_class(tmp_path):
             sched.add_request(Request(rid, [1, 2, 5], ignore_eos=False))
         _step(sched, {rid: ([9, 7], "stop") for rid in "abc"})
         bw.stop()
-        assert sorted((x["prompt"], x["outputs"], x["stopped"], x["spans"]) for x in lines) == [(4, 2, False, 1),
-                                                                                               (4, 4, True, 2)]
-        held = BR.reopen(tmp_path / "w0" / "p4-o4", PAIR, stop=RULE).spans
+        assert sorted((x["prompt"], x["outputs"], x["stopped"], x["spans"]) for x in lines) == [(3, 2, False, 1),
+                                                                                               (3, 4, True, 2)]
+        held = BR.reopen(tmp_path / "w0" / "p3-o4", PAIR, stop=RULE).spans
         assert [(s.engine_id, s.release) for s in held] == [("a", ("run", 0)), ("c", ("run", 1))]
-        assert [(s.engine_id, s.release) for s in BR.reopen(tmp_path / "w0" / "p4-o2-nostop", PAIR, stop=RULE).spans] == [("b", None)]
+        assert [(s.engine_id, s.release) for s in BR.reopen(tmp_path / "w0" / "p3-o2-nostop", PAIR, stop=RULE).spans] == [("b", None)]
     finally:
         bw.stop()
         hooks.uninstall()
     span = _ended("x", (9, 9, 7), "stop")
-    assert list(BS.filed([span], RULE)) == [(4, 4, True)] and list(BS.filed([span], RULE, released=True)) == [(4, 4, False)]
+    assert list(BS.filed([span], RULE)) == [(3, 4, True)] and list(BS.filed([span], RULE, released=True)) == [(3, 4, False)]
     released = BR.Span("x", span.prompt, span.sampling, span.served, "stop", ("run", 7))
-    assert list(BS.filed([released], RULE, released=True)) == [(4, 4, True)]
+    assert list(BS.filed([released], RULE, released=True)) == [(3, 4, True)]
     assert BR.Span.from_json(json.loads(json.dumps(released.to_json()))) == released and "release" not in span.to_json()
 
 
-#: three drained windows, each request (name, prompt ids, ids served, which is its ``max_tokens``): classes (4, 4) of two
-#: spans and (16, 2) of one, twice; then (4, 4) of three spans and (16, 4), another class of (4, 4)'s four instances a
+#: three drained windows, each request (name, prompt ids, ids served, which is its ``max_tokens``): classes (3, 4) of two
+#: spans and (9, 2) of one, twice; then (3, 4) of three spans and (9, 4), another class of (3, 4)'s four instances a
 #: replay block, of two. Under `RULE` every one is a stop class at the rule's T, 4, so all share one replay block
-WINDOWS = ([("a", 3, 4), ("b", 9, 2), ("c", 4, 4)], [("a", 3, 4), ("b", 9, 2), ("c", 4, 4)],
-           [("a", 3, 4), ("b", 4, 3), ("c", 3, 3), ("d", 9, 4), ("e", 12, 3)])
+WINDOWS = ([("a", 3, 4), ("b", 9, 2), ("c", 3, 4)], [("a", 3, 4), ("b", 9, 2), ("c", 3, 4)],
+           [("a", 3, 4), ("b", 3, 3), ("c", 3, 3), ("d", 9, 4), ("e", 9, 3)])
 BUILDERS = ("population", "inlined", "population_program", "template_instance_query", "partition")
 #: a serve's check template, whether its replay block inlines it, and its stop rule
 SERVES = [pytest.param(PAIR, False, None, id="population"), pytest.param(CHAIN, True, None, id="inlined"),
@@ -1167,7 +1212,7 @@ def test_a_later_window_builds_no_part_of_a_class_that_an_earlier_one_built(monk
     lines = _served(monkeypatch, tmp_path, check, inline, stop)
     short, replays, each = (2, [1, 2, 2, 2, 2, 2], 1) if stop is None else (4, [1] * 6, 2)
     assert [(x["window"], x["prompt"], x["outputs"], x["spans"]) for x, _ in lines] == [
-        (0, 4, 4, 2), (0, 16, short, 1), (1, 4, 4, 2), (1, 16, short, 1), (2, 4, 4, 3), (2, 16, 4, 2)]
+        (0, 3, 4, 2), (0, 9, short, 1), (1, 3, 4, 2), (1, 9, short, 1), (2, 3, 4, 3), (2, 9, 4, 2)]
     assert [x.get("stopped") for x, _ in lines] == [None if stop is None else True] * 6
     assert [tuple(n[k] for k in BUILDERS) for _, n in lines] == [
         (0, r, *[each * counts] * 3) if inline else (r, 0, *[each * counts] * 3)

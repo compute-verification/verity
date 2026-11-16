@@ -3,16 +3,16 @@ what each request's replay block reads and writes at its edges, committed inside
 the first stage samples requests whose boundary was fixed while they were served.
 
 **Spans and classes.** A window's spans are the requests that finished in it, in admission order (`boundary_windows.BoundaryWindows`); a
-request still running at a close is carried to the next window, so a span never crosses one. A span's class is (P, O): the
-least powers of two, at least `MIN_CAP`, covering its prompt's ids and the ids it was served. Each class is its own
-registration over N replay blocks, slot r its r-th span.
+request still running at a close is carried to the next window, so a span never crosses one. A span's class is (P, O): P
+its prompt's exact length, and O the least power of two, at least `MIN_CAP`, covering the ids it was served
+(`boundary_span.Span.shape`). Each class is its own registration over N replay blocks, slot r its r-th span.
 
 **Values** (`PORTS`): one `hm96-sha512/row/v2` row a span each, under its window domain (`verity.commitments.window`:
 program, partition, port, schema, N leaves, run); a u32 is two u16 words, low first, a float its f32 bits.
 
 | value | row |
 |---|---|
-| `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then P ids, zero past the prompt |
+| `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then the prompt's P ids |
 | `b.egress` | the ids served n, the finish (`boundary_span.FINISH`), then O ids, zero past n |
 
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
@@ -25,7 +25,7 @@ twice, and the ids served n is no number the serve states:
 | value | row |
 |---|---|
 | `b.request` | `b.ingress`'s fields before its ids (`boundary_span.FIELDS`), the prompt's length and ``max_tokens`` the first two |
-| `b.prompt` | P prompt ids, zero past lp |
+| `b.prompt` | the prompt's P ids |
 | `b.egress` | O ids, zero past n: no n and no finish |
 | `b.stop` | one u16, n + finish * 8192 (1 a stop id, 2 ``max_tokens``, 3 the model's length): a stop class's alone |
 
@@ -123,6 +123,7 @@ from verity_vllm.pipeline.boundary_span import (
     egress_row,
     id_rows,
     ingress_row,
+    prompt_size,
 )
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
@@ -188,9 +189,9 @@ def class_signature(prompt: int, outputs: int) -> tuple[tuple[tuple[str, Array],
     `b.request` and `b.prompt` rows, and its return, the span's `b.egress` row (`row_type`). Round 2 then links a
     template's port that reads one of them to the class's value of that name, and the template output it returns to
     the name `ends` gives `b.egress`."""
-    if not (class_size(prompt) and class_size(outputs)):
-        raise ValueError(f"a class's Definition is at a class's (P, O), each a class's size (`class_size`), not "
-                         f"({prompt!r}, {outputs!r})")
+    if not (prompt_size(prompt) and class_size(outputs)):
+        raise ValueError(f"a class's Definition is at a class's (P, O), P a prompt's length (`prompt_size`) and O an "
+                         f"output size (`class_size`), not ({prompt!r}, {outputs!r})")
     return tuple((v, row_type(v, prompt)) for v in PARAMS), row_type(EGRESS, outputs)
 
 
@@ -273,10 +274,10 @@ class Layout:
     row_words: int = BT.WORDS
 
     def __post_init__(self) -> None:
-        for k in ("prompt", "outputs"):
-            v = getattr(self, k)
-            if not class_size(v):
-                raise ValueError(f"a class's {k} cap is a power of two at least {MIN_CAP}, not {v!r}")
+        if not prompt_size(self.prompt):
+            raise ValueError(f"a class's prompt is a prompt's exact length, at least 1, not {self.prompt!r}")
+        if not class_size(self.outputs):
+            raise ValueError(f"a class's outputs cap is a power of two at least {MIN_CAP}, not {self.outputs!r}")
         if not (type(self.spans) is int and self.spans >= 1):
             raise ValueError(f"a class registers one span or more, not {self.spans!r}")
         ls = self.layers
@@ -737,5 +738,5 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 
 __all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
            "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout", "Span", "cap", "check_template",
-           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "record",
+           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "prompt_size", "record",
            "reopen", "return_port", "row_type", "run_root", "window_domain", "write"]

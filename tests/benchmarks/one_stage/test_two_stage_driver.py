@@ -77,7 +77,7 @@ RULE = TS.Rule(f"rate:{Q}/{N}", K, INTERIOR, 60.0)
 
 def _class(check=PAIR, inline: bool = False) -> BR.Committed:
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    return BR.commit(spans, BR.Layout(check, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), inline), 0)
+    return BR.commit(spans, BR.Layout(check, 0, 1, 3, 4, N, BR.run_root("test-serve", 0), inline), 0)
 
 
 def _interior(layout: BR.Layout, previous: str, program: Program | None = None) -> tuple[dict, dict]:
@@ -186,16 +186,16 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     with pytest.raises(ValueError, match="name each of the check's templates once"):
         TS.first(c.public(), BOTH, TS.Rule(RULE.replay, {pair: 3}, INTERIOR, 60.0), _placed(c.layout))
 
-    (tmp_path / "p4-o4").mkdir()
-    (tmp_path / "p4-o4" / BR.COMMIT).write_text(json.dumps(c.public()))
+    (tmp_path / "p3-o4").mkdir()
+    (tmp_path / "p3-o4" / BR.COMMIT).write_text(json.dumps(c.public()))
     monkeypatch.setattr(TS, "_first_all", lambda *a, **k: pytest.fail("a refused counts file reached the first stage"))
     for check, text, why in (
-            (BOTH, json.dumps({pair: 3}), f"class p4-o4: the counts name each of the check's templates once: missing {swap}"),
+            (BOTH, json.dumps({pair: 3}), f"class p3-o4: the counts name each of the check's templates once: missing {swap}"),
             (BOTH, '{"%s": 3, "%s": 1, "%s": 2}' % (pair, swap, swap), f"names {swap} twice"),
-            (PAIR, json.dumps(ks), f"class p4-o4: a {BR.FORMAT} commitment of check {P.template_id(BOTH)}, not {pair}")):
+            (PAIR, json.dumps(ks), f"class p3-o4: a {BR.FORMAT} commitment of check {P.template_id(BOTH)}, not {pair}")):
         monkeypatch.setattr(TS, "template_fn", lambda t, check=check: check)
         with pytest.raises(SystemExit):
-            TS.main(["first", "--boundary", str(tmp_path / "p4-o4"), "--check", P.template_id(BOTH), "--replay", RULE.replay,
+            TS.main(["first", "--boundary", str(tmp_path / "p3-o4"), "--check", P.template_id(BOTH), "--replay", RULE.replay,
                      "--k", file(text), "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])
         assert why in capsys.readouterr().err
 
@@ -291,7 +291,7 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     of the history table's row schema after ``b.ingress`` and ``b.egress``, and its first stage registers their roots,
     from ``commit.json`` alone, before the coins commit."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=8)
+    layout = BR.Layout(PAIR, 0, 1, 3, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=8)
     tables = {}
     for t in layout.tables:
         h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
@@ -313,7 +313,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     tables; its first stage registers its root, from ``commit.json`` alone, before the coins commit and samples; and the
     replay side resumes from the first stage's hand-over alone."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    layout = BR.Layout(SAME, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=layers, capacity=8, verdicts=True)
+    layout = BR.Layout(SAME, 0, 1, 3, 4, N, BR.run_root("test-serve", 0), layers=layers, capacity=8, verdicts=True)
     tables = {}
     for t in layout.tables:
         h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
@@ -339,7 +339,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     under the class record's root for it, each holding the class's C strings, so `history.roots_of` recomputes the served
     root and domain from the strings the prover publishes."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=16)
+    layout = BR.Layout(PAIR, 0, 1, 3, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=16)
     c = BT.class_rows(layout.prompt, layout.outputs, layout.capacity)
     hs = {}
     for t in layout.tables:
@@ -361,7 +361,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.sample.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
-    assert [t["name"] for t in hist["tables"]] == names and c == 8
+    assert [t["name"] for t in hist["tables"]] == names and c == 7
     assert all(t["runs"] == [{"start": 0, "count": c, "held": IR.HELD, "row": 0}] for t in hist["tables"])
     leaf = HT.leaf_layer({k: hashlib.sha512(b).hexdigest() for k, b in bodies.items()})
     assert HT.roots_of(leaf, hist) == {n: (hs[n].root, hs[n].domain.domain_id) for n in names}
@@ -411,7 +411,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     instance's row, and refuses the same read under the check's id or the bare parameter. A class with no tables names
     no port with a ``/``. What a cheaper test cannot show: the names on the serve's own layout, whose table rows are the
     served 576 words."""
-    reads, capacity, prompt, outputs = 2, 8, 4, 2
+    reads, capacity, prompt, outputs = 2, 8, 3, 2
     rd = E.read(capacity, BT.WORDS)
     params, ret = rd.signature()
     check = bind(CompositeDefinition(
@@ -423,7 +423,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     layout = BR.Layout(check, 0, 1, prompt, outputs, N, BR.run_root("test-serve", 0), inline=True, layers=(0,), capacity=capacity)
     key, tid, c = descriptor_id(layout.replay), P.template_id(rd), BT.class_rows(prompt, outputs, capacity)
     cells = P.units(Program(layout.replay), layout.query)
-    assert (layout.n_rho, cells, c) == (2, 4, 6) and key != descriptor_id(check) and layout.templates == (rd,)
+    assert (layout.n_rho, cells, c) == (2, 4, 5) and key != descriptor_id(check) and layout.templates == (rd,)
     rng = np.random.default_rng(0)
     hs = {}
     for t in layout.tables:
@@ -559,7 +559,7 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     port, is no value of this stream. Its spans set ``ignore_eos``, so the stop id one of them serves ends none."""
     stop = BS.Stop((3,), 64, 4)
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
+    c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 3, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
     got = TS.first(c.public(), PAIR, RULE, _placed(c.public()), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
@@ -578,7 +578,7 @@ def _stop_class(held: bool = True) -> BR.Committed:
     sampling = {**GREEDY, "ignore_eos": False}
     ends = [((7, 8, 3), "stop"), ((7, 8, 9, 9), "length")] if held else [((7, 8), "abort")]
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), sampling, *ends[i % len(ends)]) for i in range(N)]
-    return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
+    return BR.commit(spans, BR.Layout(PAIR, 0, 1, 3, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
 def test_a_classs_place_in_its_windows_session_is_its_records_windows():
@@ -610,7 +610,7 @@ def test_a_classs_place_in_its_windows_session_is_its_records_windows():
 def _stop_places() -> list[int]:
     """The places `_stop_class`'s two classes take in their window's session (`two_stage.place`): the stop class's
     spans', its stop blocks', and the other class's."""
-    stopped, filed = (BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held) for held in (True, False))
+    stopped, filed = (BR.Layout(PAIR, 0, 1, 3, 4 if held else 2, N, ROOT, stop=STOP, held=held) for held in (True, False))
     return [TS.place(stopped), TS.place(stopped, blocks=True), TS.place(filed)]
 
 
@@ -835,7 +835,7 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
         m.setattr(TS, "stop_order", lambda *a: "the log shows otherwise")
         out = run("wrong")
     assert [o["refused"] for o in out] == [[TS.ORDER_REFUSED]] * 2 and not any("units" in o for o in out)
-    assert all("class 0 (prompt 4, outputs 4): the log shows otherwise" in o["error"] for o in out)
+    assert all("class 0 (prompt 3, outputs 4): the log shows otherwise" in o["error"] for o in out)
     assert out[0]["stop"]["order"] == {"held": False, "reason": "the log shows otherwise"}
     assert out[0]["stop"]["design"] == f"rate:{Q}/{N}" and len(out[0]["stop"]["units"]) == Q
 
@@ -872,7 +872,7 @@ def test_two_directories_of_one_place_are_refused_before_any_session(tmp_path, m
             out = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
             assert len(out) == 3 and not any("units" in o or "stop" in o for o in out)
             for o in out:
-                assert f"directories {twice} are of one class (prompt 4, outputs 4)" in o["error"]
+                assert f"directories {twice} are of one class (prompt 3, outputs 4)" in o["error"]
                 assert "was not opened" in o["session"]["error"] and o["segment"] is None and o["evidence"] is None
 
     asked: list[list[int]] = []

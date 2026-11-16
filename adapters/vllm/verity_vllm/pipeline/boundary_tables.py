@@ -98,7 +98,8 @@ def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
 def class_rows(prompt: int, outputs: int, capacity: int = CAPACITY) -> int:
     """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's cap on positions, ``prompt`` +
     ``outputs``, since a request computes at most its prompt's and its ids' (`computed`), and at most the tables'
-    ``capacity``. A function of the class alone, so a table's published strings show nothing of its request's length."""
+    ``capacity``. A function of the class alone, so a table's published strings show nothing of how many ids its request
+    was served."""
     for k, v in (("prompt", prompt), ("outputs", outputs)):
         if type(v) is not int or v < 1:
             raise ValueError(f"a class's {k} cap is a positive integer, not {v!r}")

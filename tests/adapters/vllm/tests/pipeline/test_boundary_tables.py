@@ -425,7 +425,7 @@ def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = 
 
 def finish(sched: Scheduler) -> None:
     """Requests a (a 5-id prompt, 4 ids served, stopped) and b (a 3-id prompt, 3 served, at its cap), as `serve` computed
-    them, finish in one step: the window closes with a in class (8, 4) and b in class (4, 4)."""
+    them, finish in one step: the window closes with a in class (5, 4) and b in class (3, 4)."""
     for rid, prompt in (("a", [1, 2, 3, 4, 5]), ("b", [6, 7, 8])):
         sched.add_request(NS(request_id=rid, prompt_token_ids=prompt, sampling_params=NS(**GREEDY)))
     sched.outputs = {0: NS(outputs=[NS(request_id="a", new_token_ids=[9, 9, 9, 9], finish_reason=NS(name="STOP")),
@@ -453,7 +453,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         hooks.uninstall()
     assert all("error" not in x for x in lines) and hook.latents.requests() == []
     got = {(x["prompt"], x["outputs"]): x for x in lines}
-    assert sorted(got) == [(4, 4), (8, 4)]
+    assert sorted(got) == [(3, 4), (5, 4)]
     made = {t.value: t for t in tables}
     for (p, o), line in got.items():
         run, pub = BR.run_root("s", 0), json.loads((tmp_path / "w0" / f"p{p}-o{o}" / BR.COMMIT).read_text())
@@ -474,7 +474,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         assert mine.row_words == words and (mine.ports() == BR.Layout(PAIR, 0, 1, p, o, 1, run, layers=(0, 3), capacity=LEAVES).ports()) != cache
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
-    assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]
+    assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((5, 4), (3, 4))] == [9, 7]
 
 
 def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_path):
@@ -490,7 +490,7 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
         bw.stop()
     finally:
         hooks.uninstall()
-    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(4, 4), (8, 4)]
+    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(3, 4), (5, 4)]
     for line in lines:
         p, o = line["prompt"], line["outputs"]
         d, run = tmp_path / "w0" / f"p{p}-o{o}", BR.run_root("s", 0)
@@ -519,7 +519,7 @@ def test_a_serve_of_ids_commits_the_ids_served_as_its_blocks_return_beside_its_t
         bw.stop()
     finally:
         hooks.uninstall()
-    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(4, 4), (8, 4)]
+    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(3, 4), (5, 4)]
     made = {t.value: t for t in tables}
     for line in lines:
         p, o = line["prompt"], line["outputs"]
@@ -644,25 +644,25 @@ def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a
     assert modes(tmp_path / "node" / "tables") == {("dir", 0o700), ("file", 0o600)}
     assert not list((tmp_path / "out").rglob("*.rows")) and not list((tmp_path / "out").rglob("*.salts"))
     run, made = BR.run_root("s", 0), {t.value: t for t in tables}
-    a3 = made[BT.name(run, 8, 4, 0, 3)]
-    got = kept.span(0, run, 8, 4, 0, 3, range(2, 5))
+    a3 = made[BT.name(run, 5, 4, 0, 3)]
+    got = kept.span(0, run, 5, 4, 0, 3, range(2, 5))
     assert got["entry"] == a3.entry() and got["positions"] == range(2, 5)
     assert np.array_equal(got["rows"], np.stack([row("a", p, 3) for p in range(2, 5)]))
     assert got["salts"] == a3.salts[2:5] and got["strings"] == a3.bcs[2:5]
-    again = kept.table(0, run, 8, 4, 0, 3)
+    again = kept.table(0, run, 5, 4, 0, 3)
     assert again.root == a3.root and again.path(7) == a3.path(7)
-    c = BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
+    c = BR.reopen(tmp_path / "out" / "w0" / "p5-o4", PAIR, kept)
     assert c.roots[a3.value] == a3.root
-    past = kept.span(0, run, 8, 4, 0, 3, range(8, 12))
-    assert not past["rows"].any() and past["strings"] == a3.bcs[8:12] and HT.placeholder(H.WORDS) not in past["strings"]
-    with pytest.raises(ValueError, match="aren't a range within the 12 it holds"):
-        kept.span(0, run, 8, 4, 0, 3, range(4, 13))
-    f = tmp_path / "node" / "tables" / f"w0-{run[:16]}-p8-o4" / "s0" / "layer-0.rows"
+    past = kept.span(0, run, 5, 4, 0, 3, range(8, 9))
+    assert not past["rows"].any() and past["strings"] == a3.bcs[8:9] and HT.placeholder(H.WORDS) not in past["strings"]
+    with pytest.raises(ValueError, match="aren't a range within the 9 it holds"):
+        kept.span(0, run, 5, 4, 0, 3, range(4, 10))
+    f = tmp_path / "node" / "tables" / f"w0-{run[:16]}-p5-o4" / "s0" / "layer-0.rows"
     raw = bytearray(f.read_bytes())
     raw[0] ^= 1
     f.write_bytes(bytes(raw))
     with pytest.raises(ValueError, match="rebuild to another table than the one kept"):
-        BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
+        BR.reopen(tmp_path / "out" / "w0" / "p5-o4", PAIR, kept)
 
 
 def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_round_1s_root(tmp_path):
@@ -671,7 +671,7 @@ def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_r
     that port; a name that isn't a served table's, or one no table kept here has, is refused."""
     kept, tables = kept_window(tmp_path)
     run = BR.run_root("s", 0)
-    for (p, o), slot_rows in (((8, 4), 8), ((4, 4), 5)):
+    for (p, o), slot_rows in (((5, 4), 8), ((3, 4), 5)):
         pub = json.loads((tmp_path / "out" / "w0" / f"p{p}-o{o}" / BR.COMMIT).read_text())
         for x in (0, 3):
             n = BT.name(run, p, o, 0, x)
@@ -684,10 +684,10 @@ def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_r
             again = HT.HistoryTable(got.program, got.value, got.words, got.leaves)
             again.append(got.rows, [got.salts[i * 192:(i + 1) * 192] for i in range(len(got.rows))])
             assert again.root.hex() == pub["values"][n]["root"]
-    for bad in ("history/x", BT.name(run, 8, 4, 0, 3) + "x", f"history/{run}/p08-o4/s0/model.layers.3.self_attn.latent"):
+    for bad in ("history/x", BT.name(run, 5, 4, 0, 3) + "x", f"history/{run}/p05-o4/s0/model.layers.3.self_attn.latent"):
         with pytest.raises(ValueError, match="is no served table's name"):
             BT.load(tmp_path / "node", bad)
-    for absent in (BT.name(run, 8, 4, 1, 3), BT.name("b" * 128, 8, 4, 0, 3), BT.name(run, 8, 4, 0, 1)):
+    for absent in (BT.name(run, 5, 4, 1, 3), BT.name("b" * 128, 5, 4, 0, 3), BT.name(run, 5, 4, 0, 1)):
         with pytest.raises(ValueError, match="rank 0 kept 0 tables named"):
             BT.load(tmp_path / "node", absent)
 
