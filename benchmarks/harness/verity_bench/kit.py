@@ -20,7 +20,9 @@
 directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
-computed from (other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with
+computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and, under a research
+run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
+command's measurement from any other run's; a measurement with
 no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
 benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
 which every measurement gives, one with no value the mark it would have had: ``"measured"``, computed from a run of
@@ -275,12 +277,14 @@ class Writer:
     """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
     directory the result is in: under a research run the run's own, whatever `writer` was given. `kind`, where given,
     is the result's `kind`, the artifact kind `research` stores it as (`bench-result/v1` where it has none): the
-    writer writes it into the result and refuses a result of another kind."""
+    writer writes it into the result and refuses a result of another kind. `command`, where given, is the command the
+    run was launched as (`run_command`), which each measurement holds."""
 
     out: Path
     run: str
     stamp: Mapping
     kind: str | None = None
+    command: Sequence[str] | None = None
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -309,8 +313,8 @@ class Writer:
         """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
         to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
         holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
-        against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
-        beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        against that target, and the `inputs` it was computed from, with this run, its commit, the host stamp and, where
+        the writer has it, the run's `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
@@ -363,8 +367,10 @@ class Writer:
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        if self.command is not None:
+            entry["command"] = list(self.command)
         for key, held in (extra or {}).items():
-            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member"):
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command"):
                 raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
             try:
                 json.dumps(held, allow_nan=False)
@@ -507,7 +513,21 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     paths are relative to the run's directory; outside one it is `out/result.json`."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
-    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind, run_command())
+
+
+def run_command() -> list[str] | None:
+    """The command `research run` ran this run as, from its `job.json` (`execution.command`, which research writes
+    before the run's command starts, with secrets and machines' addresses already redacted), or None outside a research
+    run or where the file doesn't give it as a list of strings."""
+
+    if not settings.is_set("RESEARCH_RUN_DIR"):
+        return None
+    try:
+        argv = json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))["execution"]["command"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return argv if isinstance(argv, list) and all(isinstance(a, str) for a in argv) else None
 
 
 # the core benchmarks' interface, written in kit_report and called as the kit's

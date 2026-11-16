@@ -137,7 +137,10 @@ The core benchmarks take and print the same things in the same form. Each rule i
    (`kit.report`'s `measured`), under the `id` of a metric of its directory's `metrics.toml` (a variant of one
    number, such as a clock reading, is that metric's `member`), and the metric's `goal` is the benchmark's goal. Only
    a run of ours through `research run` reaches the Metrics tab ("Metrics" below); a person outside gets the print and
-   `result.json`.
+   `result.json`. A number is measured once, by the run that measured it: a command that reprints another run's record
+   passes that run's id (`kit.report(..., from_run=RUN)`), and the kit then prints and writes the document but writes no
+   measurement. Under a research run each measurement also holds the `command` the run was launched as, from its
+   `job.json`.
 
 **A made-up record** (a fixture, a test's record, anything no run left) is reported with `kit.report(...,
 made_up=True)`: the line `a made-up record, not a run's` is printed under the audit line, the document holds
@@ -145,7 +148,7 @@ made_up=True)`: the line `a made-up record, not a run's` is printed under the au
 and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
 
-`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=...)` is the command's
+`kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
 
 A command declares that it follows the interface in its own directory's `pyproject.toml`, in the change that makes it
