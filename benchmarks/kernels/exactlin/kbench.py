@@ -18,7 +18,8 @@ that GEMM alone; the last two time only M a multiple of 16).
     python kbench.py --out OUT [--reps 15] [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--arms ...] [--skip-gate]
 
 Where the gate ran, the run's result (`verity_bench.kit`) holds its verdict as the validation and, where it passed and
-METRIC_MODEL's exact and stock arms were timed, METRIC: exact's decode step at M = 32 over stock's.
+the first --models model's exact and stock arms were timed, METRIC: exact's decode step at M = 32 over stock's, with
+that model and both arms' ms beside it.
 """
 from __future__ import annotations
 
@@ -44,7 +45,6 @@ if TYPE_CHECKING:
 
 ITEM_MS = 10.0
 METRIC = "kernels/exact-linear-decode-over-stock"
-METRIC_MODEL = "llama-3.2-1b"
 ARMS = ("exact", "stock", "fused")
 PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm", "fused_vllm_tiles",
          "stock_cutlass", "cutlass_swap", "cutlass_swap_mm")
@@ -212,18 +212,19 @@ def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None]
     return row
 
 
-def record(out: Path, gate: dict, step: dict) -> None:
+def record(out: Path, gate: dict, step: dict, model: str) -> None:
     from verity_bench import kit
     w = kit.writer(out)
     w.validation("passed" if gate["ok"] else "failed", "kgate.gate",
                  f"{gate['shapes']} shapes of {', '.join(gate['models'])}, ok={gate['ok']}",
                  [os.path.relpath(out / "gate.json", w.out)])
-    arms = step.get(METRIC_MODEL, {})
+    arms = step.get(model, {})
     if gate["ok"] and {"exact", "stock"} <= arms.keys():
         exact, stock = arms["exact"]["ms_per_step_m32"], arms["stock"]["ms_per_step_m32"]
         m = w.measurement(METRIC, exact / stock, "times stock", mark="measured",
-                          extra={"exact_ms_per_step": exact, "stock_ms_per_step": stock})
-        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "exact_ms_per_step", "stock_ms_per_step")}), flush=True)
+                          extra={"model": model, "exact_ms_per_step": exact, "stock_ms_per_step": stock})
+        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "model", "exact_ms_per_step", "stock_ms_per_step")}
+                         | {"card": m["host"].get("card")}), flush=True)
 
 
 def main() -> int:
@@ -247,7 +248,7 @@ def main() -> int:
         (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
         if not doc["ok"]:
-            record(out, doc, {})
+            record(out, doc, {}, models[0])
             print(json.dumps({"timed": False, "why": "gate failed"}), flush=True)
             return 4
     clock = nvml()
@@ -276,7 +277,7 @@ def main() -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps({"decode_step_b32": step}, indent=1), flush=True)
     if doc is not None:
-        record(out, doc, step)
+        record(out, doc, step, models[0])
     return 0
 
 

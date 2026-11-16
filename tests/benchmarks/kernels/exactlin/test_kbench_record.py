@@ -1,5 +1,5 @@
-"""kbench.py's result: the gate's verdict as its validation, and the metric only where the gate passed and the metric's
-model was timed in both arms. CPU only: torch, int8_fused and kgate are stand-ins."""
+"""kbench.py's result: the gate's verdict as its validation, and the metric only where the gate passed and the model was
+timed in both arms. CPU only: torch, int8_fused and kgate are stand-ins."""
 from __future__ import annotations
 
 import importlib.util
@@ -12,8 +12,9 @@ from pathlib import Path
 import pytest
 
 DIR = Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "exactlin"
-STEP = {"llama-3.2-1b": {"exact": {"us_per_layer_m32": 75.0, "ms_per_step_m32": 1.2},
-                         "stock": {"us_per_layer_m32": 62.5, "ms_per_step_m32": 1.0}}}
+MODEL = "llama-3.2-1b"
+STEP = {MODEL: {"exact": {"us_per_layer_m32": 75.0, "ms_per_step_m32": 1.2},
+                "stock": {"us_per_layer_m32": 62.5, "ms_per_step_m32": 1.0}}}
 
 
 @pytest.fixture
@@ -35,29 +36,34 @@ def kbench(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
 
 
 def _gate(ok: bool) -> dict:
-    return {"ok": ok, "shapes": 12, "models": ["llama-3.2-1b"]}
+    return {"ok": ok, "shapes": 12, "models": [MODEL]}
 
 
-def test_a_passed_gate_records_the_ratio_and_both_arms(kbench: types.ModuleType, tmp_path: Path) -> None:
-    kbench.record(tmp_path, _gate(True), STEP)
-    doc = json.loads((tmp_path / "result.json").read_text())
+def _result(out: Path) -> dict:
+    return json.loads((out / "result.json").read_text())
+
+
+def test_a_passed_gate_records_the_ratio_the_model_and_both_arms(kbench: types.ModuleType, tmp_path: Path) -> None:
+    kbench.record(tmp_path, _gate(True), STEP, MODEL)
+    doc = _result(tmp_path)
     assert doc["validation"]["status"] == "passed" and doc["validation"]["evidence"] == ["gate.json"]
     [m] = doc["measurements"]
     assert (m["name"], m["value"], m["unit"], m["mark"]) == (kbench.METRIC, pytest.approx(1.2), "times stock", "measured")
-    assert (m["exact_ms_per_step"], m["stock_ms_per_step"]) == (1.2, 1.0)
+    assert (m["model"], m["exact_ms_per_step"], m["stock_ms_per_step"]) == (MODEL, 1.2, 1.0)
+    assert "card" in m["host"]
 
 
 def test_a_failed_gate_records_no_measurement(kbench: types.ModuleType, tmp_path: Path) -> None:
-    kbench.record(tmp_path, _gate(False), STEP)
-    doc = json.loads((tmp_path / "result.json").read_text())
+    kbench.record(tmp_path, _gate(False), STEP, MODEL)
+    doc = _result(tmp_path)
     assert doc["validation"]["status"] == "failed" and doc["measurements"] == []
 
 
-def test_no_measurement_without_the_metrics_model(kbench: types.ModuleType, tmp_path: Path) -> None:
-    kbench.record(tmp_path, _gate(True), {"llama-3.1-8b": STEP["llama-3.2-1b"]})
-    assert json.loads((tmp_path / "result.json").read_text())["measurements"] == []
+def test_no_measurement_for_a_model_not_timed(kbench: types.ModuleType, tmp_path: Path) -> None:
+    kbench.record(tmp_path, _gate(True), STEP, "llama-3.1-8b")
+    assert _result(tmp_path)["measurements"] == []
 
 
 def test_the_metric_is_the_one_metrics_toml_declares(kbench: types.ModuleType) -> None:
     [row] = tomllib.loads((DIR / "metrics.toml").read_text())["metric"]
-    assert row["id"] == kbench.METRIC and f"--models {kbench.METRIC_MODEL}" in row["command"]
+    assert row["id"] == kbench.METRIC
