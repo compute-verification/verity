@@ -42,9 +42,6 @@ attribute [local irreducible] zeroRoot
 
 /-! ## The sample of one receipt among one -/
 
-theorem hash_size (m : ByteArray) : (Flock.Sha512.hash m).size = 64 := by
-  unfold Flock.Sha512.hash
-  exact Array.size_ofFn
 
 theorem beNat_lt_aux (b : ByteArray) (off : ℕ) : ∀ (l : List ℕ) (acc k : ℕ), acc < 256 ^ k →
     l.foldl (fun acc i => acc * 256 + (b.get! (off + i)).toNat) acc < 256 ^ (k + l.length)
@@ -291,8 +288,6 @@ theorem record_verified : Verified node1 record1 := by
   obtain ⟨rs, s, hr, ho, -⟩ := record_run
   exact ⟨rs, s, hr, ho⟩
 
-/-- `Record.run` has an accepted play: some node and record the Lean verifier accepts. -/
-theorem record_accepts : ∃ (node : Node) (r : Record), Verified node r := ⟨node1, record1, record_verified⟩
 
 /-! ## `LineHeld`'s premises at the record -/
 

@@ -296,11 +296,6 @@ theorem le_fillR (hc : ∀ g, 0 ≤ cap g) (hv : ∀ g, 0 ≤ v g) :
 
 theorem ex_throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = throw e := rfl
 
-theorem ite_throw_ok {ε α : Type} {c : Prop} [Decidable c] {e : ε} {r : Except ε α} {a : α}
-    (h : (if c then throw e else r) = .ok a) : ¬ c ∧ r = .ok a := by
-  by_cases hc : c
-  · simp only [hc, ↓reduceIte] at h; cases h
-  · simp only [hc, ↓reduceIte] at h; exact ⟨hc, h⟩
 
 theorem ite_throw_bind_ok {ε α β : Type} {c : Prop} [Decidable c] {e : ε} {x : α} {k : α → Except ε β} {a : β}
     (h : ((if c then throw e else pure x) >>= k) = .ok a) : ¬ c ∧ k x = .ok a := by
@@ -351,15 +346,6 @@ theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.Poub.Poole
   · simp only [hs, if_false] at h
     cases h
 
-/-- A line the code computes read its pooled bound at a `δ` above 0 and below 1 (`Pooled.pooled` refuses any other), so
-a node whose `δ` is a nonnegative rational (`Node.delta`) leaves out no line the code computes. -/
-theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
-    {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
-    0 < δ ∧ δ < 1 := by
-  unfold line at h
-  cases hp : _root_.Poub.Pooled.pooled ws δ with
-  | error e => rw [hp] at h; cases h
-  | ok bd => exact pooled_delta hp
 
 /-- A line `line` computes: `check` accepted the wrong receipts' bound it read (`l.wrong`), and its forms are
 `stretches` at each form's charge and that bound. -/
@@ -439,19 +425,6 @@ theorem stretch_stop (hhi : (m + 1) * per < gs.size) :
   show (stretchPace (fun _ : Unit => gs) per m).released () per = _
   rw [stretch_released hhi le_rfl, spanStop, Nat.succ_mul]
 
-theorem le_foldl_max (f : ℕ → ℕ) : ∀ (l : List ℕ) (init : ℕ),
-    init ≤ l.foldl (fun a g => max a (f g)) init ∧ ∀ x ∈ l, f x ≤ l.foldl (fun a g => max a (f g)) init := by
-  intro l
-  induction l with
-  | nil => intro init; simp
-  | cons y l ih =>
-    intro init
-    obtain ⟨h1, h2⟩ := ih (max init (f y))
-    refine ⟨(le_max_left _ _).trans h1, ?_⟩
-    intro x hx
-    rcases List.mem_cons.1 hx with rfl | hx
-    · exact (le_max_right _ _).trans h1
-    · exact h2 x hx
 
 theorem stretch_longest (hhi : (m + 1) * per < gs.size) :
     (stretchPace (fun _ : Unit => gs) per m).longest () ≤ lMaxOf gs per m := by
@@ -498,16 +471,9 @@ section Fill
 
 variable {gs : Array Group} {per m : ℕ}
 
-theorem sum_range_list (F : ℕ → ℝ) (n : ℕ) : ∑ g ∈ Finset.range n, F g = ((List.range n).map F).sum := by
-  induction n with
-  | zero => simp
-  | succ n ih => rw [Finset.sum_range_succ, List.range_succ, List.map_append, List.sum_append, ih]; simp
 
 theorem order_len : (m + 1) * per + 1 - m * per = per + 1 := by rw [Nat.succ_mul]; omega
 
-theorem order_perm : (orderOf gs per m).Perm (List.range' (m * per) (per + 1)) := by
-  simp only [orderOf, order_len]
-  exact List.mergeSort_perm _ _
 
 theorem mem_order {j : ℕ} : j ∈ orderOf gs per m ↔ m * per ≤ j ∧ j < m * per + (per + 1) := by
   rw [order_perm.mem_iff, List.mem_range'_1]

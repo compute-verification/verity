@@ -29,8 +29,6 @@ local instance instLawfulBEqByteArray_honest : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-theorem zeros_size (n : Nat) : (PousCheck.Prim.zeros n).size = n :=
-  Array.size_replicate
 
 theorem node_size (d : Flock.FV3.Sha512.Domain) (lv i : Nat) (a b : ByteArray) : (d.node lv i a b).size = 64 :=
   Properties.CertifierDevice.Proofs.Lms.sha512_size _
@@ -247,13 +245,6 @@ theorem rounds_honest (root digests : ByteArray) : ∀ j (hj : j < (honestRounds
     by simp [Round.elapsedNs, honestRound],
     by simp [Round.elapsedNs, honestRound, honestCommitment]⟩
 
-theorem mapM_ok {α β ε : Type} (f : α → Except ε β) :
-    ∀ l : List α, (∀ a ∈ l, ∃ b, f a = .ok b) → ∃ bs, l.mapM f = .ok bs
-  | [], _ => ⟨[], by simp; rfl⟩
-  | a :: l, h => by
-    obtain ⟨b, hb⟩ := h a List.mem_cons_self
-    obtain ⟨bs, hbs⟩ := mapM_ok f l fun x hx => h x (List.mem_cons_of_mem _ hx)
-    exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs, bind, Except.bind, pure, Except.pure]⟩
 
 /-- A table of the deployed parameters' `blocks` rows has its row 0 whole. -/
 theorem size_le_of_table {digests : ByteArray}

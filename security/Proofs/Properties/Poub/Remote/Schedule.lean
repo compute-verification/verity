@@ -162,8 +162,6 @@ theorem varint_ne_nil (n : Nat) : Schedule.varint n ≠ [] := by
   · simp [varint_lt h]
   · simp [varint_ge h]
 
-theorem toUInt8_toNat {n : Nat} (h : n < 256) : n.toUInt8.toNat = n := by
-  simp [Nat.toUInt8, Nat.mod_eq_of_lt h]
 
 theorem varint_prefix (n m : Nat) (r r' : List UInt8) (h : Schedule.varint n ++ r = Schedule.varint m ++ r') :
     n = m ∧ r = r' := by
@@ -776,15 +774,11 @@ theorem size_frameHash (tag : String) (parts : List ByteArray) : (Flock.FV3.Sha5
   unfold Flock.FV3.Sha512.hash Flock.FV3.hash
   exact size_sha512 _
 
-theorem size_node (d : Flock.FV3.Sha512.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l i a b).size = 64 :=
-  size_frameHash _ _
 
 theorem size_leaf (d : Flock.FV3.Sha512.Domain) (r q : ℕ) (s : String) (v : ByteArray) :
     (d.leaf r q s v).size = 64 :=
   size_frameHash _ _
 
-theorem zeros_size (n : ℕ) : (zeros n).size = n :=
-  Array.size_replicate
 
 theorem receipt_size (r : Receipter) (j : ℕ) (b : ByteArray) : (r.receipt j b).size = 64 := by
   unfold Receipter.receipt

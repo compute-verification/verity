@@ -270,10 +270,6 @@ theorem refusal_none {ws : Array (ℕ × ℕ)} (h : refusal ws = none) :
   split_ifs at this with h1 h2
   exact ⟨h1, Nat.le_of_not_lt h2⟩
 
-theorem sum_range_list (n : ℕ) (h : ℕ → ℝ) : ∑ i ∈ Finset.range n, h i = ((List.range n).map h).sum := by
-  induction n with
-  | zero => simp
-  | succ n ih => rw [Finset.sum_range_succ, List.sum_range_succ, ih]
 
 theorem sum_order (ws : Array (ℕ × ℕ)) (h : ℕ → ℝ) :
     ((order ws).map h).sum = ∑ i ∈ Finset.range ws.size, h i := by

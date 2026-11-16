@@ -25,7 +25,6 @@ local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := Properties.Certifier.Bytes.hash_size m
 
 theorem append_cancel {a b c d : ByteArray} (h : a ++ b = c ++ d) (hs : a.size = c.size) : a = c ∧ b = d := by
   have := congrArg ByteArray.data h
@@ -106,8 +105,6 @@ theorem mth_binds (L1 L2 : Array ByteArray) (h1 : ∀ i (h : i < L1.size), L1[i]
 
 /-! ## The record's readers -/
 
-theorem need_ok {b : Bool} {p : String} {u : Unit} (h : TimedAudit.need b p = .ok u) : b = true := by
-  unfold TimedAudit.need at h; split at h <;> simp_all
 
 theorem field_ok {j : Json} {k p : String} {v : Json} (h : TimedAudit.field j k p = .ok v) :
     j.getObjVal? k = .ok v := by
@@ -149,69 +146,6 @@ theorem natAt_of {doc : Json} {k p : String} {v : Json} {n : Nat} (h1 : TimedAud
 
 /-! ## Loops -/
 
-theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
-    ∀ (l : List α) (bs : List β), l.mapM f = .ok bs →
-      bs.length = l.length ∧ ∀ a ∈ l, ∃ b ∈ bs, f a = .ok b := by
-  intro l
-  induction l with
-  | nil => intro bs h; simp [List.mapM_nil, pure, Except.pure] at h; subst h; simp
-  | cons a as ih =>
-    intro bs h
-    rw [List.mapM_cons] at h
-    cases ha : f a with
-    | error e => simp [ha, bind, Except.bind] at h
-    | ok b =>
-      cases hr : as.mapM f with
-      | error e => simp [ha, hr, bind, Except.bind] at h
-      | ok bs' =>
-        simp [ha, hr, bind, Except.bind, pure, Except.pure] at h
-        subst h
-        obtain ⟨hl, hm⟩ := ih bs' hr
-        refine ⟨by simp [hl], fun x hx => ?_⟩
-        rcases List.mem_cons.1 hx with rfl | hx
-        · exact ⟨b, List.mem_cons_self, ha⟩
-        · obtain ⟨y, hy, hfy⟩ := hm x hx
-          exact ⟨y, List.mem_cons_of_mem _ hy, hfy⟩
-
-theorem array_mapM_ok {α β ε : Type} (f : α → Except ε β) (l : Array α) (bs : Array β)
-    (h : l.mapM f = .ok bs) :
-    bs.size = l.size ∧ ∀ a ∈ l, ∃ b ∈ bs, f a = .ok b := by
-  rw [Array.mapM_eq_mapM_toList] at h
-  cases hl : l.toList.mapM f with
-  | error e => simp [hl, Functor.map, Except.map] at h
-  | ok xs =>
-    simp [hl, Functor.map, Except.map] at h
-    subst h
-    obtain ⟨h1, h2⟩ := list_mapM_ok f l.toList xs hl
-    refine ⟨by simpa using h1, fun a ha => ?_⟩
-    obtain ⟨b, hb, hfb⟩ := h2 a (by simpa using ha)
-    exact ⟨b, by simpa using hb, hfb⟩
-
-/-- A loop in `Except` that only pushes, one value a step: each element's step pushed a value it vouches for. -/
-theorem forIn_push {α β ε : Type} (P : α → β → Prop) (f : α → Array β → Except ε (ForInStep (Array β)))
-    (hf : ∀ a r r', f a r = .ok r' → ∃ x, r' = .yield (r.push x) ∧ P a x) :
-    ∀ (l : List α) (init out : Array β), forIn l init f = .ok out →
-      (∀ x ∈ init, x ∈ out) ∧ ∀ a ∈ l, ∃ x ∈ out, P a x := by
-  intro l
-  induction l with
-  | nil =>
-    intro init out h
-    simp only [List.forIn_nil] at h
-    cases h
-    exact ⟨fun x hx => hx, fun a ha => by simp at ha⟩
-  | cons a as ih =>
-    intro init out h
-    rw [List.forIn_cons] at h
-    cases hfa : f a init with
-    | error e => simp [hfa, bind, Except.bind] at h
-    | ok r' =>
-      obtain ⟨x, rfl, hx⟩ := hf a init r' hfa
-      simp only [hfa, bind, Except.bind] at h
-      obtain ⟨h1, h2⟩ := ih (init.push x) out h
-      refine ⟨fun y hy => h1 y (Array.mem_push.2 (.inl hy)), fun b hb => ?_⟩
-      rcases List.mem_cons.1 hb with rfl | hb
-      · exact ⟨x, h1 x (Array.mem_push.2 (.inr rfl)), hx⟩
-      · exact h2 b hb
 
 /-! ## One audit -/
 
