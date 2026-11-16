@@ -16,8 +16,8 @@ pass and no chain, so that passes are ordered by the clock alone.
 
 `stated` is the claim read through `audit.ledger`: the honest prover's session on one
 node at the node's R and S_chip, under the default codec at the node's stated squaring ceiling, every window's whole
-γ_t and the horizon's.  γ is the ledger's arithmetic, which no Lean property covers, and the conservation statements
-it is modelled on are not shown to cover a paced session.  `spanning` is the store that spans every tier in proportion to its read rate, and
+γ_t and the horizon's.  No Lean property covers γ's terms but the pooled bound's (`Properties.Poub.PooledCovers`), and
+the conservation statements γ is modelled on are not shown to cover a paced session.  `spanning` is the store that spans every tier in proportion to its read rate, and
 `store_floor` the store below which no T brings every window under 1%.
 
 `sketch_reading` is where sketch-sha512's bound is read: the rank r* that minimizes `sketch_rate`,
