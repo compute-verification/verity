@@ -332,12 +332,15 @@ def test_a_probe_tool_that_fails_or_says_nothing_stops_the_sandbox_before_its_co
 def test_a_failing_dirname_stops_the_probe_at_once_and_the_sandbox_before_its_command_runs(tmp_path, monkeypatch):
     """The probe climbs from the mount to `/` with `dirname`. One that fails prints nothing, which never reaches `/`: the
     climb ends at that failure, with the mount writable. The stand-in counts its calls, and prints `/` after 64 so a climb
-    that ignores its failure ends at all."""
+    that ignores its failure ends at all. On an absolute path outside the test's directory it is the real `dirname`: a
+    host mount whose remount fails on this node (tracefs under /sys/kernel/debug on some) is probed too, as in
+    production, and adds no call to the count."""
     tmp = tmp_path.resolve()
     count = tmp / "tree" / "pkg" / ".lake" / "dirname-calls"
     monkeypatch.setenv("COUNT", str(count))
     r = remount_refused(tmp, monkeypatch, tmp / "tree", [], fakes={
-        "dirname": 'n=$(cat "$COUNT" 2>/dev/null || echo 0); echo $((n + 1)) > "$COUNT"; [ "$n" -lt 64 ] || echo /; exit 1'})
+        "dirname": f'case "$2" in "{tmp}"|"{tmp}/"*|[!/]*|"") ;; *) exec {shutil.which("dirname")} "$@";; esac\n'
+                   'n=$(cat "$COUNT" 2>/dev/null || echo 0); echo $((n + 1)) > "$COUNT"; [ "$n" -lt 64 ] || echo /; exit 1'})
     refused_before_cmd(r, tmp)
     assert int(count.read_text()) == 1
 
