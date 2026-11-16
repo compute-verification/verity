@@ -1,4 +1,4 @@
-# SPOT (`verity-sampled-proofs`)
+# SPOT
 
 SPOT spot-checks a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then samples proof blocks
@@ -133,7 +133,7 @@ A bound of S served bits charges a replay block at most F S, F the grain's fan-o
 1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
 unit on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
-`plancheck.two` refuses a cap below them.
+`plancheck.two` refuses a served cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
@@ -559,7 +559,7 @@ sampling design).
 delta, through its weighted bound `harm_bound`; each application counts delta once.
 
 - `infiltration_bound(profile, output_bits)` is `harm_bound(output_bits)`, in bits: the committed values the prover wrote
-  in place of what the circuit computes, served or not, so no served output's size caps it. A two-stage design's profile
+  in place of what the circuit computes, served or not, so no served output's size bounds it. A two-stage design's profile
   is read at the footprint, so there it counts only what the boundary commitment pins down.
 - `exfiltration_bound(profile, output_bits)` is `infiltration_bound(profile, output_bits) + location_bits(profile)`, in bits.
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` proof blocks, 0 when `K ≤ 0` or `n = 0`, `n` when
