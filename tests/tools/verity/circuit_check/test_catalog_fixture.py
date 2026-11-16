@@ -157,7 +157,7 @@ def _records_session(tmp_path: Path, how: str, *, counts: bool = False, plan: st
 def test_a_test_that_asks_for_the_catalog_without_the_slow_mark_builds_none(tmp_path):
     r = _session(tmp_path, TESTS)
     assert "1 passed, 1 error" in r.stdout, r.stdout[-3000:]
-    assert "mark them slow: ['tests/test_it.py::test_unmarked']" in r.stdout, r.stdout[-3000:]
+    assert "mark them slow: ['test_it.py::test_unmarked']" in r.stdout, r.stdout[-3000:]
 
 
 @pytest.mark.parametrize("plan", ["missed", "none"])
