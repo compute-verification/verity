@@ -26,7 +26,7 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
 device memory's, and `default`, the name of the reading of `readings(card)`, `sm` or `tensor`, that every figure
-is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
+is stated at unless it names the other: the higher tensor ceiling, `sm` on every card),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
 and `dram_installed` the memory on the board, a second reading at or above it, which a registered sheet and a Lean
@@ -35,7 +35,7 @@ table take as device memory; and, only where a run found them, the caches an SM 
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
-its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
+its own pipe's data-sheet ceiling: `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
 both pipes at `clock.sm`, `rate.tensor` over 32 lanes of `rate.issue`, the default reading; `fp32.tensor`, the same
 with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor pipe
 never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
