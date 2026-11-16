@@ -8,8 +8,7 @@ hardware, named assumptions and the network attesters and memory attesters, and 
 budget and the export.
 
 It is a model, not a protocol: nothing under `verity/` imports it, and it is not a member of the uv workspace, so an
-importer puts this directory on `sys.path`. Its two layers, and the Lean physical model its objects mirror, are in
-[`DESIGN.md`](DESIGN.md).
+importer puts this directory on `sys.path`.
 
 ## Try it
 

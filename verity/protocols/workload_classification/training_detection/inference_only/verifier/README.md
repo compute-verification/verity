@@ -2,9 +2,7 @@
 
 The inference-only policy is the part of Verity that tells serving from training. It asks that the registered circuit
 divide into inference blocks, each of at most c gates and each reading at most k bits of fresh input: bits from outside
-the registered information θ, the models, code and data fixed before the monitoring period. Why that separates
-inference from training, and what is proved of it and on what assumptions, are in [`DESIGN.md`](DESIGN.md), in the
-words of the Lean statements.
+the registered information θ, the models, code and data fixed before the monitoring period.
 
 This directory is the policy's check, in Lean only (`lean/`, the Lake package `inference_only_check`). Its one Python
 file is its manifest, `parties.py`: one party, the verifier, with no channel. Both composites, onsite and remote,

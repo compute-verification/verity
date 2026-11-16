@@ -9,7 +9,7 @@ it. The number is the most bits an interval any of these attacks showed, with it
 
 Every `run` first runs a guard, a channel it planted and one it didn't, and a run whose guard fails reports no number.
 The target the number is held to, τ/240 to τ/600 bits an interval of τ seconds, is a stated parameter, not a
-measurement. How the number is taken and where the target comes from are in [`DESIGN.md`](DESIGN.md).
+measurement.
 
 ## Try it
 

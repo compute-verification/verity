@@ -33,8 +33,7 @@ research run --on NODE --project verity --source . --cwd clone --pool network --
   --timeout 10800 -- bash benchmarks/scan_cost/run.sh
 ~~~
 
-`run.sh`'s header has its settings (`SC_GROUP`, `SC_CORES`, `SC_CLASS`) and its exit codes. How the numbers are
-taken, the identity, the guard and the targets are in [`DESIGN.md`](DESIGN.md).
+`run.sh`'s header has its settings (`SC_GROUP`, `SC_CORES`, `SC_CLASS`) and its exit codes.
 
 ~~~text
 result.py table DOC                      a result's round, a session a line and a stage a column
