@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import tempfile
 from dataclasses import replace
 from pathlib import Path
@@ -11,7 +13,7 @@ from typing import Any
 import pytest
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
-from verity_bench import settings
+from verity_bench import jobs, settings
 from verity_bench.vllm.arms import (
     H1,
     h1_config,
@@ -204,6 +206,35 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
                                                                    "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
     assert refusals(Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+
+
+def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_bf16_rows_off(tmp_path):
+    """The H200 spec's point, launched as `run_point.sh` launches it (its setup sourced, then the point's Python), with
+    only the off-card build stood in: the serve gets no VLLM_BATCH_INVARIANT even when the job has one, and
+    PEARLC_BF16_ROWS=0 unless the job sets it."""
+
+    root = Path(__file__).resolve().parents[3]
+    stand_in = tmp_path / "stand-in"
+    stand_in.mkdir()
+    (stand_in / "bash").write_text(f'#!/bin/sh\ncase "$1" in */pearl_c_sm90/build.sh) mkdir -p "$2" && '
+                                   f': > "$2/pearl_c_sm90.cubin"; exit 0 ;; esac\nexec {shutil.which("bash")} "$@"\n')
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "${VLLM_BATCH_INVARIANT-unset} $PEARLC_BF16_ROWS ${PEARLC_CUBIN#$RESEARCH_RUN_DIR/}"\n')
+    for script in (stand_in / "bash", python):
+        script.chmod(0o755)
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    env = {"PATH": f"{stand_in}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
+           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "VLLM_BATCH_INVARIANT": "1", **jobs.point_environment(spec)}
+
+    def served(**job: str) -> str:
+        ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env={**env, **job},
+                             capture_output=True, text=True)
+        assert ran.returncode == 0, ran.stderr
+        return ran.stdout.strip()
+
+    assert served() == "unset 0 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
+    assert served(PEARLC_BF16_ROWS="1") == "unset 1 out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):

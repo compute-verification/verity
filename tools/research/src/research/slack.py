@@ -1853,8 +1853,8 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
         print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
-              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
-              "(`unheard`)")
+              "one app), and another handle's ask rings the inbox; any other new issue in the team rings it through the Slack "
+              "events service's reconciliation, and the sweep's audit (`unheard`) is the backstop")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -2270,11 +2270,17 @@ def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, te
             lines.append(f"@{name}: {why}; the comment is on {issue['identifier']}")
             continue
         api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                 unfurl_media="false", text=f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}")
+                 unfurl_media="false", text=linear_doorbell(author, issue, body))
         lines.append(f"@{to}: rang")
     for line in lines:
         print(f"route {line}", file=sys.stderr)
     return lines
+
+
+def linear_doorbell(author: str, issue: dict, body: str) -> str:
+    """A doorbell about a Linear issue ({identifier, url}): a comment's (`ring_comment`), or a new issue's (the Slack events
+    service's reconciliation)."""
+    return f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}"
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:
@@ -3908,6 +3914,8 @@ def cmd_slack_app(ns: argparse.Namespace, reg: dict) -> int:
     if ns.acmd == "diff":
         return 1 if lines else 0
     if not lines:
+        print("apply: sent nothing to Slack, and an unchanged manifest doesn't make Slack verify the Request URL again: "
+              f"Retry it at https://api.slack.com/apps/{app}/event-subscriptions")
         return 0
     api.call("apps.manifest.validate", app_id=app, manifest=repo)
     print("validate: Slack accepts the repo's manifest")

@@ -3,9 +3,12 @@
 # then Pearl+'s verdict on the passes in Python and in Lean, written as the record `run.py` reads:
 #
 #   bash benchmarks/compute/serve.sh                      on a machine with the card, from any directory
-#   research run --on NODE --project verity --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+#   research run --on NODE --project verity --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh
 #
 # Steps, each one's log in $OUT/logs/STEP.log and its exit status a line of $OUT/steps.txt:
+#   0. bootstrap, only where benchmarks/harness/env.sh finds no pinned-vLLM venv: adapters/vllm/verity_vllm/ops/pod_bootstrap.sh
+#      --cases LLAMA32_1B --gpu, which installs the venv, the checkpoint and the taps under WORK, its own logs under
+#      $OUT/logs/bootstrap/; where the venv is there, one line says so and the step is skipped;
 #   1. cubin: Pearl-C's sm_90a cubin built from this tree (benchmarks/harness/setup/pearl_c_sm90.sh: nvcc, its SASS gates);
 #   2. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card: the caller's gpu-lease's where serve.sh
 #      runs under one, else under `gpu-lease 1` where the machine has it (GPU picks the card, default 0), else directly: with no warm-up, CLASS's fixed load, SLOTS requests of
@@ -36,17 +39,19 @@
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
 # record/circuit-record.json, record/window-record.json and record/verdicts.json; registered/; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
-# path's window record W stands in its place. The passes (about 2 GB) stay outside OUT, as they hold the run's activations
+# path's window record W stands in its place. The passes stay outside OUT, as they hold the run's activations
 # and salt key: in a directory under the run's own scratch under research run, else under SCRATCH or $TMPDIR, removed
 # on exit with the local gate's key; PASSES names a directory to keep them in instead.
-# Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
+# Env: WORK (where the bootstrap installs and env.sh searches, default ~/verity-work), VERITY_BENCH_VENV (the
+# pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search under WORK), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30), LEAN_TIMEOUT (the seconds
 # the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer). The load is
-# benchmarks/compute/load.toml's, which run.py holds the record to. Before any step it exits 3 on a RUN_DIR already
-# holding a record, a missing verity_torch or lake, or a GPU that isn't an idle H100 or H200. A failed step exits 1 with
-# a sentence naming it and compute-run.json written, and run.py isn't run on what it left. Exit 0 only where Python and
-# Lean both accept and run.py prints the share.
+# benchmarks/compute/load.toml's, which run.py holds the record to. Before it writes anything it exits 3 on a RUN_DIR
+# already holding a record, a missing lake, or a GPU that isn't an idle H100 or H200, and after the bootstrap, before
+# the cubin, on a missing verity_torch. A failed step exits 1 with a sentence naming it (compute-run.json written from
+# the cubin on), and run.py isn't run on what it left. Exit 0 only where Python and Lean both accept and run.py prints
+# the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
 AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
@@ -55,8 +60,7 @@ TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
-# the Lean verdict runs on every core it may: 1,917 s on 96, 3,451 s on 36, and more than 3,600 s on 20, so its limit grows
-# as the cores fall
+# the Lean verdict runs on every core it may, so its limit grows as the cores fall
 CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
@@ -70,23 +74,8 @@ for f in steps.txt compute-run.json logs pieces record registered; do
   [ ! -e "$OUT/$f" ] || { echo "$OUT already holds a run's record ($OUT/$f): give RUN_DIR a new directory, or remove" \
     "$RUN, so this run's share can't be read from an earlier run's files" >&2; exit 3; }
 done
-mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
-# shellcheck source=/dev/null
-. benchmarks/harness/env.sh
-PY=$VENV/bin/python
-# the benchmark's load (benchmarks/compute/load.toml): the model, its revision, and the class, SLOTS requests of PROMPT
-# prompt tokens and OUTPUTS output tokens each
-read -r REPO REV SLOTS PROMPT OUTPUTS < <("$PY" -c 'import sys, tomllib
-d = tomllib.load(open(sys.argv[1], "rb"))
-print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchmarks/compute/load.toml) && [ -n "$OUTPUTS" ] \
-  || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
-CLASS=$SLOTS,$PROMPT,$OUTPUTS
-export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
-# what the serve and the Lean steps need from the machine, checked before any step
-"$PY" -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("verity_torch") is None)' || {
-  echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
-       "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
-  exit 3; }
+export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} WORK=${WORK:-$HOME/verity-work}
+# what the serve and the Lean steps need from the machine, checked before any step and before any file is written
 command -v lake > /dev/null || {
   echo "lake isn't on PATH (nor in $HOME/.elan/bin), and the Lean verifiers build with it: install elan" \
        "(https://github.com/leanprover/elan), which fetches the toolchain each Lean package's lean-toolchain file names," \
@@ -102,6 +91,43 @@ card=$(nvidia-smi ${GPU:+-i "$GPU"} --query-gpu=index,name,compute_cap --format=
 busy=$(nvidia-smi -i "${card%%,*}" --query-compute-apps=pid --format=csv,noheader 2> /dev/null | grep -c .) || busy=0
 [ "$busy" = 0 ] || { echo "card ${card%%,*} ($card) runs $busy compute process(es) (nvidia-smi -i ${card%%,*}): serve.sh" \
   "serves alone on its card; wait for them to end or set GPU to an idle H100 or H200" >&2; exit 3; }
+step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
+  local name=$1 t rc
+  shift
+  [ -z "${LONG[$name]:-}" ] || echo "$name: started $(date -u +%H:%MZ); its log is $OUT/logs/$name.log"
+  t=$(date +%s)
+  "$@" > "$OUT/logs/$name.log" 2>&1
+  rc=$?
+  printf '%s rc=%s %ss: %s\n' "$name" "$rc" "$(( $(date +%s) - t ))" "$(tail -1 "$OUT/logs/$name.log" | cut -c1-400)" \
+    | tee -a "$OUT/steps.txt"
+  return "$rc"
+}
+#: the steps whose start is printed, as each takes minutes
+declare -A LONG=([bootstrap]=1 [cubin]=1 [gate]=1 [serve]=1 [python-verify]=1 [lean]=1 [policy]=1 [circuit]=1)
+# the pinned-vLLM venv env.sh finds, else pod_bootstrap.sh installs it under WORK, where env.sh then finds it
+if venv=$(. benchmarks/harness/env.sh > /dev/null 2>&1 && echo "$VENV"); then
+  echo "bootstrap: skipped, as $venv is there"
+elif [ -z "${VERITY_BENCH_VENV:-}" ]; then
+  mkdir -p "$OUT/logs" || exit 3
+  step bootstrap env VENV="$WORK/venv312" bash adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu \
+    --out "$OUT/logs/bootstrap" || { echo "serve.sh: bootstrap failed, so this run has no share (its log is" \
+    "$OUT/logs/bootstrap.log, its own logs $OUT/logs/bootstrap/)" >&2; exit 1; }
+fi
+# shellcheck source=/dev/null
+. benchmarks/harness/env.sh
+PY=$VENV/bin/python
+# the benchmark's load (benchmarks/compute/load.toml): the model, its revision, and the class, SLOTS requests of PROMPT
+# prompt tokens and OUTPUTS output tokens each
+read -r REPO REV SLOTS PROMPT OUTPUTS < <("$PY" -c 'import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))
+print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchmarks/compute/load.toml) && [ -n "$OUTPUTS" ] \
+  || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
+CLASS=$SLOTS,$PROMPT,$OUTPUTS
+"$PY" -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("verity_torch") is None)' || {
+  echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
+       "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
+  exit 3; }
+mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
 here=$(dirname "$TREE")
@@ -113,20 +139,6 @@ mkdir -p "$W/tmp" && chmod 700 "$W" || exit 3
 export TMPDIR=$W/tmp
 umask 077
 failed=0
-#: each long step's minutes in the measured run (one H200, 96 cores), printed as it starts
-declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [python-verify]=15 [lean]=32 [policy]=2 [circuit]=2)
-step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
-  local name=$1 t rc
-  shift
-  [ -z "${ABOUT[$name]:-}" ] || echo "$name: started $(date -u +%H:%MZ), about ${ABOUT[$name]} min in the measured run on" \
-    "96 cores (longer on fewer); its log is $OUT/logs/$name.log"
-  t=$(date +%s)
-  "$@" > "$OUT/logs/$name.log" 2>&1
-  rc=$?
-  printf '%s rc=%s %ss: %s\n' "$name" "$rc" "$(( $(date +%s) - t ))" "$(tail -1 "$OUT/logs/$name.log" | cut -c1-400)" \
-    | tee -a "$OUT/steps.txt"
-  return "$rc"
-}
 lease() {  # CMD...: on one card: the caller's lease's, else under gpu-lease where the machine has it, else GPU
   if [ -n "${GPU_LEASE_UUID:-}" ]; then
     "$@"
@@ -278,10 +290,12 @@ fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '
 import json, sys
+from verity.device import load_card, number
 from verity_vllm import TargetProfile
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+sms = int(number(load_card("h200-sxm-141gb")["sm"]["count"]))
 doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
-       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132).to_json(),
+       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=sms).to_json(),
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))

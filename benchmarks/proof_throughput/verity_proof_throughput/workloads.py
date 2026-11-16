@@ -1,16 +1,16 @@
-"""The VU families the benchmark proves: GLM-5.3's dot products at their served K, each one ``GemmCoordinate<K>`` (K MACs).
+"""The proof-block families the benchmark proves: GLM-5.3's dot products at their served K, each one ``GemmCoordinate<K>`` (K MACs).
 
-A workload is one VU family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K.
+A workload is one proof-block family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K.
 Its population is ``n_max`` independent instances of that Definition (``population``: core's ``population_program``, each
 instance one unit of ``Q_template_instance`` v0, so the population is one stratum), staged once as one statement; each
 session proves the B units the verifier samples from it by the stratified sampling design, the sample the Lean verifier's soundness covers
 (``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
-``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
+``bf16-k6144`` is the proof-block family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
 (``adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
-(N = 160) are ``Gemm_v2``, whose coordinate is the VU; the MoE router (N = 256) past 16 tokens is cuBLAS's ``GemmF32Out_v1``
+(N = 160) are ``Gemm_v2``, whose coordinate is the proof block; the MoE router (N = 256) past 16 tokens is cuBLAS's ``GemmF32Out_v1``
 over the same dot chain, its output the f32 word rather than its bf16 rounding. The sites differ in N, the number of
-coordinates a token row makes, not in the coordinate, so one VU family stands for them. ``fp8-coord-k*`` are served_units' block-scaled FP8
+coordinates a token row makes, not in the coordinate, so one proof-block family stands for them. ``fp8-coord-k*`` are served_units' block-scaled FP8
 coordinates (``benchmarks/served_units/stage.py``'s ``UNITS``), declared with their profile and staged by that script; the
 point job proves only the class-statement workloads today (``stager``).
 """
@@ -27,7 +27,7 @@ MAX_STATEMENT_BITS = 1 << 35
 @dataclass(frozen=True)
 class Workload:
     name: str
-    #: the VU Definition a statement's instances are (one output coordinate)
+    #: the proof block's Definition a statement's instances are (one output coordinate)
     vu: str
     K: int
     #: the target the overhead divides by (``verity.circuits.targets.target.TARGETS``): its anchor's dense peak
@@ -51,7 +51,7 @@ class Workload:
         return min(self.n_max, MAX_STATEMENT_BITS >> self.k_log)
 
     def population(self) -> Any:
-        """The Program the statement is staged over: ``n_max`` independent instances of the VU Definition."""
+        """The Program the statement is staged over: ``n_max`` independent instances of the proof block's Definition."""
         if self.stager != "class-statement":
             raise ValueError(f"{self.name}: staged by {self.stager}, not by the class sweep")
         from .population import population

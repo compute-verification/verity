@@ -441,7 +441,7 @@ def test_detection_refuses_an_escape_tail_above_p_evade_and_names_the_cure():
                                                ("reference-onsite-nvl72-per-device", "devices")])
 def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scenario, per):
     """`Σ_a δ_a`: PoUW's `p/ε'` over all windows, and the wipe's `2⁻¹²⁸ + Adv_PRF` once per game, a game per
-    server (or, per device, per device) per wipe over the monitoring period; the certifier adds nothing (it is the
+    server (or, per device, per device) per wipe over the monitoring period; the network attester adds nothing (it is the
     auditor's)."""
     s = build(REG, scenario)
     ctx, r = s.context, s.regime
