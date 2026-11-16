@@ -79,7 +79,7 @@ means = "the architecture"
 
 [[tree]]
 path = "GLOSSARY.md"
-means = "the Glossary: terms, notation, narrower senses and older names"
+means = "the Glossary: terms and notation"
 
 [[tree]]
 path = "pyproject.toml"

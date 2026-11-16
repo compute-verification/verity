@@ -20,7 +20,7 @@ and `fit.py` read. Hosts carry no compute and no run beats the reference's effic
 multiplications (the inference-only policy's term, χ, the memory limit) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
 where every proof block is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`free` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
-hosts assumption 2.19 and 2.80, and without both 1 and 1.12. These names look like older ones (`GLOSSARY.md`, Older names) and are not: `tiers.py`'s `rho_T`,
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. These names look like older ones (`tests/lint/retired_terms.md`) and are not: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
 `RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
 the loss formula; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency

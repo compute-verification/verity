@@ -584,7 +584,7 @@ def test_no_long_module_grows():
           + "\n  ".join(f"{f}: {n} lines" for fs in long.values() for f, n in fs.items()))
 
 
-#: the Lean declarations whose own names carry each of the Glossary's older names (`test_retired_terms.py`'s `LEAN_WORDS`)
+#: the Lean declarations whose own names carry each of the older names (`test_retired_terms.py`'s `LEAN_WORDS`)
 RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 

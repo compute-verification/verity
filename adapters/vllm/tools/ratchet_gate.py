@@ -19,7 +19,7 @@ counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow wh
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
 (comments, docstrings, Lean comments and Markdown, the integration's too) to a count per file of its
 lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
-per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
+per file of the terms ``tests/lint/retired_terms.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``tests/adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``tests/adapters/vllm/tests/lint/ruff_vllm.toml``
@@ -117,7 +117,7 @@ the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
-to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
+to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the table gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/check/move_check.py`` certifies.
@@ -214,7 +214,7 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
            ("repo_lane_text", "sites", "lane-text site"),                   # S5: what is true now
-           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (GLOSSARY.md)
+           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (tests/lint/retired_terms.md)
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)

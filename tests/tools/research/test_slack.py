@@ -3052,7 +3052,7 @@ def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions(
         (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
         ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
     assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
-    assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert vocabulary.instead("nothing like it") == "see tests/lint/retired_terms.md"
     assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
     assert "skipped" not in vocabulary.table()
 

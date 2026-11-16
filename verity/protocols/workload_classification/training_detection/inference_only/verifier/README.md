@@ -147,7 +147,7 @@ literature index and the training algorithms' traits.
 
 ## Names
 
-A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
+A few older names stay here until a change of their own renames each (`tests/lint/retired_terms.md`): `benchmarks/nci`;
 a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"

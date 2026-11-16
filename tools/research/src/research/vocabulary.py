@@ -1,5 +1,5 @@
 """The tree's retired terms and what to write instead, as `tests/test_retired_terms.py` states them: `TERMS`, retired
-everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs' prose (GLOSSARY.md's older names). `research msg`
+everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs' prose (tests/lint/retired_terms.md). `research msg`
 warns when a post uses one (`retired`).
 
 The table has one home, the test, which every lane's rename edits; this reads its assignments from the checkout rather
@@ -84,4 +84,4 @@ def instead(term: str, t: dict | None = None) -> str:
         for name in (n.strip().lower() for n in names.split(",")):
             if name and (name in said or said in name or name.startswith(said.rstrip("s"))):
                 return write
-    return "see GLOSSARY.md's older names"
+    return "see tests/lint/retired_terms.md"

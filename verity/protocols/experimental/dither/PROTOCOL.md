@@ -63,15 +63,15 @@ The Glossary's terms (`GLOSSARY.md`), the shared notation, and these:
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
 - **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
-  (`GLOSSARY.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
+  (`tests/lint/retired_terms.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
   **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the certifier counts into and out of the
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year.
 
 The Lean predates these names. Its round is an execution phase, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. A rename is to follow. Two premises already have their new names in the Lean (GLOSSARY.md's
-older names give the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
+a replica, and θ is 𝓜. A rename is to follow. Two premises already have their new names in the Lean (`tests/lint/retired_terms.md`
+gives the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
 system is sound", is `ProofSystemSound` (`Pouw.Assumptions.ProofSystemSound`): the verdict accepts a period only where
 each block's instance is registrable and the selected blocks' checks pass, in Flock's proofs. It is not H1's
 `ServiceSound` (in `security/Properties/lean-audit.json`), a different premise, about the one-stage Flock sessions over an

@@ -1807,19 +1807,20 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
 
 REPO_TERMS_LINT = "tests/lint/test_repo_retired_terms.py"
 REPO_TERMS_JSON = "tests/lint/allowlists/repo_retired_terms.json"
+REPO_TERMS_TABLE = "tests/lint/retired_terms.md"
 TOY_GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "teapot" | kettle |\n'
 
 
 def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_retires_it(repo):
-    """The retired-terms lint, loaded alone from the base, reads the checkout's GLOSSARY.md: a new use in a file the change
+    """The retired-terms lint, loaded alone from the base, reads the checkout's table of older names: a new use in a file the change
     touches is refused with the term to say, and saying it passes."""
-    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), REPO_TERMS_TABLE: TOY_GLOSSARY,
                                   REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
     repo.git("checkout", "-q", "-b", "pr")
     repo.commit("another use", {"docs/a.md": "# A\n\nA teapot boils it, and a teapot pours it.\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("failed", ["docs/a.md"]), c["why"]
-    assert c["fix"] == ["docs/a.md:3 'teapot' is retired; say kettle (GLOSSARY.md)"], c["why"]
+    assert c["fix"] == ["docs/a.md:3 'teapot' is retired; say kettle (tests/lint/retired_terms.md)"], c["why"]
     repo.git("checkout", "-q", "-B", "pr", "main")
     repo.commit("says the term", {"docs/a.md": "# A\n\nA kettle boils it.\n"})
     [c] = G.gate("main", "pr")["changes"]
@@ -1830,7 +1831,7 @@ def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_
 def terms_linted(repo) -> Repo:
     """``repo`` with the repository's real retired-terms lint and a list behind its tree: docs/a.md's use is listed, and
     docs/b.md's two, on lines 5 and 7, are not."""
-    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), REPO_TERMS_TABLE: TOY_GLOSSARY,
                                   REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n",
                                   "docs/b.md": "# B\n\nOne.\nTwo.\nA teapot pours it.\n\nA teapot whistles.\n"})
     repo.git("checkout", "-q", "-b", "pr")
@@ -1839,7 +1840,7 @@ def terms_linted(repo) -> Repo:
 
 #: what a change that touches the list writes beside docs/b.md: the term said in docs/a.md, whose entry goes
 SAYS_THE_TERM = {"docs/a.md": "# A\n\nA kettle boils it.\n", REPO_TERMS_JSON: _allowlist()}
-B_SITE = "repo_retired_terms: docs/b.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
+B_SITE = "repo_retired_terms: docs/b.md:{} 'teapot' is retired; say kettle (tests/lint/retired_terms.md)"
 
 
 def test_a_site_that_an_edit_above_it_moves_is_the_bases_still_and_is_named_at_the_bases_line(terms_linted):
@@ -1887,7 +1888,7 @@ def terms_behind(repo) -> Repo:
     """``repo`` with the repository's real retired-terms lint, a file its list covers and one it is behind: docs/a.md's two
     uses are both listed, and of docs/b.md's four, on lines 3, 5, 7 and 9, the list allows two."""
     repo.commit("retired terms", {
-        REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY, "docs/a.md": A_USES,
+        REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), REPO_TERMS_TABLE: TOY_GLOSSARY, "docs/a.md": A_USES,
         "docs/b.md": B_USES, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/b.md", "count": 2})})
     repo.git("checkout", "-q", "-b", "pr")
     return repo
@@ -2145,7 +2146,7 @@ def test_a_renamed_file_s_entry_is_compared_at_its_new_path_so_a_move_buys_no_ro
     assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(b)} 0 -> 2"]
 
 
-C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
+C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (tests/lint/retired_terms.md)"
 
 
 def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_key(terms_linted):
@@ -2197,7 +2198,7 @@ TWO_TERMS = TOY_GLOSSARY + '| "samovar" | urn |\n'
 @pytest.fixture
 def terms_split(repo) -> Repo:
     """``repo`` with the repository's real retired-terms lint, two retired terms, and docs/a.md's two uses of one, listed."""
-    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TWO_TERMS,
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), REPO_TERMS_TABLE: TWO_TERMS,
                                   "docs/a.md": A_USES, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2})})
     repo.git("checkout", "-q", "-b", "pr")
     return repo

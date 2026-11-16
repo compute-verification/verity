@@ -3241,7 +3241,7 @@ def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
         return
     if found := vocabulary.retired(plain(text)):
         print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
-              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+              + " (tests/lint/retired_terms.md; a name quoted in backticks is kept)", file=sys.stderr)
     if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:

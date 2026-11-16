@@ -15,7 +15,7 @@ whose clause is proved on the Program its check judges, the two statements that 
 (`Vocab.WiresSound`, `GateARow`).
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `GLOSSARY.md`,
-the Glossary, with the notation and the older names. In Lean's older
+the Glossary, with the notation (the older names are `tests/lint/retired_terms.md`). In Lean's older
 names, `Session*` means a run of a subprotocol.
 
 **Which "remote".** Four things in the tree are called "remote", and this page means the first:
@@ -558,4 +558,4 @@ suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/comput
 - `security/README.md`: the definitions, properties and proofs trees, the locks, and the remote protocol in Lean.
 - `benchmarks/prove_path/README.md` and `benchmarks/prove_path/e2e_chains/README.md`: what an accepted audit means, and
   each protocol's end-to-end chain.
-- `ARCHITECTURE.md` and `GLOSSARY.md` (the Glossary): the architecture, the terms, the notation and the older names.
+- `ARCHITECTURE.md` and `GLOSSARY.md` (the Glossary): the architecture, the terms and the notation.
