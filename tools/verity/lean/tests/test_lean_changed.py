@@ -2700,6 +2700,6 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
         (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
     assert LC.matching("network_check", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verity/protocols/resource_accounting/network/verifier/lean/", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
-    assert LC.matching("certifier/verifier/lean", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
+    assert LC.matching("network/verifier/lean", pkgs, tmp_path) == ["verity/protocols/resource_accounting/network/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
     assert LC.matching("network_check", pkgs) == []
