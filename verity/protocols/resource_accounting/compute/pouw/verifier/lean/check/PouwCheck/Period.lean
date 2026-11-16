@@ -12,7 +12,7 @@ meta import PouwCheck.CreditOnce
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
 
-Onsite's work component (`Core.Onsite.components`). A period is the windows the auditor's ledger lists between the
+The work of remote's development composite (`Core.Remote.components`), and no composite of record's. A period is the windows the auditor's ledger lists between the
 period's open and its close, and it earns all or nothing: `Credit.periodCredit` credits it only when every one of its
 windows is credited (`Credit.window`), and a refused window refuses the period. `pouw-period` runs it through
 `Core.Protocol.main`, and `tests/test_period_difftest.py` holds it to its Python, `verity/protocols/accounting/pouw/verifier/period_check.py`.

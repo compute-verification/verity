@@ -57,9 +57,9 @@ directory holds the served run's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network attestation. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
+Onsite (`verity/onsite/v1`, in `verity/protocols/compose/verifier/onsite/`) is the superset of remote's composite of
+record: beside SPOT, the inference-only policy and Pearl+'s run verdict it composes PoUS, PoUB-P2
+(`verity/remote-bandwidth/p2/v0`), network attestation and the memory wipe. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 

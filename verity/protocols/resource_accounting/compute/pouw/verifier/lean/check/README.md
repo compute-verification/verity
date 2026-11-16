@@ -15,7 +15,7 @@ Python reference held to it.
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N proof blocks sampled subset:K′ at the execution phase's δ, and the sample is subset:K′ over N |
 
 A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a credit period's credit
-and onsite's PoUW subprotocol (`Core.Onsite.components`), with `verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py` its Python
+and the PoUW subprotocol of remote's development composite (`Core.Remote.components`), with `verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py` its Python
 (`tests/test_period_difftest.py`). It credits a credit period all or nothing: `Credit.periodCredit` accepts only when every
 execution phase of the credit period's close is credited.
 

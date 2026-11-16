@@ -1,5 +1,5 @@
 """`verity.protocols.resource_accounting.compute.pouw.verifier.period_check` held to `pouw-period serve`, PoUW's verifier for a period
-(`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
+(`PouwCheck.Period`, ``verity/pouw/period/v1``, the work of remote's development composite), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
 framing broken, and a period in each form the period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`

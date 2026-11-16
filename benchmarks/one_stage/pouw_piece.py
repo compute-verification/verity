@@ -9,8 +9,8 @@
 ``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
 window's docket, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
-system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
-(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
+system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is the work of remote's
+development composite (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
 challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its
 copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``; the sessions the ledger's
 close of the period lists, `close_sessions`), its commitment the auditor's ledger
@@ -145,7 +145,7 @@ def v1_missing(serve_dir: Path, k: int) -> str:
     return (f"window {k}'s PoUW is H1's per-call credit ({h1.get('entry')}), which {V1} doesn't check: {V1} is the tile "
             "window's check, over a one-stage registration of tiles PouwCheck.tiles pins (the Pearl-C tiles at sm120, "
             "PouwH1Tile_v1 at K = 64) and the proof system's answer to it, and an H1 window has neither; an H1 window's "
-            f"Lean check is {PERIOD}, onsite's")
+            f"Lean check is {PERIOD}")
 
 
 def period_missing(serve_dir: Path, k: int) -> str:
