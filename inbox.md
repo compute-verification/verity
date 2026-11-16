@@ -1,0 +1,3 @@
+[2026-11-16T23:48Z] 6a382352c26a
+Coordinator 3:50 PM PST: proofs fixed the landing order for served_verdicts.sh tonight: #10608, proofs card for the tied audit, proofs limit fallback, THEN our uniform rate for the tie, then vllm move of six blocks into verbs (a pure move that rebases onto ours). So the uniform-rate PR must be OPEN TONIGHT and as small as possible in that file (the preflight lines and the record note only, no reflow, no neighbouring edits), so I can mark it on your return at 4:45 PM PST. Say in your return which lines of served_verdicts.sh it touches and whether it conflicts with #10608.
+
