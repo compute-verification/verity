@@ -109,6 +109,12 @@ theorem wb_loopT {B m : ℕ} {cs : Challenges} {tr : Trace} {t₀ : Transcript} 
     simp only [loopT]
     exact (((wb_loopT h hB i).ap (pF_le _)).ap (pF_le _)).sq (by omega) _ _ _
 
+theorem r1ab_size (tr : Trace) (n : ℕ) (r : Array F128) : (r1ab tr n r).size = 64 := by
+  simp only [r1ab, Array.size_map, Array.size_range]
+
+theorem r1c_size (tr : Trace) (n : ℕ) (r : Array F128) : (r1c tr n r).size = 64 := by
+  simp only [r1c, Array.size_map, Array.size_range]
+
 /-- Zerocheck's rounds: the binding's (the digest and the cap), round 1's two vectors, and two field elements each. -/
 theorem wb_tEnd {B P C V m : ℕ} {digest cap : ByteArray} {cs : Challenges} {tr : Trace} {t : Transcript}
     (h : Wb B P t) (hd : digest.size ≤ C) (hc : cap.size ≤ C) (hab : (r1ab tr (m - 6) (cs.r m)).size ≤ V)
@@ -135,6 +141,15 @@ theorem wb_loopT {B P : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOu
     simp only [loopT]
     exact (((wb_loopT h hP hB i).ap (pF_le _)).ap (pF_le _)).sq (by omega) _ _ _
 
+theorem zrT_size_le (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Challenges) :
+    ∀ i, (zrT c m tr zc cs i).size ≤ 2 ^ c.kLog
+  | 0 => by simp only [zrT, zr0, Array.size_map, Array.size_range, le_refl]
+  | i + 1 => by
+    simp only [zrT]
+    unfold halve
+    simp only [Array.size_map, Array.size_range]
+    exact (Nat.div_le_self _ _).trans (zrT_size_le c m tr zc cs i)
+
 /-- Lincheck's rounds: its label, two field elements each, and `z_partial`. -/
 theorem wb_tEnd {B P V : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128}
     {cs : Challenges} {t : Transcript} (h : Wb B P t) (hz : (zrT c m tr zc cs (c.kLog - 6)).size ≤ V)
@@ -146,6 +161,9 @@ end Lc
 /-! ## The ring switch -/
 
 namespace Rs
+
+theorem switchVec_size (tr : Trace) (c : Claim) : (FlockComplete.switchVec tr c).size = 128 := by
+  simp only [FlockComplete.switchVec, Array.size_map, Array.size_range]
 
 theorem wb_loopT {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Wb B P t)
     (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 414 ≤ B) :
