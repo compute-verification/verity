@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_olean_graph", HERE.parent / "olean_graph.py")
+spec = importlib.util.spec_from_file_location("lean_olean_graph", HERE.parents[3] / "tools" / "verity" / "lean" / "olean_graph.py")
 G = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(G)
 
@@ -23,7 +23,7 @@ spec.loader.exec_module(G)
 @functools.cache
 def check():
     """`check.py`, whose `replay_keys` reads `canonical`."""
-    spec = importlib.util.spec_from_file_location("lean_check", HERE.parent / "check.py")
+    spec = importlib.util.spec_from_file_location("lean_check", HERE.parents[3] / "tools" / "verity" / "lean" / "check.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

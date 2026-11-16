@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-LAYOUT = HERE.parent / "layout.py"
+LAYOUT = HERE.parents[2] / "tools" / "move" / "layout.py"
 spec = importlib.util.spec_from_file_location("layout_under_test", LAYOUT)
 L = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(L)
