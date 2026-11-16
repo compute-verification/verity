@@ -4839,6 +4839,11 @@
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_charge_slots.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_charge_slots.py",
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_lean_difftest.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_lean_difftest.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py"
+      }
     }
   ]
 }
