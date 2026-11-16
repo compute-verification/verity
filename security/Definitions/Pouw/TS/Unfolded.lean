@@ -49,7 +49,7 @@ that no word of the unit determines, so the round's check passes only if it gues
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -84,4 +84,4 @@ def WholeLuck [Fintype Ω] (p0 : ℝ) : {n : ℕ} → ReceiptGame Ω n → Unfol
 
 end ReceiptGame
 
-end Accounting.TS
+end ResourceAccounting.TS

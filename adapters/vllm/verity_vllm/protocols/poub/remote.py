@@ -12,9 +12,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.memory.poub.prover.node_store import memory_map as store_map
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import (
+    memory_map as store_map,
+)
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+    NodeMemory,
+)
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving import (
     KvDevice,
     Lockstep,

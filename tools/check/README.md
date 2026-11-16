@@ -5,7 +5,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 
 | Part | Jobs |
 | --- | --- |
-| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
+| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM adapter's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
 | `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
@@ -103,7 +103,7 @@ Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checko
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py flock"            # one suite
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py verity-flock"     # one suite
 $R "uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"
 $R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
 uv run tools/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
@@ -223,4 +223,4 @@ body) lands on its ready mark alone once the queue's rerun of its map is certifi
 Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
 into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
 (refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
-variable it doesn't declare. Reads outside it are held by `tools/check/tests/test_settings.py` to a list that only shrinks.
+variable it doesn't declare. Reads outside it are held by `tests/tools/check/test_settings.py` to a list that only shrinks.

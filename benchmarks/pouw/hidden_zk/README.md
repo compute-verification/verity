@@ -1,7 +1,7 @@
 # hidden_zk
 
-Pearl-C4's hidden-check units proved under Flock `--zk` on CPUs: each unit staged for Flock, proved by Rust `prove --zk`
-and checked by the Lean verifier, beside controls that must be refused or rejected; what staging and proving a unit
+Pearl-C4's hidden-check proof blocks proved under Flock `--zk` on CPUs: each proof block staged for Flock, proved by Rust `prove --zk`
+and checked by the Lean verifier, beside controls that must be refused or rejected; what staging and proving a proof block
 costs; and the ZK server's send check, its cost per proved witness bit.
 
 **Hardware:** a node's CPUs, no GPU. `scope` exists for a node whose sessions carry a CPU mask narrower than the CPUs a
@@ -37,4 +37,4 @@ for primitives Flock has none for yet, and every result staged through them is l
 `served_stage.py` (`../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/stage_tile.py` with its Flock
 staging) import this directory's modules, and `compact_stage.py`, `fast_stage.py`, `core3_scratch.py`
 and `hash_scratch.py` list in `__all__` the names other files read, the tests' included. Their tests are
-`test_hidden_zk_stage.py` and `test_hidden_zk_summarize.py` under `benchmarks/pouw/tests/`.
+`test_hidden_zk_stage.py` and `test_hidden_zk_summarize.py` under `tests/benchmarks/pouw/`.

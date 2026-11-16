@@ -11,7 +11,7 @@ B bytes, so cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connec
 egress cell i is in bucket s + D + ⌊i / r⌋, its slot i mod r: its n events (`data_cell`) and its `END`
 (`end_cell`), and the rest of that bucket a `PAD` on q; it holds no slot after it. A `DATA` cell is the network
 attester's cut of the server's bytes, P = B − 9 of them, and a response is its events, each `id_event` padded with
-spaces to P, then `TRAILER`, shorter than P: so the network attester's cut (`network_attester.NetworkCertifier._egress`) is exactly n
+spaces to P, then `TRAILER`, shorter than P: so the network attester's cut (`network_attester.NetworkAttester._egress`) is exactly n
 `DATA` cells, one event each, and an `END` that holds `TRAILER`, whenever the bytes are there by their deadlines. q is
 the request's ingress ordinal on the wire, from 1, which the network attester writes from the connection it
 terminated.

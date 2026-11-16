@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.PerRun
-public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.ResourceAccounting
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Game.Params
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -13,8 +13,8 @@ public import Proofs.Pouw.Break
 /-!
 # PoUW's per-run guarantee needs the cost model to truncate
 
-`Pouw.Assumptions.TT` and EndToEnd's other hypotheses do not give `Accounting.Guarantees.PouwEndToEndPerRun`'s
-conclusion without `Accounting.BudgetAbort`. In this cost model a workload of one 1×1×1 unit has one program, which
+`Pouw.Assumptions.TT` and EndToEnd's other hypotheses do not give `ResourceAccounting.Guarantees.PouwEndToEndPerRun`'s
+conclusion without `ResourceAccounting.BudgetAbort`. In this cost model a workload of one 1×1×1 unit has one program, which
 commits a correct unit on every salt, costs nothing on salt `true` and the unit's full work on salt `false`. TT holds
 with error 0, since every adversary within budget `T` has `T` at least the whole workload's work, but the audit accepts
 on every coin, so the probability of acceptance with realized cost below `(1 − γ)(1 − ε_s)·W` is `1/2`, above
@@ -24,7 +24,7 @@ cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`
 
 @[expose] public section
 
-namespace Accounting.PerRunNecessity
+namespace ResourceAccounting.PerRunNecessity
 
 open Pouw Finset
 
@@ -144,4 +144,4 @@ theorem not_budgetAbort : ¬ BudgetAbort CM := by
   exact absurd (le_trans (pr_mono fun x hx =>
     ⟨hx.1, hx.2, Pouw.Proofs.not_breaks_of_hashless (fun _ _ _ _ _ _ => rfl) A U x.1 x.2.1⟩) hb) (not_le.2 hlt)
 
-end Accounting.PerRunNecessity
+end ResourceAccounting.PerRunNecessity

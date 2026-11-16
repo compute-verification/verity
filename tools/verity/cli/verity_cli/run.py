@@ -1,4 +1,4 @@
-"""`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
+"""`verity run` and `verity config`: a configuration's parties, run on this machine, and the file itself
 (`verity.config`).
 
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR] [--bindings FILE] [--dry-run]
@@ -12,10 +12,10 @@ soundness covers; H1's development composite is refused), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
 parties are those of the static table `REGISTRY` names: the served window's (`tools/verity/cli/verity_cli/served_table.py`);
-`verity_cli`'s tests also run the toy's (`tools/verity/cli/tests/step0.py`). With no table, `verity run` and
+`verity_cli`'s tests also run the toy's (`tests/tools/verity/cli/step0.py`). With no table, `verity run` and
 `verity config` are refused by name (``no-table``).
 
-``--bindings FILE`` gives the deploy bindings: the hosts, addresses and gate commands the table's pieces reach the
+``--bindings FILE`` gives the bindings: the hosts, addresses and gate commands the table's pieces reach the
 parties by, which the configuration never states, so binding another host changes no hash. It is TOML, a table per
 party and in it a table per listed subprotocol that declares that party, of strings and integers
 (``[memory-challenger.pous] address = "HOST:PORT"``); one naming another party or subprotocol is refused by name
@@ -81,7 +81,7 @@ from . import settings
 ROOT = Path(__file__).resolve().parents[4]
 #: the static table: the directory on its import path, and its module (module docstring)
 REGISTRY: tuple[Path, str] | None = (Path(__file__).resolve().parent, "served_table")
-#: the deploy bindings `begin` keeps beside the run (module docstring)
+#: the bindings `begin` keeps beside the run (module docstring)
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools
 UNSENT = ("build", "logs", "transcripts", "run.json", BINDINGS, "tools.json", "record/transcripts",
@@ -185,7 +185,7 @@ def plan(cfg: Mapping[str, Any], reg: Registry, machine: str, wanted: Sequence[s
 
 
 def bindings(path: Path | None, cfg: Mapping[str, Any], reg: Registry) -> dict[str, dict[str, dict[str, Any]]]:
-    """The deploy bindings at ``path`` (module docstring), checked against ``cfg``; refused by name (``toml``,
+    """The bindings at ``path`` (module docstring), checked against ``cfg``; refused by name (``toml``,
     ``binding``)."""
     if path is None:
         return {}
@@ -305,7 +305,7 @@ def head() -> str | None:
 def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks: Iterable[str],
           bound: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The run's ``run.json`` (module docstring), written before any party starts, or the one in ``state`` when it is
-    this configuration's run at ``periods`` (another machine's parties); the deploy bindings ``bound`` beside it."""
+    this configuration's run at ``periods`` (another machine's parties); the bindings ``bound`` beside it."""
     state.mkdir(parents=True, exist_ok=True)
     if bound:
         (state / BINDINGS).write_text(json.dumps(bound, indent=1, sort_keys=True))
@@ -421,7 +421,7 @@ def hooks_of(cfg: Mapping[str, Any], reg: Registry) -> set[str]:
 
 
 def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool = False) -> int:
-    ap = argparse.ArgumentParser(prog="verity run", description="Run a deployment configuration's parties on this "
+    ap = argparse.ArgumentParser(prog="verity run", description="Run a configuration's parties on this "
                                  "machine (module docstring of verity_cli.run).")
     ap.add_argument("config", metavar="CONFIG")
     ap.add_argument("--party", action="append", default=[], metavar="ROLE", help="only this party (repeatable)")
@@ -429,7 +429,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
                     f"(default {K.LOCAL})")
     ap.add_argument("--periods", type=int, default=1, metavar="N", help="the run's periods (default 1)")
     ap.add_argument("--state", metavar="DIR", help="the parties' shared state (default a new temporary directory)")
-    ap.add_argument("--bindings", metavar="FILE", help="the deploy bindings: hosts, addresses and gate commands (TOML)")
+    ap.add_argument("--bindings", metavar="FILE", help="the bindings: hosts, addresses and gate commands (TOML)")
     ap.add_argument("--dry-run", action="store_true", help="resolve every party, channel and entry, and run nothing")
     a = ap.parse_args(argv)
     if a.periods < 1:
@@ -478,7 +478,7 @@ HEADER = ("The deployment configuration of {protocols} on the {workload} workloa
 
 
 def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity config", description="Write, check or hash a deployment configuration.")
+    ap = argparse.ArgumentParser(prog="verity config", description="Write, check or hash a configuration.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)

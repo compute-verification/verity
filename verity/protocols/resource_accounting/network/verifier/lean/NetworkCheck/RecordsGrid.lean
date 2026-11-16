@@ -6,7 +6,7 @@ public import NetworkCheck.Records
 # `Records.expectedGrids` is `Check.expectedGrid`, window by window
 
 `verity/network-records/v3` reads the Program's grids from `expectedGrids`, which computes every window of a link in one
-pass, linear in the frames and the buckets, where `Check.expectedGrid` (and `NetworkCertifier.expectedRow`, which
+pass, linear in the frames and the buckets, where `Check.expectedGrid` (and `NetworkAttester.expectedRow`, which
 `Security` reads) recomputes the hand times, the queue and the offsets for every bucket. `expectedGrids_eq`: for each
 window `w < W`, the two are equal, so every egress verdict of the records check reads the Program `Security` reasons about.
 -/
@@ -16,13 +16,13 @@ window `w < W`, the two are equal, so every egress verdict of the records check 
 namespace NetworkCheck.RecordsGrid
 
 open NetworkCheck.Records
-open NetworkCertifier (ClockSync LogicalFrame)
+open NetworkAttester (ClockSync LogicalFrame)
 
 theorem handingRev_eq (T W : Nat) (syncs : Fin W → ClockSync) (last : Nat) (fs : List LogicalFrame) (acc : List Nat) :
-    handingRev T W syncs last fs acc = (NetworkCertifier.handingFrom T W syncs last fs).reverse ++ acc := by
+    handingRev T W syncs last fs acc = (NetworkAttester.handingFrom T W syncs last fs).reverse ++ acc := by
   induction fs generalizing last acc with
-  | nil => simp [handingRev, NetworkCertifier.handingFrom]
-  | cons f fs ih => simp [handingRev, NetworkCertifier.handingFrom, ih]
+  | nil => simp [handingRev, NetworkAttester.handingFrom]
+  | cons f fs ih => simp [handingRev, NetworkAttester.handingFrom, ih]
 
 theorem foldl_modify_getD (hs : List Nat) (a : Array Nat) (t : Nat) :
     (hs.foldl (fun a h => a.modify h (· + 1)) a).getD t 0 = a.getD t 0 + if t < a.size then hs.count t else 0 := by
@@ -38,15 +38,15 @@ theorem foldl_modify_getD (hs : List Nat) (a : Array Nat) (t : Nat) :
 
 theorem enqueueCounts_eq (T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) :
     (fun t => (enqueueCounts (W * T) (handingRev T W syncs 0 frames []).reverse).getD t 0) =
-      NetworkCertifier.enqueued T W syncs frames := by
+      NetworkAttester.enqueued T W syncs frames := by
   funext t
   simp only [enqueueCounts, foldl_modify_getD, handingRev_eq, List.append_nil, List.reverse_reverse,
-    NetworkCertifier.enqueued, NetworkCertifier.handingBuckets]
+    NetworkAttester.enqueued, NetworkAttester.handingBuckets]
   by_cases ht : t < W * T <;> simp [Array.getD, ht]
 
 theorem releases_eq (S : Nat) (enq : Nat → Nat) (t c : Nat) :
-    releases S enq t (NetworkCertifier.queue S enq t) c =
-      (List.range' t c).map fun u => (NetworkCertifier.released S enq u : Nat) := by
+    releases S enq t (NetworkAttester.queue S enq t) c =
+      (List.range' t c).map fun u => (NetworkAttester.released S enq u : Nat) := by
   induction c generalizing t with
   | zero => simp [releases]
   | succ c ih =>
@@ -77,9 +77,9 @@ theorem map_finRange (t : Nat) (f : Nat → Nat) : ((List.finRange t).map fun i 
   | succ t ih => rw [List.finRange_succ_last, List.range_succ]; simp [← ih]
 
 theorem offset_last (S : Nat) (enq : Nat → Nat) (t : Nat) :
-    NetworkCertifier.offset (fun u : Fin (t + 1) => NetworkCertifier.released S enq u) (Fin.last t) =
-      ((List.range t).map fun u => (NetworkCertifier.released S enq u : Nat)).sum := by
-  unfold NetworkCertifier.offset
+    NetworkAttester.offset (fun u : Fin (t + 1) => NetworkAttester.released S enq u) (Fin.last t) =
+      ((List.range t).map fun u => (NetworkAttester.released S enq u : Nat)).sum := by
+  unfold NetworkAttester.offset
   rw [List.finRange_succ_last, List.filter_append]
   have : (List.map Fin.castSucc (List.finRange t)).filter (fun u => decide (u < Fin.last t)) =
       List.map Fin.castSucc (List.finRange t) := by
@@ -95,21 +95,21 @@ theorem releases_length (S : Nat) (enq : Nat → Nat) (t q c : Nat) : (releases 
 
 theorem payloads_getD (frames : List LogicalFrame) (k : Nat) :
     (frames.toArray.map fun f => Check.bytesOfBits f.payload).getD k (Check.bytesOfBits []) =
-      Check.bytesOfBits (NetworkCertifier.payloads frames k) := by
-  unfold NetworkCertifier.payloads
+      Check.bytesOfBits (NetworkAttester.payloads frames k) := by
+  unfold NetworkAttester.payloads
   by_cases h : k < frames.length <;> simp [Array.getD, h]
 
 theorem expectedRow_eq (S T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) (t : Nat) :
-    (List.ofFn (NetworkCertifier.expectedRow S T W syncs frames t)).toArray.map (·.map Check.bytesOfBits) =
+    (List.ofFn (NetworkAttester.expectedRow S T W syncs frames t)).toArray.map (·.map Check.bytesOfBits) =
       Array.ofFn fun s : Fin S =>
-        if s.1 < (NetworkCertifier.released S (NetworkCertifier.enqueued T W syncs frames) t : Nat) then
-          some (Check.bytesOfBits (NetworkCertifier.payloads frames (((List.range t).map fun u =>
-            (NetworkCertifier.released S (NetworkCertifier.enqueued T W syncs frames) u : Nat)).sum + s.1)))
+        if s.1 < (NetworkAttester.released S (NetworkAttester.enqueued T W syncs frames) t : Nat) then
+          some (Check.bytesOfBits (NetworkAttester.payloads frames (((List.range t).map fun u =>
+            (NetworkAttester.released S (NetworkAttester.enqueued T W syncs frames) u : Nat)).sum + s.1)))
         else none := by
   rw [List.toArray_ofFn, Array.map_ofFn]
   congr 1
   funext s
-  simp only [Function.comp, NetworkCertifier.expectedRow, NetworkCertifier.fifoGrid, NetworkCertifier.fill, offset_last,
+  simp only [Function.comp, NetworkAttester.expectedRow, NetworkAttester.fifoGrid, NetworkAttester.fill, offset_last,
     Fin.val_last]
   split <;> rfl
 
@@ -122,8 +122,8 @@ theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.LinkOpening) (w :
   congr 1
   simp only [payloads_getD]
   have hrel := releases_eq g.allocation
-    (NetworkCertifier.enqueued g.buckets W (fun v => l.syncs.getD (↑v) Check.noSync) l.frames) 0 (W * g.buckets)
-  simp only [NetworkCertifier.queue] at hrel
+    (NetworkAttester.enqueued g.buckets W (fun v => l.syncs.getD (↑v) Check.noSync) l.frames) 0 (W * g.buckets)
+  simp only [NetworkAttester.queue] at hrel
   rw [hrel]
   have hle : w * g.buckets + g.buckets ≤ W * g.buckets := by
     rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hw

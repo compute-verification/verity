@@ -16,7 +16,7 @@ What code outside this directory may use. Everything else here is internal.
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. The hosts' addresses come from the launcher's environment (`VY_CHALLENGER_1_HOST`, `VY_AUDITOR_1_HOST`, `VY_NEBIUS_2_HOST`), and one that is unset ends the run by name before anything is written. |
 
 Read from outside `benchmarks/`: `store_layout.py`, `auditor_line.py` and `tests/test_session.py`, which the live
-verifier's tests (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/tests/`) import with this directory and its `tests/` on
+verifier's tests (`tests/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/`) import with this directory and its `tests/` on
 `sys.path`, `auditor_line.py` also run by its path; and the whole directory, which the verifier's host is pinned with,
 beside `verity`. Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
 `verity/protocols/resource_accounting/memory/poub/prover/remote_session/`, and the verifier's is
@@ -45,7 +45,7 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
 **Reads and writes:** a store (synthetic, or a pinned checkpoint `store_layout.py` writes) and the prover's plan (`PLAN`:
 `honest`, or `skip:F`, a fraction F of the chunks dropped); it writes `verifier.json`, `prover.json` and their logs, which
 `summary.py`, `sampling_inputs.py` and `gate_whatif.py` read. **Backs:** its line reads the conclusions of
-`Accounting.Guarantees.Remote.HeldOverTime` and `HeldOverTimeLinks`, and `Properties.Poub.Line`'s `LineHeld` and
+`ResourceAccounting.Guarantees.Remote.HeldOverTime` and `HeldOverTimeLinks`, and `Properties.Poub.Line`'s `LineHeld` and
 `LineHeldIdentity` state that line holds, with the named assumption `NoOutsideCompute` among their premises. The
 line's error reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): the table prints it in those words
 (`ledger.DELTA_FORM`) with δ's number after them, and every error of the document names the term (`NAMED_TERMS`).

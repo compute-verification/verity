@@ -34,7 +34,7 @@ memory_gib = 1690
 stops_at = "2026-10-23T15:00:00Z"  # the fallback for the VM's /etc/research/deadline
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
-# The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z), slot
+# The candidates' check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z), slot
 # d on 128-159. The provers' slices, the dispatcher's VY_PROVER_CPUS, which no other job may share
 # (160-191 since slot d took 128-159); a job naming no pool gets 96-127.
 pools = { checks = "8-95,128-159", provers = "160-191" }

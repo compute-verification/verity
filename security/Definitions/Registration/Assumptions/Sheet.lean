@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 Seven physical assumptions, each a `Prop` taken as a hypothesis, never an
 `axiom`, and each a vendor statement (data-sheet constants, no GPU self-attestation). Each docstring opens
 with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
-against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
+against its sheet (`ResourceAccounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
 section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
 `Definitions.Pouw.Assumptions.TS`'s are.
 
@@ -53,9 +53,9 @@ Data independence needs no axiom: a peak is a maximum over every operand value, 
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 section Run
 
@@ -143,4 +143,4 @@ unit's words cost at least its per-word vector, read off its definition and pric
 (`SideUnits`). -/
 def SheetSemantics (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop := NoSum A ∧ SideUnits Z A
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

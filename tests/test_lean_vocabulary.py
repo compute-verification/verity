@@ -114,7 +114,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{CIRCUITS}Evaluated.lean::Flock.Extract.Partition"),
     "Period": (),
-    "Placement": (f"{CORE}Requirement.lean::Accounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
+    "Placement": (f"{CORE}Requirement.lean::ResourceAccounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
                   f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{CIRCUITS}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/circuits/program.py::Program",),
@@ -129,7 +129,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
-    "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
+    "Store": (f"{CORE}Requirement.lean::ResourceAccounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
               f"{REQ_PY}::Store"),
     "Strategy": (f"{CORE}Game.lean::Verity.Game.Strategy",),
     "Trace": (),
@@ -429,74 +429,74 @@ KNOWN_MAX = 424
 KNOWN: dict[str, str] = {
     # security/Definitions/
     "security/Definitions/Poub/Bandwidth/Game.lean::Bandwidth.Device":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "security/Definitions/Poub/Bandwidth/Game.lean::Bandwidth.Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "security/Definitions/Poub/Bandwidth/Interactive.lean::Bandwidth.InteractiveDevice":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Poub/BoundReceipt.lean::Accounting.BoundReceipt.Coins":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
+    "security/Definitions/Poub/BoundReceipt.lean::ResourceAccounting.BoundReceipt.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/BoundReceipt.lean::Accounting.BoundReceipt.Node":
+    "security/Definitions/Poub/BoundReceipt.lean::ResourceAccounting.BoundReceipt.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/BoundSketch.lean::Accounting.BoundSketch.Protocol":
+    "security/Definitions/Poub/BoundSketch.lean::ResourceAccounting.BoundSketch.Protocol":
         "homonym, a two-party communication protocol (a tree of one-bit messages): rename (memory-accounting)",
-    "security/Definitions/Pouw/CoinFlow.lean::Accounting.CoinFlow.Program":
+    "security/Definitions/Pouw/CoinFlow.lean::ResourceAccounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "security/Definitions/Registration/Device.lean::Accounting.Device":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes `Verity.Device`, moved into security/Definitions/Core/ (lean)",
-    "security/Definitions/Registration/Device.lean::Accounting.Window":
+    "security/Definitions/Registration/Device.lean::ResourceAccounting.Device":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes `Verity.Device`, moved into security/Definitions/Core/ (lean)",
+    "security/Definitions/Registration/Device.lean::ResourceAccounting.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes `Verity.Period`, moved into security/Definitions/Core/ (lean)",
-    "security/Definitions/Accounting/Gates/Codec.lean::Accounting.Gates.Draw":
+    "security/Definitions/ResourceAccounting/Gates/Codec.lean::ResourceAccounting.Gates.Draw":
         "homonym, a draw of a k-round key: rename (memory-accounting)",
-    "security/Definitions/Registration/Physical.lean::Accounting.Hardware":
+    "security/Definitions/Registration/Physical.lean::ResourceAccounting.Hardware":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the Site plus the device model (lean)",
-    "security/Definitions/Pouw/PouwWork.lean::Accounting.PouwWork.Verdict":
+    "security/Definitions/Pouw/PouwWork.lean::ResourceAccounting.PouwWork.Verdict":
         "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
-    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Coins":
+    "security/Definitions/Poub/RateAudit.lean::ResourceAccounting.Rate.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Device":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
-    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Store":
+    "security/Definitions/Poub/RateAudit.lean::ResourceAccounting.Rate.Device":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
+    "security/Definitions/Poub/RateAudit.lean::ResourceAccounting.Rate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Poub/RateAuditPooled.lean::Accounting.Rate.Session":
+    "security/Definitions/Poub/RateAuditInteractive.lean::ResourceAccounting.Rate.InteractiveDevice":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
+    "security/Definitions/Poub/RateAuditPooled.lean::ResourceAccounting.Rate.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a run over sampling periods (memory-accounting)",
-    "security/Definitions/Poub/RateAuditSketch.lean::Accounting.RateSketch.Coins":
+    "security/Definitions/Poub/RateAuditSketch.lean::ResourceAccounting.RateSketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/RateAuditSketch.lean::Accounting.RateSketch.Device":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
-    "security/Definitions/Poub/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Poub/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
+    "security/Definitions/Poub/RateAuditSketch.lean::ResourceAccounting.RateSketch.Device":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
+    "security/Definitions/Poub/RateAuditSketchInteractive.lean::ResourceAccounting.RateSketch.InteractiveDevice":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
+    "security/Definitions/Poub/Remote/Sample.lean::ResourceAccounting.Remote.Sample.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/Remote/Sample.lean::Accounting.Remote.Sample.Session":
+    "security/Definitions/Poub/Remote/Sample.lean::ResourceAccounting.Remote.Sample.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/Remote/Held.lean::Accounting.Remote.Held.Trace":
+    "security/Definitions/Poub/Remote/Held.lean::ResourceAccounting.Remote.Held.Trace":
         "homonym, a PoUB session's record of the registered blocks in node memory: rename (memory-accounting)",
-    "security/Definitions/Poub/Remote/Node.lean::Accounting.Remote.Node":
+    "security/Definitions/Poub/Remote/Node.lean::ResourceAccounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
-    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
+    "security/Definitions/Poub/Remote/Sketch.lean::ResourceAccounting.Remote.Sketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Outcome":
+    "security/Definitions/Poub/Remote/Sketch.lean::ResourceAccounting.Remote.Sketch.Outcome":
         "homonym, a session's random outcome (coins): rename (memory-accounting)",
-    "security/Definitions/Poub/Remote/Sketch.lean::Accounting.Remote.Sketch.Session":
+    "security/Definitions/Poub/Remote/Sketch.lean::ResourceAccounting.Remote.Sketch.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Layout":
+    "security/Definitions/ResourceAccounting/Requirement.lean::ResourceAccounting.Requirement.Layout":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
-    "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Placement":
+    "security/Definitions/ResourceAccounting/Requirement.lean::ResourceAccounting.Requirement.Placement":
         "duplicate of `CircuitRequirement.Placement`, stated in Accounting: becomes Core's, moved into security/Definitions/Core/ (memory-accounting)",
-    "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store":
+    "security/Definitions/ResourceAccounting/Requirement.lean::ResourceAccounting.Requirement.Store":
         "duplicate of `CircuitRequirement.Store`, stated in Accounting: becomes Core's, moved into security/Definitions/Core/ (memory-accounting)",
-    "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store.Placement":
+    "security/Definitions/ResourceAccounting/Requirement.lean::ResourceAccounting.Requirement.Store.Placement":
         "duplicate of the Site (`Verity.Site`, not yet in Core): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
-    "security/Definitions/Pouw/TS/J10R.lean::Accounting.TS.J10R.Layout":
+    "security/Definitions/Pouw/TS/J10R.lean::ResourceAccounting.TS.J10R.Layout":
         "homonym, a tile shape: rename (compute-accounting)",
-    "security/Definitions/Pouw/TS/Machine.lean::Accounting.TS.Machine":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "security/Definitions/Pouw/TS/Sheet.lean::Accounting.TS.Sheet":
+    "security/Definitions/Pouw/TS/Machine.lean::ResourceAccounting.TS.Machine":
+        "duplicate of the device model (`ResourceAccounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
+    "security/Definitions/Pouw/TS/Sheet.lean::ResourceAccounting.TS.Sheet":
         "duplicate of the data sheet (`Verity.Site.Sheet`; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
-    "security/Definitions/Pous/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
+    "security/Definitions/Pous/Accounting/Wipe.lean::ResourceAccounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",
     "security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
@@ -518,7 +518,7 @@ KNOWN: dict[str, str] = {
     "security/Definitions/Core/Interaction.lean::Claims.Transcript":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "security/Definitions/Core/Site.lean::Verity.Site.Sheet":
-        "duplicate of the data sheet (`Verity.Accel.Card`; `Accounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
+        "duplicate of the data sheet (`Verity.Accel.Card`; `ResourceAccounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
     "security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
@@ -649,7 +649,7 @@ KNOWN: dict[str, str] = {
     "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
     "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Node":
-        "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
+        "duplicate of the Site (`Verity.Site`): becomes what `ResourceAccounting.Remote.Node` becomes (lean)",
     "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what Poub becomes (lean)",
     # benchmarks/
@@ -691,7 +691,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/sheet.py::Sheet":
-        "duplicate of the data sheet (`Accounting.TS.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
+        "duplicate of the data sheet (`ResourceAccounting.TS.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/proved_ticks.py::Sheet": "homonym, a family's priced headline design: rename (compute-accounting)",
@@ -736,19 +736,19 @@ KNOWN: dict[str, str] = {
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Block":
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Layout":
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes a client of it (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Link":
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes a client of its link (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Placement":
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Registration":
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a client of it (top)",
-    "tools/verity/cli/tests/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "tools/verity/cli/tests/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
+    "tests/tools/verity/cli/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
+    "tests/tools/verity/cli/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",
@@ -787,9 +787,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/resource_accounting/network/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/protocols/resource_accounting/network/attester/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
+    "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/Run.lean::NetworkAttester.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
-    "verity/protocols/resource_accounting/network/attester/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
+    "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/WindowCharge.lean::NetworkAttester.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/protocols/resource_accounting/network/prover/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
@@ -949,7 +949,7 @@ KNOWN: dict[str, str] = {
     "verity/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
     "verity/circuits/requirement.py::Layout":
-        "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
+        "homonym, each value's place in the store: rename (`ResourceAccounting.Requirement.Layout`'s mirror) (proofs)",
     "verity/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
     "verity/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
@@ -1239,10 +1239,10 @@ def test_a_canonical_under_another_name():
     core, rate, other = f"{CORE}Period.lean", f"{D}Accounting/Rate.lean", f"{D}Accounting/Other.lean"
     s = scan({core: "namespace Verity\nabbrev Play (n : Nat) (Ω : Type) (X : Fin n → Type) : Type :=\n"
                     "  (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t\nend Verity\n",
-              rate: "namespace Accounting.Rate\nabbrev Session (n : Nat) : Type :=\n"
-                    "  Verity.Play n Nat (fun _ => Nat)\nend Accounting.Rate\n",
+              rate: "namespace ResourceAccounting.Rate\nabbrev Session (n : Nat) : Type :=\n"
+                    "  Verity.Play n Nat (fun _ => Nat)\nend ResourceAccounting.Rate\n",
               other: "namespace Accounting\nstructure Play where\n  x : Nat\nend Accounting\n"})
-    assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::Accounting.Rate.Session"]
+    assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::ResourceAccounting.Rate.Session"]
     assert "Play" not in s.hits
     assert reads_canonical(s.hits["Session"][1], set(CANONICAL["Session"]), s)
 

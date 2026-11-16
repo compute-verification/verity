@@ -268,7 +268,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     Up to τ = 279 ms the 1119 execution phases are the bound, 59 min 40 s · τ / 100 ms. At the deployed key's
     height, 20 (the default), the key takes four minutes more: `--minutes 67` at 100 ms, and from 273 ms the whole
     execution phases in 162 min 44 s. The relay listens only once its key is made, so a load that must start soon
-    gives the least `--height` its `--windows` need. A load's last connection is admitted `NetworkCertifierParams.span` + 1
+    gives the least `--height` its `--windows` need. A load's last connection is admitted `NetworkAttesterParams.span` + 1
     buckets before the end ("End", and the runner's "A session").
   - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
     `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
@@ -306,7 +306,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     record. One admitted at bucket s and cut before s + D has its ingress cells in the record (its request may have
     been released to the endpoint) and no answer cell, and the check refuses nothing for it. One cut at or after
     s + D, with no `END` or `FAIL`, makes the check refuse the execution phase of its admission, so the run isn't
-    accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`NetworkCertifierParams.span`:
+    accepted. A connection admitted by bucket windows · T − span − 1 ends inside the session (`NetworkAttesterParams.span`:
     D + ⌊(egress cells − 1) / r⌋ buckets).
   - *One verdict.* The check's verdict is the whole session's, whichever client a connection was: one connection
     the relay failed closed, for its client's bytes (ingress past the schedule's bounds, or a malformed cell) or for
@@ -450,7 +450,7 @@ NETWORK_CERTIFIER_WINDOW_LEAVES = 5
 #: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
 #: there)
 START_LEAVES = 1
-#: a network attester rehearsal's execution phase without `--scan`: `network_attester_serve.py`'s default schedule's (`NetworkCertifierParams`, 600
+#: a network attester rehearsal's execution phase without `--scan`: `network_attester_serve.py`'s default schedule's (`NetworkAttesterParams`, 600
 #: buckets of 100 ms)
 NETWORK_CERTIFIER_WINDOW_MS = 60_000
 NETWORK_CERTIFIER_TOKENS = (16, 256)

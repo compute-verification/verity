@@ -18,7 +18,7 @@ the window's.
 * `Served.Traced.counted P f w`: the window's record with its incorrect proof blocks counted at its trace, and
   `Served.Traced.countRun P f run` the run of such records, the run the audit's undetected bound is about;
 * `Served.Traced.Tied eg L l`: each accepted window that releases released its trace's values on the egress slots
-  (the network certifier's egress tie: the released bytes are the trace's outputs);
+  (the network attester's egress tie: the released bytes are the trace's outputs);
 * `Served.Traced.Covered P inp Ou L θ r l`: each accepted window that releases holds, on the population's input slots,
   the inputs of the weights and of the outsider's query served with the window's advice (advice coverage: whatever
   else the prover chose is in the advice, which is charged).

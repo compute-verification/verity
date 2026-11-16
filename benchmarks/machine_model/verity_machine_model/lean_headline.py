@@ -2,8 +2,8 @@
 (security/Definitions/Pouw/Headline/Sm*.lean). `machine-model lean-headline` writes them, and with `--check`
 exits 1 when a committed file is not what it would write (`write`).
 
-A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounting.Guarantees.TS.SmNNSheetHeadline`):
-its device's data sheet (`DS-NN`) as `Accounting.TS.Sheet` data, its headline design as a TS model on it, the floor
+A family's data-sheet instance (`ResourceAccounting.TS.Headline.SmNN`, read by `ResourceAccounting.Guarantees.TS.SmNNSheetHeadline`):
+its device's data sheet (`DS-NN`) as `ResourceAccounting.TS.Sheet` data, its headline design as a TS model on it, the floor
 program ♭ with the work the proofs could miss (ε_skip), and π*, the certificate the machine model's LP finds at q* = ½.
 Every number is exact: a census value or a TOML value read as its decimal, and `skip.design_skip`'s ε_skip as the
 decimal Python prints. `FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe
@@ -19,14 +19,14 @@ The vector classes (`vec`, which A6's `SheetWords` and SCALAR-ROUTE sum over) ar
 the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`): a run that heads
 vector words with IMAD.WIDE meets A6 then. Each of the five costs what IMAD does at both π*, so ε doesn't move.
 
-sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
-`Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (`VECTOR`, VF3s-16, its
+sm_120's measured instance (`ResourceAccounting.TS.Headline.Sm120Measured`, read by
+`ResourceAccounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (`VECTOR`, VF3s-16, its
 rows sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar
 routes at `q = q_T = 9/8`, the work of ♭ the proofs could miss at the vector's ε_skip, and π* at q* = 9/8. `measured()`
 checks it the same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of
 `Real.hasSum_log_one_add_inv` at 7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not
 model.toml's `current` (VF3r-16): measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in
-honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
+honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`tests/benchmarks/pouw/test_lean_headline.py`).
 """
 from __future__ import annotations
 
@@ -202,7 +202,7 @@ def vector_classes(cuda: tuple[str, ...] | list[str], classes: list[str]) -> lis
 
 
 def coef(i: Instance, row: str, k: str) -> Fraction:
-    """The data-sheet machine's coefficient (`Accounting.TS.Sheet.machine`) on a DS row."""
+    """The data-sheet machine's coefficient (`ResourceAccounting.TS.Sheet.machine`) on a DS row."""
     j = i.classes.index(k)
     if row == "DS_issue":
         return Fraction(1)
@@ -523,16 +523,16 @@ public import Definitions.Pouw.Headline.Encoding
 
 Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
-file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
+file. `ResourceAccounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
 {doc}
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{f.ns}
+namespace ResourceAccounting.TS.Headline.{f.ns}
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- The {f.device} census's instruction classes, in index order. -/
 def classes : List String := {_list([f'"{k}"' for k in i.classes], "  ")}
@@ -599,7 +599,7 @@ noncomputable def piStar : SheetRow Pipe → ℝ := fun r =>
 /-- The checks a window. -/
 def checks : ℕ := {i.checks}
 
-end Accounting.TS.Headline.{f.ns}
+end ResourceAccounting.TS.Headline.{f.ns}
 '''
 
 
@@ -623,7 +623,7 @@ public import Definitions.Pouw.Headline.Sm120
 
 Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
-file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
+file. `ResourceAccounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `{vf}`, `machine`: the measured vector {VECTOR} (the exporter's `VECTOR`, named there, not model.toml's
   `current`), {len(m.rows)} rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
@@ -641,9 +641,9 @@ file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm120Measured
+namespace ResourceAccounting.TS.Headline.Sm120Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- {VECTOR}'s rows, in index order. -/
 def rowNames : List String := {_list([f'"{r}"' for r in m.rows], "  ")}
@@ -686,7 +686,7 @@ def piStar : Fin {len(m.rows)} := {m.rows.index(m.pistar)}
 /-- The writer kind of w* at π*: {m.wstar}. -/
 def wStarKind : Fin {nt} := {[k for k, _ in m.writers].index(m.wstar)}
 
-end Accounting.TS.Headline.Sm120Measured
+end ResourceAccounting.TS.Headline.Sm120Measured
 '''
 
 

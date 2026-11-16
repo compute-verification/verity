@@ -919,7 +919,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     circuit, rows, steps = meta["program_digest"], int(meta["rows"]), int(meta["steps"])
     if proto is not None and proto.get("program") != circuit:
         raise ValueError(f"serve.json's Program {str(proto.get('program'))[:16]}... is not {H1_META}'s {circuit[:16]}...")
-    redo = (f"build them with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
+    redo = (f"build them, from tests/adapters/vllm, with python -m tests.protocols.pouw_h1_circuits --program {serve_dir / 'h1'} --out {circuits} "
             f"--live {rows},{steps}")
     try:
         doc = json.loads((circuits / CIRCUITS_MANIFEST).read_text())
@@ -1148,14 +1148,14 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
                      inputs: Mapping[str, str], python: str) -> dict[str, Any]:
-    """`pouw_h1_gpu.py --check-challenger` (run by `python` in adapters/vllm, so ``tests`` is that package's) of the
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in tests/adapters/vllm, so ``tests`` is the adapter's) of the
     window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
     ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
             "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
             *(x for kv in inputs.items() for x in kv)]
-    p = subprocess.run(argv, cwd=ROOT / "adapters" / "vllm", capture_output=True, text=True, check=False)
+    p = subprocess.run(argv, cwd=ROOT / "tests" / "adapters" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
         return json.loads((out / "pouw_h1_challenger.json").read_text())
@@ -1168,7 +1168,7 @@ Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str,
 
 #: the premises the pouw piece's verdict says whether the window meets (`premises`)
 PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
-#: why a window meets ``AcceptedLive`` (`Accounting.TS.Session`'s, ``accounting-ts-accepted-live``)
+#: why a window meets ``AcceptedLive`` (`ResourceAccounting.TS.Session`'s, ``accounting-ts-accepted-live``)
 LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
             "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
 #: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.MonitoringPeriod`'s)

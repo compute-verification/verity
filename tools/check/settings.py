@@ -18,7 +18,7 @@ each variable of a prefix this registry owns (`OWNED`: the ``CHECK_*`` knobs and
 declare and nothing else in the tree reads (`ELSEWHERE`): `check.py` and `suites.py` refuse to start with one, so a misspelt or
 retired knob fails the run instead of being ignored.
 
-The check package reads ``os.environ`` here.  The reads left outside are ``tools/check/tests/test_settings.py``'s
+The check package reads ``os.environ`` here.  The reads left outside are ``tests/tools/check/test_settings.py``'s
 `DIRECT`, which only shrinks: `slot.py` and `lean_slot.py` run alone, their source sent to a machine as ``python3 -``
 (``check.py --slots``, ``research.auto``, ``research.remote``), `common.py` is in every Lean package's audit key
 (`lean_audit.py`), and the read guard (``guard/``) loads in every test process before anything else; each variable they read

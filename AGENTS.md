@@ -10,22 +10,23 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 The tree is in the layout below. `tests/tree.toml` is the layout of record, and `tests/test_tree.py` holds the tree to
 it; a line marked "Target, not yet" says what the layout of record has and the tree does not.
 
-- `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
+- `verity/`: the distribution `verity` (the root `pyproject.toml`; `verity/README.md` outlines it). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
-    `spot` and `recursion` on it and `spot_flock` on those, what the other protocols call to prove; `resource_accounting/`
+    `spot` and `recursion` on it, `spot_flock` on those and `spot_flock_recursion` on top, what the other protocols call
+    to prove; `resource_accounting/`
     holds `compute/pouw`, `memory/pous`, `memory/poub` and `network` (compute, memory and network), and `registration/` (the
-    registration log, checked once, before any challenge; its Lean is still in `interface/`) sits beside the layers;
-    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is an eleventh
+    registration log, checked once, before any challenge; its site log's types are still in `interface/`) sits beside the layers;
+    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is a twelfth
     protocol. Its `verifier/` holds its Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an
     auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its
-    `verifier/live_challenger/` holds the auditor device's challenger service. Target, not yet: `experimental/NAME/` for a whole directory
-    no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
+    `verifier/live_challenger/` holds the auditor device's challenger service. `experimental/` holds the protocols being
+    tried that no configuration lists (`dither/`, `pearl_c4/`). Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `attester/` is the
-    auditor's device (the network attester, the memory challenger).
+    auditor's device (the network attester, the memory attester).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
+    (`flock/prover/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
     for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/lean/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
@@ -36,32 +37,33 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
-    sampling of units). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
+    sampling of proof blocks). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
     Definitions), `silicon` (the GPUs' exact semantics), `kernels`, `private_circuits` (the universal circuit), and the
     evaluator and a circuit's requirement in Lean (`evaluate`, `requirement`). The served kernels' circuits are the vLLM
     adapter's (`adapters/vllm/verity_vllm/definitions/`). Target, not yet: `verity/circuits/` also holds the circuits a
     protocol names.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
-    and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
+    and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `periods` (what an adapter hands
     the prover for each execution phase).
-  - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
-    directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
-    reads a configuration) and `verity/runtime/`, which runs parties over channels.
-  - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
+  - Six files directly under `verity/` (`party.py`, `channel.py` for the messages every party speaks, `device.py`,
+    `protocol.py`, `config.py`, which reads a configuration, and `errors.py`) and `verity/runtime/`, which runs parties
+    over channels. `verity_config`, its own distribution, is `tools/config/`.
+  - `tools/difftest/`: the differential tests that hold the Python to each Lean (`verity_difftest`).
     `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
-  commits its values while serving. Target, not yet: a torch adapter beside it, which the vLLM adapter sits on.
+  commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
+  circuits, which also traces a training step.
 - `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
-- `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
+- `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
+  (the Lean check); `tools/check/`: the one check.
+- `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -127,7 +129,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
   `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
-  verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
+  verifier. A protocol states what is committed, which proof blocks need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
   model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
@@ -142,7 +144,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
+  assumption H-μ⁺ (`ResourceAccounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
   party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
   (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
@@ -154,7 +156,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
-- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the network attester's record of
   every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
   configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks: given those, at most
   one y is self-consistent (else the bound adds log₂ of how many are). Explanation: the circuit C = B(x, y, a) outputs y's
@@ -178,7 +180,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
-- **Auditor-trusted devices.** The network attesters and memory challengers sign what they see; what they sign is
+- **Auditor-trusted devices.** The network attesters and memory attesters sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
   control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-device`.
   Nothing the developer runs or hosts is trusted. "Network attester" is its one name, never "network certifier", "warden" or "tap".
@@ -200,7 +202,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   checks, and defines every other layer's circuit from it.
 - **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
   commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
-  those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
+  those still in it (network certification's advice format) move out to the adapter. An integration hands Verity only: a
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.commitments` scheme and registered
@@ -217,8 +219,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 
 ## Tests
 
-Each package's tests are one suite in its own `tests/`, run in its own process and cached by input; the root `tests/`
-holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
+Every test is under the root `tests/`: the tests of X in `tests/X`, one suite each, run in its own process and cached by
+input; the top of `tests/` holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
 and dummy credentials: the testing skill.
 
 No test reads wall-clock time (no sleeps, clock readings or timeouts:
@@ -233,7 +235,7 @@ everything that can make a claim false or can't be undone still fail.
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
-`uv run circuit-check <definition|template|row>`, with its report in the PR. A new Definition gets a binding in its
+`uv run circuit-check <definition|template|request>`, with its report in the PR. A new Definition gets a binding in its
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging
@@ -302,7 +304,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
   or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `InferenceOnly`,
-  `Pouw`, `Pous`, `Certifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
+  `Pouw`, `Pous`, `Certifier`, `Flock`, `ResourceAccounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a

@@ -22,7 +22,7 @@ public import Proofs.Pouw.MonitoringPeriodJ10R
 namespace Properties.Pouw.Served.SecurityProofs
 
 open Properties.Pouw.Served Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## A window's salt is uniform given what is fixed before it -/
 

@@ -58,12 +58,12 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer, LmsSigner
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-_TRAFFIC = Path(__file__).resolve().parents[1] / "verifier/tests/egress_traffic.py"
+_TRAFFIC = Path(__file__).resolve().parents[5] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
 
-PARAMS = W.NetworkCertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+PARAMS = W.NetworkAttesterParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 NR, K = 4, 16
 SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))

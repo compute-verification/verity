@@ -58,7 +58,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/resource_accounting/network/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "tests/verity/protocols/resource_accounting/network/verifier/network/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -119,7 +119,7 @@ DOC_TERMS = {
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
-    "timed verifier": "the memory challenger",
+    "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
@@ -570,8 +570,8 @@ CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
 CERTIFIER_LEFT_OUT = {
     MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
     "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
-    "tools/research/tests/test_queue.py": "a test of the words a word map retires spells one in its map",
-    "tools/research/tests/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
+    "tests/tools/research/test_queue.py": "a test of the words a word map retires spells one in its map",
+    "tests/tools/research/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
     LINTS[0]: "this test spells the name to find it",
 }
 #: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
@@ -744,7 +744,7 @@ def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/resource_accounting/network/verifier/network/tests/a.py"
+    net = "tests/verity/protocols/resource_accounting/network/verifier/network/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'

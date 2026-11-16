@@ -335,8 +335,8 @@ def _prove_parser(commands: Any) -> None:
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
     layers = commands.add_parser("prove-layers", prog="verity bench prove layers",
-                                 help="the proof system by layer (Flock, with zero knowledge, with "
-                                                      "sampling, with recursion), a row each read from its run's output")
+                                 help="the proof benchmark by layer (Flock, with zero knowledge, with sampling, with "
+                                      "recursion), the benchmark result for each layer read from its run's output")
     proof_layers.add_arguments(layers)
     layers.set_defaults(run=proof_layers.run, command_parser=layers)
 

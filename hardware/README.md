@@ -26,7 +26,7 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
 device memory's, and `default`, the name of the reading of `readings(card)`, `sm` or `tensor`, that every figure
-is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
+is stated at unless it names the other: the higher tensor ceiling, `sm` on every card),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
 and `dram_installed` the memory on the board, a second reading at or above it, which a registered sheet and a Lean
@@ -35,7 +35,7 @@ table take as device memory; and, only where a run found them, the caches an SM 
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
-its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
+its own pipe's data-sheet ceiling: `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
 both pipes at `clock.sm`, `rate.tensor` over 32 lanes of `rate.issue`, the default reading; `fp32.tensor`, the same
 with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor pipe
 never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
@@ -55,8 +55,9 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/slowdown` reads from the card: its
-`link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
+server of the location `h200-hgx`, defined in `benchmarks/slowdown/data/hardware.toml`, whose `links`
+`benchmarks/slowdown/slowdown/params.py`'s `carded` reads from the card: its `link.rate` times the location's hosts,
+and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
 
@@ -64,7 +65,7 @@ record, a `measurement`, which `max` is never below.
 reads (`number(load_card(sku)["drift"]["max"])`), and a row is of record only where that entry's mark is `ceiling`. Where
 it is `premise`, as on the one time base with a card (the raw clock of a provider's virtual machine, which no page
 bounds), the row prints the premise for the device's host, which the registration names and the card does not, and
-`../verity/tests/tests/test_cards.py` lists every entry so marked, in a card or a node file.
+`../tests/verity/tests/test_cards.py` lists every entry so marked, in a card or a node file.
 
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
@@ -89,7 +90,7 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 `CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
 imports the standard library, the wire and `verity.errors` only. Importing the Site or the wire, in a verifier too,
-reads no card file and no node file: the readers run only when called (`../verity/tests/tests/test_imports.py`).
+reads no card file and no node file: the readers run only when called (`../tests/verity/tests/test_imports.py`).
 
 `load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
@@ -150,7 +151,7 @@ disk leaves that ride the path (`leaves`) and says why they leave (`source`). It
 the one that bounds the node's disks together, the host card's `disk.read_max`, written once, there. Both nodes'
 disks all ride it. A server whose drives are all its own has no `storage` table and no such way out.
 
-A node file holds no clock or peak of a card, which are the cards', and no network attester or memory challenger:
+A node file holds no clock or peak of a card, which are the cards', and no network attester or memory attester:
 those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
 `load_node(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
@@ -185,20 +186,22 @@ no file itself, so its caller hands it the ways out and the leaves, and it holds
 by name and in order, with a rate exactly where the file states one, and each leaf by name, tier and bytes. A rate's
 value is `ways_out`'s or `leaves`' reading.
 
-A way out's link is a boundary link that no certifier splits, at its rate in bits a second. That is what is so of a
-node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no certifier splits them
+A way out's link is a boundary link that no network attester splits, at its rate in bits a second. That is what is so
+of a node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no network attester splits them
 (`Link.unmediated`, from the way's kind): an interface that reads no line rate, whose link states no capacity ("no
 line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
 not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
-until a certifier splits it. Where a network attester stands in front of such a node without splitting its interface (a process on
-another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key, scheme))` registers it too:
-the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
-interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
-registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
-not in a certifier's links and no certifier is linked to the path: a certifier that did split the interface would
-leave the path's link, and the site would still not be mediated.
+until a network attester splits it. Where a network attester stands in front of such a node without splitting its
+interface (a process on another machine that reaches the server through a forward),
+`node_entry(..., certifier=(id, key, scheme))` registers it too: the network attester under the site (a location of
+kind `certifier`) and a certified
+way out, host to network attester and network attester to outside, each at the interfaces' rates summed. The ways' own
+links stay beside them, so `onsite` still refuses the node, and no registration says that every bit leaves through a
+network attester that does not hold the wire. The storage path's rate is not in a network attester's links and no
+network attester is linked to the path: one that did split the interface would leave the path's link, and the site
+would still not be mediated.
 
-An entry always registers a link out. An interface with no rate takes no certifier, so naming one on a node none of
+An entry always registers a link out. An interface with no rate takes no network attester, so naming one on a node none of
 whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
 how the node reaches the outside. Each message says what to read or state.
 
@@ -209,8 +212,9 @@ figure the host states and `Auditor.drift` holds it to. A number marked `premise
 that reads a drift the auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is
 refused. `auditor_host(host, key, scheme, load_card(sku))` is the host's location (kind `auditor-host`, at the site):
 it states the card's SKU as its time base and the figure as its drift, or no drift for a premise.
-`node_entry(..., certifier=..., certifier_host=that location)` registers the certifier in the host, so the clock the
-certifier reads is the host's (`Site.clock`, `Site.drift`); a certifier under the site reads none and times nothing.
+`node_entry(..., certifier=..., certifier_host=that location)` registers the network attester in the host, so the
+clock the network attester reads is the host's (`Site.clock`, `Site.drift`); a network attester under the site reads
+none and times nothing.
 `Auditor.of_files(..., timebases={host: card})` holds the host's time base and drift, and `ClockPremise.premised()` is
 the host's `Account.Premised` (host, drift, premise), the drift of every device of the auditor's in the host.
 
@@ -226,6 +230,6 @@ site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("
 ~~~
 
 `remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
-refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
-accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
-(`../verity/tests/tests/test_nodes.py`).
+refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in network attester or without
+one, and accepts the H200 node, both of whose links say why no network attester splits them, once a memory attester reaches its host
+(`../tests/verity/tests/test_nodes.py`).
