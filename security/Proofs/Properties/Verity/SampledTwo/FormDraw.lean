@@ -24,15 +24,19 @@ both plays' samples read (`PlayCoinsOne`).
   `unit_draw` (`Verity.Sampled.recordSample_raw`), a well-formed value `norm` fixes, and two such values with one
   canonical text are equivalent (`Properties.Challenger.CanonLine.canon_inj`), so equal
   (`FlockDeploy.eq_of_jsonEquiv_norm`).
-* **Each registration lists each port once** (`portsDistinctAt`), with no hypothesis: the parameters are read from
-  the tree `Core.canonicalJson` returns, which is well formed.
+* **An accepted play's statements pass the model's check** (`stmtOk_form`) at any round-0 coin and second stage's
+  coins that carry the bytes its run's samples read (`SpotFlock.RunsAs.PlayCoins`): the run of record is an accepted
+  two-stage run at the held copies, whose round 2 gives the model's statement check
+  (`SpotFlock.RunsAs.stmtOk_of_accepted`). Each registration lists each port once (`portsDistinctAt`), with no
+  hypothesis: the parameters are read from the tree `Core.canonicalJson` returns, which is well formed.
+* **`StageCoinsOne`** (`stageCoinsOne_of_play`), from `stmtOk_form` at each play and `PlayCoinsOne`.
 
 **Not established here**: that template `t`'s statement decodes to its member's statement at the record's printed
 sample: the form sets each session up at the pinned tables its member's circuit looks up (`Spot.OneStageZk.ownTables`),
-and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`). `StageCoinsOne` and
-`PlayCoinsOne` are hypotheses. The check reads each stage's bytes off the play's log (`FirstShown`, `SecondShown`); that
-the bytes the samples of two plays with one log before the statements' round read start one round-0 coin and one second
-stage's coins is not shown.
+and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`). `PlayCoinsOne` is a
+hypothesis. The check reads each stage's bytes off the play's log (`FirstShown`, `SecondShown`); that the bytes the
+samples of two plays with one log before the statements' round read start one round-0 coin and one second stage's
+coins is not shown.
 -/
 
 @[expose] public section
@@ -113,6 +117,30 @@ theorem records_of_accepts {C : CaseOf} {o : Verity.Exchange} (hA : FormAccepts 
   · simp only [recordMsg, hs]
     rfl
 
+/-- **An accepted play's statements pass the model's statement check**, at any round-0 coin and second stage's coins
+that carry the bytes its run's samples read (`SpotFlock.RunsAs.PlayCoins`): the play's run of record is an accepted
+two-stage run (`acceptedTwo_of_formAccepts`) at the held copies (`heldAt_of_parts`), its records read back
+(`recordsRead`) and name their registrations' names (`recordsAt_of_held`), and the reading's statements are the run's,
+each with its template's rounds, in scope and its reference statement but for the run's fields
+(`SpotFlock.RunsAs.stmtOk_of_accepted`). -/
+theorem stmtOk_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading} (hparts : PartsHeldAt A C)
+    (hof : HeldOfAt A C)
+    (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
+    {o : Verity.Exchange} {i : Spot.Run.Input} {it : Spot.Run.Interior} {x m₁ m₂ : Msg} (hA : FormAccepts C o)
+    (hi : inputOn C o = some i) (hit : i.interior = some it) (hx : recordMsg i.record = some x)
+    (hm₁ : recordMsg it.record = some m₁) (hm₂ : S.stmts o = some m₂) {c₀ : FlockDeploy.Coin}
+    {c₁ : SpotFlock.Stage A.h} (hpc : SpotFlock.RunsAs.PlayCoins A.h i it c₀ c₁) :
+    SpotFlock.stmtOk A.h x m₁ m₂ c₀ c₁ = true := by
+  have htwo := twoHolds_at hof hA hi hit
+  obtain ⟨run, hat⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
+  obtain ⟨hrh, hrn⟩ := recordsAt_of_held htwo (recordsHeldAt_of hof (portsDistinctAt C)) o i it x m₁ hA hi hit hx hm₁
+  obtain ⟨hjx, hjm⟩ := recordsRead C o i it x m₁ hA hi hit hx hm₁
+  obtain ⟨m₂', hm₂', hsa⟩ := hst o i it hA hi hit
+  rw [← Option.some.inj (hm₂.symm.trans hm₂')] at hsa
+  exact SpotFlock.RunsAs.stmtOk_of_accepted hat (heldAt_of_parts hof hparts o i it hA hi hit) htwo
+    (SpotFlock.RunsAs.Round2.namesDistinct_of_two htwo) hrh hrn hjx hjm (SpotFlock.RunsAs.stmtOk_of_check A.h) hsa
+    (hrounds o m₂ hA hm₂) (hscope o m₂ hA hm₂) (hpin o m₂ hA hm₂) hpc
+
 /-- **One pair of stage coins carries what both plays' samples read**: at two plays the check accepts whose logs are
 the device's, with one parameters and one log before round `stage + 1`, some round-0 coin and second stage's coins
 carry the bytes each play's run's samples read (`SpotFlock.RunsAs.PlayCoins`). -/
@@ -123,5 +151,20 @@ def PlayCoinsOne (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L
     i.interior = some it → inputOn C o' = some i' → i'.interior = some it' →
       ∃ (c₀ : FlockDeploy.Coin) (c₁ : SpotFlock.Stage A.h),
         SpotFlock.RunsAs.PlayCoins A.h i it c₀ c₁ ∧ SpotFlock.RunsAs.PlayCoins A.h i' it' c₀ c₁
+
+/-- **`StageCoinsOne` from the plays' coins** (`PlayCoinsOne`): each play's statements pass the model's check at the
+coins that carry what its samples read (`stmtOk_form`), at its own records' messages (`records_of_accepts`). -/
+theorem stageCoinsOne_of_play {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
+    {L : CoinMap.Locate} (hparts : PartsHeldAt A C) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
+    (hcoins : PlayCoinsOne A C Good L) : StageCoinsOne A C S Good L := by
+  intro o o' k k' p e e' m₂ m₂' hA hG hA' hG' hk hk' hlog hf hf' hm₂ hm₂'
+  obtain ⟨i, it, x, m₁, hi, hit, hx, hm₁⟩ := records_of_accepts hA
+  obtain ⟨i', it', x', m₁', hi', hit', hx', hm₁'⟩ := records_of_accepts hA'
+  obtain ⟨c₀, c₁, hpc, hpc'⟩ :=
+    hcoins o o' k k' p e e' i i' it it' hA hG hA' hG' hk hk' hlog hf hf' hi hit hi' hit'
+  exact ⟨x, x', m₁, m₁', c₀, c₁, stmtOk_form hparts hof hst hrounds hscope hpin hA hi hit hx hm₁ hm₂ hpc,
+    stmtOk_form hparts hof hst hrounds hscope hpin hA' hi' hit' hx' hm₁' hm₂' hpc'⟩
 
 end Verity.SampledTwo

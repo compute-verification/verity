@@ -17,6 +17,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
 public import Proofs.Flock.SpotFlock.DoWalk
+public import Proofs.Flock.SpotFlock.ParamsWf
 
 /-!
 # The form's accept and the run's accept: the pieces
@@ -43,8 +44,11 @@ pieces it reads:
 * `RecordsAt` from `TwoHolds` and `RecordsHeldAt` (`recordsAt_of_held`): the interior record registers no value
   (`Round2.registersNone_of_two`: where the design evaluates, the interior registration registers none), and both
   records name their registrations' names (`RecordsHeldAt`). An accepted run's registration checks have no code
-  (`checks_of_accepted`), each at a registration with the run's own names; each registration is asked to list each
-  port once (`PortsDistinctAt`), which R3-ports doesn't check.
+  (`checks_of_accepted`), each at a registration with the run's own names, so each record names its registration's
+  ports and registered then certified values (`HeldOf.recordNamesOf`): the boundary's held names, and the interior's
+  too, since the interior holds no certified entry (`certified_of_inputOn`: the form's parse refuses `certified` on
+  the object it reads the interior from, `ParamsWf.interior_parsed`). Each registration is asked to list each port
+  once (`PortsDistinctAt`), which R3-ports doesn't check.
 
 `HeldAt` is asked in one clause of its nine, `PartsHeldAt`: the held copies' parts are the interior program's strata's
 at the play's replay sample. A held copy `heldOf` builds has the other eight by construction (`heldAt_of_parts`,
@@ -121,14 +125,14 @@ theorem recordsRead (C : CaseOf) : RecordsRead C := by
 
 /-- **An accepted two-stage run's registration checks have no code**, the boundary record's and the interior
 record's (`RunsAs.accepted_registered`), each at a registration with the run's own ports and registered values
-(`namesOf`): the run checks each at its own registration with the sampling design it expands and, at the boundary, its work
+(`recordNamesOf`): the run checks each at its own registration with the sampling design it expands and, at the boundary, its work
 table. -/
 theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
     (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
     (∃ v, Spot.Docket.check i.record v = #[] ∧
-        SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf i.params.verifier) ∧
+        SpotFlock.HeldOf.recordNamesOf v = SpotFlock.HeldOf.recordNamesOf i.params.verifier) ∧
       ∃ v, Spot.Docket.check it.record v = #[] ∧
-        SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf it.params.verifier := by
+        SpotFlock.HeldOf.recordNamesOf v = SpotFlock.HeldOf.recordNamesOf it.params.verifier := by
   obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
     SpotFlock.RunsAs.accepted_registered ha
   exact ⟨⟨_, Array.isEmpty_iff.1 h₁, rfl⟩, _, Array.isEmpty_iff.1 h₂, rfl⟩
@@ -142,6 +146,85 @@ def HeldOfAt (A : Live₂) (C : CaseOf) : Prop :=
 def PortsDistinctAt (C : CaseOf) : Prop :=
   ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
     (i.params.verifier.ports.map (·.1)).toList.Nodup ∧ (it.params.verifier.ports.map (·.1)).toList.Nodup
+
+/-- **A case's input's parameters are the form's**, parsed from the tree `Core.canonicalJson` returned: its boundary's
+and its interior's (`inputOf_first`, `inputOf_interior`). -/
+theorem params_of_inputOfCase {k : Case} {i : Spot.Run.Input} {it : Spot.Run.Interior} (hi : inputOfCase k = some i)
+    (hit : i.interior = some it) :
+    ∃ b j p, Core.canonicalJson b = .ok j ∧ VStar.Recursive.SampledTwo.paramsOfJson j = .ok p ∧
+      i.params = p.boundary ∧ it.params = p.interior := by
+  unfold inputOfCase at hi
+  split at hi
+  · rename_i i' h
+    have h0 : i' = i := Option.some.inj hi
+    obtain ⟨p, hp, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    obtain ⟨c, -, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    obtain ⟨e, -, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    obtain ⟨⟨c₂, ξ₂, r, i''⟩, hin, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    have h1 : i'' = i' := Except.ok.inj h
+    obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+    have hI := h0.symm.trans (h1.symm.trans hieq)
+    obtain ⟨j, hcj, hj⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hp
+    obtain ⟨it', hit', hpar, -⟩ := _root_.VStar.Recursive.SampledTwo.inputOf_interior p { c with record := j₁ }
+      e.source ξ₂ { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e k.blobs } rc vs
+    subst hI
+    have hii : it = it' := Option.some.inj (hit.symm.trans hit')
+    refine ⟨_, j, p, hcj, hj, (_root_.VStar.Recursive.SampledTwo.inputOf_first _ _ _ _ _ _ _).2.1, ?_⟩
+    rw [hii, hpar]
+  · cases hi
+
+/-- **A play's interior holds no certified entry**, at every case map: its parameters are the form's interior's
+(`params_of_inputOfCase`), parsed from a tree that names no `certified` (`ParamsWf.interior_parsed`, the tree
+`Core.canonicalJson` returned being one its parser built, `FlockComplete.JsonRT.parse_wf`), and parameters parsed
+from such a tree hold none (`RecordNames.paramsParsed_certified`). -/
+theorem certified_of_inputOn {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} {it : Spot.Run.Interior}
+    (hi : inputOn C o = some i) (hit : i.interior = some it) : it.params.verifier.certified = #[] := by
+  unfold inputOn at hi
+  cases hk : C o with
+  | none =>
+    rw [hk] at hi
+    cases hi
+  | some k =>
+    rw [hk, Option.bind_some] at hi
+    obtain ⟨b, j, p, hc, hj, -, hn⟩ := params_of_inputOfCase hi hit
+    obtain ⟨s, -, hp, -⟩ := Verity.CanonicalJson.canonicalJson_ok hc
+    obtain ⟨j', hf, hq⟩ := SpotFlock.ParamsWf.interior_parsed (FlockComplete.JsonRT.parse_wf s j hp) hj
+    rw [hn]
+    exact SpotFlock.RecordNames.paramsParsed_certified hf hq
+
+/-- **An accepted play's records name their registrations' names**: its run's registration checks have no code
+(`checks_of_accepted`), and each names its registration's ports and registered then certified values
+(`RecordNames.recordOk_of_check`), which are the held copies' (`HeldOf.namesHeld_of`) at the boundary, and at the
+interior, which holds no certified entry (`certified_of_inputOn`). -/
+theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    (hports : PortsDistinctAt C) :
+    RecordsHeldAt A C := by
+  intro o i it x m₁ hA hi hit hx hm₁
+  obtain ⟨u, hu⟩ := hof o i it hA hi hit
+  obtain ⟨hb, hn⟩ := SpotFlock.HeldOf.namesHeld_of hu
+  obtain ⟨j, hj⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
+  obtain ⟨⟨v, hv, hvn⟩, w, hw, hwn⟩ := checks_of_accepted hj
+  obtain ⟨hpb, hpi⟩ := hports o i it hA hi hit
+  obtain ⟨hjx, hjm⟩ := recordsRead C o i it x m₁ hA hi hit hx hm₁
+  have hnv : (v.ports.map (·.1)).toList.Nodup := by
+    have := congrArg SpotFlock.Names.ports hvn
+    simp only [SpotFlock.HeldOf.recordNamesOf] at this
+    rw [this]
+    exact hpb
+  have hnw : (w.ports.map (·.1)).toList.Nodup := by
+    have := congrArg SpotFlock.Names.ports hwn
+    simp only [SpotFlock.HeldOf.recordNamesOf] at this
+    rw [this]
+    exact hpi
+  have rb := SpotFlock.RecordNames.recordOk_of_check hv hnv
+  have ri := SpotFlock.RecordNames.recordOk_of_check hw hnw
+  rw [hvn, ← hb] at rb
+  rw [hwn, SpotFlock.HeldOf.recordNamesOf_of_none (certified_of_inputOn hi hit), ← hn] at ri
+  show SpotFlock.recordsOk A.h x m₁ = true
+  unfold SpotFlock.recordsOk SpotFlock.decode
+  rw [hjx, hjm]
+  simp only [Option.map_some, Bool.and_eq_true]
+  exact ⟨rb, ri⟩
 
 /-- **The held copies' parts are the interior program's strata's**, at each accepted play's replay sample
 (`HeldOf.PartsAt`): the clause of `HeldAt` that `heldOf`'s construction leaves. -/
@@ -543,6 +626,47 @@ theorem recordsAt_of_held {A : Live₂} {C : CaseOf} (htwo : TwoHolds A.h) (hrec
   have hrh : RecordsHeld A.h x m₁ := hrec o i it x m₁ hA hi hit hx hm₁
   exact ⟨hrh, SpotFlock.RunsAs.Round2.registersNone_of_two htwo (recordsRead C o i it x m₁ hA hi hit hx hm₁).2 hrh⟩
 
+/-- **The form's accept is a play SPOT[Flock] accepts** (`PlayAccepts` at the form): `Within.playAccepts_of_run'` with
+the rule two-stage by the form's parser (`ruleIsTwo`), the second stage's hand-off proved at the held copies
+(`RunsAs.stmtOk_of_check`), the held copies agreeing with the run's reads given their parts (`heldAt_of_parts`), the
+design evaluating at them at the accepted play (`twoHolds_at`), so the names distinct and the interior record
+registering no value (`Round2.namesDistinct_of_two`, `recordsAt_of_held`), and the records naming their registrations'
+names (`recordsHeldAt_of`). -/
+theorem playAccepts_form (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hparts : PartsHeldAt A C)
+    (hof : HeldOfAt A C) (hports : PortsDistinctAt C) (hst : StmtsRead A C S)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
+    (hsess : SessionsRun A C S P') :
+    PlayAccepts A C S P' := by
+  intro o i it x m₁ hA hi hit hx hm₁
+  have htwo : TwoHolds A.h := twoHolds_at hof hA hi hit
+  exact playAccepts_of_run' A C S P' (ruleIsTwo C) (heldAt_of_parts hof hparts) htwo
+    (SpotFlock.RunsAs.Round2.namesDistinct_of_two htwo) (recordsAt_of_held htwo (recordsHeldAt_of hof hports))
+    (recordsRead C) (SpotFlock.RunsAs.stmtOk_of_check A.h) hst hrounds hscope hpin hsess o i it x m₁ hA hi hit hx hm₁
+
+/-- **The form's accept is the run's accept** (`AcceptsRun` at the form): where the form's check accepts a play, every
+run of `SpotFlock.V` on coins agreeing with what the check read, whose messages are what the check read, accepts. -/
+theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
+    (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
+    (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') :
+    AcceptsRun A x (formReading A C S dev) (FormAccepts C) :=
+  acceptsRun_of' A x C S dev P' (sourcesFit A C)
+    (playAccepts_form A C S P' hparts hof hports hst hrounds hscope hpin hsess) hsm
+
+/-- **The form's accept is the run's accept, with every message reached** (`ReachedAccepts` at the form): where the
+form's check accepts a play, every run of `SpotFlock.V` on coins agreeing with what the check read, whose messages
+are what the check read wherever the run has one, accepts and has all the verifier's `k` messages. -/
+theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
+    (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
+    (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') :
+    ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
+  reachedAccepts A x C S dev P' (sourcesFit A C)
+    (playAccepts_form A C S P' hparts hof hports hst hrounds hscope hpin hsess) hsm
+
 /-- **The cases at `x` carry the play's commitment where `C`'s do.** -/
 theorem caseCommits_at {C : CaseOf} (x : Msg) (h : CaseCommits C) : CaseCommits (atStmt C x) :=
   fun o k hk => h o k (atStmt_some hk).1
@@ -558,5 +682,34 @@ theorem reachedAccepts_at {A : Live₂} {x : Msg} {C : CaseOf} {S : SessionReadi
   refine h o hA' (e₁.trans hx) Ω P ω r ?_ ?_
   · rw [e₂, e₄]; exact hc
   · rw [e₃]; exact hm
+
+/-- **The form's accept is the run's accept, its premises asked at the plays at `x`**: `acceptsRun_form` at the cases
+at `x` (`atStmt C x`), whose accepted plays are `C`'s at the statement `x`, the only ones `AcceptsRun` at `x` looks at
+(`acceptsRun_at`). -/
+theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
+    (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
+    (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
+    (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
+    (hsess : SessionsRun A (atStmt C x) S P') :
+    AcceptsRun A x (formReading A C S dev) (FormAccepts C) :=
+  acceptsRun_at
+    (acceptsRun_form A x (atStmt C x) S dev P' hsm hparts hof hports hst hrounds hscope hpin hsess)
+
+/-- **The form's accept is the run's accept, with every message reached, its premises asked at the plays at `x`**:
+`reachedAccepts_form` at the cases at `x` (`reachedAccepts_at`). -/
+theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
+    (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
+    (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
+    (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
+    (hsess : SessionsRun A (atStmt C x) S P') :
+    ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
+  reachedAccepts_at
+    (reachedAccepts_form A x (atStmt C x) S dev P' hsm hparts hof hports hst hrounds hscope hpin hsess)
 
 end Verity.SampledTwo

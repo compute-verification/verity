@@ -8,8 +8,8 @@ public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
 
 `StmtsCount` (`StmtsRound.lean`) says an accepted play's evidence holds one statement a template of the held copies.
 Here it is a theorem where the held copies are the ones `heldOf` builds from the play's run (`HeldOfAt`) and their
-parts are the interior program's strata's (`PartsHeldAt`), two of the premises of the play's run of record's
-accept (`PlayAccepts`).
+parts are the interior program's strata's (`PartsHeldAt`), the two hypotheses the play's acceptance already rests on
+(`playAccepts_form`).
 
 * **The run reads the evidence's statements** (`stmts_of_accepts`): the run of record's input on an accepted case has
   an interior whose statements are the evidence's (`VStar.Recursive.SampledTwo.inputOf`).

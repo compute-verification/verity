@@ -8,8 +8,7 @@ public import Proofs.Properties.Verity.SampledTwo.RefsOfSent
 /-!
 # The run's accept at the case kept on good plays
 
-The run of record's accept (`PlayAccepts`'s premises) and `partsHeldAt_of_accepts` read `HeldOfAt A C` at every
-accepted play. `HeldOfAtOr A C F₀` gives
+`playAccepts_form` and `partsHeldAt_of_accepts` read `HeldOfAt A C` at every accepted play. `HeldOfAtOr A C F₀` gives
 the held copies only at the accepted plays whose blobs don't collide with the files `F₀`, so the accept is taken at
 `goodCase C (NoCollide F₀)`, the case kept on those plays, where `HeldOfAt` holds outright (`heldOfAt_goodCase`).
 

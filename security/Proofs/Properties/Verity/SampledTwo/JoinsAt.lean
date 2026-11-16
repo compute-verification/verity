@@ -26,11 +26,14 @@ form's check comes in: the acceptance is the form's (`FormAccepts C`), the check
 it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), and the locator is the run's
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
-**One premise at the form's accept.** `JoinsAt` is a structure whose fields are the pieces' remaining premises, each in
-its owner's words, beside the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the period's game and
-the coin map alone and reads no accept; a witness of it at an accepted play is one term of that structure.
+**One premise at the form's accept.** `joinedOfDistribution` takes `JoinsAt`, a structure whose fields are the pieces'
+remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the
+period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfDistribution` at
+COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
+accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
+its proof (`CoinMapAgree.lean`).
 
-**What the pieces discharge** from the fields:
+**What `joinedOfDistribution` discharges** from the fields:
 
 * the cut at the deployed two-session history, where the device's ledger orders the two sessions
   (`Sessions.cutOrder_dev₂`), with the composite's wiring in the cut's words (`Wired`, from `wiring` and `caseIsSent`:
@@ -42,7 +45,7 @@ the coin map alone and reads no accept; a witness of it at an accepted play is o
 * the sessions' releases' agreement and coins (`SessionCoins.sessionsAgree_accepted`, `coinsAgree_sessions`), with
   CUT's `held_size` for `HeldSize`;
 * no coin at the statements' round, the accept on the rounds a run reaches (`reachedAccepts`, with ACCEPTS's
-  `sourcesFit`, an accepted run read at most the coins it has, and `PlayAccepts`, its run of record a play
+  `sourcesFit`, an accepted run read at most the coins it has, and `playAccepts_form`, its run of record a play
   SPOT[Flock] accepts) and the statement read (`stmtAt`).
 
 **The stages' pieces are taken at the case kept on the good plays** (`goodCase C JoinGood`, `GoodCase.lean`).
@@ -52,8 +55,8 @@ log the check read. At the kept case they speak of the accepted plays `JoinGood`
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageSamples` is asked only of those
 plays. There each stage's one root is CUT's (`oneRoot_samples`, `oneRoot_second`, at `otherRoots`), so `StageSamples`
   takes the families alone (`stageSamples_first`, `stageSamples_second`, `DrawRoots.lean`). What the pieces conclude comes
-back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So no `CutReads` and no coins'
-premise for either stage is a field.
+back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfDistribution` takes no
+`CutReads` and no coins' premise for either stage.
 
 **What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
 cut's (STAGECOINS's `sessionMatches_of`, from the form's refusal of an interior record whose read-back digest is not
@@ -78,29 +81,25 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
   (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
   `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
-* **The run of record's accept** (`PlayAccepts`'s premises at the form): `heldOfAt` (HELDOF: the held copies at each
+* **The run of record's accept** (`playAccepts_form`'s premises): `heldOfAt` (HELDOF: the held copies at each
   accepted play, or its blobs collide with the registered files `V.registered θ`, the plays the cut leaves out at the
   blob finder's term, `cutBound_avoid`); `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`,
-  `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`. That an accepted play's records read back
-  as the records the run held, that the held copies' design evaluates, that each accepted play's held first stage
-  samples one fixed number of replay blocks, and that at each such number the held copies' parts are the interior
-  program's strata's, and that each play's registrations list each port once, are theorems (ACCEPTS's
-  `recordsRead`, `twoHolds_at`, `firstK_of_formAccepts`, `partsSizedAt_of_formAccepts`; `portsDistinctAt`), no
-  fields. The last is the run's
+  `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`. That an accepted play's records name their
+  registrations' names and read back as the records the run held, that the held copies' design evaluates, that each
+  accepted play's held first stage samples one fixed number of replay blocks, and that at each such number the held
+  copies' parts are the interior program's strata's, and that each play's registrations list each port once, are
+  theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`, `firstK_of_formAccepts`,
+  `partsSizedAt_of_formAccepts`; `portsDistinctAt`), no longer fields. The last is the run's
   refusal of an interior whose strata are not the parts its replay block's cells give (`interior-parts`), read at the
   held copies of the case kept on the plays with no such collision (`heldOfAt_goodCase`); with them it gives the parts
   at each such play's replay sample (`partsHeldAt_of_accepts`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 * **Round 2's check is the one the join reads** (`sampledNone`): no accepted play's run has a statement of only its
   part's sampled proof blocks, so the run's `SecondStage.checkAny` is `SecondStage.check` (`checkAny_eq_check`). The
-  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`).
+  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfDistribution` makes of it.
 
-**Not established here**: the projection's bound at the form's accept from `JoinsAt` and the coin map's
-distribution. Its run of record's accept needs both of an accepted play's records to name their registrations' names
-(`RecordsHeldAt`, `AcceptsTop.lean`), which is not proved.
-
-Every field is over the form's accept, so a bound from them says nothing about a run of record until the form accepts
-a play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
+Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
+play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
 history the cut meets the open hole `ProjectionOf.lean` names: a genuine challenger signature from an earlier period
 makes the forger's term `⊤`. The join neither closes nor widens it.
 -/
@@ -240,7 +239,8 @@ theorem secondFits_congr {A : Live₂} {C : CaseOf} {L L' : CoinMap.Locate} {Acc
 /-- **What the join takes at the form's accept**: the pieces' remaining premises, each in its owner's words, at the
 parameters `θ`, the files `F`, the commitment `c` and the strategy `σ`, the instance's case `C`, the messages' reading
 `Ms`, the stages' families `ℓ₁` and `ℓ₂`, the digests `Dg`, the deployment `P` with its layouts and cut, and the
-sessions' provers `P'`. The module docstring says what each field waits on. -/
+sessions' provers `P'`. `joinedForm` (`JoinedForm.lean`) takes this and nothing else; the module docstring says what
+each field waits on. -/
 structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg)
@@ -306,5 +306,125 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   check the run makes (`SecondStage.checkAny`) is the `SecondStage.check` the join reads (`checkAny_eq_check`). Taken
   as a hypothesis until the join's pieces read `checkAny`'s own pass (`checkAny_ok`). -/
   sampledNone : SampledNoneAt C
+
+/-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's acceptance,
+`JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
+at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
+map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
+plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
+theorem joinedOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
+    (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
+    (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
+    (h : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P') :
+    ProjectionBound V k A x θ F c σ
+      (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+      (CoinMap.gapOf V θ F c σ (joinLocate A tab ℓ₁ ℓ₂) (A.L.V.k x) +
+        joinMiss V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q +
+        (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+          ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg))) := by
+  haveI : Fact (SampledNoneAt C) := ⟨h.sampledNone⟩
+  have hG : ∀ o, JoinGood o → LogIsDevice o ∧ CoinMap.FreshWide o.log := fun o hg => ⟨hg.1.2, hg.2⟩
+  have hLs : ∀ pre i s c' b, CoinMap.stageLocate ℓ₁ ℓ₂ pre (.opening i s c') b = none :=
+    fun _ _ _ _ _ => rfl
+  have hstage : ∀ n, n ≤ A.h.stage → ∀ pre fr b,
+      CoinMap.locAt (joinLocate A tab ℓ₁ ℓ₂) pre fr b = some n ↔
+        CoinMap.locAt (CoinMap.stageLocate ℓ₁ ℓ₂) pre fr b = some n :=
+    fun n hn => SessionCoins.locAt_run_stage A (CoinMap.stageLocate ℓ₁ ℓ₂) tab hLs hn
+  -- The stages' pieces, at the case kept on the plays `JoinGood` holds of.
+  have hC' : CaseIsSent (goodCase C JoinGood) := caseIsSent_goodCase h.caseIsSent
+  have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
+  have hD' : FirstSampled (goodCase C JoinGood) := firstSampled_of _ hC'
+  have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase (sessionMatches_of C h.caseIsSent)
+  have hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) :=
+    fun o k p c e hk hd => (h.caseIsSent o k p c e hk hd).1
+  have hA : ∀ o, FormAccepts C o ∧ JoinGood o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent :=
+    fun o ho => ⟨ho.1, ho.2.1, h.otherRoots o ho⟩
+  have hDraw₁ : CoinMap.StageSamples (FormAccepts (goodCase C JoinGood))
+      (fun o => (goodCase C JoinGood o).bind firstDraw) ℓ₁ :=
+    stageSamples_goodCase (stageSamples_first hcase hA h.family₁)
+  have hDraw₂ : CoinMap.StageSamples (FormAccepts (goodCase C JoinGood))
+      (fun o => (goodCase C JoinGood o).bind secondDraw) ℓ₂ :=
+    stageSamples_goodCase (stageSamples_second hcase hA h.family₂)
+  have hShow₁ : FirstShown (goodCase C JoinGood) LogIsDevice := firstShown_of _ hC' hR' hD'
+  have hShow₂ : SecondShown (goodCase C JoinGood) LogIsDevice :=
+    secondShown_of _ hC' hR' (secondAlone_of_matches _ hC' hM')
+  have hDev₁ : DevFirst (goodCase C JoinGood) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) := by
+    intro o hA label after b hd hb h0 hL
+    obtain ⟨e, he, hsrc⟩ := CoinMap.devFirst_stage ℓ₁ ℓ₂ hDraw₁ o hA label after b hd hb h0 hL
+    exact ⟨e, (SessionCoins.dev_run_stage A (CoinMap.stageLocate ℓ₁ ℓ₂) tab hLs (Nat.zero_le _) o.log).trans he,
+      hsrc⟩
+  have hDev₂ : DevSecond A (goodCase C JoinGood) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) := by
+    intro o hA label after b hd hb hsz j hj hpos
+    obtain ⟨e, he, hsrc⟩ := CoinMap.devSecond_stage ℓ₁ ℓ₂ h.distinctFamilies hDraw₂ A.h.stage o hA
+      (formAccepts_goodCase.1 hA).2.2 label after b hd hb hsz j hj hpos
+    exact ⟨e, (SessionCoins.dev_run_stage A (CoinMap.stageLocate ℓ₁ ℓ₂) tab hLs (n := j + 1) hj o.log).trans he,
+      hsrc⟩
+  have hFit₁ : FirstFits C (joinLocate A tab ℓ₁ ℓ₂) (FormAccepts C) JoinGood :=
+    firstFits_goodCase (firstFits_congr (hstage 0 (Nat.zero_le _))
+      (firstFits_stage A (goodCase C JoinGood) ℓ₁ ℓ₂ LogIsDevice JoinGood hG hShow₁ hDraw₁))
+  have hFit₂ : SecondFits A C (joinLocate A tab ℓ₁ ℓ₂) (FormAccepts C) JoinGood :=
+    secondFits_goodCase (secondFits_congr (fun n _ hn => hstage n hn)
+      (secondFits_stage A (goodCase C JoinGood) ℓ₁ ℓ₂ h.distinctFamilies LogIsDevice JoinGood hG hShow₂ hDraw₂))
+  have hFirst : CoinsAgree A (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂))
+      (FormAccepts C) JoinGood .first :=
+    coinsAgree_goodCase (coinsAgree_mono (fun o (hg : JoinGood o) => hg.1.2)
+      (coinsAgree_first_of A (goodCase C JoinGood) (joinSessions A C Ms tab ℓ₁ ℓ₂)
+        (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) LogIsDevice hShow₁ hDev₁))
+  have hSecond : CoinsAgree A (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂))
+      (FormAccepts C) JoinGood .second :=
+    coinsAgree_goodCase (coinsAgree_mono (fun o (hg : JoinGood o) => hg.1.2)
+      (coinsAgree_second_of A (goodCase C JoinGood) (joinSessions A C Ms tab ℓ₁ ℓ₂)
+        (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) LogIsDevice hShow₂ hDev₂))
+  -- The sessions' pieces, at the case itself.
+  have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
+  have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg =>
+    SessionCoins.interiorLogged_read C h.caseIsSent
+      (SessionCoins.firstTreeless_of_check C h.caseIsSent (fun _ _ _ _ _ _ _ _ => rfl)) o hA hg.1
+  have hLoc := SessionCoins.locates_run A (CoinMap.stageLocate ℓ₁ ℓ₂) tab
+  have hSess := SessionCoins.sessionsAgree_accepted A x C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood _
+    hsz hlog
+    (SessionCoins.devElems_of A x tab (joinLocate A tab ℓ₁ ℓ₂) (readsAt A.h) (FormAccepts C) JoinGood hLoc
+      (fun _ hr => hr) (SessionCoins.sessionsFit_of A C tab JoinGood hsz hlog))
+  have hSessions := SessionCoins.coinsAgree_sessions A C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood
+    (SessionCoins.devLocal_of A tab _ hLoc) hlog
+  -- The cut, at the deployed two-session history, with `FreshWide` joined to its event and the plays whose blobs
+  -- collide with the registered files left out.
+  have hw : Wired V k θ := fun o hθ hv => accepts_of_form h.caseIsSent (h.wiring o hθ hv)
+  have hCut₀ : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
+      (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
+    cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
+      (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
+  have hCut : CutBound V k θ F c σ (fun o => JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ))
+      (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+        ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg)) :=
+    cutBound_avoid (V.registered θ) hCut₀
+  -- The run of record's accept, at the case kept on the plays whose blobs don't collide with the registered files.
+  have hHeld : HeldOfAt A (goodCase C (NoCollide (V.registered θ))) := heldOfAt_goodCase h.heldOfAt
+  haveI : Fact (SampledNoneAt (goodCase C (NoCollide (V.registered θ)))) :=
+    ⟨sampledNoneAt_goodCase h.sampledNone⟩
+  have hParts : PartsHeldAt A (goodCase C (NoCollide (V.registered θ))) :=
+    partsHeldAt_of_accepts hHeld (partsSizedAt_of_formAccepts hHeld)
+  have hReached : ReachedAccepts A x
+      (formReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
+      (fun o => FormAccepts C o ∧ NoCollide (V.registered θ) o) :=
+    reachedAccepts_goodCase (reachedAccepts A x (goodCase C (NoCollide (V.registered θ)))
+      (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A _)
+      (playAccepts_form A _ _ P' hParts hHeld (portsDistinctAt_goodCase (portsDistinctAt C))
+        (stmtsRead_goodCase h.stmtsRead) (roundsHeldAt_goodCase h.roundsHeldAt) (scopeHeldAt_goodCase h.scopeHeldAt)
+        (pinHeldAt_goodCase h.pinHeldAt) (sessionsRun_goodCase h.sessionsRun)) (sessionMsgs_goodCase h.sessionMsgs))
+  exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
+    (fun o => JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ))
+    (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+      ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg)) h.wiring
+    (hHolds V A x θ F c σ _ _ (readsAt A.h))
+    (fun o hA hg => hFit₁ o hA hg.1) (fun o hA hg => hFit₂ o hA hg.1) (fun o hA hg => hSess o hA hg.1)
+    (coinsAgree_mono (fun _ hg => hg.1) hFirst) (coinsAgree_mono (fun _ hg => hg.1) hSecond)
+    (coinsAgree_mono (fun _ hg => hg.1) hSessions)
+    (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
+    (fun o hA hg => h.msgOpens o hA hg.1) (fun i hi ω r r' hA hg => h.digestBefore i hi ω r r' hA hg.1) hCut
+    (fun o hA hg => hReached o ⟨hA, hg.2⟩)
+    (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
 end Verity.SampledTwo

@@ -8,16 +8,17 @@ public import Proofs.Properties.Verity.SampledTwo.CouplingOf
 # The two-stage subprotocol's coupling at the form's accept, from the coin map's distribution
 
 `coupling_at` (`CouplingOf.lean`) gives `CouplingTargetTwo`'s body (`CouplingTwoAt`) from a projection's bound and a
-majority's at one commitment and strategy. Here the projection's is the join's, at the join's frame `joinFrame`, and the
-majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bounds' sum as the coupling's terms
-(`joinCRBound`: `joinBound` with the blob finder's term under `ecr/sha-512`, `blobCR`; `bindBound`).
+majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfDistribution`, at the join's frame
+`joinFrame`), and the majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bounds' sum as the
+coupling's terms (`joinCRBound`: `joinBound` with the blob finder's term under `ecr/sha-512`, `blobCR`; `bindBound`).
 
-**One premise a commitment and strategy.** At each commitment `c` and strategy `σ` the coupling's premise is one
-structure, `CouplesAt`: the join's premise (`JoinsAt`), what the majority's piece owes and the coupling's two clauses
-(the scope and the published `δ`), beside the coin map's distribution (`CoinMap.CoinMapHolds`). The statement, the
-files, the stages' families, the deployment and the readings are fixed across commitments and strategies except the
-statement `x`, which is the commitment's; the majority's statement data (`s`, `Pt`, `dd`) and its witness's reading
-and openings (`readX`, `openOf`, `dColl`) are each commitment's and strategy's.
+**One premise a commitment and strategy.** `joinedCouplingOfDistribution` takes the coin map's distribution (`CoinMap.CoinMapHolds`) and,
+at each commitment `c` and strategy `σ`, one structure, `CouplesAt`: the join's premise (`JoinsAt`), what the majority's
+piece owes and the coupling's two clauses (the scope and the published `δ`). `joinedCoupling` (`JoinedForm.lean`) is
+it at COINMAP's proof of the sampling design. The statement, the files, the stages' families, the deployment and the readings are
+fixed across commitments and strategies except the statement `x`, which is the commitment's; the majority's statement
+data (`s`, `Pt`, `dd`) and its witness's reading and openings (`readX`, `openOf`, `dColl`) are each commitment's and
+strategy's.
 
 **The openings are the witness's own** (`opens`, `OpensBy`). Some `openOf` meets `OpensBy` at every `readX` by choice
 (`exists_opensBy`), and the bound under `ecr/sha-512` (`collisionResistant`) prices only an `openOf` an algorithm
@@ -27,11 +28,8 @@ and `hashedAll`, and `exists_opensBy` discharges no `opens` field.
 **Not established**: every field of `CouplesAt` is a premise. Those of `JoinsAt` are as `JoinsAt.lean` lists them; the
 majority's (`extract`, `parse`, `partition`, `two`, `units`, `caps`, `opens`, `collisionResistant`) are MAJORITY's and
 the instance's; `blobCR` is `ecr/sha-512` at the blob finder; `scope` and `delta` are the coupling's at the deployment.
-Every one is over the form's accept or the period's game at the deployment, so a coupling from them says nothing about a
-run of record until the form accepts a play.
-
-**Not established here**: the coupling from `CouplesAt` and the coin map's distribution, which needs the projection's
-bound at the form's accept (`JoinsAt.lean`).
+Every one is over the form's accept or the period's game at the deployment, so the theorem says nothing about a run of
+record until the form accepts a play.
 -/
 
 @[expose] public section
@@ -118,5 +116,67 @@ structure CouplesAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
         bindBound V A x θ F c σ
           (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl) ≤
       V.delta θ .sampled (V.cost θ F c σ)
+
+/-- **The two-stage subprotocol's coupling at one commitment and strategy, from the coin map's distribution**: `coupling_at` at the
+join's frame, with the join's projection bound (`joinedOfDistribution`, its blob term under `blobCR`) and MAJORITY's majority
+bound there (`majorityBound_opens`), from the coin map's distribution and `CouplesAt` there. -/
+theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} (x : Msg) (C : CaseOf)
+    (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
+    (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (s : Claims.Sampling.AuditStatement)
+    (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
+    (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
+    (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening) (dColl : ℕ)
+    (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
+    (h : CouplesAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl)
+    (hI : ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε) :
+    CouplingTwoAt V k A θ F c σ
+      (joinCRBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+        bindBound V A x θ F c σ
+          (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl) :=
+  coupling_at V k A θ F x
+    (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) (V.extract θ F c σ)
+    (joinCRBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut)
+    (bindBound V A x θ F c σ
+      (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl)
+    h.scope (by
+      have hP : ProjectionBound V k A x θ F c σ
+          (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+          (joinBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut) :=
+        joinedOfDistribution V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' hHolds h.joins
+      unfold ProjectionBound joinBound at hP
+      unfold ProjectionBound joinCRBound
+      exact le_trans hP (add_le_add le_rfl (add_le_add le_rfl (add_le_add le_rfl (blobPr_le h.blobCR)))))
+    (majorityBound_opens V A x θ F c σ
+      (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+      s Pt dd readX openOf dColl h.extract h.parse h.partition h.two h.units h.caps h.opens h.collisionResistant)
+    rfl h.delta hI
+
+/-- **The two-stage subprotocol's coupling at the form's accept, from the coin map's distribution**: `joinedCouplingAt` at each
+commitment and strategy, from the coin map's distribution and one `CouplesAt` at each. -/
+theorem joinedCouplingOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
+    (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
+    (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (s : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.AuditStatement)
+    (Pt : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.Partition)
+    (dd : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.Design.Two)
+    (readX : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
+      Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
+    (openOf : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
+      Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
+    (dColl : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℕ)
+    (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
+    (h : ∀ c σ, CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+      (readX c σ) (openOf c σ) (dColl c σ)) :
+    CouplingTargetTwo V k A θ F fun c σ =>
+      joinCRBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+        bindBound V A (x c σ) θ F c σ
+          (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+          (openOf c σ) (dColl c σ) :=
+  fun c σ hI => joinedCouplingAt V k A θ F (x c σ) C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+    (readX c σ) (openOf c σ) (dColl c σ) hHolds (h c σ) hI
 
 end Verity.SampledTwo

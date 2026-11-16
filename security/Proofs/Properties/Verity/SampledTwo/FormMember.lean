@@ -37,7 +37,7 @@ have the same units (`MembersApart`, a theorem at any case).
 **Not established here**: `MemberAtFixed`, which reads template `t`'s statement decoded at its member's files
 (`FormDraw.lean`): the form sets each session up at the pinned tables its member's circuit looks up
 (`Spot.OneStageZk.ownTables`), and the statement reads every pinned table the blobs hold (`Spot.OneStageZk.tablesOf`).
-`StageCoinsOne` (`FormDraw.lean`) is a hypothesis.
+`StageCoinsOne` is a hypothesis, which `stageCoinsOne_of_play` (`FormDraw.lean`) gives from `PlayCoinsOne`.
 -/
 
 @[expose] public section

@@ -1,35 +1,13 @@
 # Lean declarations out of the tree, each file whole on the commit below.
-# `record`: each rests on `recordsHeldAt_of`, that both of an accepted play's records name `HeldOf.namesOf` of their
-# registrations' verifiers, which `RecordNames.recordOk_of_check` gives only at a verifier holding no certified entry
-# (R7 holds the record's `registered` to the verifier's own entries and its certified ones, `names_of_check`). The
-# form's parse refuses none at the boundary registration (`SampledTwo.paramsAt`, `OneStage.paramsParsed`), and the
-# interior's (`paramsAt` too) is held to none only through the interior audit's parse of the same object, across
-# `paramsAt`'s canonical round trip. `CheckFacts`, `checkFacts_of_check` and `recordOk_of_facts` are what
-# `names_of_check` replaced.
 # `tables`: each states or rests on the blobs holding exactly the pinned tables a member's circuit looks up
 # (`HoldsRegisteredTables`, `Spot.OneStageZk.tablesOf`), while the per-member form hands each member its own tables
-# (`Spot.OneStageZk.ownTables`).
+# (`Spot.OneStageZk.ownTables`); `agreed_circuit` rests on `sessionMsgs_form`. `RecordNames`' `CheckFacts`,
+# `checkFacts_of_check` and `recordOk_of_facts` are not out: `names_of_check` replaced them.
 branch = "cursor/proofs-placer-memberchecks-5cc2"
 commit = "9b7c5a1b4d076e014a947dfe43c32f9e7988f4b4"
 files = [
   "security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean",
-  "security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean",
 ]
-
-[record]
-"security/Proofs/Properties/Verity/SampledTwo/RecordNames.lean" = [
-  "CheckFacts", "checkFacts_of_check", "recordOk_of_facts",
-]
-"security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean" = [
-  "recordsHeldAt_of", "playAccepts_form", "acceptsRun_form", "reachedAccepts_form", "acceptsRun_form_at",
-  "reachedAccepts_form_at",
-]
-"security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean" = ["stmtOk_form", "stageCoinsOne_of_play"]
-"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["agreed_circuit"]
-"security/Proofs/Properties/Verity/SampledTwo/JoinsAt.lean" = ["joinedOfDistribution"]
-"security/Proofs/Properties/Verity/SampledTwo/JoinedCoupling.lean" = ["joinedCouplingAt", "joinedCouplingOfDistribution"]
-"security/Proofs/Properties/Verity/SampledTwo/Undecodable.lean" = ["joinedCouplingOfDistribution_decoded"]
-"security/Proofs/Properties/Verity/SampledTwo/JoinedForm.lean" = ["joinedForm", "joinedCoupling"]
 
 [tables]
 "security/Proofs/Properties/Verity/SampledTwo/RefsOfSent.lean" = [
@@ -39,4 +17,4 @@ files = [
 "security/Proofs/Properties/Verity/SampledTwo/FormDraw.lean" = ["stmtAt_raw", "stmtAt_record", "sampleAtFixed_of_coins"]
 "security/Proofs/Properties/Verity/SampledTwo/FormSetup.lean" = ["verdictsAt_of", "msgsOfRecords_form"]
 "security/Proofs/Properties/Verity/SampledTwo/FormMember.lean" = ["memberAtFixed_of_coins"]
-"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["sessionMsgs_form"]
+"security/Proofs/Properties/Verity/SampledTwo/FormCircuit.lean" = ["sessionMsgs_form", "agreed_circuit"]
