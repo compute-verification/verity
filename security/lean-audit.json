@@ -41171,7 +41171,7 @@
    }
   },
   "Definitions.Slowdown.Cut": {
-   "digest": "b2260f9e67aaa29c5e21528c0a5c4372f50ec367fc34a45338916e720de0a06f",
+   "digest": "7fadbe21be65ed39324bdbb462928755d789d4085e3504bb64db98b2f53a1f71",
    "definitions": {
     "Slowdown.Cut.Arrays": "5e8d40c083f394210890dd4fec1a7b15b1f5f48e44d19446e9b87e2ebb090cfc",
     "Slowdown.Cut.Connected": "d1208688f479b209d66fc7fff37177a6999eb6e13e405a03a729adfdfe380aef",
@@ -41186,6 +41186,7 @@
     "Slowdown.Cut.Matmul.y": "163ac8b74aeb236ec27642c0408202f0c8b429a3a0fd31fff4aa3d2c7b7fd07d",
     "Slowdown.Cut.NoSharedPair": "7654fc2aef8cd08e83c42c0e0a9a0c903667af4ef1cd9d42e4418f74b176bbde",
     "Slowdown.Cut.ReadsAtMost": "1b47e61421e7dcbf59c909b83e765094b02aaf4a485dac8fff2d61160c266afd",
+    "Slowdown.Cut.ReadsOn": "477e26c72bf3b2d1d8683a80d281a64a86eccba692cb26da63c3731d479cb439",
     "Slowdown.Cut.Separates": "42ffd98c6312649574432ef3e3d46fcbc61108aa0d0e2c493fa88c5f3765ff72",
     "Slowdown.Cut.ValuesInjective": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
     "Slowdown.Cut.Work": "b2997ad23d7f32b6042baf6f9231dd28c8af436a810a308d9e70d691a43bcde7",
@@ -41199,6 +41200,7 @@
     "Slowdown.Cut.Work.bY": "9519e4e79cd3384793e1efdcc3a2c5c6694c880de8deb8de8c79a19ac02fdb46",
     "Slowdown.Cut.Work.clear": "1a39859bcff774c329df322d7f37ef0642b61dbe0a8964e5bdc121622bee304f",
     "Slowdown.Cut.Work.fed": "cc5b927c291bc380e97f0b7197da2bcc3291da533647eae31d5a2e2e8df224ca",
+    "Slowdown.Cut.Work.inside": "71bdb1e438f0b9f5fdeb7400b3776727a5ae9bfd71d9e6b02a7a773d710c80a1",
     "Slowdown.Cut.Work.mac": "3cd949d795a7f06b4ad57e010caa3ef7f67a56962224f04b299654a1702d413d",
     "Slowdown.Cut.Work.out": "391e407d344c41ac1ebbf6edf9280fee6a9a027ce38d171c63f749184de24f18",
     "Slowdown.Cut.Work.pi": "93d1be9626bea34c16237bb31d5390db934b0de112491230d422f6125fdbae1d",
@@ -41212,7 +41214,8 @@
     "Slowdown.Cut.piMax": "232573ffd4f01883a2cbae98d4864faec008b614442fa02ff547db5d6e0a7a11",
     "Slowdown.Cut.shareF": "7e3dd7f641716d1f65bcc93e08229472a324cab684c4e90f81df98e01787e292",
     "Slowdown.Cut.unregisteredInputs": "891112a9ec127fd904e70b0031c1b335e1fa6c821c7430d3cf618dc9f8538d43",
-    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027"
+    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027",
+    "Slowdown.Cut.workHEOn": "88a70f61640077129463928c089f6bdd2ef74923c819545ce92fc75559ffcbd2"
    }
   },
   "Definitions.Slowdown.Cut.Toy": {
@@ -41420,7 +41423,7 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Cut": {
-   "digest": "d0ead6520308615502bc22b6a022b2b57fe16d823eb8766a856a118db0848e0d",
+   "digest": "7f6171c64ad8daa1bdaf796328ec9d22199e04e45e3410afef2d62039aa0bf6b",
    "definitions": {
     "Slowdown.Cut.Guarantees.Bound": "90ea079f4581a0265c3119307349e0e5ec2b57c74734190bd4b8252354ae9f11",
     "Slowdown.Cut.Guarantees.Bound_nontrivial": "a27de39899bfe100337575a717f5ef2071cb63824f32ae7b50d609cc8db1ae1a",
@@ -41429,6 +41432,9 @@
     "Slowdown.Cut.Guarantees.CountHE_nontrivial": "6354fe14217cc46cfe039e92be8660f4c990084441667247f90dad4db7ba35ca",
     "Slowdown.Cut.Guarantees.Cut_honest": "5ebbe543c32a5f45df4cc136f9c321ad688e4ac40feeb786a23d213ed4925e46",
     "Slowdown.Cut.Guarantees.HE": "4839f27c960a8da2fd2607bbf7dc3418bfbce0d8309bc49369883b7bb53618e0",
+    "Slowdown.Cut.Guarantees.HECharged": "28fd59d9e853c7f4cff068ee0e4b8ad496364723d0ff1e8ddc01c6b308a357a1",
+    "Slowdown.Cut.Guarantees.HECharged_honest": "b6937dc2b06bce6ec26876fab8d016b131d0d0dbe03bc74e9bfdf357abd5244e",
+    "Slowdown.Cut.Guarantees.HECharged_nontrivial": "3e9b94665ae52352dda3ddcc305340d43b32adaed959d88b91e83de3bdd953d7",
     "Slowdown.Cut.Guarantees.HEShared": "9ce1327b37db117991d8c704b373b4d5ac1a870315c19899d0aaa6973c93dab9",
     "Slowdown.Cut.Guarantees.HEShared_nontrivial": "5055415c97533801e272ead3797af4d21c77f478608ad45f1f761ae2aab1bfdb",
     "Slowdown.Cut.Guarantees.HE_nontrivial": "7b6426bdc6c4b71f4a60121d1fd964998a5ac99679e0cdd7f571d173b09891fe",
