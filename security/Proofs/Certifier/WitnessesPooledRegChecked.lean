@@ -158,7 +158,11 @@ theorem outLay_refuses_allTrue :
       inputOf_of_mem_freeInputs (ins := [[]]) rfl (fun g => decide (g = 0)) zero_mem_freeInputs_notProg
     rw [notProg_valOver_one _ rfl rfl, hi]
   have hc := congrFun hrow 0
-  simp [rowOf, outLay, hv1, hv2] at hc
+  have k1 : valOver notProg (outLay.inputOf 1 [[]] (fun _ => false)) (fun _ => none)
+      (outLay.egress 0 0 0).1 = true := hv1
+  have k2 : valOver notProg (outLay.inputOf 1 [[]] (fun g => decide (g = 0))) (fun _ => none)
+      (outLay.egress 0 0 0).1 = false := hv2
+  simp [rowOf, k1, k2] at hc
 
 /-- At the honest instance the phase is registered as the period's with no input registered: its statement parses to
 `twoStmt` with the partition `twoPart`. -/
