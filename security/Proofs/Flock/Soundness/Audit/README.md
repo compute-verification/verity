@@ -1,13 +1,13 @@
 # The audit layer (`Audit/`): what is proved
 
 The sampled audit's guarantee, the integrity profile of `docs/audit-protocols.md` §2, over any Boolean circuit, any
-partition, any sampling design, and any per-unit proof system. The derivations and the deviations from that plan are in
-`../DESIGN.md` §12. Everything here is proved; the per-unit proof system enters only through named hypotheses.
+partition, any sampling design, and any per-proof-block proof system. The derivations and the deviations from that plan are in
+`../DESIGN.md` §12. Everything here is proved; the per-proof-block proof system enters only through named hypotheses.
 
-**The model.** The prover registers `R` (its roots); the verifier samples units from its own randomness after registration;
+**The model.** The prover registers `R` (its roots); the verifier samples proof blocks from its own randomness after registration;
 one batched session proves the sampled proof blocks (`audit`). The **committed trace** `X` is an analysis function of the
 prover's state at registration (its registration and its session strategy for every sample), so the sample is independent of
-its incorrect proof blocks; nobody computes it. A unit is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
+its incorrect proof blocks; nobody computes it. A proof block is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
 design, its `escape` (here $e_L(B)$) is the miss probability $P_a(B)$, and $\delta_{link}$ (`BindSound`) is the
@@ -44,14 +44,10 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
 $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's miss probability $\binom{n-|B|}{k}/\binom{n}{k}$;
 `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_escape_le_prod`, the product bound
 $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 - k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound;
-`subset_minimax`, **uniform is optimal**: no sampling design that proves $k$ units on average has a smaller count curve,
+`subset_minimax`, **uniform is optimal**: no sampling design that proves $k$ proof blocks on average has a smaller count curve,
 at any $K$; `demo_count_590`, the demo's point (1,024 heads, 16 sampled): 590 or more incorrect heads have miss
-probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/Share.lean`): for a uniform $kd$-subset
-$S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
-(`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
-size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
-`share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ runs, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes run $t$'s wrong set $W_t$ from the earlier samples
+probability at most $2^{-20}$, by exact arithmetic. **The pooled escape** (`Audit/Pooled.lean`): over $T$ runs, each a fresh uniform
+$kd$-subset of the same $N$ proof blocks, an adaptive adversary that fixes run $t$'s wrong set $W_t$ from the earlier samples
 escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
 escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
@@ -94,8 +90,8 @@ uniform window secret (A5). `keyedExecutionPhase_audit_of_record` and `keyedExec
 the window pins (`audit_executionPhase_split_of_record_of_le_slack`, and at the compiled layer
 `extraction_audit_executionPhase_split_of_record_of_le_slack`): the 0.1% event has probability at most
 $2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's sample
-depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
-game whose sampling design is fixed at its registration, which `keyedExecutionPhaseReg_extraction_audit_of_record` reads.
+depends on the docket: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
+game whose sampling design is fixed at its docket, which `keyedExecutionPhaseReg_extraction_audit_of_record` reads.
 
 **Theorems, the stratified sampling design** (`Audit/Stratified.lean`, the default sampling design;
 `docs/sampling-strategies.md` §4): `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of
@@ -104,7 +100,7 @@ $\prod_s \binom{n_s - m_s}{k_s}/\binom{n_s}{k_s}$ with $m_s = |B \cap U_s|$, whi
 `verity.protocols.proofs.spot.verifier.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
 with $k_s \ge 1$, a set containing $U_s$ has miss probability 0; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum
-is incorrect with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
+is incorrect with probability at most the per-proof-block terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
 stratified count curve**: a count vector that some $\tau \in (0, 1]$ separates, every acceptance factor
 $r_s(c) = (n_s - c - k_s)/(n_s - c)$ it takes at least $\tau$ and every one it leaves at most $\tau$, attains
 $\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A greedy fill has such a $\tau$, so this
@@ -112,30 +108,30 @@ is `Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified
 
 **Theorems, the work sampling design** (`Audit/Work.lean`, the default sampling design's second version;
 `Flock.Draw`): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
-$k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the PoUW work of each of its units,
+$k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the PoUW work of each of its proof blocks,
 $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work table; every stratified and
 one-stage theorem holds of it as stated, and the theorems below hold for every such $f$. `floor_le_workK`, **the
-floor**: a stratum samples at least $\min(n_s, f_s)$ units, so every non-empty stratum samples at least one and
+floor**: a stratum samples at least $\min(n_s, f_s)$ proof blocks, so every non-empty stratum samples at least one and
 `audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly incorrect one. `work_escape_floor_le`,
-**the per-stratum floor bound**: a set with $b_s$ units in a non-empty stratum has miss probability at most
+**the per-stratum floor bound**: a set with $b_s$ proof blocks in a non-empty stratum has miss probability at most
 $((n_s - b_s)/n_s)^{f_s}$, audited at both layers (`audit_work_floor`, `extraction_audit_work_floor`). `workK_ge`: a
-stratum samples at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at most $K + \sum_s f_s$ units are sampled.
+stratum samples at least $K w_s n_s / W$ proof blocks, or all of them. `sum_workK_le`: at most $K + \sum_s f_s$ proof blocks are sampled.
 `workK_rest`: a stratum that does no work samples $\min(n_s, f_s)$. `work_escape_le_count`: when those strata have floors
 of at least the stratified sampling design's sizes at $C$ (`countK`, which `countK_eq` shows is `stratumK C n_s N`), a
-set's miss probability under the work sampling design is at most its units' in them under the stratified one at
+set's miss probability under the work sampling design is at most its proof blocks' in them under the stratified one at
 $C$ (`choose_div_anti`: the hypergeometric miss probability falls as the sample grows), and `audit_work_rest` and
 `extraction_audit_work_rest` carry any such integrity profile to the audit. `work_escape_le`, **the work bound**: a set
-$B$ of units doing $W_B$ of the work has miss probability at most $((W - W_B)/W)^K$, from the per-stratum
+$B$ of proof blocks doing $W_B$ of the work has miss probability at most $((W - W_B)/W)^K$, from the per-stratum
 hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
-$\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-unit terms. `record_sizing` and
+$\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-proof-block terms. `record_sizing` and
 `audit_work_of_record`: at $K = 27{,}713$, incorrect proof blocks doing at least 0.1% of the work have miss probability at
 most $2^{-40}$; `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and
-`escape_widen_le`, the seam for closure samples: proving more units than are sampled, on the same coins, never raises a
+`escape_widen_le`, the seam for closure samples: proving more proof blocks than are sampled, on the same coins, never raises a
 miss probability. `FlockWork.lean`'s `workRule_eq_sample` and `countRule_eq_sample`: the executable's
 `Flock.Draw.workK` and `stratumK` are `Law.workRule` and `countRule`.
 
 **Theorems, harm bounds** (`Audit/HarmBound.lean`, `IsHarmBound` proved for the stratified sampling design):
-`stratified_escape_le_exp`, **the closed form**: a set with $c_s$ units in stratum $s$ has miss probability at most
+`stratified_escape_le_exp`, **the closed form**: a set with $c_s$ proof blocks in stratum $s$ has miss probability at most
 $\exp(-\sum_s k_s c_s / n_s)$ (`work_escape_le_exp` for the work sampling design), so one with miss probability at
 least $\delta > 0$ has $c_s \le n_s - k_s$ and $\sum_s k_s c_s / n_s \le \ln(1/\delta)$ (`stratified_risk_le`).
 `stratified_isHarmBound_dual`: with harm $g_s$ per unit of stratum $s$, every $\tau \ge 0$ gives the harm bound
@@ -167,20 +163,20 @@ the whole play.
 
 **Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its miss probability is
-the base sampling design's miss probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
-whose closure meets $B$, so an incorrect proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
-is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a unit in its own closure, so the incorrect proof blocks'
+the base sampling design's miss probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the proof blocks
+whose closure meets $B$, so an incorrect proof block that is never sampled on its own is charged to the proof blocks above it. `unsoundWork`
+is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a proof block in its own closure, so the incorrect proof blocks'
 own work is counted explicitly (`workOf_le_unsoundWork`). `harm_le_unsoundWork`: an
-incorrect proof block's harm (its own work and that of the units whose closure holds it) is in the unsound work, sampled or not;
+incorrect proof block's harm (its own work and that of the proof blocks whose closure holds it) is in the unsound work, sampled or not;
 `unsoundWork_le_harm` (coverage) and `unsoundWork_singleton`. `audit_work_closure` and `extraction_audit_work_closure`:
 under the work sampling design's closure sample, at any floors $f_s \ge 1$,
-$\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-unit terms, for
+$\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-proof-block terms, for
 $B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for an incorrect proof block's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
 **Theorems, windows of calls** (`Audit/Window.lean`): a window is one stratified sampling design
 over its (call, template) strata, the calls sampled independently. `Covers σ k w K`: every stratum samples at least its
-share $K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then
+share $K w_s n_s / W$, or all its proof blocks. `stratified_escape_le_of_covers`: then
 $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any such sampling design. `covers_work`: the work sampling design covers
 its own work. `covers_executionPhase`: the per-call split, call $c$ at its share
 $K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work when each call's work is in one stratum
@@ -188,11 +184,11 @@ $K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work wh
 `covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_executionPhase` and
 `extraction_audit_executionPhase`:
 $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is at most the larger of
-the two bounds plus the per-unit terms, not their sum, since both bound the one committed incorrect set.
+the two bounds plus the per-proof-block terms, not their sum, since both bound the one committed incorrect set.
 `audit_executionPhase_of_le`: the same for any sampling design whose miss probabilities are at most the product design's,
 such as an executable sample; `audit_executionPhase_of_le_slack` and, at the compiled layer,
 `extraction_audit_executionPhase_of_le_slack`: for a sampling design within $\eta$ of it, with $\eta$ added to the bound, as a
-keyed sample needs, and `audit_executionPhase_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
+keyed sample needs, and `audit_executionPhase_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-proof-block
 terms, with `extraction_audit_executionPhase_split_of_record_of_le_slack` at the compiled layer. `audit_executionPhase_of_record`:
 $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_executionPhase_split_of_record`: the same for the per-call
 split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
@@ -202,17 +198,17 @@ context.
 (`Claims.SamplingGeneric.compilerKSTwo`), with its miss probability $\bar P_a$ at the footprint
 (`Claims.Sampling.Design.Two.Pa`). With a Bernoulli first stage, $\bar P_a$ is Partitioning's `NestedEscape` product.
 
-**Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
+**Composition** (`Audit/Circuit.lean`): `compose` (every proof block correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
 
 **Influence through a separator** (`Audit/Influence.lean`). $D$ is the set of delivered wires (the served tokens); the
-circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the units $B$ from $D$
-(`Separates K B D`, a downstream cut) when every gate path from a unit of $B$ to a wire of $D$ meets $K$.
+circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the proof blocks $B$ from $D$
+(`Separates K B D`, a downstream cut) when every gate path from a proof block of $B$ to a wire of $D$ meets $K$.
 
 - `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose incorrect proof blocks lie in
   $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
 - `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
-- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay block's exports); `Separates.mono`,
+- `separates_exits`: the committed wires of the proof blocks of $B$ separate $B$ (a replay block's exports); `Separates.mono`,
   `Separates.union`;
 - `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the incorrect proof blocks inside some set of
   miss probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$
@@ -222,8 +218,8 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   $\log_2 |\mathrm{influenceSet}|$ bits.
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
-  each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
-  \delta$. $H$ counts the value bits and the second term the choice of which units are incorrect.
+  each proof block's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
+  \delta$. $H$ counts the value bits and the second term the choice of which proof blocks are incorrect.
 - `audit_exfiltration`, **exfiltration with the location term**: a prover that picks its strategy from a uniform message
   $m \in M$, and a receiver that sees only what is delivered on $D$, recover $m$ from an accepted audit with probability
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
@@ -232,9 +228,9 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   `verity.protocols.proofs.spot.verifier.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different traces that both have an incorrect proof block, with a separator
-  narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
+  narrower than the proof block's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
-  meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each unit's
+  meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each proof block's
   exported width as its harm; `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
   message.
 
@@ -244,7 +240,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   accepting is at most as likely as any one table accepting (`Game.value_interleave_le`, table by table);
 - `FlockTable.value_le`: one table, with the executable's arithmetic, at most `2^-205` for `22 ≤ m ≤ 35`;
 - `flock_session_sound`: Flock's batched session is `SessionSound` at `2^-205`, given `LoweringSound`;
-- `flock_inputs_sound`: the input unit, likewise, given `InputsLoweringSound`;
+- `flock_inputs_sound`: the input block, likewise, given `InputsLoweringSound`;
 - `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-205}$,
   and $\binom{n-K}{k}/\binom{n}{k} + 2^{-205}$ for the uniform $k$-subset;
 - `flock_oracle_sampled`: sampled proof blocks correct up to $2^{-205}$;
@@ -274,10 +270,10 @@ The hypotheses are the lowerings.
   $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
 
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
-(`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
+(`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each proof block an instance of its template's `Rows`, one `Op.row` gate per
 computed row. No hypothesis relates those rows to another circuit (the circuit is chosen on the untrusted side,
-and the lowering does no optimizing); what a correct unit computes beyond its rows is outside these theorems: rows
-derived from a gate circuit carry its outputs (`GateRows.rows_sound`), and no theorem carries that to a unit's committed
+and the lowering does no optimizing); what a correct proof block computes beyond its rows is outside these theorems: rows
+derived from a gate circuit carry its outputs (`GateRows.rows_sound`), and no theorem carries that to a proof block's committed
 values (`../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
