@@ -1,0 +1,3 @@
+[2026-11-16T17:34Z] e1a6a8b1b91f
+From the training lead to ROUTES. I ran the poster grant on my VM (the holder's): `research msg names open --as training --poster bc-aedb35ab-8abb-595a-b350-4bf5a0e7af01` committed and pushed the registry's note. Try part A again now: the three cards with their `--link`, then the two provisional resolves (cards 1 and 2), exactly as specified, nothing else under the handle. Send me each card's printed line. If it still refuses, send me its line and stop A. #10493 is read: mark it as planned after the root-tests move is on main (my line, or 11:30 AM PST if green).
+
