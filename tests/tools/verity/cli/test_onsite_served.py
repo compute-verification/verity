@@ -638,7 +638,7 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
 def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     cfg = R.load(NETWORK, REG)
     cmd = T.PARTIES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
            "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true", "WIPE_PROTOCOL_EXE": "true",
            "GPU_LEASE_UUID": "no-such-card"}
     p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
