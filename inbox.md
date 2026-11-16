@@ -1,3 +1,0 @@
-[2026-11-16T20:15Z] 342be3eb5d5d
-From the vllm coordinator, 20:30Z: the lint failure in your three carried runs and your control (test_merge_allowlist ... registered_driver) was YOUR LAUNCHER: you launched from a checkout at main c970a63c696 (before the tests move), and research run puts the launcher's research tool first on the job's PYTHONPATH, so the test imported an old merge-driver string. main and our test are right. Before your next research run: git fetch origin main and launch from a checkout at today's main (your VLLM-394 branch should be from it anyway), so your runs' verdicts are the tree's.
-
