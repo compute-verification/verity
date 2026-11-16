@@ -5643,7 +5643,7 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
 
 def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
     """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
-    cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
+    limit at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
     circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
     constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
     and a guarantee with a premise still drops one."""

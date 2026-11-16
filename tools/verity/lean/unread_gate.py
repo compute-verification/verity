@@ -1,6 +1,6 @@
 """`unread_gate`: drive's landing gate on the seeds of the Lean nothing reads (`unread.py`'s ratchet). A change that takes the
 last mention outside Lean of a module of the security analysis, or of a declaration of it, out of the files that keep it
-fails here, before it lands, when that takes the module's area above its cap in `unread-caps.json`.
+fails here, before it lands, when that takes the module's area above its limit in `unread-caps.json`.
 
     python3 tools/verity/lean/unread_gate.py MAIN HEAD [--json]
 
@@ -22,7 +22,7 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   published once its lock run lands, about an hour after it), it reads stale ones: those of the newest commit below ``LO``
   along first parents, within `ANCESTORS`, that a recorded check ran at and whose facts are kept or published
   (`ancestor_facts`). The verdict says so (``--json``: `facts_from`, `stale`) and isn't kept, and the Lean check's ratchet
-  after landing judges what such facts miss. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
+  after landing judges what such facts miss. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its limit and ``LO``'s count
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change

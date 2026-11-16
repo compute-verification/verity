@@ -92,15 +92,15 @@ package or add a root to `security/Properties` merge. Any other conflict, and a 
 sides: two branches that each add a file a suite reads merge, each side's comment lines above the item they were above, and
 anything else stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back. For `tests/test_lean_packages.py` (`--limits`, `lean-limits`), each of its ratchet caps
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--limits`, `lean-limits`), each of its ratchet limits
 (`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files key by key three-way (a key a side
 lacks counting 0): a side that kept the base's count takes the other's, so a lowering survives a merge that also holds
 another edit of the file, two raises or a raise and a lowering add their changes, and two lowerings take the larger. Two
-branches that each move a cap merge, a cap one side brings is that side's, and a conflict whose sides differ only in
+branches that each move a limit merge, a limit one side brings is that side's, and a conflict whose sides differ only in
 comment lines takes theirs'; any other conflict stays git's.
 The same driver merges `tools/verity/lean/unread-caps.json` (`UNREAD_CAPS`, told by the path git passes), whose every
 area's `modules` and `declarations` merge as counters: theirs' count plus ours' change against the base (`unread_caps`),
-so two branches that each raise one area's cap merge, and the merged cap is never above one side's plus the other's own
+so two branches that each raise one area's limit merge, and the merged limit is never above one side's plus the other's own
 change. It leaves git's conflict where a side is not a `lean-unread-caps/v1` file of counts (`unread_areas`).
 """
 from __future__ import annotations
@@ -134,7 +134,7 @@ LIMITS = "lean-limits"
 OLD_LIMITS = "lean-caps"
 #: the mode the registered command passes: `driver` runs `origin/main`'s copy, which knows `--limits` only once it holds this one
 LIMITS_FLAG = "--caps "
-#: the unread ratchet's caps, which `--limits` merges as counters when git names this file (`%P`), and their schema and
+#: the unread ratchet's limits, which `--limits` merges as counters when git names this file (`%P`), and their schema and
 #: fields as `unread.py` writes them (its `CAPS_SCHEMA`, `CAP_KEYS`)
 UNREAD_CAPS = "unread-caps.json"
 UNREAD_SCHEMA = "lean-unread-caps/v1"
@@ -147,10 +147,10 @@ TEST_LISTS = {"inputs", "untraced", "paths", "tests"}
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 COMMENT_LINE = re.compile(r"\s*#")
-#: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
+#: the ratchet limits of `tests/test_lean_packages.py`, each on one line there
 CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
              "RETIRED_NAMES", "IMPORT_ALL_USES")
-#: a ratchet cap's line (`UNWITNESSED = {"security": 355, "verity/protocols/proofs/flock/verifier": 7}`), and one of its entries
+#: a ratchet limit's line (`UNWITNESSED = {"security": 355, "verity/protocols/proofs/flock/verifier": 7}`), and one of its entries
 CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
@@ -1025,7 +1025,7 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
 
 
 def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
-    """A conflict side's ratchet caps ({its line up to `{`: its counts by key}), blank lines aside, or None when it holds
+    """A conflict side's ratchet limits ({its line up to `{`: its counts by key}), blank lines aside, or None when it holds
     anything else."""
     out: dict[str, dict[str, int]] = {}
     for s in lines:
@@ -1042,13 +1042,13 @@ def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
 
 
 def _merged(base: dict[str, int] | None, ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int]:
-    """One cap's counts merged three-way, key by key, a key a side or the base lacks counting 0 there (as `_held` reads a
-    cap): a side that kept the base's count takes the other's, two raises or a raise and a lowering add their changes to
+    """One limit's counts merged three-way, key by key, a key a side or the base lacks counting 0 there (as `_held` reads a
+    limit): a side that kept the base's count takes the other's, two raises or a raise and a lowering add their changes to
     the base, and two lowerings take the larger.  Ours' order, with theirs' new keys after the key theirs has before them; a
-    key that merges to 0 is dropped unless both sides hold it.  Two lowerings can overlap (drive's lock run lowers a cap to
-    its count while a PR from an older base lowers it for entries the count already left out), so their sum can take a cap
-    below its merged count and fail every PR on it, while a cap above its count only warns until the lock run lowers it.
-    With no ``base`` (a cap both sides brought), each key is the larger of the sides'."""
+    key that merges to 0 is dropped unless both sides hold it.  Two lowerings can overlap (drive's lock run lowers a limit to
+    its count while a PR from an older base lowers it for entries the count already left out), so their sum can take a limit
+    below its merged count and fail every PR on it, while a limit above its count only warns until the lock run lowers it.
+    With no ``base`` (a limit both sides brought), each key is the larger of the sides'."""
     def one(k: str) -> int:
         o, a, b = (0 if base is None else base.get(k, 0)), ours.get(k, 0), theirs.get(k, 0)
         if base is None or (a < o and b < o):
@@ -1063,8 +1063,8 @@ def _cap_line(head: str, counts: dict[str, int], end: str) -> str:
 
 
 def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
-    """A conflict all of whose sides are the same ratchet caps' lines, each merged three-way (`_merged`).  None when a side
-    holds anything else or the sides hold different caps."""
+    """A conflict all of whose sides are the same ratchet limits' lines, each merged three-way (`_merged`).  None when a side
+    holds anything else or the sides hold different limits."""
     x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
     if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
         return None
@@ -1086,7 +1086,7 @@ def _comments(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
 
 
 def _file_caps(text: str) -> dict[str, tuple[str, dict[str, int]]] | None:
-    """A whole file's ratchet caps ({its line up to `{`: (the line, its counts by key)}), or None when a cap's line appears
+    """A whole file's ratchet limits ({its line up to `{`: (the line, its counts by key)}), or None when a limit's line appears
     twice (a side git left in conflict) or holds anything but counts."""
     out: dict[str, tuple[str, dict[str, int]]] = {}
     for s in text.splitlines(keepends=True):
@@ -1103,15 +1103,15 @@ def _file_caps(text: str) -> dict[str, tuple[str, dict[str, int]]] | None:
 
 
 def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
-    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`.  Each ratchet cap merges over the
-    whole files: a line both sides changed alike as that line, else key by key three-way (`_merged`; a cap both sides
+    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`.  Each ratchet limit merges over the
+    whole files: a line both sides changed alike as that line, else key by key three-way (`_merged`; a limit both sides
     brought over a base without it as the larger of theirs, since both may hold one change).
-    While git's own merge runs, each cap's line stands as one placeholder (`HEAD{}`) on every side, so the count never
+    While git's own merge runs, each limit's line stands as one placeholder (`HEAD{}`) on every side, so the count never
     conflicts with the comment above it, and a conflict whose sides differ only in comment lines takes theirs'
-    (`_comments`); the merged counts then replace the placeholders.  So two branches that each move a cap and reword its
-    comment merge, whatever the bases git's recursive merge combines (it runs this driver on them too).  A cap only a side
-    holds (a new cap, which the base lacks too) is that side's line.  Where a side's caps can't be read whole (a cap's line
-    twice, a side without a cap the base holds), the conflicts merge one by one instead: one whose sides are only cap lines
+    (`_comments`); the merged counts then replace the placeholders.  So two branches that each move a limit and reword its
+    comment merge, whatever the bases git's recursive merge combines (it runs this driver on them too).  A limit only a side
+    holds (a new limit, which the base lacks too) is that side's line.  Where a side's limits can't be read whole (a limit's line
+    twice, a side without a limit the base holds), the conflicts merge one by one instead: one whose sides are only limit lines
     three-way (`_caps`), one that differs only in comments as theirs'.  Any other conflict is left as git writes it."""
     def one_by_one():
         return lean(base, ours, theirs, (_caps, _comments))
@@ -1150,7 +1150,7 @@ def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
 
 
 def unread_areas(text: str, side: str) -> dict[str, dict[str, int]]:
-    """A side's unread caps ({area: {field: count}}), a field `UNREAD_KEYS` lists that an area lacks counting 0, as `unread.py`
+    """A side's unread limits ({area: {field: count}}), a field `UNREAD_KEYS` lists that an area lacks counting 0, as `unread.py`
     reads it; an empty text (git's base of a file both sides added) holds none.  ValueError, naming ``side``, for anything
     the merge can't vouch for: not a JSON object of `schema` and `areas` alone, another schema, an area that isn't a map of
     those fields, or a field that isn't a count (an int, not a bool, at least 0)."""

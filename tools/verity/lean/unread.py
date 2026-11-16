@@ -1,7 +1,7 @@
 """`unread`: the Lean nothing reads, per module and per area, and what deleting it would do to the longest import chain.
 
     python tools/verity/lean/unread.py --out DIR [--root DIR] [--env PKG] [--setup] [--build] [--facts FILE ...]
-                                       [--caps FILE [--update-caps]] [--rev REV]
+                                       [--caps FILE [--update-limits]] [--rev REV]
 
 It reads every module of every Lake package under ``--root`` (default this checkout; `modules.packages`, the auditor's
 fixtures aside) from the `.olean` files of one package's build (``--env``, default `security/Proofs`, whose `lake env`
@@ -60,14 +60,14 @@ It writes ``DIR/unread.json`` (every module's counts and unread declarations, by
 seeds) and ``DIR/unread.md`` (the summary). The owners of an area are the `owner` handles the locks give the guarantees
 and assumptions its modules declare: the tree has no other map from Lean to lanes.
 
-**The ratchet.** Each area of the analysis's trees has a cap on its wholly unread modules and on their declarations
+**The ratchet.** Each area of the analysis's trees has a limit on its wholly unread modules and on their declarations
 (`unread-caps.json`, `CAPS`), not on their lines, which a rewrap changes. ``--caps FILE`` exits 1 when an area's count
-rose above its cap (an area the file doesn't list has a cap of nothing). A change that adds proof modules no guarantee
+rose above its limit (an area the file doesn't list has a limit of nothing). A change that adds proof modules no guarantee
 reads yet sets its area's entry there to the check's count in the same change, with no room, and lists in its pull
 request's body each such module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`).
-``--update-caps`` lowers each cap to its count, never raising one. The Lean check runs it (`check`, from
+``--update-caps`` lowers each limit to its count, never raising one. The Lean check runs it (`check`, from
 `lean_audit.py`) on the facts its audits wrote, with no build; there the report is the short one (`analyse` without
-``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
+``full``: no chains or `kept_only_by`). Neither this file nor the limits is in an audit's key (`lean_audit.NOT_READ`), so
 changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): drive's landing gate
 (`unread_gate.py`) runs the ratchet on a change to them before it lands, from the facts a check of its Lean left
 (`lean_audit.facts_file`). Those facts come from the builds of `security` and `security/Proofs` alone: a module of
@@ -127,7 +127,7 @@ CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances
 #: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
 #: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
 CHECKS = re.compile(r"(?:Checks|Vectors)$")
-#: the ratchet's caps: each area's wholly unread modules and their declarations (`ratchet` says what may raise one)
+#: the ratchet's limits: each area's wholly unread modules and their declarations (`ratchet` says what may raise one)
 CAPS = HERE / "unread-caps.json"
 CAPS_SCHEMA = "lean-unread-caps/v1"
 CAP_KEYS = ("modules", "declarations")
@@ -868,7 +868,7 @@ def analyse(tree: Tree, facts: Facts, full: bool = True) -> dict:
 
 
 def counts(rep: dict) -> dict[str, dict[str, int]]:
-    """Each analysis area's wholly unread modules and their declarations, the areas with none aside: what the caps
+    """Each analysis area's wholly unread modules and their declarations, the areas with none aside: what the limits
     bound."""
     decls = Counter()
     for r in rep["modules"].values():
@@ -879,7 +879,7 @@ def counts(rep: dict) -> dict[str, dict[str, int]]:
 
 
 def load_caps(path: Path) -> dict[str, dict[str, int]]:
-    """The caps a file holds ({area: {"modules", "declarations"}}); ValueError when it isn't a caps file."""
+    """The limits a file holds ({area: {"modules", "declarations"}}); ValueError when it isn't a limits file."""
     doc = json.loads(path.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != CAPS_SCHEMA or not isinstance(doc.get("areas"), dict):
         raise ValueError(f"{path} is not a {CAPS_SCHEMA} file")
@@ -892,8 +892,8 @@ def caps_text(areas: dict[str, dict[str, int]]) -> str:
 
 def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.relative_to(ROOT))
             ) -> tuple[list[str], dict[str, dict[str, int]]]:
-    """(a failure for each area whose wholly unread modules, or their declarations, rose above its cap in ``where``; the
-    caps, each lowered to its count). An area the caps don't list has a cap of nothing. A change that adds proof modules
+    """(a failure for each area whose wholly unread modules, or their declarations, rose above its limit in ``where``; the
+    limits, each lowered to its count). An area the limits don't list has a limit of nothing. A change that adds proof modules
     no guarantee reads yet sets its area's entry in ``where`` to the count, with no room, in the same change (the
     failure prints the entry), and lists in its pull request's body each such module, the guarantee that will read it
     and the date that guarantee is listed by."""
@@ -922,8 +922,8 @@ def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.re
 def check(root: Path, files: list[str], facts: list[Path], out: Path, caps: Path = CAPS) -> dict:
     """The ratchet, as `lean_audit.py` runs it once the audits that write the facts have passed: the report of ``facts``
     joined (`Facts`, no chains or `kept_only_by`) in ``out`` (`unread.json`, `unread.md`), against ``caps``. Returns
-    {"failures", "areas": each area's count and cap, "lower": whether a count is below its cap (``out``'s
-    `unread-caps.json` then holds the caps at the counts), "seconds"}."""
+    {"failures", "areas": each area's count and limit, "lower": whether a count is below its limit (``out``'s
+    `unread-caps.json` then holds the limits at the counts), "seconds"}."""
     t = time.monotonic()
     rep = analyse(Tree(root, files), Facts(*facts), full=False)
     cap = load_caps(caps) if caps.is_file() else {}

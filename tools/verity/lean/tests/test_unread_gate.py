@@ -62,7 +62,7 @@ def commit(repo: Path, msg: str, files: dict[str, str | None]) -> str:
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    """The fixture with `tools/lonely.py` and caps at its counts, committed as `main`; the gate's cache (`CHECK_CACHE`) empty."""
+    """The fixture with `tools/lonely.py` and limits at its counts, committed as `main`; the gate's cache (`CHECK_CACHE`) empty."""
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "CHECK_CACHE": str(tmp_path / "cache")}.items():
         monkeypatch.setenv(k, v)

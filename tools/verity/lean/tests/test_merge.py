@@ -804,7 +804,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
     """`TileUnpredictableOfNCPU`'s premise as a rename of its binder `γ₀` to `g₀` left it, which changed the printed text and no
     record.  Theirs renames it, restating the guarantee (another hash of the `Guarantees` definition its signature names),
     while ours has the old text as the base had it: the merge has the new text alone, not the old one beside it (`next`
-    held 19 such old texts over its `INLINE` cap).  A base that lists both texts, merged with a side whose `--update` dropped
+    held 19 such old texts over its `INLINE` limit).  A base that lists both texts, merged with a side whose `--update` dropped
     the old one (the lock run) and one that has both as the base had them, keeps the new one alone too.  Where the side
     that has both restated the guarantee and the other didn't (a branch whose `--update` ran on a tree before the rename,
     which prints the old text only), the new text stays: the merged statement prints it."""
@@ -1591,7 +1591,7 @@ SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/p
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",
              above: str = "the size of each lock's `unwitnessed`") -> str:
-    """`tests/test_lean_packages.py` as far as its ratchet caps go: each cap's line as the file writes it, between the
+    """`tests/test_lean_packages.py` as far as its ratchet limits go: each limit's line as the file writes it, between the
     comment above it and its test."""
     return (f"import json\n\n\n#: {above}\nUNWITNESSED = {json.dumps(unwitnessed)}\n\n\n"
             f'def test_the_unwitnessed_list_only_shrinks():\n    """A lock\'s `unwitnessed` {doc}."""\n\n\n'
@@ -1607,7 +1607,7 @@ def _caps(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
 
 def test_two_branches_that_each_move_the_ratchet_caps_merge_them_three_way(tmp_path, capsys):
     """Every PR that witnesses a guarantee, and drive's lock run, edit a lock's count on one line, so any two conflict as
-    text. Each key merges three-way, on each cap line, with theirs' other edits kept: a side's change where the other kept
+    text. Each key merges three-way, on each limit line, with theirs' other edits kept: a side's change where the other kept
     the base's count, and a raise and a lowering added."""
     base = packages({SEC: 354, PROPS: 184, FLOCK: 8}, {SEC: 1422, PROPS: 129, FLOCK: 6})
     ours = packages({SEC: 355, PROPS: 183, FLOCK: 7}, {SEC: 1423, PROPS: 129, FLOCK: 6})
@@ -1629,7 +1629,7 @@ def test_two_branches_that_each_move_the_ratchet_caps_merge_them_three_way(tmp_p
 
 
 def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
-    """A key a side or the base lacks counts 0 there, as `_held` reads a cap: a package one side gives a cap keeps that
+    """A key a side or the base lacks counts 0 there, as `_held` reads a limit: a package one side gives a limit keeps that
     count, placed after the key the side has before it, and two sides that each give one add; one a side dropped is gone
     where the other kept the base's count and is the larger where the other lowered it too; and one both sides dropped is
     gone."""
@@ -1652,8 +1652,8 @@ def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
 
 
 def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_path, capsys):
-    """A PR that lowers two inert-work bounds to their counts and room, merged onto a `main` that kept the base's caps but edited the
-    file elsewhere: the lowered caps stand, whichever side brings them, where the larger of the sides would put the base's
+    """A PR that lowers two inert-work bounds to their counts and room, merged onto a `main` that kept the base's limits but edited the
+    file elsewhere: the lowered limits stand, whichever side brings them, where the larger of the sides would put the base's
     back."""
     props, flock = 186, 7
     base = packages({SEC: 251, PROPS: props, FLOCK: flock}, {SEC: 902, PROPS: 132, FLOCK: 6})
@@ -1667,8 +1667,8 @@ def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_pat
 
 
 def test_two_raises_of_a_cap_add_and_a_raise_and_a_lowering_add(tmp_path):
-    """Two PRs that each add entries under one cap raise it from one base: the merged count holds both PRs' entries, so the
-    merged cap adds both raises to the base, where the larger would fail `grew`. A raise and a lowering add the same way,
+    """Two PRs that each add entries under one limit raise it from one base: the merged count holds both PRs' entries, so the
+    merged limit adds both raises to the base, where the larger would fail `grew`. A raise and a lowering add the same way,
     whichever side brings which."""
     inline = {SEC: 900}
     base = packages({SEC: 230, PROPS: 186}, inline)
@@ -1680,7 +1680,7 @@ def test_two_raises_of_a_cap_add_and_a_raise_and_a_lowering_add(tmp_path):
 
 
 def test_a_cap_whose_comment_both_sides_reword_merges_three_way_under_theirs_comment(tmp_path):
-    """A PR that moves a cap rewords the comment above it, so the count and the comment sit in one hunk: the count merges
+    """A PR that moves a limit rewords the comment above it, so the count and the comment sit in one hunk: the count merges
     three-way all the same, a comment both sides reworded differently is theirs', and one both reworded alike is that."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
@@ -1695,8 +1695,8 @@ def test_a_cap_whose_comment_both_sides_reword_merges_three_way_under_theirs_com
 
 
 def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_three_way(tmp_path):
-    """A branch that brings a new cap (a new check's count) and a branch that moves an old cap and rewords its comment
-    merge as when both hold the same caps: the new cap is its side's line, whichever side brings it, and the old one
+    """A branch that brings a new limit (a new check's count) and a branch that moves an old limit and rewords its comment
+    merge as when both hold the same limits: the new limit is its side's line, whichever side brings it, and the old one
     merges three-way under theirs' comment."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
@@ -1709,7 +1709,7 @@ def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_three_w
 
 
 def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_count(tmp_path):
-    """A merge base from before the caps came (`main` while the PR bringing them is still on `next`) holds no cap line,
+    """A merge base from before the limits came (`main` while the PR bringing them is still on `next`) holds no limit line,
     so both sides added each one: each key merges as the larger count, not the sum, under theirs' comment."""
     base = "import json\n\n\ndef test_one_mathlib():\n    pass\n"
     ours = base + "\n\n" + packages({SEC: 535, PROPS: 205}, {SEC: 1688}, above="ours")
@@ -1720,7 +1720,7 @@ def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_co
 
 def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_below_its_count(tmp_path, capsys):
     """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["security"]` from 331 to 311, its count then, and a PR,
-    from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged cap was 287 against a
+    from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged limit was 287 against a
     merged count of 305, since what the two lowerings dropped overlapped, and every PR on it failed `grew`. As the larger,
     311 holds the count, and the lock run lowers it to the count and its room."""
     inline = {SEC: 917, PROPS: 132}
@@ -1732,8 +1732,8 @@ def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_bel
 
 
 def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, capsys):
-    """Only the caps and the comments merge: a conflict in a docstring stays git's beside a cap that merges, and the caps
-    stay git's where the sides hold different caps. Both sides lowering one cap below what counters could hold (both
+    """Only the limits and the comments merge: a conflict in a docstring stays git's beside a limit that merges, and the limits
+    stay git's where the sides hold different limits. Both sides lowering one limit below what counters could hold (both
     dropped entries, maybe the same ones) merges as the larger."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
@@ -1786,8 +1786,8 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
 
 
 def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_driver(tmp_path, monkeypatch):
-    """Two branches that each merged the other's cap change, and then moved on, have two merge bases; git merges those with
-    this driver into the base it merges the branches over, so every cap and comment merges, base and all."""
+    """Two branches that each merged the other's limit change, and then moved on, have two merge bases; git merges those with
+    this driver into the base it merges the branches over, so every limit and comment merges, base and all."""
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "PYTHONDONTWRITEBYTECODE": "1"}.items():
         monkeypatch.setenv(k, v)
@@ -1849,10 +1849,10 @@ def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
 
 
 def test_two_branches_that_each_raise_an_area_s_unread_cap_merge_as_counters(tmp_path, capsys):
-    """Every PR that adds proof modules no guarantee reads yet writes its area's cap as main's count plus its own, so any two
+    """Every PR that adds proof modules no guarantee reads yet writes its area's limit as main's count plus its own, so any two
     conflict on that line as text. Each area's `modules` and `declarations` merge as theirs' count plus ours' change against
     the base, whichever side is which: two raises both count, a lowering (drive's lock run) and a raise both apply, and the
-    merged cap is never above one side's count plus the other's own change."""
+    merged limit is never above one side's count plus the other's own change."""
     base = U.CAPS.read_text()
     caps = U.load_caps(U.CAPS)
     flock, pouw = caps[FL], caps[PW]
@@ -1932,7 +1932,7 @@ def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict
 def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
     """The `lean-limits` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
     path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
-    each raise an area's cap merges, and a side in another schema leaves git's conflict."""
+    each raise an area's limit merges, and a side in another schema leaves git's conflict."""
     from research.clone import RECORD_DRIVER
 
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",

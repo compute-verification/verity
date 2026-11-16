@@ -96,9 +96,9 @@ assumptions.
   computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
 - **The counting bound over kinds of work**, `Slowdown.Formalism.Guarantees.Counting`
   (`Definitions/Slowdown/Guarantees/Formalism.lean`, proved in `Proofs/Slowdown/Formalism/Slowdown.lean`): every partition into
-  inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
+  inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a limit cap_K on
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
-  it takes the token kind's cap from the named assumption `training-token-work`.
+  it takes the token kind's limit from the named assumption `training-token-work`.
 
 The rest of this section is the argument they are read in.
 
@@ -162,7 +162,7 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
   outputs B(a_j) = (E_j, 𝒫_j, 𝓘_j, loc_j):
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
   - 𝒫_j, a partition of E_j's gates into proof blocks, each block's outputs within its public size class and their
-    number within a public cap;
+    number within a public limit;
   - 𝓘_j, a partition of E_j's gates into inference blocks, each of at most c gates reading at most k bits of fresh
     input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
@@ -320,7 +320,7 @@ The bound degrades with the gate budget instead of failing at a threshold: impor
 spends gates. The g gates are the analysed implementation's certificate, not a lower bound on every algorithm computing
 the same function, and products split between blocks still need their own account. The weights replace "every
 activation is hard" with "enough structurally supported computation": overlapping regions get low weights, and choosing
-ω is a linear program. These caps count the uses a block serves, not its products; over counted products the bound of
+ω is a linear program. These limits count the uses a block serves, not its products; over counted products the bound of
 record is the min-cut theorem (Start here).
 
 #### Counting and the standard assemblies
@@ -336,7 +336,7 @@ used so far:
 | a recoverable hard source | outputs | (k' + δ + amb)/β_v |
 
 An assembly counts only when its premises hold for the same blocks, and a refuted premise contributes nothing. The
-smallest valid cap wins only among caps on the same count: a served-weight cap and a recovery-output cap bound different
+smallest valid limit wins only among limits on the same count: a served-weight limit and a recovery-output limit bound different
 counts, so they are compared only after conversion to one convention, or applied separately, each with its own coverage
 statement.
 
@@ -393,7 +393,7 @@ reaches the target with probability above η, and **fleet-time** elapsed time ti
 **Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1, the
 plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the sum
 by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to one
-to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform cap
+to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform limit
 q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered hardware included, not
 doing correct credited work of the registered circuit,
 
@@ -425,7 +425,7 @@ the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
 its inference blocks and its remainder together. When k_S is large enough for a server block to hold a token's whole
-path, the cap is void, and the available onsite bound reduces to the remote bound.
+path, the limit is void, and the available onsite bound reduces to the remote bound.
 
 ### What the argument doesn't assume
 

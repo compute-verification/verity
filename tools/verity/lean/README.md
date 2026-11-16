@@ -256,7 +256,7 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   exits 3 and keeps no pass, and the record it regenerates stays outside `record/` (`lean_changed.py`'s `ALLOWABLE`,
   `conclude` and `withheld`). `check.py` takes none.
 - **Bookkeeping warns in a records run.** A candidate's records run (`--bookkeeping warn`) repairs a lock that fails
-  only on bookkeeping, and the caps beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
+  only on bookkeeping, and the limits beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
   `lean_audit.py`'s `held_caps` and `raised_unread`; `research.merge.REPAIRED`).
 - **The landing DM** lists each new, removed or changed guarantee and definition when the change lands on `main`;
   nobody approves it first (`research.spec_alert`). A statement whose type hash, named assumptions and premises are
@@ -296,7 +296,7 @@ The auditor:
   restores it.
 - `olean_graph.py`: whether two builds of one module differ only in where its source was.
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
-- `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the caps.
+- `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
   carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
@@ -326,7 +326,7 @@ Lean's job in `check` and the tools around the audit:
   it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
   so, and what the stub of the plan made once more says is the verdict. That is the step's limit, and the full check,
   which builds every module, has none.
-- `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
+- `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's limits, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints

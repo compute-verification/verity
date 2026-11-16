@@ -212,9 +212,9 @@ def test_a_lock_s_texts_and_the_document_they_name_seed_and_a_module_of_checks_o
 
 
 def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_caps_only_come_down(tmp_path):
-    """No caps is a cap of nothing; caps at the counts pass; caps above them pass and leave the lowered caps; a cap below
-    its count fails naming the area's modules and the fix. `--update-caps` writes the counts when there are no caps, lowers
-    caps above them, and never raises one."""
+    """No limits is a limit of nothing; limits at the counts pass; limits above them pass and leave the lowered limits; a limit below
+    its count fails naming the area's modules and the fix. `--update-caps` writes the counts when there are no limits, lowers
+    limits above them, and never raises one."""
     files, caps, out = U.tracked(FIXTURE), tmp_path / "caps.json", tmp_path / "out"
     now = U.counts(U.analyse(U.Tree(FIXTURE, files), U.Facts(FACTS), full=False))
     assert now == {"Definitions/Dead": {"modules": 1, "declarations": 2}, "Definitions/Gone": {"modules": 1, "declarations": 0},
