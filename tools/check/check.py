@@ -1823,7 +1823,7 @@ def builds_records(only: list[str] | None) -> bool:
     whole of `pytest`), the two that read and write its binding records."""
     if only is None:
         return True
-    names = {"", *(s.name for s in SUITES.discover() if s.path == CIRCUIT_SUITE)}
+    names = {"", *(s.name for s in SUITES.discover() if CIRCUIT_SUITE in (s.path, *SUITES.LAYOUT.tested(s.path)))}
     return any(p.partition(":")[0] == "circuit-check" or (p.partition(":")[0] == "pytest" and SHARDS.suite_part(p)[1] in names)
                for p in only)
 
