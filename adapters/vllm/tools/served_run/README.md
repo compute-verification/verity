@@ -53,12 +53,16 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 
 The placed window (`placement.toml`'s `[run.window]`) is remote with no accounting piece: it serves no H1
 (`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
-audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`.
+audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
+tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
+(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), and defers
+V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory): its follow-on, `served_verdicts.sh copy deferred
+HOST` and then `served_verdicts.sh v3c` on a prover node, has no `run.sh` command yet.
 
-The run's exit is its record's verdict. 0 means the compiled Lean composite of record accepted, and only a composite
-computed off the served node, on an auditor device, is of record. 2 means pending: no composite of record yet. That is
-what a window run on the served node ends with, since its own composite is a development check; it is not a crash. 1
-means a rejection, a refused composite, or a failed step.
+`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which only
+a composite computed off the served node, on an auditor device, is; 2 pending; 1 a rejection, a refused composite or a
+failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+`pending: composed off this node` (or, under a deferral, audited and composed off it).
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `adapters/vllm/`; this
 directory holds the served run's own: its placement and its commands.
@@ -89,40 +93,38 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 - The workload: the integration's one (`adapters/vllm/workloads/`) that `placement.toml`'s `row` names, with its
   requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
   fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the workload's Build of record,
-  which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
-  that `placement.toml`'s `COMMIT_RUN` names is its cross-check (`predict compare --predicted`), and the endpoint serves
-  only when they agree.
+  which `verity-vllm predict row` writes from the workload alone before serving. The row's traced Build, made by
+  `run.sh setup` and named in `placement.toml`'s `builds`, is its cross-check (`predict compare --predicted`), and the
+  endpoint serves only when they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
   `LOAD=fixed` one full execution phase of fixed length).
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
   H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
-  cache, taps, workload dirs and Flock's build, which the node's setup leaves under the served run's directory, and a run's
-  table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
-  script names a node. It holds no machine's address and no row of cards: the gate's value names the variable
-  that holds the challenger host's (`VY_CHALLENGER_1_HOST`), and the window's card, cores and end are `CARD`, `CORES`
-  and `END`. `run.sh` fills each from the environment the run is launched in, and without one it starts nothing and
-  says so.
+  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
+  run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
+  script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
+  (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
+  are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the served run doesn't serve.
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|commit] [--dry-run] [--development] [FLAG...]`). It starts the run with
-the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
-recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command, and `--development` takes development coins.
+`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup] [--dry-run] [--development] [--tie] [FLAG...]`).
+It starts the run with the run recorder from the tree root, on the node `placement.toml` names, and returns once the
+run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command.
 
-1. `run.sh commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
-   that seals its replay bundle. The workload dir stays on the node, the only copy: the bundle and the Commit's records
-   under `commit/` hold values (the committed store with its salts, the weights key, the requests and served tokens)
-   and `match/spec.json` holds the prompts, so nothing stores the dir. The run's record holds only the files
-   `published.sh` lists, each with the reason it holds nothing of a request (the node and the tree's commit, each
-   stage's flags, exit code and verdict word, the sealed bundle's manifest digest, the GPU lease's times, the row's
-   target), and the run names every file it left on the node; to publish another file, give it an entry there.
-   `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
-2. `CARD=N CORES=A-B END=UTC run.sh` (`window`, the default): `window.sh`, which runs `served_verdicts.sh`, the
-   served run through every subprotocol, as above, on that card under its own lease, and packs the compose hand-off
-   into the run's `out/handoff/`. It ends 2, pending, and 75 with nothing run when the card is in use.
-   `HANDOFF=DIR run.sh compose`, launched at the window's commit with DIR holding that run's `out/handoff/`:
-   `compose.sh`, the window's record composed off the served node, its SPOT Lean verifier run there on the audit.
+1. `CARD=N CORES=A-B END=UTC run.sh setup [--tie]`, once per row and node: `setup.sh` makes what the window reads,
+   each step skipped where its result is there unless `STEPS` names it: the INT8 pin, the taps (built at the launch's
+   commit, which `TAPS_AT` then names), Flock's build, and the row's predicted and traced Build and their compare. Its
+   last line names the run id to add to `builds`.
+2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
+   that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
+   the card is in use. The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
+   landed `run.sh` refuses: land it first, or take development coins with `--development`. It refuses a commit that
+   changed the taps' sources since `TAPS_AT`.
+3. `HANDOFF=DIR run.sh compose`, DIR holding the window run's `out/handoff/`: `compose.sh`, the window's record composed
+   off the served node, its SPOT Lean verifier run there on the audit. `run.sh` refuses it from any commit but the
+   window's (the hand-off's `COMPOSE_TREE`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.
