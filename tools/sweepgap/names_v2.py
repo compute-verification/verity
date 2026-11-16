@@ -108,14 +108,18 @@ for r in rows:
     line = lines_of(f)[ln - 1] if ln - 1 < len(lines_of(f)) else ""
     sp = spell_of(r["spelling"], r["matched"])
     if term == "memory challenger":
-        if f.endswith(".lean"):
-            add(term, sp, "Lean", f, ln, kind, own, "LEAN", sp.replace("hallenger", "ttester").replace("HALLENGER", "TTESTER"), "a Lean name: lean's names pass")
-        elif kind == "prose":
+        if f.endswith(".lean") and not re.fullmatch(r"(?i)memory challengers?", sp):
+            add(term, sp, "Lean name", f, ln, kind, own, "NAME-LATER", "", "a Lean name: lean's names pass, in a later PR")
+        elif kind == "prose" or f.endswith(".lean"):
             add(term, sp, "prose", f, ln, kind, own, "RENAME", re.sub(r"(?i)challenger", lambda mo: "Attester" if mo.group(0)[0] == "C" else "attester", sp), "")
         else:
             add(term, sp, kind, f, ln, kind, own, "NAME-LATER", "", "an identifier, key or string: the Glossary row and the names move come in a later PR; memory-accounting renames its own files")
         continue
     low = sp.lower()
+    if f.endswith(".lean") and re.fullmatch(r"(?i)certifiers?", sp) and re.search(r"(?i)network certifiers?", line):
+        add(term, sp, '"network certifier" in a Lean line', f, ln, kind, own, "RENAME", "network attester" if low == "certifier" else "network attesters",
+            "the words map renames it in a comment or docstring; a string literal stays")
+        continue
     if f.endswith(".lean"):
         add(term, sp, "Lean", f, ln, kind, own, "LEAN", attester_of(sp, False),
             f"GLOSSARY.md:{GLOSSARY_ROW}: the Lean package `NetworkCertifier` and the names that follow it stay until lean renames them")

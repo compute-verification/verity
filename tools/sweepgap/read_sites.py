@@ -3,7 +3,8 @@
 
   python3 read_sites.py PAIRS.tsv OLD_WORDS.v2.tsv BOTH_LIVE_SITES.tsv OUT_SITES.tsv OUT_SUMMARY.tsv [REF]
 
-The ten are spread evenly over the word's sites (sorted by file, line).  A site is held when it is a stored record (the
+The ten are spread evenly over the word's sites (sorted by file, line), and up to three more in each lane that owns sites of
+the word, so that a lane's count of the word comes with sites opened in its files.  A site is held when it is a stored record (the
 store's moves.json, a lock record, a fixture), a path that still exists at REF and names a directory or file by the old
 spelling, or a line one of the word's maps' [keep] patterns matches; else it is not held.  Each opened site's `reading`
 starts with `opened:`; the others keep the first guess."""
@@ -83,6 +84,7 @@ def read(old: str, s: dict, keeps) -> tuple[str, str]:
 
 
 summary = []
+by_lane = []
 for old, idxs in sorted(by.items(), key=lambda kv: -len(kv[1])):
     if len(idxs) <= 50:
         continue
@@ -93,6 +95,13 @@ for old, idxs in sorted(by.items(), key=lambda kv: -len(kv[1])):
         if idxs[j] not in pick:
             pick.append(idxs[j])
         j += 1
+    owners = collections.defaultdict(list)
+    for i in idxs:
+        owners[sites[i]["owner"]].append(i)
+    for o, ids in owners.items():
+        k = min(3, len(ids))
+        pick += [ids[int(j * (len(ids) - 1) / max(k - 1, 1))] for j in range(k)]
+    pick = sorted(set(pick))
     keeps = compile_keeps(old)
     held = collections.Counter()
     for i in pick:
@@ -101,7 +110,11 @@ for old, idxs in sorted(by.items(), key=lambda kv: -len(kv[1])):
         held[(verdict, why.split(" (")[0].split(":")[0][:60] if verdict == "held" else "")] += 1
     h = sum(c for (v, _), c in held.items() if v == "held")
     what = "; ".join(sorted({w for (v, w) in held if v == "held"}))
-    summary.append([old, len(idxs), 10, h, 10 - h, what])
+    summary.append([old, len(idxs), len(pick), h, len(pick) - h, what])
+    for o, ids in owners.items():
+        opened = [i for i in ids if i in set(pick)]
+        oh = sum(sites[i]["reading"].startswith("opened: held") for i in opened)
+        by_lane.append([old, o, len(ids), len(opened), oh])
 
 with open(out_sites, "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=list(sites[0].keys()), delimiter="\t")
@@ -111,5 +124,9 @@ with open(out_sum, "w", newline="") as fh:
     w = csv.writer(fh, delimiter="\t")
     w.writerow(["old", "sites", "opened", "held", "not_held", "what_holds"])
     w.writerows(summary)
+with open(Path(out_sum).with_name("readings_by_lane.tsv"), "w", newline="") as fh:
+    w = csv.writer(fh, delimiter="\t")
+    w.writerow(["old", "lane", "sites_in_lane", "opened_in_lane", "held_among_opened"])
+    w.writerows(by_lane)
 for r in summary:
     print(*r, sep="\t")
