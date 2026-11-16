@@ -686,7 +686,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                               "its observations, its ingress values its operator on the earlier ones",
                         "discharged_by": ("Properties.Certifier.certifiersOpen",)},
     "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
-                            "auditor's record of its own device (certifier-key/v1, `network_certifier_chain.RECORD`), whose key the "
+                            "auditor's record of its own device (certifier-key/v1, `network_attester_chain.RECORD`), whose key the "
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
                             "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
                             "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
@@ -1512,12 +1512,12 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     execution phase ``first`` (the last listed whose ``start`` is at most it, as `NetworkCheck.Period.entryAt` picks;
     `NO_KEYS` where they list none readable, `NO_ENTRY` where none holds it), against the auditor's record of its
     network attester at ``key`` (certifier-key/v1,
-    `network_certifier_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
+    `network_attester_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
     ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
     `Core.Registration` by difftest), whose auditor holds the record's key for a network attester the log places.
     ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import composite as CO
-    from benchmarks.network_traces import network_certifier_chain as WC
+    from benchmarks.network_traces import network_attester_chain as WC
     from verity.protocols.registration.verifier import registration as REG
 
     out: dict[str, Any] = {"is": CHECKED[AUDITOR_RECORD], "holds": False, "from": {}}

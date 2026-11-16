@@ -1,6 +1,6 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the certifier front kept
 under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
-boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_certifier_serve.Publisher` publishes a served one
+boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_attester_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so execution phase 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in execution phase 0, is anchored at 32, so execution phase 1's Program 6 starts it.
@@ -32,7 +32,7 @@ from typing import Any
 import pytest
 
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_STATE
 from verity.protocols.resource_accounting.network.verifier.certificate import Issuer, LmsSigner
@@ -63,8 +63,8 @@ def network_traces() -> Iterator[None]:
 
 with network_traces():
     import certifier_piece as CP
-    from benchmarks.network_traces import network_certifier_chain as WCH
-    from verity.protocols.resource_accounting.network.attester import network_certifier_serve as WS
+    from benchmarks.network_traces import network_attester_chain as WCH
+    from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
@@ -224,7 +224,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
 
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
     """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
-    hold. No kept run whose certified I/O `network_certifier_chain.io` accepts has either: an accepted request is a whole id
+    hold. No kept run whose certified I/O `network_attester_chain.io` accepts has either: an accepted request is a whole id
     request, whose last bytes the network attester sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""

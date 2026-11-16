@@ -54,7 +54,7 @@
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
-# found of the traffic (which execution phases were certified or refused, and how many problems: network_certifier_chain's
+# found of the traffic (which execution phases were certified or refused, and how many problems: network_attester_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
 # which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
 # nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
@@ -220,7 +220,7 @@ scan() {
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
-  [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_certifier"
+  [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_attester"
 }
 tie() {
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
@@ -252,7 +252,7 @@ EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.network_certifier" ] && echo --warden-run "$(cat "$W/scan.network_certifier")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
+  $( [ -f "$W/scan.network_attester" ] && echo --warden-run "$(cat "$W/scan.network_attester")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   --tie "$OUT/tie/summary.json" \
   ${PA:+--period-answer "$PA"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}

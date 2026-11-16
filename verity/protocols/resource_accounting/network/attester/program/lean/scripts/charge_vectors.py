@@ -8,7 +8,7 @@ it, and `DIR/charge/python.jsonl`, the same line's results from the checkout's
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges
 chained from the book's priors and run 0, or none when one refuses (`charges`). The Lean audit runs
 `ChargeDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
-`verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_charge_lean_difftest.py` checks that this script still
+`verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_charge_lean_difftest.py` checks that this script still
 writes them.
 
 Half the instances start from a random carry (counts small, at and just below the `2^KW` the book holds, where a
