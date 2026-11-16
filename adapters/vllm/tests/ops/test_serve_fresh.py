@@ -49,7 +49,8 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     steps = [line.split(":", 1)[0][len("step "):] for line in r.stdout.splitlines() if line.startswith("step ")]
     assert steps == ["bootstrap", "workload", "predict", "build", "serve", "request", "stop"]
     build = next(line for line in r.stdout.splitlines() if line.startswith("build: "))
-    assert "head size 64 only" in build and f"MAX_JOBS={len(os.sched_getaffinity(0))}" in build, build
+    jobs = subprocess.run(["nproc"], capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")}).stdout.strip()
+    assert "head size 64 only" in build and f"MAX_JOBS={jobs}" in build, build   # nproc, as the bootstrap's MAX_JOBS default
     assert not (tmp_path / ".verity-work").exists(), "a dry run makes nothing"
 
 
