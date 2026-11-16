@@ -23,7 +23,8 @@ import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 * `Lg.capBytes_size`, `ybarFlat_size`, `y_padsOf_size`, `padLayout_len_le`: the honest sizes a masked rep absorbs.
 * `zkSchedule_sizes`: at `25 ≤ m ≤ 35` the `--zk` schedule's `t_pad`, `ext`, `k_0` and every level's cap are small,
   by the kernel's evaluation at either statement version.
-* `rep_bytes`: every round of a masked rep that returns holds at most `|d| + 2^16` bytes, `d` its stream's domain. The
+* `rep_bytes`: every round of a masked rep that returns holds at most `2^16` bytes, the first `|d| + 2^16`, `d` its
+  stream's domain. The
   rep splits into its PIOP (`ZcZ.tEnd`, `LcZ.tEnd`, `Rs.tEnd`), its Ligerito, which ends at the masked model's
   transcript (`L0.honestZ`), and its inner proof (`innerP_ret`); each stage's rounds are bounded by the bytes it absorbs.
 -/
@@ -111,15 +112,15 @@ theorem capBytes_le (h64 : Claims.Out64 H) {wideLeaf : Bool} {m : ℕ} (h25 : 25
   exact (Nat.mul_le_mul (by decide : MerkleScheme.hm96Sha512.digestLen ≤ 64)
     (Nat.pow_le_pow_right (by decide) (hcap8 0 (by omega)))).trans (by decide)
 
-/-- **Every round of a masked rep that returns holds at most `|d| + 2^16` bytes**, `d` its stream's domain, at a
-statement of `25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
+/-- **Every round of a masked rep that returns holds at most `2^16` bytes, the first `|d| + 2^16`**, `d` its stream's
+domain, at a statement of `25 ≤ m ≤ 35` under `hm96-sha512/v1` with `k_log ≤ m`. -/
 theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (hkm : st.c.kLog ≤ st.m) (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
     (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
-    RoundsLe (d.size + 65536) t' := by
+    RoundsLe d.size 65536 t' := by
   have hm14 : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   have hmerk : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := hms
   set resp : ℕ → Claims.Msg := fun j => (Claims.coinSeq r j).bytes with hresp
@@ -190,13 +191,13 @@ theorem rep_bytes (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr : Trace) (h25 : 2
   have hlen : lay.len ≤ 2 * st.m + 2 * st.c.kLog + 4 * v.1.k0 + 210 := padLayout_len_le _ _ _
   obtain ⟨-, -, -, ht''⟩ := innerP_ret resp (Claims.hOf H) _ _ _ _ _ _ _ hinn
   rw [ht'', ht']
-  refine (InZ.wb_tEnd (P := 0) (C := 16384) (NI := 600) ?_ ((tcOf_size h64' _ _).le.trans (by decide)) ?_
+  refine (InZ.wb_tEnd (E := d.size) (B := 65536) (P := 0) (C := 16384) (NI := 600) ?_ ((tcOf_size h64' _ _).le.trans (by decide)) ?_
     (by omega) (by omega) (by omega) (by omega)).1
   · refine L0.wb_outZ (C := 16384) (NY := 512) (NB := 1108) ?_ hcap0 hrc hyr' hyb' (by omega)
     unfold tPiop
     refine Rs.wb_tEnd (P := 0) (V := 128) ?_ (fun _ => (Rs.switchVec_size _ _).le) (by omega)
     refine LcZ.wb_tEnd (P := 64) ?_ (by omega) (by omega)
-    exact ZcZ.wb_tEnd (Wb.init d) hD (hcap0 : (flat cm.cap).size ≤ 16384) hroot (by omega) (by omega)
+    exact ZcZ.wb_tEnd (Wb.init d) rfl hD (hcap0 : (flat cm.cap).size ≤ 16384) hroot (by omega) (by omega)
   · rw [hpads, y_padsOf_size]
     show lay.len + 192 ≤ 600
     omega

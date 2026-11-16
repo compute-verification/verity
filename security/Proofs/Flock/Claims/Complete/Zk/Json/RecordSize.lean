@@ -37,11 +37,11 @@ whenever those are. -/
 theorem jsz_recordObjZk_le {h : ByteArray → ByteArray} (hh : ∀ b, (h b).size = 64) {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hz : String) (ct : CoinTree.Spec) (rb : ByteArray)
     {points : Array (Array F128)} {Q : ℕ} (hp : ∀ p ∈ points, p.size ≤ Q) {streams : Array (Array Round)}
-    {R M L : ℕ} (hR : R < 10 ^ 20) (hs : StreamsLe streams R M) (hL : NamesLe spec L) (proofs : Array ByteArray) :
+    {R M E L : ℕ} (hR : R < 10 ^ 20) (hs : StreamsLe streams R M E) (hL : NamesLe spec L) (proofs : Array ByteArray) :
     jsz (recordObjZk spec h hz ct #[rb] points streams proofs) ≤
       18 * hz.length + jsz (spec.unitSample.getD Json.null) + jsz ct.toJson + 72 * spec.sigma.size +
         36 * rb.size + 36 * t.length + points.size * (579 * Q + 2 + 1) + 579 * spec.points +
-        spec.repStreams.size * (18 * L + R * (M + 4747) + 4500 + 1) +
+        spec.repStreams.size * (18 * L + R * (M + 4747) + 36 * E + 4500 + 1) +
         spec.repStreams.size * (18 * L + 2900 + 1) + 30000 := by
   have hK : ∀ p ∈ recordListZk spec h hz ct #[rb] points streams proofs, p.1.length ≤ 16 :=
     keys_le (by

@@ -40,7 +40,7 @@ table name `t`, `Q` coordinates a point, domains of at most `D` bytes and stream
 def recBound (spec : SessionSpec) (hz t : String) (ct : CoinTree.Spec) (Q D L : ℕ) : ℕ :=
   18 * hz.length + jsz (spec.unitSample.getD Json.null) + jsz ct.toJson + 72 * spec.sigma.size + 36 * 16384 +
     36 * t.length + spec.points * (579 * Q + 2 + 1) + 579 * spec.points +
-    spec.repStreams.size * (18 * L + 5000 * (579 * 65536 + 36 * (D + 65536) + 4747) + 4500 + 1) +
+    spec.repStreams.size * (18 * L + 5000 * (579 * 65536 + 36 * 65536 + 4747) + 36 * D + 4500 + 1) +
     spec.repStreams.size * (18 * L + 2900 + 1) + 30000
 
 /-- **Each masked rep's rounds are nonempty and of at most `2^16` coins**, at a statement with `25 ≤ m ≤ 35`, at most
@@ -64,10 +64,11 @@ theorem repOk_at (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (sp
   rintro l ⟨p, t'⟩ l' hrun
   obtain ⟨⟨hs, hsz⟩, -⟩ := JsonRT.repPZk_grows resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (B := 65536) (by decide)
     (by simp [Setup.ofCircuit]; omega) (by omega) hn hq _ l _ _ _ hrun
-  exact ⟨show 0 < t'.rounds.size by simp [Transcript.init] at hsz; omega, hs (by simp [CoinsLe, Transcript.init])⟩
+  exact ⟨show 0 < t'.rounds.size by simp [Transcript.init] at hsz; omega, hs (by simp [JsonRT.CoinsLe, Transcript.init])⟩
 
 /-- **The masked session's two streams fit `StreamsLe`**: rep `j`'s stream is its rounds (`RepRunZk`), `repRoundsT`
-of them (`rep_rounds_of`), each of at most `2^16` coins (`RoundsOk`) and `|d| + 2^16` bytes (`rep_bytes`). -/
+of them (`rep_rounds_of`), each of at most `2^16` coins (`RoundsOk`) and `2^16` bytes, the first `|d| + 2^16`
+(`rep_bytes`). -/
 theorem streamsLe_at (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hkm : st.c.kLog ≤ st.m) (hpm : spec.mPts = st.mPts) {D : ℕ} (hD : ∀ rep < 2, (spec.domain t rep).toUTF8.size ≤ D)
@@ -81,7 +82,7 @@ theorem streamsLe_at (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} (h
     (hss : streams.size = 2) (hrs : ∀ rs ∈ streams, JsonRT.RoundsOk rs)
     (hreps : ∀ j < 2, ∃ q, JsonRT.RepRunZk (fun j => (Claims.coinSeq r j).bytes) (Claims.hOf H) spec
       (Setup.ofCircuit st) v tr cm e tape j streams[j]! q) :
-    StreamsLe streams (repRoundsT st v e) (579 * 65536 + 36 * (D + 65536)) := by
+    StreamsLe streams (repRoundsT st v e) (579 * 65536 + 36 * 65536) D := by
   intro rs hmem
   obtain ⟨j, hj, rfl⟩ : ∃ j, j < 2 ∧ streams[j]! = rs := by
     obtain ⟨j, hj, hje⟩ := Array.mem_iff_getElem.1 hmem
@@ -99,12 +100,20 @@ theorem streamsLe_at (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} (h
     prior ws l p t' l' hgo
   obtain ⟨-, hok⟩ := hrs _ hmem
   rw [hrst] at hok ⊢
-  refine ⟨hR.le, fun x hx => ?_⟩
-  obtain ⟨h1, h2, h3⟩ := hok x hx
-  have hb := hB x hx
-  refine ⟨by omega, by omega, ?_⟩
-  rw [h3]
-  omega
+  refine ⟨hR.le, fun k hk => ?_⟩
+  obtain ⟨h1, h2, h3⟩ := hok _ (Array.getElem_mem hk)
+  have hb := hB k hk
+  by_cases hk0 : k = 0
+  · rw [if_pos hk0] at hb
+    rw [if_pos hk0]
+    refine ⟨by omega, by omega, ?_⟩
+    rw [h3]
+    omega
+  · rw [if_neg hk0] at hb
+    rw [if_neg hk0]
+    refine ⟨by omega, by omega, ?_⟩
+    rw [h3]
+    omega
 
 /-- **The honest masked record weighs at most `recBound`** at one table whose statement has `25 ≤ m ≤ 35`, the `hm96`
 leaf, `kLog ≤ m`, at most `2^10` regions and at most two points of its `mPts` coordinates. -/
@@ -133,14 +142,14 @@ theorem record_size_le (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} 
     rw [hm] at hv
     obtain ⟨-, -, hk0, -⟩ := L0.zkSchedule_sizes h25 h35 hv
     have hkn := (L0.zkSch_facts h25 h35 hv).2.2.2.1
-    have hn := ZkTables.zkSchedule_n hv
+    have hn := zkSchedule_n hv
     have hx : e.size = st.regions.size * spec.points := by
       rw [JsonRT.extraClaims_size he]
       simp [JsonRT.ptsOf]
     have hrp : st.regions.size * spec.points ≤ 2048 := Nat.mul_le_mul hreg hpt
     unfold repRoundsT
     omega
-  have hs' : StreamsLe streams 5000 (579 * 65536 + 36 * (D + 65536)) := fun rs h =>
+  have hs' : StreamsLe streams 5000 (579 * 65536 + 36 * 65536) D := fun rs h =>
     ⟨(hs rs h).1.trans hR, (hs rs h).2⟩
   have hp : ∀ p ∈ JsonRT.ptsOf spec (coinOf (Claims.coinSeq r 0).bytes), p.size ≤ st.mPts := by
     intro a ha

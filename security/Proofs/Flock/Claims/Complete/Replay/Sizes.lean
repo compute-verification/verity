@@ -11,8 +11,9 @@ string adds its own bytes and at most 31 (`pLabel_size_le`, `pBytes_size_le`), a
 of `n` F128s `16 + 16·n` (`pSlice_size`). A squeeze records its pending bytes and a header as its round's bytes and
 leaves nothing pending (`sent_bytes_size`, `afterSq_pending`).
 
-* `RoundsLe B t`: each recorded round of `t` retains at most `B` bytes; a squeeze of at most `B − 16` pending bytes
-  keeps it (`RoundsLe.afterSq`), and an absorb, which records no round, does too.
+* `RoundsLe E B t`: each recorded round of `t` retains at most `B` bytes, the first at most `B + E`; a squeeze of at
+  most `B − 16` pending bytes keeps it (`RoundsLe.afterSq`), the first squeeze of at most `B + E − 16`
+  (`RoundsLe.afterSq0`), and an absorb, which records no round, does too.
 -/
 
 @[expose] public section
@@ -102,28 +103,58 @@ theorem init_pending_size_le (rs : Array Round) (d : ByteArray) :
   have := padded_size_le d
   omega
 
-/-- Each recorded round of `t` retains at most `B` bytes. -/
-def RoundsLe (B : ℕ) (t : Transcript) : Prop := ∀ x ∈ t.rounds, (x.bytes.getD ByteArray.empty).size ≤ B
+/-- Each recorded round of `t` retains at most `B` bytes, the first at most `B + E`. -/
+def RoundsLe (E B : ℕ) (t : Transcript) : Prop :=
+  ∀ (k : ℕ) (hk : k < t.rounds.size),
+    ((t.rounds[k]'hk).bytes.getD ByteArray.empty).size ≤ B + (if k = 0 then E else 0)
 
 namespace RoundsLe
 
-variable {B : ℕ}
+variable {E B : ℕ}
 
-theorem afterSq {t : Transcript} (h : RoundsLe B t) (hp : t.pending.size + 16 ≤ B) (kind : UInt8) (n : ℕ)
-    (coin : ℕ → F128) : RoundsLe B (Replay.afterSq t kind n coin) := by
-  intro x hx
-  rcases Array.mem_push.1 hx with hx | rfl
-  · exact h x hx
+theorem afterSq {t : Transcript} (h : RoundsLe E B t) (hp : t.pending.size + 16 ≤ B) (kind : UInt8) (n : ℕ)
+    (coin : ℕ → F128) : RoundsLe E B (Replay.afterSq t kind n coin) := by
+  intro k hk
+  change k < (t.rounds.push (sent t kind n coin)).size at hk
+  change (((t.rounds.push (sent t kind n coin))[k]'hk).bytes.getD ByteArray.empty).size ≤ _
+  rw [Array.getElem_push]
+  split
+  · rename_i hlt
+    exact h k hlt
   · rw [sent_bytes_size]
+    split <;> omega
+
+theorem afterSq0 {t : Transcript} (h : RoundsLe E B t) (h0 : t.rounds.size = 0) (hp : t.pending.size + 16 ≤ B + E)
+    (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : RoundsLe E B (Replay.afterSq t kind n coin) := by
+  intro k hk
+  change k < (t.rounds.push (sent t kind n coin)).size at hk
+  change (((t.rounds.push (sent t kind n coin))[k]'hk).bytes.getD ByteArray.empty).size ≤ _
+  rw [Array.size_push] at hk
+  rw [Array.getElem_push]
+  split
+  · rename_i hlt
+    exact absurd hlt (by omega)
+  · rename_i hlt
+    have hk0 : k = 0 := by omega
+    rw [sent_bytes_size, if_pos hk0]
     exact hp
 
-theorem of_rounds {t t' : Transcript} (h : RoundsLe B t) (hr : t'.rounds = t.rounds) : RoundsLe B t' := by
-  intro x hx
-  rw [hr] at hx
-  exact h x hx
+theorem of_rounds {t t' : Transcript} (h : RoundsLe E B t) (hr : t'.rounds = t.rounds) : RoundsLe E B t' := by
+  intro k hk
+  have key : ∀ (a b : Array Round) (e : a = b) (hk : k < a.size),
+      (a[k]'hk).bytes = (b[k]'(e ▸ hk)).bytes := by
+    intro a b e
+    subst e
+    intro hk
+    rfl
+  rw [key _ _ hr hk]
+  exact h k _
 
 theorem init (rs : Array Round) (d : ByteArray) (h : ∀ x ∈ rs, (x.bytes.getD ByteArray.empty).size ≤ B) :
-    RoundsLe B (Transcript.init rs d) := h
+    RoundsLe E B (Transcript.init rs d) := by
+  intro k hk
+  have := h _ (Array.getElem_mem hk)
+  split <;> omega
 
 end RoundsLe
 

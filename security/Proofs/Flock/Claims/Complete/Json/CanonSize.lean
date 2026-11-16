@@ -75,7 +75,7 @@ theorem canonStr_size_le (t : String) : (Flock.canonStr t).utf8ByteSize ≤ 18 *
     rwa [String.ofList_toList, String.length_toList] at this
   have h2 := congrArg List.length (Ascii.canonStr_toList t)
   have h3 := flatMap_esc_length t.toList
-  simp only [List.length_cons, List.length_append, List.length_singleton, String.length_toList] at h2 h3
+  simp only [List.length_cons, List.length_append, List.length_nil, String.length_toList] at h2 h3
   omega
 
 theorem sum_map_succ {β : Type} (w : β → ℕ) : ∀ l : List β, (l.map fun s => w s + 1).sum = (l.map w).sum + l.length
