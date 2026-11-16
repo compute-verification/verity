@@ -626,6 +626,12 @@ on it; this exposes the inner `sortStrings` over the tree's structurally-reducib
 private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
     Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
 
+/-- `any` over two elements as their disjunction. `paramsEitherOfJson` tests `proofs`' keys against each of
+`MEMBERS_KEYS` under `any`'s binder, where the walk reduces no field read; this takes each test out from under it, where
+`proofs`' read reduces and `keys?_obj` applies. -/
+private theorem any_pair {α : Type} (a b : α) (p : α → Bool) : [a, b].any p = (p a || p b) := by
+  simp
+
 /-! ## v2's parameters, with every field named -/
 
 /-- A verifier that names its window's open root has no unwindowed registered value: `unwindowed` returns `#[]` at once
@@ -886,28 +892,11 @@ private theorem params_full :
     have hgk_pub : Spot.Challenger.hexOf? (.str gk) = some keyPub := by
       show (Flock.unhex gk).toOption = some keyPub
       rw [← hgk, Flock.Hex.unhex_hexOf]; rfl
-    -- `paramsOfJsonAny` takes the per-member form where `proofs`' keys are `MEMBERS_KEYS`; the parameters' `proofs` has
-    -- the one statement's keys, so it is `false`. The keys are read under the `any`'s binder, where the walk reduces no
-    -- field read, so this is a rule keyed on the `any`, its side condition the field read the kernel evaluates.
-    have hpk : Spot.keys? (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) =
-        some #["circuit", "public", "registered"] := by
-      rw [keys?_mkObj, sortStrings_eq_sortLt]; kernel_rfl'
-    have hmk : ∀ j : Json, Spot.field? j "proofs" =
-        some (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) →
-        ([#["members"], #["members", "wiring"]].any fun x => ((Spot.field? j "proofs").bind Spot.keys? == some x)) =
-          false := by
-      intro j h
-      rw [h]
-      show ([#["members"], #["members", "wiring"]].any fun x =>
-        (Spot.keys? (Json.mkObj [("circuit", Json.str gc), ("public", Json.str gp), ("registered", Json.null)]) ==
-          some x)) = false
-      rw [hpk]
-      first | rfl | decide
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9, ?f10⟩
     -- `Spot.keys?` and `Spot.sortStrings` are blocked so the walk never hands the parser's key checks (`exactly`, whose
     -- body reads them) to the kernel's `whnf`, which cannot reduce `sortStrings`'s well-founded `Array.qsort`; the rules
     -- below (`keys?_mkObj`, `keys?_obj`, `sortStrings_of_sorted`, `sortStrings_eq_sortLt`) rewrite each occurrence instead.
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, hmk, ratio_half, split_half, poolValues_none,
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, hq, hgk_pub, hgw_dg, hgh_dg, any_pair, ratio_half, split_half, poolValues_none,
       keys?_mkObj,       keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt, PortsFacts.ports_entries, PortsFacts.rest_eq,
       unwindowed_some, Array.mapM_empty]
       block [Flock.canon, Spot.Program.parse, Flock.unhex, Spot.keys?, Spot.sortStrings] shallow []
