@@ -66,6 +66,10 @@ set_option maxRecDepth 200000
 
 namespace Verity.Sampled.Instance.HonestSession
 
+local instance lawfulBEqByteArray : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
+
 /-! ## Tags: `Zk.tags` touches only `identity`, so the public-file fields project through to `Tags.circuit`. -/
 
 theorem tagsZ_fmt : tagsZ.publicFormat = Flock.Tags.circuit.publicFormat := rfl
@@ -400,5 +404,48 @@ theorem drawn_ok_pf (hC : CircuitFileFacts) : HmIn.drawn cH {} pubI draw₀ = .o
 /-- `HmIn.checkOwn` over no public input port, no own recomputation: the match `(none, isEmpty = true)` returns, whatever
 the population value. -/
 theorem checkOwn_ok_pf : HmIn.checkOwn {} pubI none = .ok () := rfl
+
+/-! ## The dummy row and `checkPublic`.
+
+`HmOut.checkPublic` recomputes each row's frame-v3 root from the population's `b ‖ c` against the header's, and checks
+each row's pinned dummy `b ‖ c` against the padding instance's row under a zero salt. Everything but three circuit reads
+(`c.ports`, `c.dummyDigests` and the dummy row `HmOut.dummyRow c p`) is read off the (concrete) sampled public value, so
+the walk takes `hC`'s field equations for those three and reduces the rest. The dummy row at the one hidden-output port
+is the zero row: its output words all come from `c.dummyOutputs = #[0]`, so every byte is zero whatever the output
+group's `(at_, w)`. -/
+
+theorem getD01 (j : Nat) : (#[(0:Nat)]).getD j 0 = 0 := by
+  rcases j with _ | j
+  · rfl
+  · rfl
+
+/-- The hidden-output dummy row at the one port is the zero row. -/
+theorem dummyRow_zero (c : Flock.Circuit) (hp : c.ports = #[yPort]) (hd : c.dummyOutputs = #[0]) :
+    HmOut.dummyRow c 0 = zeroRow := by
+  simp only [HmOut.dummyRow]
+  obtain ⟨a, b, at_, w⟩ :=
+    (if 0 < HmOut.nIn c then ((0:Nat), (0:Nat), (0:Nat), (0:Nat))
+      else HmOut.outGroup c (0 - HmOut.nIn c))
+  simp only [hp, hd, Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    List.forIn_pure_yield_eq_foldl, getD01, ite_self]
+  kernel_rfl'
+
+/-- The one port's pinned-dummy check is false (no throw): the recomputed `rowBcZeroSalt yPort (dummy row)` is
+`dummyBc` itself, so `a != a`. Both `#[yPort][0]!` and `#[dummyBc].getD 0 _` reduce (no SHA forced). -/
+theorem dummyCheck_false :
+    (HmOut.rowBcZeroSalt (#[yPort][0]!) zeroRow != #[dummyBc].getD 0 ByteArray.empty) = false := by
+  rw [show HmOut.rowBcZeroSalt (#[yPort][0]!) zeroRow = #[dummyBc].getD 0 ByteArray.empty from rfl]
+  exact bne_self_eq_false _
+
+/-- Field `checkPublic_ok`, proved as stated. The one row's recomputed root matches the header's, and its pinned dummy
+`b ‖ c` is the zero row's under a zero salt (`dummyBc`). -/
+theorem checkPublic_ok_pf (hC : CircuitFileFacts) : HmOut.checkPublic cH pubD = .ok () := by
+  rw [pubD_eq hC]
+  unfold HmOut.checkPublic
+  simp only [hC.cH_ports, hC.cH_dummyDigests, Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, List.size_toArray, List.length_cons, List.length_nil,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, Nat.zero_add, List.range'_one,
+    List.forIn_cons, List.forIn_nil, dummyRow_zero cH hC.cH_ports hC.cH_dummyOutputs]
+  fwd_walk [dummyCheck_false] block [] shallow []
 
 end Verity.Sampled.Instance.HonestSession
