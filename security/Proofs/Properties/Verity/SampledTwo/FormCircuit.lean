@@ -84,7 +84,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The replaying provers' messages are the ones the check read, at the form** (`SessionMsgs` at
 `SessionMsgs.replayProver`): `sessionMsgs_replay` where the statements' count, their fit and the sessions' verdicts
