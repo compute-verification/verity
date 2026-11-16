@@ -166,7 +166,10 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
           "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml",
-          "tools/check/merge_map.py", "tools/check/merge_rows.py"]
+          "tools/check/merge_map.py", "tools/check/merge_rows.py",
+          # what the compose builds, which test_nebius_compose_packaging.py holds the compose gate's pin to
+          "benchmarks/one_stage/served_composite.sh", "benchmarks/one_stage/served_cases.py",
+          "benchmarks/one_stage/inference_only_lean.py"]
 parallel = true
 # the suite takes about 11 minutes on 3 workers and over an hour in one process (`held_workers`; on fewer, `bound` stretches
 # timeout_s in proportion)
@@ -219,12 +222,6 @@ paths = ["tests"]
 [[tool.verity.tests.reads]]
 tests = ["test_nebius_commit_pack_sizes.py"]
 paths = ["tools/research/src/research/pods/nebius/sky"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_nebius_compose_packaging.py"]
-paths = ["benchmarks/one_stage/served_composite.sh", "benchmarks/one_stage/served_cases.py",
-         "benchmarks/one_stage/inference_only_lean.py"]
-
 [[tool.verity.tests.reads]]
 tests = [
     "test_nebius_dispatch_lease_pool.py",
