@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.SpotFlock.NeededBitsOf
 public import Proofs.Flock.SpotFlock.WireMapRewires
-public import Definitions.Certifier.SampledAudit
 import Mathlib.Logic.Relation
 
 /-!
@@ -19,7 +18,7 @@ holds of the key program's own layout:
 * `owner_inGate_of_unitReads`: the source gate on an input bit the unit net reads is owned by its unit.
 * `membersPart_reads_own`: a proof block's gates read only its own gates and constants
   (`NeededBitsOf.blocksClosed_bitsProgs`); `bitsProgs_depends_member`: a gate of member `m` depends on gates of member `m`
-  alone.
+  alone (its hypothesis is `NetTiming.Depends`'s relation, which SPOT's Lean cannot name).
 -/
 
 @[expose] public section
@@ -130,10 +129,12 @@ theorem memberProg_reads_lt (c : _root_.Flock.Circuit) (n : ℕ) {p : ℕ} {x : 
       · have := NeededBitsOf.off_add_lt hhs (j := 1) (by omega)
         omega
 
-/-- **A gate depends only on its own member's**: a gate of member `m` reads gates of member `m`. -/
+/-- **A gate depends only on its own member's**: a gate of member `m` reads gates of member `m`. The hypothesis is
+`NetTiming.Depends (bitsProgs ms) i g` unfolded: SPOT[Flock]'s Lean imports none of the certifier's, so the lemma names
+the relation, which `Depends` is by definition. -/
 theorem bitsProgs_depends_member (ms : Spot.Bits.Members) {m i g : ℕ} (hm : m < ms.length)
     (hg₁ : Spot.Bits.base ms m ≤ g) (hg₂ : g < Spot.Bits.base ms (m + 1))
-    (hd : NetTiming.Depends (bitsProgs ms) i g) :
+    (hd : Relation.ReflTransGen (fun a b => a ∈ ((bitsProgs ms).gates[b]?.map BGate.reads).getD []) i g) :
     Spot.Bits.base ms m ≤ i ∧ i < Spot.Bits.base ms (m + 1) := by
   have hb := base_succ ms hm
   have step : ∀ y, Spot.Bits.base ms m ≤ y → y < Spot.Bits.base ms (m + 1) →
@@ -153,7 +154,6 @@ theorem bitsProgs_depends_member (ms : Spot.Bits.Members) {m i g : ℕ} (hm : m 
       obtain ⟨w, hw, rfl⟩ := hx
       have := memberProg_reads_lt _ _ hgq hw
       omega
-  unfold NetTiming.Depends at hd
   induction hd using Relation.ReflTransGen.head_induction_on with
   | refl => exact ⟨hg₁, hg₂⟩
   | @head a c' h' h ih => exact step c' ih.1 ih.2 a h'
