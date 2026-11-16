@@ -789,14 +789,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Claims.Sampling.SessionRuns": {
-   "owner": "@proofs",
-   "digest": "430f40a915e9222d4bee74b54e6db70d7d6095a1ea4d6e460fc2976e1dc50b6d",
-   "issue": "PRF-460",
-   "due": "2026-11-30"
-  },
   "Claims.Sampling.SessionRunsTo": {
    "owner": "@proofs",
+   "digest": "32ad92f5484ea5d7caa581a385b8638be26bb982d13f8c33af3a2846c0b73bb4",
    "issue": "PRF-629",
    "due": "2026-11-30"
   },
@@ -12331,7 +12326,7 @@
     "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
     "domain": ["SamplingDeploy.Code.ReplayCap", "SamplingDeploy.RegMatchesTwo"],
     "open": [
-     "Claims.Sampling.SessionRuns",
+     "Claims.Sampling.SessionRunsTo",
      "Claims.SamplingGeneric.CompiledTwo.Scope",
      "Claims.SamplingGeneric.SessionOpensTwo",
      "SamplingDeploy.Code.InteriorFixed",
@@ -12368,7 +12363,7 @@
     "                (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) fun x x_1 x_2 =>",
     "                List.nil)",
     "              (And",
-    "                (Claims.Sampling.SessionRuns FlockDeploy.sha512",
+    "                (Claims.Sampling.SessionRunsTo FlockDeploy.sha512",
     "                  (SamplingDeploy.deploy Flock.Readable.relation",
     "                    (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
     "                      SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage SamplingDeploy.toyStageBytes)))",
@@ -12390,7 +12385,7 @@
     "open": [],
     "reads": ["FlockSoundness.Assumptions.UniformRandomBytes"]
    },
-   "type_hash": "d4ebf4c0bc865e16721edc6ddde768037bc76d2d998f272b9881b1cdee7baa55"
+   "type_hash": "7e0b0d302767f38b5d291c154981e0891263e6af103441a1e30482ad4e1f016e"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
@@ -51156,18 +51151,18 @@
     "Claims.Sampling.unitTape": "337b4055568c77a1dc07dbfcf775cf0df21f58251c3669b1759de723e9f97272"
    }
   },
-  "Proofs.Flock.Claims.Sampling.Session": {
-   "digest": "d90e08ed5230442db47f68f2841f62ea1d966bb0b855e54244f81c2d21517a23",
-   "definitions": {
-    "Claims.Sampling.SessionRuns": "430f40a915e9222d4bee74b54e6db70d7d6095a1ea4d6e460fc2976e1dc50b6d"
-   }
-  },
   "Proofs.Flock.Claims.Sampling.SessionSlots": {
    "digest": "4b86930969ef7fa79e3369e137db6586099f82452c907635d5069c8c601cb6e0",
    "definitions": {
     "Claims.Sampling.cutSeen": "45f65eaadfe9828c9a2d5ec77a8654dd095b6c931c4350a43bb37969c1b8aca3",
     "Claims.Sampling.markOut": "956ff8952004ffe12e1e8c3d85def34401bb14992e7806d9c73aefc8fad9ed63",
     "Claims.Sampling.sessOff": "137a6d5bfa976dc5eed9961d82f6e58134add48bbd45e573b5565305e22d2ff5"
+   }
+  },
+  "Proofs.Flock.Claims.Sampling.SessionTo": {
+   "digest": "64de1b9a8fd255a8ee772717f98ae5baace33ef60fd69119565d82c0a5ed90b9",
+   "definitions": {
+    "Claims.Sampling.SessionRunsTo": "32ad92f5484ea5d7caa581a385b8638be26bb982d13f8c33af3a2846c0b73bb4"
    }
   },
   "Proofs.Flock.Claims.Sampling.Universal": {
@@ -53594,9 +53589,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "be361e82afff4b530e199b1b0ff515453c780900e26f5c46eac7146935d529e3",
+   "digest": "ba3c19e3e0071358e7427a07c0011ce58a02af5efd6db37356c752136c9169bd",
    "definitions": {
-    "Flock.Guarantees.SampledKSTwo": "30ffe2b28d47195d8240120c7674301bc14a571edbdd70c910b32bf3c9faa884",
+    "Flock.Guarantees.SampledKSTwo": "37e1875f27a1a805d2f6424b6d181029758b62cbf57e71d2990eede860463847",
     "Flock.Guarantees.SpotExfilTwo": "08de0b7993c2ff3d4eb9ca95b743b436bb560e22af1e32504005bc08ba31c82c",
     "Flock.Guarantees.SpotKSTwo": "920013bcf254c576602bfeb1df3942c6b725046ba3f6891145ef4975ec111656"
    }
