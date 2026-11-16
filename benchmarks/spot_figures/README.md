@@ -121,7 +121,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
-    head's key block as its scores unit and its values units on column blocks, which read the block's key rows from
+    head's key block as its scores proof block and its values proof blocks on column blocks, which read the block's key rows from
     their writers' committed rows). A new configuration, such as another cut, is a new
     entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
@@ -330,7 +330,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
   (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) cuts the head as it is served, by
-  the `partition` card `head-scores-values`: each head's key block its scores unit and its values units on 64
+  the `partition` card `head-scores-values`: each head's key block its scores proof block and its values proof blocks on 64
   columns, which read the block's key rows from their writers' committed rows (one writer a column block for all the
   heads); its rows carry that card's label. `--whole` prices the head as the `workload` card's whole key blocks and end
   block instead, for comparison.

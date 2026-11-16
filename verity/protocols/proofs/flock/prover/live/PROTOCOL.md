@@ -502,7 +502,7 @@ to its one tree, and the pads trees take `next_id() ≥ 1`.
 
 **Several tables per session** (the public-circuit ZK proof's §2.3) are on the CPU prover, `--session-tables J`; the
 device prover proves one table per session and refuses J above 1:
-- the sample's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
+- the sample's proof blocks split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
   table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
   divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
   header carries only its part as a subset sample;
