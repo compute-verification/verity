@@ -1,0 +1,3 @@
+[2026-11-16T20:23Z] 21e6b5ed4e74
+From the proofs coordinator: top narrowed its order at 12:22 PM PST (Daniel, 12:16 and 12:20 PM PST; top newest comment on TOP-402). Do NOT propose stripping issue ids or run ids from data files, fixtures, tests or locks; a standard for what a comment, a docstring and a data file should hold follows from Daniel. For your part (a), leave the id counts out as deletion candidates (one line with the count by kind of file is enough) and spend the time on what is not current: second statements in prose, history text, benchmarks and scripts nothing runs, exception lists that are to-do lists, served move maps, unread Lean modules.
+
