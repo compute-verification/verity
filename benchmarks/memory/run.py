@@ -435,7 +435,9 @@ def from_run(store, run: str, k: int | None) -> dict:
 def from_dir(tree: Path, k: int | None) -> dict:
     """The printed document of the run whose record is the directory `tree` (`kit.record_dir`), read with nothing of
     ours: its `out/verifier.json` (or its verifier host's, under `out/host/`), the run and commit `job.json` names, or
-    else the document this command left there (`out/memory.json`)."""
+    else the document this command left there (`out/memory.json`). `tree` may be the run's directory or its `out/`."""
+    if tree.name == "out" and not (tree / "out").is_dir():
+        tree = tree.parent
     try:
         job = json.loads((tree / "job.json").read_text()) if (tree / "job.json").is_file() else {}
     except (OSError, ValueError) as e:
@@ -589,15 +591,15 @@ def checkpoint(work: Path, vllm_py: str, run: Callable) -> Path:
     return snap
 
 
-def local(run: Callable = subprocess.run) -> dict:
+def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
     """The node's session on one card of this machine: `run.sh` with ROLE=both, SERVE=node and GPUS=1, a vLLM engine
     serving ROLE's pinned checkpoint with its weights in one arena (`engine.py`), the store, which the node prover
     (`node.py`) reads whole in paced, timed passes, and the verifier beside them on cores of its own, in the one
     session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint and the caches are
     kept in LOCAL_WORK, and on a machine with no lease of its own (no `gpu-lease` and no `LEASE_DIR`) the tree's
     lease's locks too, while a machine's own lease directory stays the one every lane there counts in. The run's records are kept, in
-    the research run's directory under one and else in a directory of LOCAL_WORK/runs/. A session whose store is
-    below `STORE_MIN` of the card's memory prints no number."""
+    the research run's directory under one and else in a directory of LOCAL_WORK/runs/, which is returned with the
+    document. A session whose store is below `STORE_MIN` of the card's memory prints no number."""
     given = SETTINGS.environ()
     other = [f"{k}={given[k]}" for k, v in PACE.items() if given.get(k, v) not in (v, "")]
     if other := other + [f"{k}={given[k]}" for k in WINDOWED if given.get(k)]:
@@ -636,7 +638,8 @@ def local(run: Callable = subprocess.run) -> dict:
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
-          f"verifier's node one card of {kind}; its records go to {held}/out", file=sys.stderr)
+          f"verifier's node one card of {kind}; its records go to {held}/out, which `verity bench memory --from {held}` "
+          "reads back", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
         if (why := refusal(Path(held) / "out" / "verifier.json")) is not None:
@@ -650,7 +653,8 @@ def local(run: Callable = subprocess.run) -> dict:
                        "bytes and not the card's memory, so its share is not this benchmark's")
     machine = {"card": name, "sheet": kind, **engine_args(Path(held)), "sheet_sha256": digest(SHEETS),
                "verifier_sha256": digest(VERIFIER)}
-    return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine)
+    return (document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True, machine=machine),
+            Path(held))
 
 
 def refusal(record: Path) -> str | None:
@@ -993,7 +997,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     ap.add_argument("period", nargs="?", help="the node run: the challenger's period, a name its ledger hasn't used")
     ap.add_argument("--dry-run", action="store_true", help="the node run with nothing sent to either gate; no number")
     ap.add_argument("--from", dest="run", metavar="DIR|RUN", help="print from a recorded run: the directory of its record "
-                    "(its job.json and out/), read with nothing of ours, or a run id, read through the evidence store")
+                    "(its job.json and out/, or that out/), read with nothing of ours, or a run id, read through the "
+                    "evidence store")
     ap.add_argument("--session", type=int, metavar="K", help="the session, in a run that holds several")
     ap.add_argument("--loopback", action="store_true", help="both processes on this machine; certifies nothing")
     ap.add_argument("--local", action="store_true",
@@ -1002,11 +1007,12 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     a = ap.parse_args(argv)
     if sum((a.period is not None, a.run is not None, a.loopback, a.local)) != 1:
         ap.error("one of PERIOD (the node run), --from RUN, --loopback or --local")
+    records = None
     try:
         if a.loopback:
             doc = loopback(run)
         elif a.local:
-            doc = local(run)
+            doc, records = local(run)
             store_of = _no_store
         elif a.run and Path(a.run).is_dir():
             doc = from_dir(kit.record_dir(a.run), a.session)
@@ -1040,6 +1046,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         kit.report("memory", printed, doc, measured, document=not kept, ran_with=ran(doc), accepted=True)
     except ValueError as e:
         print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
+    if records is not None and not SETTINGS.RESEARCH_RUN_DIR:
+        # the document says the records are a --local session's, which `--from` that directory reads them as
+        (records / "out" / "memory.json").write_text(json.dumps(doc))
     if kept:
         which = "the loopback" if was == "loopback" else "--local"
         print(f"memory: this run ran {which}, and its out/memory.json stays {which}'s document", file=sys.stderr)
