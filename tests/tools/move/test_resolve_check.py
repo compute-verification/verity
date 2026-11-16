@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("resolve_check_under_test", HERE.parent / "resolve_check.py")
+spec = importlib.util.spec_from_file_location("resolve_check_under_test", HERE.parents[2] / "tools" / "move" / "resolve_check.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
@@ -56,7 +56,7 @@ def moved(tmp_path: Path, words: dict[str, str], files: list[str]) -> tuple[Path
     row = ", ".join(f"{json.dumps(old)} = {json.dumps(new)}" for old, new in words.items())
     word_map = tmp_path / "map.toml"
     word_map.write_text(f"[words]\n\n[[words_in]]\nfiles = {json.dumps(files)}\nwords = {{ {row} }}\n")
-    subprocess.run([sys.executable, str(HERE.parent / "rename.py"), "--map", str(word_map), "--root", str(root)],
+    subprocess.run([sys.executable, str(HERE.parents[2] / "tools" / "move" / "rename.py"), "--map", str(word_map), "--root", str(root)],
                    check=True, capture_output=True, text=True)
     return root, parent, committed(root, "move")
 

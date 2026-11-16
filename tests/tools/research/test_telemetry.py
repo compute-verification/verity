@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-PKG_ROOT = HERE.parent / "src"          # tools/research/src (research is installed; kept for the subprocess PYTHONPATH below)
+PKG_ROOT = HERE.parents[2] / "tools" / "research" / "src"          # tools/research/src (research is installed; kept for the subprocess PYTHONPATH below)
 
 from research import settings  # noqa: E402
 from research.telemetry import CLASSIFIER_VERSION, events, job, policy  # noqa: E402

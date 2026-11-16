@@ -10,7 +10,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-#include "../cuda/zerocheck_fused.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/zerocheck_fused.cuh"
 
 __host__ __device__ inline uint64_t zf_mix(uint64_t x) {
     x += 0x9e3779b97f4a7c15ull;

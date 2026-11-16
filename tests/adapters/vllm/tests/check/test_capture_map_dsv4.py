@@ -31,7 +31,7 @@ from verity_vllm.engine import meta_inventory as MI
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "deepseek_v4"
-MAPS = HERE.parents[1] / "manifests" / "capture-maps"
+MAPS = HERE.parents[4] / "adapters" / "vllm" / "manifests" / "capture-maps"
 MAP = MAPS / "deepseek-v4-eager-hopper-tp8-v0.json"
 
 CMAP = CM.load(MAP)

@@ -122,7 +122,7 @@ def lower(k: int, tile: tuple[int, int], bind: dict, path: Path, j10r: bool = Fa
     """The auditor's lowering of K's template into `path`, in its own process (`_lower`)."""
     subprocess.run([sys.executable, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(tile[0]),
                     str(tile[1]), json.dumps(bind), str(path), *(["--j10r"] if j10r else [])], check=True,
-                   cwd=HERE.parents[1])
+                   cwd=HERE.parents[4] / "adapters" / "vllm")
 
 
 def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -> None:
@@ -209,7 +209,7 @@ def leaf_file(kind: str, k: int) -> str:
 def lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """The auditor's lowering of K's leaf statement ``kind`` into `path`, in its own process (`_lower_leaf`)."""
     subprocess.run([sys.executable, "-m", "tests.protocols.pouw_h1_circuits", "--lower-leaf", str(k), kind,
-                    str(Path(program).resolve()), str(Path(path).resolve())], check=True, cwd=HERE.parents[1])
+                    str(Path(program).resolve()), str(Path(path).resolve())], check=True, cwd=HERE.parents[4] / "adapters" / "vllm")
 
 
 def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:

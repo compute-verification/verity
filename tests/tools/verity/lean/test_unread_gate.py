@@ -21,7 +21,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
-GATE = HERE.parent / "unread_gate.py"
+GATE = HERE.parents[3] / "tools" / "verity" / "lean" / "unread_gate.py"
 FIXTURE = HERE / "fixtures" / "unread"
 FACTS = HERE / "fixtures" / "unread.facts.jsonl"
 #: ``MAIN``'s code the gate runs (`unread_gate.CODE`), copied into the test's repository
