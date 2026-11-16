@@ -42,7 +42,7 @@ theorem band_pub_iff_seg_global (N : ℕ) [NeZero N] (d : ℕ) :
   forall_congr' fun _ => pubMeets_exact_iff _ (chainBandSeg_encDec _ _ _ _ _ _)
 
 /-- **The band store with a public encoder at every segment count from 1 to 2^64**, unconditional, both domain
-layouts, every `d ≥ 5`. Deployment conditions (review §48): (1) the check is the exact, full-decode check, and a
+layouts, every `d ≥ 5`. Deployment conditions: (1) the check is the exact, full-decode check, and a
 sampled or spot check is not covered; (2) the salt is fixed by the verifier or the protocol, not the server; (3) `W`
 is fixed before setup, and the primitive is independent of `W` and the salt; (4) the commitment to `W` and the
 binding of `C*` are idealized. -/

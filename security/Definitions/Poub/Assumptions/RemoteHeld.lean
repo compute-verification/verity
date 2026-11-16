@@ -10,7 +10,7 @@ The premises of `ResourceAccounting.Guarantees.Remote.Held` and its time-held fo
 
 * `Identity` (statement C's links clause): no block comes back into the node over its boundary links. The link-charged
   forms take `Links` instead, the links' ceiling. Statement C in full, no device outside the node computing for it, is
-  no longer assumed of the prover: the memory line of record reads it from the network attesters' record, an event
+  not assumed of the prover: the memory line of record reads it from the network attesters' record, an event
   charged at δ_net (`Covered`, `IngressCounted` in `Definitions.Poub.Assumptions.RemoteOutside`), with which it
   splits `SketchBound`.
 * `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings

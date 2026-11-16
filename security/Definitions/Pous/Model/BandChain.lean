@@ -9,7 +9,7 @@ public import Definitions.Pous.Model.Dense
 The definitions the band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
 `BandMultiMeets14`, `BandMultiMeets14K106`, `ChainDenseMeets64`), copied verbatim from the proofs' source modules
 (the like-named sections of `Security/Proofs/Pous/Chain/Flat.lean` hold the rest of each), with
-each source namespace `PousX` renamed `Pous.X` (the `Pous.Dense` and `Definitions.Pous.Model.P3Chain` precedent). The
+each source namespace `PousX` renamed `Pous.X`. The
 overwrite chain itself (`Pous.Sponge.{iv, padBlk, parentsDesc, ovR, ovH, ovStep, ovAbsorb, ovKey}`) is reused from
 `Definitions.Pous.Model.P3Chain`, whose copies are of the same source.
 - `Pous.Sponge` (`SpongeDense`): the ideal-permutation model

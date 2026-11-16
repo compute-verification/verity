@@ -32,7 +32,7 @@ union over a candidate family's query indices), `Prover.pr_unpaid_rank_family_le
 `SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window),
 `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchSum` (the session, at every parameter), and
 `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed` (the deployed guarantee,
-`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
+`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`). The budget is the named assumption
 `ResourceAccounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
 form at the worst budget recovers the product form (`RemoteRunConservationSketchDeployedProduct` in
 `DeployedSketch.lean` keeps that bound stated).

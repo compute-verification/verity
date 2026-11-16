@@ -23,7 +23,7 @@ theorem pr_def (P : α → Prop) [DecidablePred P] :
   Verity.Game.prCoin_eq_card P
 
 open Classical in
-/-- `pr_def` at the classical decision of `P`, the one `pr`'s card form had when it was a definition of its own. -/
+/-- `pr_def` at the classical decision of `P`: `pr`'s card form. -/
 theorem pr_eq_card (P : α → Prop) :
     pr P = ((Finset.univ.filter P).card : ℝ≥0∞) / Fintype.card α :=
   pr_def P

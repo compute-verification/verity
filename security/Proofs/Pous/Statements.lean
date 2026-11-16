@@ -177,7 +177,7 @@ def A6RederiveTimed : Prop :=
     (hR : ∀ W ω r i, (R W (sch.enc W ω r).1 (z W ω r) i).run (M.answer ω) = (sch.enc W ω r).2 i),
     ∃ (A₁ : Preprocessor sch κ) (A₂ : SeqResponder sch κ D Q), ∀ W, pr (seqAccepts sch k W A₁ A₂) = 1
 
-/-- **A7′** (sms5 review, restating the A7 draft), in certified log form: at `B = 2^28` blocks,
+/-- **A7′**, in certified log form: at `B = 2^28` blocks,
 `S = ⌊(18/19)·2056·B⌋` (RW–SMS records of `w + 8 = 2056` bits), `λ' = 128` and `log₂ M ≥ 2048 − 2.8·10⁻⁶`
 (`M = φ(N)`), the history union closes and `k` challenges reach 1%: `k = 117` (M1, `T = 2^20`), `142` (M1, `2^34`),
 `175` (M2, `2^20`) and `238` (M2, `2^34`). The review's `g` (258,033,293; 259,824,025; 261,446,274; 263,285,578) are
@@ -362,7 +362,7 @@ open Pous.Invertible in
 `m`-bit preprocessor and `(D, Q)`-bounded online programs — which may query `P⁻¹` — answer at least `k` top-label
 challenges with probability at most the B5 bound at width `n·wc` and `Q_tot = n·(Q + 1) + 2n`.
 
-Kept only as the statement `N10Refuted` negates; it is no longer a target. -/
+The statement `N10Refuted` negates. -/
 def InvExPostFactoTwoLayer : Prop :=
   ∀ (n wc m s D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
     (hwc : 0 < wc)
@@ -488,7 +488,7 @@ def StackedAuditOnePercent : Prop :=
 
 /-! ## The continuous audit (`Definitions.Pous.Model.Continuous`)
 
-Red team: needed. The memory challenger enforces the three timing
+The memory challenger enforces the three timing
 rules: it reveals the next index only after the last round closed, rejects an answer past the hard deadline, and counts
 every answer past `Δ` as a miss, with every rejected or wrong one. `PerAnswer` takes no hypothesis about them, and
 holds at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
@@ -514,7 +514,7 @@ def PerAnswer : Prop :=
 
 /-! ## Completeness of the continuous audit
 
-Red team: needed. `ContinuousAudit` bounds what the memory challenger
+`ContinuousAudit` bounds what the memory challenger
 of `Security/Definitions/Pous/Model/Continuous.lean` accepts; `ContinuousComplete` bounds what the same memory
 challenger rejects, for a responder whose rounds miss at a bounded rate. It takes no named assumption: the miss rate `q`
 is a parameter.
@@ -566,7 +566,7 @@ def ContinuousComplete : Prop :=
 
 /-! ## The continuous audit, time-averaged, with arrivals sampled by the memory challenger
 
-Red team: needed. The memory challenger of `ContinuousAudit`,
+The memory challenger of `ContinuousAudit`,
 unchanged, run on arrivals it samples itself: one coin per slot of one unit
 (`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals sampled by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
