@@ -48,5 +48,5 @@ PoUS's rounds' and PoUB's parties) through `runner.run`.
   `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py` with `verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py`,
   and `verity/protocols/resource_accounting/compute/pouw/verifier/parties.py`: protocols' parties on the runtime, the two sides of the
   first two each in its own file.
-- `tests/deploy_example.py`: a two-party protocol the tests run every way the runtime runs one; `tests/test_deploy.py`
-  and `tests/test_stream.py` are the suite (`uv run tools/check/suites.py verity/runtime`).
+- `tests/verity/runtime/deploy_example.py`: a two-party protocol the tests run every way the runtime runs one;
+  `tests/verity/runtime/test_deploy.py` and `tests/verity/runtime/test_stream.py` are the suite (`uv run tools/check/suites.py verity/runtime`).
