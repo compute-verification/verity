@@ -1,7 +1,4 @@
 #!/bin/sh
-# In use: `drive.sh merge ARGS` and `drive.sh queue ARGS` (`research merge`, `research queue eject`) with the App's token, and
-# `status`. Kept stopped: the loop at the bottom and `once`, `queue promote` and `queue baseline`, which run verbs `research
-# queue` no longer has; /data/drive/stopped stays, and ci's verified queue lands PRs (README). The loop, as written:
 # Drive: `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
 # origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
