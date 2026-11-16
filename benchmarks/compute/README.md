@@ -222,7 +222,10 @@ step and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
-line says `Lean verdict of record against the local challenger's key`. `COINS=in-process` holds the challenger in the
+line says `Lean verdict of record against the local challenger's key`. Under it the serve runs inside a Pearl-C period
+of the local gate's lane, opened before the serve on the run's circuit record (built first, on the CPU) and closed once
+the serve's salt session has ended, so the verifier's sample is the lane's first reserve after the close, as PoUW's row
+of record requires (`out/pieces/pouw/period.json` holds the period). `COINS=in-process` holds the challenger in the
 serving process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it
 (`salt_coin`). The serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing
 in `/tmp`.

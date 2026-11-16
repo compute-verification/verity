@@ -141,3 +141,49 @@ def test_with_in_process_coins_the_row_is_asked_under_no_key_pin_or_lane(tmp_pat
     doc, _ = verdicts(tmp_path, None)
     assert '"key_sha512": null, "lane": null' in doc["protocols"]["work"]["why"]
     assert '"run": null' in doc["protocols"]["work"]["why"]
+
+
+def steps() -> list[str]:
+    """serve.sh's step names in the order its lines run them."""
+    return re.findall(r"^\s*(?:\[ [^]]* \] \|\| )?step ([a-z-]+) ", SERVE.read_text(), re.M)
+
+
+def test_the_circuit_record_and_the_period_come_before_the_serve_and_its_close_before_the_sample():
+    """PoUW's row of record holds the serve's salt session to a Pearl-C period of the lane's own that committed the
+    circuit record, and the sample to the lane's first reserve after that period closed: so the circuit record is built
+    before the period opens, the period opens before the serve, and it closes after the serve's passes are retained and
+    before python-verify takes the sample."""
+    got = steps()
+    for name in ("serve-phi", "circuit", "period-open", "serve", "retain", "period-close", "python-verify", "verdicts"):
+        assert got.count(name) == 1, (name, got)
+    at = got.index
+    assert at("serve-phi") < at("circuit") < at("gate") < at("period-open") < at("serve") < at("retain") \
+        < at("period-close") < at("python-verify") < at("verdicts")
+
+
+def period(tmp_path, verb: str) -> tuple[list[str], Path]:
+    """serve.sh's `period VERB` run alone with a `$PY` that only prints its arguments: those arguments, and W."""
+    fn = re.search(r"^period\(\) \{.*?^\}$", SERVE.read_text(), re.M | re.S)
+    assert fn, "serve.sh's period() moved: this test reads it"
+    py, w = tmp_path / "py", tmp_path / "w"
+    py.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    py.chmod(0o755)
+    env = {**os.environ, "PY": str(py), "W": str(w), "PIECE": str(tmp_path / "piece"), "REC": str(tmp_path / "rec"),
+           "SCHEME": "pearl-c-h100-v1-h3", "PEARLC_CHALLENGER_GATE": "gate cmd", "PEARLC_CHALLENGER_LANE": "vllm",
+           "RESEARCH_RUN_ID": "r20261116-000000-abcd"}
+    got = subprocess.run(["bash", "-c", f"{fn[0]}\nperiod {verb}"], env=env, capture_output=True, text=True, check=True)
+    return got.stdout.splitlines(), w
+
+
+def test_the_period_opens_on_the_runs_circuit_record_and_closes_once_the_serves_salt_session_has_ended(tmp_path):
+    """The open commits the circuit record's bytes (`pearlplus-period open --circuit-record`), the record
+    `pearlplus_of_record` holds the period's circuit to; the close reads the serve's salt session from its served.json
+    as one window's and waits for the gate's ledger to end it, since the gate closes no period a window of which runs."""
+    opened, _ = period(tmp_path, "open")
+    assert opened == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(tmp_path / "piece"),
+                      "--gate", "gate cmd", "--name", "pearlplus-r20261116-000000-abcd", "--scheme", "pearl-c-h100-v1-h3",
+                      "--circuit-record", str(tmp_path / "rec" / "circuit-record.json")]
+    closed, w = period(tmp_path, "close")
+    assert closed == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "close", str(tmp_path / "piece"),
+                      "--gate", "gate cmd", "--lane", "vllm", "--windows", str(w / "pearl"), "--wait", "300"]
+    assert os.readlink(w / "pearl" / "w0" / "served.json") == str(tmp_path / "piece" / "served.json")
