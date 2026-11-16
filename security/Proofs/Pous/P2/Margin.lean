@@ -226,25 +226,6 @@ theorem log_b19 (Sl k g : ℕ) (hk : 1 ≤ k) (hg : 1 ≤ g) (hgB : g ≤ 2 ^ 19
   push_cast at h ⊢
   linarith
 
-/-- `λ = 0`, `k = 88`, `g = 497,557`: `log₂(|Hist|·Γ) ≤ −3,001,430`. -/
-theorem log_b19_0 : logHistGammaM1 (2 ^ 19) (8169621180 + 0 * 2 ^ 19 + 1) (2 ^ 20) 497557 88 (2 ^ 16448) ≤
-    -3001430 :=
-  (log_b19 _ 88 497557 (by norm_num) (by norm_num) (by norm_num)).trans (by norm_num)
-
-/-- `λ = 64`, `k = 95`, `g = 499,480`: `log₂(|Hist|·Γ) ≤ −1,035,135`. -/
-theorem log_b19_64 : logHistGammaM1 (2 ^ 19) (8169621180 + 64 * 2 ^ 19 + 1) (2 ^ 20) 499480 95 (2 ^ 16448) ≤
-    -1035135 :=
-  (log_b19 _ 95 499480 (by norm_num) (by norm_num) (by norm_num)).trans (by norm_num)
-
-/-- `λ = 128`, `k = 104`, `g = 501,579`: `log₂(|Hist|·Γ) ≤ −1,959,876`. -/
-theorem log_b19_128 : logHistGammaM1 (2 ^ 19) (8169621180 + 128 * 2 ^ 19 + 1) (2 ^ 20) 501579 104 (2 ^ 16448) ≤
-    -1959876 :=
-  (log_b19 _ 104 501579 (by norm_num) (by norm_num) (by norm_num)).trans (by norm_num)
-
-/-- `λ = 256`, `k = 127`, `g = 505,618`: `log₂(|Hist|·Γ) ≤ −1,197,439`. -/
-theorem log_b19_256 : logHistGammaM1 (2 ^ 19) (8169621180 + 256 * 2 ^ 19 + 1) (2 ^ 20) 505618 127 (2 ^ 16448) ≤
-    -1197439 :=
-  (log_b19 _ 127 505618 (by norm_num) (by norm_num) (by norm_num)).trans (by norm_num)
 
 /-- The four rows at `2^19` blocks and target `2^-129`; each `g` is the largest with `((g − 1)/2^19)^k ≤ 1/100`. -/
 theorem row_b19_0 : P2RowE (2 ^ 19) 16448 (8169621180 + 0 * 2 ^ 19 + 1) (2 ^ 20) 88 129 :=
@@ -413,20 +394,6 @@ theorem not_slack_b19 (lam m kr : ℕ) (hS : m * 16448 ≤ 8169621180 + lam * 2 
   · have : ((m1p (2 ^ 19) 16448 p b).B : ℝ) = 2 ^ 19 := by norm_num [m1p]
     rw [this]; exact hbig
 
-/-- **`λ = 64`: raw storage (498,733 blocks, fraction 0.95126) breaks every `k ≤ 92`.** -/
-theorem raw_b19_64 (p b D Q k : ℕ) (hk : k ≤ 92) (ε : ℝ≥0∞) :
-    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 64 D Q k ε :=
-  not_slack_b19 64 498733 92 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
-
-/-- **`λ = 128`: raw storage (500,773 blocks, fraction 0.95515) breaks every `k ≤ 100`.** -/
-theorem raw_b19_128 (p b D Q k : ℕ) (hk : k ≤ 100) (ε : ℝ≥0∞) :
-    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 128 D Q k ε :=
-  not_slack_b19 128 500773 100 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
-
-/-- **`λ = 256`: raw storage (504,854 blocks, fraction 0.96293) breaks every `k ≤ 121`.** -/
-theorem raw_b19_256 (p b D Q k : ℕ) (hk : k ≤ 121) (ε : ℝ≥0∞) :
-    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 256 D Q k ε :=
-  not_slack_b19 256 504854 121 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
 
 /-! ### The families at `ε = 2^-128` -/
 

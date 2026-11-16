@@ -56,13 +56,6 @@ theorem onTime_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
   have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.ChallengePhaseCommitment.limitNs hc
   exact ⟨run, hrun, hc, hl.trans_le haud.2.2.2.2.1, hot⟩
 
-theorem δ_nonneg : (0 : ℝ) ≤ (Params.δ : ℝ) := by
-  have : (0 : ℚ) ≤ Params.δ := by norm_num [Params.δ]
-  exact_mod_cast this
-
-theorem εMax_ne_top : Params.εMax ≠ ⊤ := by
-  unfold Params.εMax
-  exact ENNReal.pow_ne_top (ENNReal.inv_ne_top.2 two_ne_zero)
 
 /-! ## The extractor -/
 
@@ -285,18 +278,5 @@ theorem periodHeld_nontrivial :
   rw [Pouw.pr_eq_one fun _ => trivial]
   exact not_le.2 bound_toReal_lt_one
 
-/-- **`periodCapacity` holds at the honest instance**: `periodHeld_honest`, its premises being `periodHeld`'s. -/
-theorem periodCapacity_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
-    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
-    DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=
-  periodHeld_honest r P D Q L round hs hfull
-
-/-- **`periodCapacity` is nontrivial**: `periodHeld_nontrivial`, its bound being `periodHeld`'s. -/
-theorem periodCapacity_nontrivial :
-    ¬ Pouw.pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      (Params.δ : ℝ) + Params.εMax.toReal :=
-  periodHeld_nontrivial
 
 end Pous.Period.SecurityProofs

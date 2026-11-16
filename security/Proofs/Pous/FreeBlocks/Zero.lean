@@ -40,21 +40,5 @@ theorem seqAcceptsFree_zero (sch : Scheme M) {S D Q : ℕ} (k : ℕ) (W : Bits s
   · intro h j
     rw [h]; simp
 
-/-- With no free blocks, the free-blocks target is the sequential audit's. -/
-theorem auditSecureFree_zero (sch : Scheme M) (S D Q k : ℕ) (δ ε : ENNReal) :
-    AuditSecureFree sch 0 S D Q k δ ε ↔ AuditSecure sch .sequential S D Q k δ ε := by
-  have hpr : ∀ W (A₁ : Preprocessor sch S) (Fr : FreeSet sch 0) (A₂ : SeqResponder sch S D Q),
-      pr (seqAcceptsFree sch k W A₁ Fr A₂) = pr (seqAccepts sch k W A₁ A₂) := by
-    intro W A₁ Fr A₂
-    have h : seqAcceptsFree sch k W A₁ Fr A₂ = seqAccepts sch k W A₁ A₂ :=
-      funext fun x => propext (seqAcceptsFree_zero sch k W A₁ Fr A₂ x)
-    simp only [h]
-  constructor
-  · intro h W A₁ A₂
-    rw [← hpr W A₁ ⟨fun _ _ _ _ => ∅, fun _ _ _ _ => by simp⟩ A₂]
-    exact h W A₁ _ A₂
-  · intro h W A₁ Fr A₂
-    rw [hpr]
-    exact h W A₁ A₂
 
 end Pous.FreeBlocks

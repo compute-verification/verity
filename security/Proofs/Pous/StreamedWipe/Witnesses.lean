@@ -36,12 +36,6 @@ namespace Pous.Claims
 open Finset Pous Pous.StreamedWipe
 open scoped ENNReal
 
-/-- At the wipe's own acceptance rule the distinguisher is the game's, built from the prover. -/
-theorem wipeDistinguisherBy_accepts {N k b q M E : ℕ} (P : Prover N k b q M E) :
-    wipeDistinguisherBy Accepts P = wipeDistinguisher P := rfl
-
-theorem winRealBy_accepts {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b) (P : Prover N k b q M E) :
-    winRealBy Accepts prf P = winReal prf P := rfl
 
 /-- The prover that keeps all its prior content: its fill writes `z` into the first `q` of its `M` bits and sends
 nothing out, and its keep reads them back. -/
@@ -121,12 +115,6 @@ theorem keepNothing_within (V : Acceptance) {N k b q M E κ : ℕ} (hq : 128 ≤
   ((winRealBy_le_of_keep_const V prf P w hw).trans
     (pow_le_pow_of_le_one zero_le (ENNReal.inv_le_one.2 ENNReal.one_lt_two.le) hq)).trans le_self_add
 
-/-- The honest server, which keeps every label and nothing of its prior content, is within the claims' bound at
-`acceptAll`: what breaks the claims there is a prover that keeps its content, not the event itself. -/
-theorem honest_within {N k b q κ : ℕ} (hq : 128 ≤ q) (prf : Bits κ → Fin N → Bits b) :
-    winRealBy acceptAll prf (PousStreamedWipe.honest N k b q) ≤
-      (2⁻¹ : ℝ≥0∞) ^ 128 + prfAdvantage prf (wipeDistinguisherBy acceptAll (PousStreamedWipe.honest N k b q)) :=
-  keepNothing_within acceptAll hq prf _ (fun _ => false) fun _ _ _ => rfl
 
 /-- No labels: the PRF of the nontrivial lemmas, of a zero-bit key. -/
 def noKey (N : ℕ) : Bits 0 → Fin N → Bits 512 := fun _ _ _ => false

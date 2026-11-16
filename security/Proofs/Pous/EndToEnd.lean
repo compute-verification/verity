@@ -16,8 +16,6 @@ namespace Pous.EndToEnd.SecurityProofs
 open MemoryChallenger
 open scoped ENNReal
 
-theorem size_bytesOf {n : ℕ} (x : Bytes n) : (bytesOf x).size = n := by
-  simp [bytesOf, ByteArray.size]
 
 theorem get!_bytesOf {n : ℕ} (x : Bytes n) (i : ℕ) (hi : i < n) : ((bytesOf x).get! i).toNat = (x ⟨i, hi⟩).val := by
   simp only [bytesOf, ByteArray.get!]
@@ -237,13 +235,6 @@ theorem checkKey_coinKey (k : Bytes 256) : checkKey (coinKey k) = .ok () := by
   rw [show HM96.keyBytes = 256 from rfl, hs, hg, uint8_clear]
   rfl
 
-theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
-    ∀ l : List α, (∀ a ∈ l, ∃ b, f a = .ok b) → ∃ bs, l.mapM f = .ok bs
-  | [], _ => ⟨[], rfl⟩
-  | a :: l, h => by
-    obtain ⟨b, hb⟩ := h a (by simp)
-    obtain ⟨bs, hbs⟩ := list_mapM_ok f l fun x hx => h x (by simp [hx])
-    exact ⟨b :: bs, by rw [List.mapM_cons, hb, hbs]; rfl⟩
 
 theorem beN_ok (n x : ℕ) (w : String) (h : x < 2 ^ (8 * n)) : ∃ b, beN n x w = .ok b := by
   unfold beN; simp only [h, ↓reduceIte]; exact ⟨_, rfl⟩
@@ -336,9 +327,6 @@ theorem honest_answers (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → 
   simp
 
 set_option exponentiation.threshold 20000 in
-theorem honestPassesRing : HonestPassesRing :=
-  ⟨stateBound_lt, honestPre sch, honestOn, fun W => pr_eq_one fun x =>
-    honest_answers _ W _ (sch.enc W x.1 x.2.1).2 105 x.2.2⟩
 
 set_option exponentiation.threshold 20000 in
 theorem honestPassesAccepts : HonestPassesAccepts := by
@@ -376,13 +364,5 @@ theorem endToEndRing_nontrivial :
   rw [pr_eq_one fun _ => trivial]
   exact not_le.2 bound_lt_one
 
-/-- **`endToEndRingDeployed` holds at the honest instance**: `endToEndRing_honest`, its event being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_honest : HonestPassesAccepts := honestPassesAccepts
-
-/-- **`endToEndRingDeployed` is nontrivial**: `endToEndRing_nontrivial`, its bound being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_nontrivial :
-    ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRing_nontrivial
 
 end Pous.EndToEnd.SecurityProofs

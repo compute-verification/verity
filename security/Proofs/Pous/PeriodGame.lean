@@ -131,8 +131,6 @@ theorem flatMap_range_getElem? {α : Type} (g : ℕ → List α) (hg : ∀ c, (g
       have h2 : b % 64 = b - 64 * n := by omega
       rw [h1, h2]
 
-theorem sha512_size (x : ByteArray) : (Flock.Sha512.hash x).size = 64 := by
-  unfold Flock.Sha512.hash; exact Array.size_ofFn
 
 theorem hash_ofFn (x : ByteArray) :
     (⟨Array.ofFn fun i : Fin 64 => (Flock.Sha512.hash x).data.getD i.val 0⟩ : ByteArray) = Flock.Sha512.hash x := by

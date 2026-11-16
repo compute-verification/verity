@@ -157,10 +157,6 @@ theorem ObligationDemo : Pous.Guarantees.ObligationDemo := by
   intro T _ _ tag htag Sz k D Q L c _ h W A₁ A₂
   exact ObligationOfStatic N T tag htag Sz k D Q L c h W A₁ A₂
 
-/-- The widened per-round floor implies `P2RingRoundSecure`: its range contains that one's. -/
-theorem roundSecure_of_wide {p ε₀ : ℝ≥0∞} {D Q L : ℕ} (h : Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L) :
-    Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L :=
-  fun N _ h1 h2 => h N h1 (h2.trans (by norm_num))
 
 theorem lowBoundaries_of_le {Sz : ℕ → ℕ} {S k : ℕ} (h : ∀ j < k, Sz j ≤ S) : lowBoundaries Sz S k = k := by
   unfold lowBoundaries
@@ -254,14 +250,6 @@ theorem obligationHeld : ObligationHeld := by
     fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
       hdev hinst hS (o.1, (o.2, e))
 
-/-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
-keys among the other audits' coins. -/
-theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
-    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
-    DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=
-  periodHeld_honest r P D Q L round hs hfull
 
 /-- **`obligationHeld` is nontrivial**: at a store of `2^19` tags, an event that holds on every oracle and coin
 exceeds its bound `δ + ε_max`. -/

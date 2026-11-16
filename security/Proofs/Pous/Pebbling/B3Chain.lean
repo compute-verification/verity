@@ -97,19 +97,6 @@ theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
     · have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hp (h ▸ hx)
       rw [this, ih]
 
-/-- A program that never asks `p` does not depend on the answer to `p`. -/
-theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
-    (P : OracleAlgorithm M α) (hp : p ∉ pre p f P) : P.run g = P.run f := by
-  induction P with
-  | ret a => rfl
-  | round qs k ih =>
-    simp only [pre, List.mem_append, not_or] at hp
-    obtain ⟨hq, hrest⟩ := hp
-    simp only [hq, ↓reduceIte] at hrest
-    have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hq (h ▸ hx)
-    simp only [OracleAlgorithm.run]
-    rw [← this]
-    exact ih _ hrest
 
 /-- If `c (i+1)` is never asked by the first round that asks `c i`, for every `i < k`, and `c k` is asked at all,
 then the first rounds asking `c 0, …, c k` strictly increase, so there are at least `k + 1` rounds. -/
@@ -347,10 +334,5 @@ theorem b3_chain (m D q : ℕ) [NeZero m] (x₀ : Fin m)
   b3_pr m D (D * q) x₀ P (fun H => (hP H).1)
     (fun H => (work_le_depth_mul_width H P).trans (Nat.mul_le_mul (hP H).1 (hP H).2))
 
-/-- B3 in the audit game's `(D, Q)` model (`OracleAlgorithm.Bounded`, not drafted): probability at most `(Q + 1)/m`. -/
-theorem b3_chain_bounded (m D Q : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.Bounded D Q) :
-    pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((Q + 1 : ℕ) : ℝ≥0∞) / m :=
-  b3_pr m D Q x₀ P (fun H => (hP H).1) (fun H => (hP H).2)
 
 end PousPebbling

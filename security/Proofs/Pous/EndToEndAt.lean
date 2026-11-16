@@ -146,14 +146,6 @@ theorem pr_sample_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempt
         ((Fintype.card A : ℝ≥0∞) * Fintype.card I * Fintype.card T) := by rw [mul_right_comm]
     _ = _ := ENNReal.mul_div_mul_right _ _ hT0 (ENNReal.natCast_ne_top _)
 
-/-- Any event of the 105 indices the code reads from the streams is at most as likely as under uniform indices. -/
-theorem pr_samples_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F : A → (Fin 105 → Fin N) → Prop) :
-    pr (fun x : A × Streams => ∃ I : Fin 105 → Fin N,
-        (∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2 j)) = some (I j).val) ∧ F x.1 I) ≤
-      pr (fun x : A × (Fin 105 → Fin N) => F x.1 x.2) :=
-  pr_sample_le (fun (s : Streams) (I : Fin 105 → Fin N) =>
-      ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (s j)) = some (I j).val)
-    (card_samples_le N (Nat.pos_of_ne_zero (NeZero.ne N))) F
 
 theorem drawAtMost : DrawAtMost := by
   intro N P
@@ -320,14 +312,6 @@ theorem honestRing_answers {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p))
   simp
 
 set_option exponentiation.threshold 20000 in
-/-- **`endToEndRingAt` holds at the honest instance**: at every block count `N ≤ 2^64` and 32-byte session id, the
-honest full-state server passes on every `ω`, coins and streams from which the code's sampler samples its indices `I`. -/
-theorem endToEndRingAt_honest (N : ℕ) [NeZero N] (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
-    (W : Bits (schAt N).n) (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin N)
-    (hI : ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2.2 j)) = some (I j).val) :
-    PassesAt N session W (honestRing (schAt N)) x := by
-  obtain ⟨v, hv⟩ := coinViewAt_some N (Nat.pos_of_ne_zero (NeZero.ne N)) hN64 session hs x.2.1 I
-  exact ⟨I, v, hI, hv, honestRing_answers (schAt N) _ W ((schAt N).enc W x.1 ()).1 ((schAt N).enc W x.1 ()).2 105 I⟩
 
 /-- **`endToEndRingAt` is nontrivial**: at every block count and every bound `c < 1`, an event that holds on every
 coin, a verifier accepting everything, exceeds `c`. -/
@@ -344,14 +328,5 @@ theorem endToEndRingOfRoundSecure_nontrivial (N : ℕ) [NeZero N] :
       ENNReal.ofReal Params.δ + Params.εMax :=
   endToEndRingAt_nontrivial N _ bound_lt_one
 
-theorem endToEndRingOfRoundSecureWide_nontrivial (N : ℕ) [NeZero N] :
-    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRingOfRoundSecure_nontrivial N
-
-theorem endToEndRingDemo_nontrivial (N : ℕ) [NeZero N] :
-    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRingOfRoundSecure_nontrivial N
 
 end Pous.EndToEnd.SecurityProofs

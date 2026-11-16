@@ -69,11 +69,6 @@ theorem periodHeld_honestInstance :
     fun _ => ⟨0, zero_mem_ticks, le_rfl⟩
   exact ⟨h.1, h.2, honest_fits honestRun rfl⟩
 
-/-- **`periodHeldDeployed`'s honest lemma**: `periodHeld_honestInstance`, its budget being the deployed one. -/
-theorem periodHeldDeployed_honest :
-    DeviceModel honestRun sidAudit honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates sidAudit honestStrategy ∧
-      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S :=
-  periodHeld_honestInstance
 
 noncomputable def certifiedSetupState : Identity.Sha512.State :=
   Classical.choose PousCheck.Properties.SecurityProofs.Accepts.commitState_deployed
@@ -134,11 +129,6 @@ noncomputable def certifiedSignature : Lms.Signature :=
   Classical.choose (MemoryChallenger.Attest.Properties.SecurityProofs.signs
     certifiedPrivateKey_spec certifiedLmsMessage)
 
-theorem certifiedSignature_spec :
-    Lms.signAt certifiedPrivateKey 0 certifiedLmsMessage = .ok certifiedSignature ∧
-      Lms.verify Lms.deployed certifiedPrivateKey.publicKey certifiedLmsMessage certifiedSignature = .ok true :=
-  Classical.choose_spec (MemoryChallenger.Attest.Properties.SecurityProofs.signs
-    certifiedPrivateKey_spec certifiedLmsMessage)
 
 noncomputable def certifiedRecord : PousCheck.Run.ChallengePhaseRecord :=
   ⟨⟨honestCommitment certifiedPublic.root, MemoryChallenger.COMPLETE,
@@ -388,16 +378,6 @@ theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.b
       simp [MemoryChallenger.Properties.Recorded.round, hb, honestCoins, MemoryChallenger.CoinTree.k, hidx, hd,
         honestRound, MemoryChallenger.Round.elapsedNs, Array.range_succ]
 
-theorem honest_recorded_prefix
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    ∀ n, n ≤ 105 →
-      (List.replicate n certifiedObserved).foldl
-          (MemoryChallenger.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
-            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
-        ⟨(Array.range n).map
-            (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
-          if n = 105 then some MemoryChallenger.COMPLETE else none⟩ :=
-  recorded_prefix_of (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 /-- The challenger's honest run bound to any root with a block `b` of the deployed size whose digest is row 0 of a
 table `d` records the 105 honest rounds of `d`, complete. -/
@@ -511,24 +491,6 @@ theorem periodHeld_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
     · simp [playStrings, certifiedAudit, certifiedCommitment, ha]
     · simp [playStrings, certifiedAudit, certifiedCommitment, hb]
 
-/-- **`periodHeldDeployed`'s certified honest instance**: `periodHeld_certified`, at the deployed budget. -/
-theorem periodHeldDeployed_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
-    DeviceModel honestRun certifiedAudit honestStrategy RING_D RING_Q RING_L 1 ∧
-      Instantiates certifiedAudit honestStrategy ∧
-      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
-      ((∃ ω, certifiedAudit.Accepts ω ∧ ¬ certifiedAudit.Break ω) ∨ PlayCollision certifiedAudit) :=
-  periodHeld_certified hP
-
-/-- **`periodCapacity`'s honest lemma at one instance**: on the honest period whose capacity verdict is the verifier's
-whole decision outside a break, the device model, the instantiation, the certificate's fit and the verdict's wiring
-hold. -/
-theorem periodCapacity_honestInstance :
-    DeviceModel verdictRun sidAudit honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates sidAudit honestStrategy ∧
-      Fits honestDevice (verdictRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
-        ∀ ω, verdictRun.accepts .capacity ω → sidAudit.Accepts ω ∧ ¬ sidAudit.Break ω := by
-  have h := periodHeld_honest verdictRun sidAudit RING_D RING_Q RING_L 1 sidAudit_sid
-    fun _ => ⟨0, zero_mem_ticks, le_rfl⟩
-  exact ⟨h.1, h.2, honest_fits verdictRun rfl, fun _ hω => hω⟩
 
 /-- **`periodCapacity` is nontrivial**: at the empty period (`emptyRun`), whose capacity verdict accepts every window
 and whose account holds nothing, the certificate `HONEST_S` is not sound per run at `δ + ε_max`: every window is
@@ -552,56 +514,10 @@ theorem periodCapacity_nontrivialEmpty :
 theorem obligationRun_mem_ticks : (0 : ℕ) ∈ (obligationRun.win .capacity).ticks := by
   simp [obligationRun, ResourceAccounting.Window.ticks, K]
 
-/-- **`obligationHeld`'s honest lemma at one instance**: at the snapshot `tag = id`, the honest period and a strategy
-(the lookup strategy) against `obligationAudit` meet the device model at the deployed budget and the instantiation, and
-the certificate fits. -/
-theorem obligationHeld_honestInstance :
-    ∃ τ : Strategy Unit (Unit × IdKeys),
-      DeviceModel obligationRun obligationAudit τ RING_D RING_Q RING_L 1 ∧ Instantiates obligationAudit τ ∧
-        Fits honestDevice (obligationRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S := by
-  have h := periodHeld_honest obligationRun obligationAudit RING_D RING_Q RING_L 1 rfl
-    fun _ => ⟨0, obligationRun_mem_ticks, le_rfl⟩
-  refine ⟨lookup Unit (Unit × IdKeys), h.1, h.2, ?_⟩
-  rw [S_eq]
-  show (HONEST_S : ℝ) * ((K : ℕ) : ℝ) + ((2 ^ 30 : ℕ) : ℝ) + ((∑ _i : Unit, 437248000 * 1 : ℕ) : ℝ) ≤
-    ((8169621180 : ℕ) : ℝ)
-  norm_num [HONEST_S, K]
-
-/-- **`periodHeldAt`'s honest lemma at one instance**: at the deployed point and `2^19` blocks, the honest period, whose
-account holds `FULL` bits above `SAt (2^19)`, meets the ring-model device premise at the deployed budget, and the
-certificate fits `SAt (2^19)`. -/
-theorem periodHeldAt_honestInstance :
-    RingDeviceAt (2 ^ 19) PousCheck.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1 ∧
-      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S (SAt (2 ^ 19)) := by
-  have hS : SAt (2 ^ 19) = 8169621180 := PousP2Ring.stateBound_p2ring_b19 _ _
-  refine ⟨ringDeviceAt_honest (2 ^ 19) PousCheck.Run.DEPLOYED honestRun (sidAuditAt (2 ^ 19)) RING_D RING_Q RING_L 1
-    fun _ => ⟨0, zero_mem_ticks, ?_⟩, ?_⟩
-  · rw [hS]
-    show 8169621180 < FULL
-    norm_num [FULL]
-  · rw [hS]
-    show (HONEST_S : ℝ) * ((K : ℕ) : ℝ) + ((2 ^ 30 : ℕ) : ℝ) + ((∑ _i : Unit, 437248000 * 1 : ℕ) : ℝ) ≤
-      ((8169621180 : ℕ) : ℝ)
-    norm_num [HONEST_S, K]
 
 theorem demoRun_mem_ticks : (0 : ℕ) ∈ (demoRun.win .capacity).ticks := by
   simp [demoRun, ResourceAccounting.Window.ticks, K]
 
-/-- **`periodHeldDemo`'s honest lemma at one instance**: at Demo B's point and `N = 1038·2^16`, a period whose account
-holds the whole store, above `SAt N`, meets the ring-model device premise at the deployed budget, and the certificate
-fits Demo B's state bound. -/
-theorem periodHeldDemo_honestInstance :
-    RingDeviceAt (1038 * 2 ^ 16) demoPoint demoRun (sidAuditAt (1038 * 2 ^ 16)) RING_D RING_Q RING_L 1 ∧
-      Fits demoDevice (demoRun.win .capacity).len 1 HONEST_S 1060008348186 := by
-  have hS : SAt (1038 * 2 ^ 16) = 1060008348186 := Pous.SecurityProofs.stateBound_p2ring_demo _ _ _ rfl
-  refine ⟨ringDeviceAt_honest (1038 * 2 ^ 16) demoPoint demoRun (sidAuditAt (1038 * 2 ^ 16)) RING_D RING_Q RING_L 1
-    fun _ => ⟨0, demoRun_mem_ticks, ?_⟩, ?_⟩
-  · rw [hS]
-    show 1060008348186 < DEMO_FULL
-    norm_num [DEMO_FULL]
-  · show (HONEST_S : ℝ) * ((K : ℕ) : ℝ) + ((2 ^ 30 : ℕ) : ℝ) + ((∑ _i : Unit, 437248000 * 1 : ℕ) : ℝ) ≤
-      ((1060008348186 : ℕ) : ℝ)
-    norm_num [HONEST_S, K]
 
 /-- **`periodHeldDemo` is nontrivial at Demo B's store**: `periodHeldAt_nontrivial` at `N = 1038·2^16`. -/
 theorem periodHeldDemo_nontrivialDemo :

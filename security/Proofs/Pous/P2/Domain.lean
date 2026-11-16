@@ -72,7 +72,6 @@ open scoped ENNReal
 
 /-! ### Bits as numbers -/
 
-theorem bitsVal_lt {w : ℕ} (x : Bits w) : bitsVal x < 2 ^ w := (bitsEquiv w x).isLt
 
 theorem bitsVal_bitsOfNat {w n : ℕ} (h : n < 2 ^ w) : bitsVal (bitsOfNat w n) = n := by
   simp [bitsVal, bitsOfNat, Nat.mod_eq_of_lt h]
@@ -176,31 +175,6 @@ theorem card_eval_eq (B p : ℕ) (j : Fin B) (x y : Fin p) :
   rw [h]
   simp only [hc, sum_const, card_univ, Fintype.card_fin, smul_eq_mul, mul_comm]
 
-/-- **The code blocks are uniform on `[0, p)`**: each value `v < p` is block `j` of the code with probability
-`1/p`, and by `m1p_code` no value `≥ p` is. -/
-theorem m1p_code_uniform (B w p b : ℕ) [NeZero B] (hb : 2 ^ b ≤ p) (hp2 : p ≤ 2 ^ w)
-    (W : Bits (B * b)) (j : Fin B) (v : Fin p) :
-    pr (fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v) = (p : ℝ≥0∞)⁻¹ := by
-  classical
-  have hp0 : 0 < p := lt_of_lt_of_le (Nat.two_pow_pos _) hb
-  have hiff : ∀ ω : (permsp B w p).Ω, bitsVal (((m1p B w p b).enc W ω ()).2 j) = v ↔
-      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩ := by
-    intro ω
-    rw [m1p_code B w p b hb hp2, ← Fin.ext_iff, Equiv.symm_apply_eq, eq_comm]
-  have hcard := card_eval_eq B p j v ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩
-  obtain ⟨c, hc⟩ : ∃ c, (univ.filter fun ω : PousGen.Om B (Fin p) =>
-      ω j v = ⟨bitsVal (pad B w b W j), pad_lt hb hp2 W j⟩).card = c := ⟨_, rfl⟩
-  rw [hc] at hcard
-  have hc0 : c ≠ 0 := by
-    rintro rfl
-    exact Fintype.card_ne_zero (α := PousGen.Om B (Fin p)) (by rw [← hcard, zero_mul])
-  rw [pr_def]
-  have e1 : (univ.filter fun ω : (permsp B w p).Ω => bitsVal (((m1p B w p b).enc W ω ()).2 j) = v).card = c := by
-    rw [← hc]; exact PousGen.card_filter_congr _ _ _ _ hiff
-  have e2 : Fintype.card (permsp B w p).Ω = p * c := by rw [mul_comm]; exact hcard.symm
-  rw [e1, e2, Nat.cast_mul, ENNReal.div_eq_inv_mul,
-    ENNReal.mul_inv (Or.inl (by exact_mod_cast hp0.ne')) (Or.inl (ENNReal.natCast_ne_top _)), mul_assoc,
-    ENNReal.inv_mul_cancel (by exact_mod_cast hc0) (ENNReal.natCast_ne_top _), mul_one]
 
 /-! ### Query trees over `[0, p)` -/
 
@@ -478,11 +452,6 @@ theorem widths : (20 * 16448 ≤ 21 * 16447 ∧ 16447 ≤ 16447) ∧ (20 * 16448
     (20 * 16448 ≤ 21 * 15665 ∧ ¬ 20 * 16448 ≤ 21 * 15664) ∧ (20 * 8192 ≤ 21 * 7802 ∧ ¬ 20 * 8192 ≤ 21 * 7801) := by
   norm_num
 
-/-- All hypotheses of `meets_m1p_of_row` other than the row also hold at small sizes, by `decide`: `w = 21`,
-`p = 2^21 − 1`, `b = 20`, `c = 1`, `B = 2^8`. -/
-theorem hyps_small : 2 ^ 20 ≤ 2 ^ 21 - 1 ∧ 2 ^ 21 - 1 ≤ 2 ^ 21 ∧ 2 ^ 21 ≤ (2 ^ 21 - 1) + 1 ∧
-    2 * 2 ^ 8 * 1 ≤ 2 ^ 21 ∧ 20 * 21 ≤ 21 * 20 := by
-  decide
 
 /-- `2^b ≤ p` from `b ≤ w − 1` and `2^(w−1) ≤ p`. -/
 theorem two_pow_le_of_le {b w p : ℕ} (hb : b ≤ w - 1) (hlo : 2 ^ (w - 1) ≤ p) : 2 ^ b ≤ p :=
@@ -508,20 +477,6 @@ theorem p2_meets_m1p_b19 : ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 →
     ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) b) .sequential D (2 ^ 20) 88 Params.εMax :=
   family (2 ^ 19) (by norm_num) (by norm_num)
 
-/-- The `2^19` row at one pad bit per block, `b = 16447`. -/
-theorem p2_meets_m1p_b19_w16447 :
-    ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16447) .sequential D (2 ^ 20) 88 Params.εMax :=
-  p2_meets_m1p_b19 16447 widths.1.1 widths.1.2
-
-/-- The `2^19` row at the MVP's byte-aligned packing, `b = 16432` (2,054 bytes per block). -/
-theorem p2_meets_m1p_b19_w16432 :
-    ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential D (2 ^ 20) 88 Params.εMax :=
-  p2_meets_m1p_b19 16432 widths.2.1.1 widths.2.1.2
-
-/-- The family's upper end, `2^23` (the `P2MeetsM1Uncond` block count), at the MVP's packing. -/
-theorem p2_meets_m1p_b23_w16432 :
-    ∀ D, Meets (m1p (2 ^ 23) 16448 (2 ^ 16448 - 21065) 16432) .sequential D (2 ^ 20) 88 Params.εMax :=
-  family (2 ^ 23) (by norm_num) (by norm_num) 16432 widths.2.1.1 widths.2.1.2
 
 /-- `S = ⌊(18/19)·2^24·8192⌋`, whatever `p` and `b`. -/
 theorem stateBound_m1p_8192 (p b : ℕ) : (m1p (2 ^ 24) 8192 p b).stateBound Params.ρ = 130205324341 := by
@@ -554,11 +509,6 @@ theorem p2_meets_m1p_8192 : ∀ b, 20 * 8192 ≤ 21 * b → b ≤ 8191 →
   rw [stateBound_m1p_8192]
   exact row_8192p
 
-/-- The 8,192-bit row at `b = 8191` and at the byte-aligned `b = 8176` (1,022 bytes per block). -/
-theorem p2_meets_m1p_8192_instances :
-    (∀ D, Meets (m1p (2 ^ 24) 8192 (2 ^ 8192 - 9345) 8191) .sequential D (2 ^ 20) 90 Params.εMax) ∧
-    (∀ D, Meets (m1p (2 ^ 24) 8192 (2 ^ 8192 - 9345) 8176) .sequential D (2 ^ 20) 90 Params.εMax) :=
-  ⟨p2_meets_m1p_8192 8191 widths.2.2.1.1 widths.2.2.1.2, p2_meets_m1p_8192 8176 widths.2.2.2.1.1 widths.2.2.2.1.2⟩
 
 /-! ### Non-vacuity: raw storage breaks `k = 85` -/
 
@@ -597,10 +547,5 @@ theorem not_meets_m1p_b19_k85 (p b D Q : ℕ) :
   rw [hL, hR, ENNReal.ofReal_le_ofReal_iff (by positivity)] at h
   norm_num at h
 
-/-- **The family fails at `k = 85`**: its `2^19` instance fails `Meets` at `85` challenges, at every width and every
-`D` and `Q` (`not_meets_m1p_b19_k85`). -/
-theorem family_k85_fails : ∃ (B : ℕ) (_ : NeZero B), 2 ^ 8 ≤ B ∧ B ≤ 2 ^ 23 ∧
-    ∀ b D Q, ¬ Meets (m1p B 16448 (2 ^ 16448 - 21065) b) .sequential D Q 85 Params.εMax :=
-  ⟨2 ^ 19, inferInstance, by norm_num, by norm_num, not_meets_m1p_b19_k85 _⟩
 
 end PousP2p

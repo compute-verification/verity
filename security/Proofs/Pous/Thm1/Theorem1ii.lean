@@ -85,23 +85,6 @@ theorem card_pi_mem (k B : ℕ) (G : Finset (Fin B)) :
 
 /-! ### The threshold `p₀` -/
 
-/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
-theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
-    (g : ℝ) ≤ p₀ β S B ℓ * B := by
-  unfold p₀
-  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
-  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
-    exact_mod_cast (by omega : g ≤ B)
-  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
-    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
-    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
-    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
-    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
-      field_simp
-    rw [key]
-    have : ((β : ℝ) - S - B) / ℓ < b := by
-      rw [div_lt_iff₀ hℓ']; linarith
-    linarith
 
 open Classical in
 /-- **Averaging.** `k` uniform challenges all land on blocks the responder gets right with probability at most
@@ -134,55 +117,6 @@ theorem pr_all_good_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (B ℓ β S k : �
 
 /-! ### Compression -/
 
-/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
-theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
-    ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
-  classical
-  obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := T) (β := Bits β) (by simpa using h)
-  refine ⟨fun x => if hx : x ∈ T then e ⟨x, hx⟩ else fun _ => false,
-    fun w => if hw : ∃ y, e y = w then hw.choose.1 else Classical.arbitrary X, fun x hx => ?_⟩
-  have hex : ∃ y, e y = e ⟨x, hx⟩ := ⟨_, rfl⟩
-  simp only [hx, dite_true, hex]
-  exact congrArg Subtype.val (e.injective hex.choose_spec)
-
-/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
-of blocks in total: at most `2^B · 2^L`. -/
-theorem card_patches_le (B ℓ L : ℕ) :
-    (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
-  classical
-  let t : Finset (Fin B) → (i : Fin B) → Finset (Option (Bits ℓ)) := fun D i =>
-    if i ∈ D then Finset.univ.erase none else {none}
-  have hsub : (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L) ⊆
-      (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L).biUnion
-        fun D => Fintype.piFinset (t D) := by
-    intro g hg
-    rw [Finset.mem_filter] at hg
-    rw [Finset.mem_biUnion]
-    refine ⟨Finset.univ.filter fun i => g i ≠ none, by simpa using hg.2, ?_⟩
-    rw [Fintype.mem_piFinset]
-    intro i
-    by_cases hi : g i = none <;> simp [t, hi]
-  refine (Finset.card_le_card hsub).trans ((Finset.card_biUnion_le).trans ?_)
-  have hD : ∀ D ∈ (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L),
-      (Fintype.piFinset (t D)).card ≤ 2 ^ L := by
-    intro D hD
-    rw [Finset.mem_filter] at hD
-    rw [Fintype.card_piFinset]
-    have : ∀ i, (t D i).card = if i ∈ D then 2 ^ ℓ else 1 := by
-      intro i
-      by_cases hi : i ∈ D
-      · simp [t, hi, Finset.card_erase_of_mem, Fintype.card_option]
-      · simp [t, hi]
-    simp_rw [this]
-    rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const, ← pow_mul]
-    exact Nat.pow_le_pow_right (by norm_num) (by rw [mul_comm]; exact hD.2)
-  refine (Finset.sum_le_card_nsmul _ _ _ hD).trans ?_
-  rw [smul_eq_mul]
-  refine Nat.mul_le_mul_right _ ?_
-  refine (Finset.card_filter_le _ _).trans ?_
-  rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
 /-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
@@ -192,43 +126,11 @@ block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
-/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
-theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
-  by_cases hβ : S + B ≤ β
-  · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-        (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ β - S - B) := by
-      intro x hx
-      rw [fits, Finset.mem_filter] at hx
-      rw [Finset.mem_product, Finset.mem_filter]
-      exact ⟨Finset.mem_univ _, Finset.mem_univ _, by omega⟩
-    refine (Finset.card_le_card hsub).trans ?_
-    rw [Finset.card_product, Finset.card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
-    calc 2 ^ S * _ ≤ 2 ^ S * (2 ^ B * 2 ^ (β - S - B)) := Nat.mul_le_mul_left _ (card_patches_le B ℓ _)
-      _ = 2 ^ β := by rw [← pow_add, ← pow_add]; congr 1; omega
-  · have : fits S B ℓ β = ∅ := by
-      ext x
-      rw [fits, Finset.mem_filter]
-      simp only [Finset.mem_univ, true_and, Finset.notMem_empty, iff_false]
-      omega
-    rw [this, Finset.card_empty]
-    exact Nat.zero_le _
 
 /-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
 
-/-- The patched block where there is one, else the prediction: this is `C`. -/
-theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
-  by_cases h : P i = C i <;> simp [patch, h]
-
-/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
-theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
-    (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
-  rw [fits, Finset.mem_filter]
-  refine ⟨Finset.mem_univ _, ?_⟩
-  convert h using 4
-  ext i
-  by_cases hi : P i = C i <;> simp [patch, hi]
 
 end PousThm1ii
 

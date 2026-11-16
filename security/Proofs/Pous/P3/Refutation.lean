@@ -24,11 +24,6 @@ namespace PousP3Forward
 
 open scoped ENNReal
 
-theorem two_pow_mul_inv_pow (a b : ℕ) (h : a ≤ b) :
-    (2 : ℝ≥0∞) ^ a * (2⁻¹ : ℝ≥0∞) ^ b = (2⁻¹ : ℝ≥0∞) ^ (b - a) := by
-  obtain ⟨c, rfl⟩ := Nat.exists_eq_add_of_le h
-  rw [pow_add, ← mul_assoc, ← mul_pow, ENNReal.mul_inv_cancel two_ne_zero ENNReal.ofNat_ne_top, one_pow, one_mul,
-    Nat.add_sub_cancel_left]
 
 end PousP3Forward
 
@@ -182,21 +177,6 @@ noncomputable def A₁ (ω : (p3Model 8 64).Ω) : Bits 512 := codeEquiv 8 64 (to
 noncomputable def A₂ (σ : Bits 512) (v : Fin 8) : OracleAlgorithm (p3Model 8 64) (Lab 8 64) :=
   if v = 0 then .ret ((codeEquiv 8 64).symm σ) else if v = 1 then prog1 ((codeEquiv 8 64).symm σ) else .ret zLab
 
-theorem A₂_bounded (σ : Bits 512) (v : Fin 8) : (A₂ σ v).Bounded 3 4 := by
-  intro ω
-  unfold A₂
-  split_ifs
-  · exact ⟨Nat.zero_le _, Nat.zero_le _⟩
-  · exact ⟨le_of_eq rfl, le_of_eq rfl⟩
-  · exact ⟨Nat.zero_le _, Nat.zero_le _⟩
-
-theorem A₂_invBounded (σ : Bits 512) (v : Fin 8) : InvBounded 0 (A₂ σ v) := by
-  intro ω
-  unfold A₂
-  split_ifs
-  · exact le_of_eq rfl
-  · exact le_of_eq rfl
-  · exact le_of_eq rfl
 
 /-! ### The event: the guess is right whenever `c¹_u[1] = 0` for `u = 1..7` -/
 
@@ -446,15 +426,6 @@ theorem pr_prod_ge' {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [None
     c ≤ @pr (α × β) i (fun x => R x.1 x.2) :=
   (pr_prod_ge R c h).trans_eq (pr_congr_inst _ _ _)
 
-/-- The adversary answers both challenges 0 and 1 with probability at least `2^-448`. -/
-theorem pr_attack : (2⁻¹ : ℝ≥0∞) ^ 448 ≤ pr (fun ω : (p3Model 8 64).Ω =>
-    2 ≤ (Finset.univ.filter fun v =>
-      (A₂ (A₁ ω) v).run ((p3Model 8 64).answer ω) = topLabel chain8 W0 ω v).card) := by
-  refine le_trans ?_ (pr_mono fun ω (hω : Ev ω.2 7 ω.1) => ?_)
-  · exact pr_prod_ge' (α := KQ 8 64 → Lab 8 64) (β := Equiv.Perm (Lab 8 64)) (p3Model 8 64).fintypeΩ
-      (fun H P => Ev P 7 H) _ (by intro P; exact pr_Ev7 P)
-  · obtain ⟨H, P⟩ := ω
-    exact correct_of H P hω
 
 /-! ### The bound it beats -/
 
@@ -501,11 +472,6 @@ def ForwardOnlyBound : Prop :=
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s + 1 - 0)
 
-/-- **The forward-only case is false**, by the same adversary, which makes no inverse query. -/
-theorem not_forwardOnlyBound : ¬ ForwardOnlyBound := by
-  intro h
-  have hb := h 8 64 512 1 3 4 2 chain8 W0 (by norm_num) (Nat.zero_le _) hard A₁ A₂ A₂_bounded A₂_invBounded
-  exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 /-! ### The sibling's placeholder `ForwardBound` -/
 
@@ -518,12 +484,6 @@ def ForwardBound (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → L
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s' + 1)
 
-/-- **`ForwardBound` is false** at `n = 8, wc = 64, m = 512, D = 3, Q = 4, k = 2`, the chain, `W = 0` (with
-`s' = 1`). -/
-theorem not_forwardBound : ¬ ForwardBound 8 64 512 3 4 2 chain8 W0 := by
-  intro h
-  have hb := h 1 A₁ A₂ A₂_bounded A₂_invBounded hard
-  exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 set_option linter.unusedVariables false in
 /-- `ForwardBound` with the per-entry width `b` as a parameter: each of the `s' + 1` fresh entries saves `b` bits.
@@ -536,7 +496,5 @@ def ForwardBoundAt (b n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n �
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ b) ^ (s' + 1)
 
-theorem forwardBound_eq_at (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) :
-    ForwardBound n wc m D Q k G W = ForwardBoundAt (n * wc) n wc m D Q k G W := rfl
 
 end PousP3Forward

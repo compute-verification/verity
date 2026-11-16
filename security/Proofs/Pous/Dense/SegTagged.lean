@@ -294,9 +294,6 @@ theorem segTag_auditSecure {N B ℓ : ℕ} [NeZero (N * B)] (salt : Bits 192)
 
 /-! ### The 14 GB theorem, tagged -/
 
-/-- **Satisfiability witness** for the query map's hypotheses at 14 GB: segments `0 ≠ 1`, `448 ≤ 2^64` tags and
-`256 ≤ 524288`-bit labels. -/
-theorem tagEmbed_hyps_14 : (1 : Fin 448) ≠ 0 ∧ 448 ≤ 2 ^ 64 ∧ 192 + 64 ≤ 524288 := by decide
 
 /-- The query map at 14 GB is injective. -/
 theorem tagEmbed_14_injective (salt : Bits 192) :
@@ -309,18 +306,6 @@ theorem tagEmbed_14_tag (salt : Bits 192) (s : Fin 448) (i : Fin (2 ^ 9)) (p : F
       (segIndexEquiv 448 (2 ^ 9) (s, i), liftPar 448 (2 ^ 9) 524288 s p) :=
   tagEmbed_tag salt 0 1 _ tagEmbed_hyps_14.2.1 s i p
 
-/-- **Satisfiability witness:** at 14 GB the tagged scheme, run on the restricted oracle, writes exactly the global
-scheme's codeword, for every `W`, oracle and salt. -/
-theorem segTag_code_eq_14 (salt : Bits 192) (W : Bits ((448 * 2 ^ 9) * 524288))
-    (H : LabelQry (448 * 2 ^ 9) 524288 → Bits 524288) :
-    ((segTagScheme 448 (2 ^ 9) 524288 salt).enc W
-        (fun x => H (tagEmbed 448 (2 ^ 9) 524288 salt 0 1 ⟨0, by norm_num⟩ x)) ()).2 =
-      ((segScheme 448 (2 ^ 9) 524288).enc W H ()).2 := by
-  funext g
-  obtain ⟨⟨s, i⟩, rfl⟩ := (segIndexEquiv 448 (2 ^ 9)).surjective g
-  dsimp only [segTagScheme, segScheme]
-  simp only [Equiv.symm_apply_apply]
-  exact label_tag_eq salt _ (tagEmbed_14_tag salt) H W s i
 
 /-- **The 14 GB theorem for the implementation's keying.** The tagged segmented dense scheme (448 segments of `2^9`
 blocks of 64 KB, oracle `H(salt ‖ u64 s, local query)`) meets the requirement for every salt, random-oracle `H`,

@@ -106,14 +106,6 @@ theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [F
   exfalso
   omega
 
-/-- **`periodHeldAt` holds at the honest instance**: its device premise, `ringDeviceAt_honest`. -/
-theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
-    {α ΩW ΩQ : Type} [Fintype α]
-    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
-    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
-    RingDeviceAt N pt r P D Q L round :=
-  ringDeviceAt_honest N pt r P D Q L round hfull
 
 /-- **`periodHeldAt` is nontrivial**: at every block count, an event that holds on every capacity coin exceeds its
 bound `δ + ε_max`. -/
@@ -123,19 +115,5 @@ theorem periodHeldAt_nontrivial (N : ℕ) [NeZero N] :
   rw [Pouw.pr_eq_one fun _ => trivial]
   exact not_le.2 bound_toReal_lt_one
 
-/-- **`periodHeldDemo` holds at the honest instance**: `periodHeldAt_honest` at Demo B's `N`. -/
-theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
-    {α ΩW ΩQ : Type} [Fintype α]
-    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
-    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
-    RingDeviceAt N pt r P D Q L round :=
-  ringDeviceAt_honest N pt r P D Q L round hfull
-
-/-- **`periodHeldDemo` is nontrivial**: `periodHeldAt_nontrivial` at Demo B's `N`. -/
-theorem periodHeldDemo_nontrivial (N : ℕ) [NeZero N] :
-    ¬ Pouw.pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      (Params.δ : ℝ) + Params.εMax.toReal :=
-  periodHeldAt_nontrivial N
 
 end Pous.Period.SecurityProofs

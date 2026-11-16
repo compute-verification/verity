@@ -143,7 +143,6 @@ theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuo
 
 /-! ## `ε_proof` at one segment -/
 
-theorem βOne_5_111 : βOne 5 111 = 265253616 := rfl
 
 /-- `ε_proof` at one segment and `β = βOne D k`: `1 − (β − 512)/2^28`. -/
 theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :
@@ -151,28 +150,5 @@ theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :
   show (1 : ℝ) - ((β : ℝ) - ((1 * 2 ^ 9 : ℕ) : ℝ)) / (((1 * 2 ^ 9 : ℕ) : ℝ) * ((524288 : ℕ) : ℝ)) = _
   norm_num
 
-/-- `ε_proof` at `D = 0`, `k = 89`, one segment: `561059/2^28 ≈ 0.2090%`. -/
-theorem band_epsProof_d0 (d : ℕ) (dom : ℕ → Bits 512) :
-    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 0 89) = 561059 / 2 ^ 28 := by
-  rw [band_epsProof_one, βOne_0_89]
-  norm_num
-
-/-- `ε_proof` at `D = 1`, `k = 93`, one segment: `1085314/2^28 ≈ 0.4043%`. -/
-theorem band_epsProof_d1 (d : ℕ) (dom : ℕ → Bits 512) :
-    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 1 93) = 1085314 / 2 ^ 28 := by
-  rw [band_epsProof_one, βOne_1_93]
-  norm_num
-
-/-- `ε_proof` at `D = 2`, `k = 97`, one segment: `1609569/2^28 ≈ 0.5996%`. -/
-theorem band_epsProof_d2 (d : ℕ) (dom : ℕ → Bits 512) :
-    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 2 97) = 1609569 / 2 ^ 28 := by
-  rw [band_epsProof_one, βOne_2_97]
-  norm_num
-
-/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`. -/
-theorem band_epsProof_d5 (d : ℕ) (dom : ℕ → Bits 512) :
-    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 5 111) = 3182352 / 2 ^ 28 := by
-  rw [band_epsProof_one, βOne_5_111]
-  norm_num
 
 end PousContinuous

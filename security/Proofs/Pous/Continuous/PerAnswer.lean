@@ -137,12 +137,6 @@ theorem pr_bad_le (β : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π) (
         exact le_trans (Nat.add_le_add_left (Nat.mul_le_mul_right _ (Finset.card_le_card hsub)) _) hb
     _ = (β + 1) * π := by rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, Nat.cast_add, Nat.cast_one]
 
-/-- `p₀` at the memory's size is `1 − ε + ε_proof`. -/
-theorem p₀_eq (β : ℕ) (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) :
-    p₀ β (heldAt sch D_late W mach arr a h).length sch.B sch.ℓ =
-      1 - contFreed sch (heldAt sch D_late W mach arr a h).length + epsProof sch β := by
-  unfold p₀ contFreed epsProof
-  ring
 
 /-- **Step (a) at one setup.** Off `bad h`, the round after `h` is a hit with probability at most
 `1 − ε + ε_proof`. -/

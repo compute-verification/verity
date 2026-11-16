@@ -86,21 +86,6 @@ theorem mix_le {q c a b : ℝ≥0∞} (hqc : q ≤ c) (hc : c ≤ 1) (hba : b �
     _ ≤ q * a + (1 - (q + e)) * b + e * a := by gcongr
     _ = (q + e) * a + (1 - (q + e)) * b := by rw [add_mul]; exact add_right_comm _ _ _
 
-/-- **The bound grows with `c` on `[0, 1]`.** -/
-theorem binTail_mono {c c' : ℝ≥0∞} (hcc : c ≤ c') (hc' : c' ≤ 1) : ∀ k t, binTail k t c ≤ binTail k t c'
-  | 0, t => by rw [binTail_zero_left, binTail_zero_left]
-  | k + 1, 0 => by
-      rw [binTail_succ_zero, binTail_succ_zero]
-      exact mul_le_mul' hcc (binTail_mono hcc hc' k 0)
-  | k + 1, t + 1 => by
-      rw [binTail_succ_succ, binTail_succ_succ]
-      calc c * binTail k (t + 1) c + (1 - c) * binTail k t c
-          ≤ c * binTail k (t + 1) c' + (1 - c) * binTail k t c' := by
-            gcongr
-            · exact binTail_mono hcc hc' k (t + 1)
-            · exact binTail_mono hcc hc' k t
-        _ ≤ c' * binTail k (t + 1) c' + (1 - c') * binTail k t c' :=
-            mix_le hcc hc' (binTail_le_succ k t c')
 
 /-! ### Probability -/
 

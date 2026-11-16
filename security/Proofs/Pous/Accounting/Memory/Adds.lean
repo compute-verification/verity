@@ -35,23 +35,6 @@ section progMap
 
 variable {I : IdealModel} {α β : Type} (g : α → β) (f : I.Qry → I.Ans)
 
-theorem run_progMap (P : OracleAlgorithm I α) : (progMap g P).run f = g (P.run f) := by
-  induction P with
-  | ret a => rfl
-  | round qs k ih => simp only [progMap, OracleAlgorithm.run]; exact ih _
-
-theorem depth_progMap (P : OracleAlgorithm I α) : (progMap g P).depth f = P.depth f := by
-  induction P with
-  | ret a => rfl
-  | round qs k ih => simp only [progMap, OracleAlgorithm.depth, ih]
-
-theorem work_progMap (P : OracleAlgorithm I α) : (progMap g P).work f = P.work f := by
-  induction P with
-  | ret a => rfl
-  | round qs k ih => simp only [progMap, OracleAlgorithm.work, ih]
-
-theorem bounded_progMap {D Q : ℕ} {P : OracleAlgorithm I α} (h : P.Bounded D Q) : (progMap g P).Bounded D Q :=
-  fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
 
@@ -82,19 +65,6 @@ end ring
 
 /-! ## Coding a fibre into `S` bits -/
 
-/-- A set of at most `|β|` elements has a code into `β` that decodes back on it. -/
-theorem exists_code {α β : Type} [Nonempty α] [Fintype β] [Nonempty β] (s : Finset α) :
-    ∃ (e : α → β) (d : β → α), s.card ≤ Fintype.card β → ∀ a ∈ s, d (e a) = a := by
-  classical
-  by_cases hs : s.card ≤ Fintype.card β
-  · obtain ⟨emb⟩ := Function.Embedding.nonempty_of_card_le (α := s) (β := β) (by rwa [Fintype.card_coe])
-    let e : α → β := fun a => if ha : a ∈ s then emb ⟨a, ha⟩ else Classical.arbitrary β
-    have hinj : Set.InjOn e s := by
-      intro a ha b hb hab
-      simp only [e, Finset.mem_coe.1 ha, Finset.mem_coe.1 hb, ↓reduceDIte] at hab
-      exact congrArg Subtype.val (emb.injective hab)
-    exact ⟨e, Function.invFunOn e s, fun _ a ha => hinj.leftInvOn_invFunOn (Finset.mem_coe.2 ha)⟩
-  · exact ⟨fun _ => Classical.arbitrary β, fun _ => Classical.arbitrary α, fun h => absurd h hs⟩
 
 /-- **The coded responder answers as the location does.** Run through codes `e j` that `d j` inverts on the states
 of `P j` before challenge `j < c`, from the code of a state whose run is in `P` before each challenge, the responder

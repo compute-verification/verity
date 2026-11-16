@@ -103,27 +103,6 @@ theorem union_term_one (k : ℕ) (hk : k ≤ 1000) :
 
 /-! ## The threshold at any `k ≤ 300` -/
 
-theorem p₀_fam_le (N k S : ℕ) (hN2 : 2 ≤ N) (hk : k ≤ 300) (hS : (S : ℝ) ≤ 18 / 19 * ((N : ℝ) * 2 ^ 28)) :
-    p₀ (265616286 * N - 524289 - (73 * k + 129)) S (N * 2 ^ 9) 524288 ≤ 95923 / 100000 := by
-  have hNr : (2 : ℝ) ≤ N := by exact_mod_cast hN2
-  have hkr : (k : ℝ) ≤ 300 := by exact_mod_cast hk
-  have h1 : 524289 ≤ 265616286 * N := by omega
-  have h2 : 73 * k + 129 ≤ 265616286 * N - 524289 := by omega
-  unfold p₀
-  rw [Nat.cast_sub h2, Nat.cast_sub h1]
-  push_cast
-  rw [sub_le_comm, le_div_iff₀ (by positivity)]
-  linarith
-
-theorem p₀_one_le (k S : ℕ) (hk : k ≤ 300) (hS : (S : ℝ) ≤ 18 / 19 * (((1 : ℕ) : ℝ) * 2 ^ 28)) :
-    p₀ (265254744 - (9 * k + 129)) S (1 * 2 ^ 9) 524288 ≤ 95923 / 100000 := by
-  have hkr : (k : ℝ) ≤ 300 := by exact_mod_cast hk
-  have h1 : 9 * k + 129 ≤ 265254744 := by omega
-  unfold p₀
-  rw [Nat.cast_sub h1]
-  push_cast at hS ⊢
-  rw [sub_le_comm, le_div_iff₀ (by positivity)]
-  linarith
 
 /-! ## The sampling term -/
 
@@ -142,12 +121,6 @@ theorem binTail_ofReal (k t : ℕ) {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     ← ENNReal.ofReal_mul (Nat.cast_nonneg _),
     ← ENNReal.ofReal_mul (mul_nonneg (Nat.cast_nonneg _) (pow_nonneg h1r _))]
 
-theorem binTail_le_δ {k t : ℕ}
-    (h : ∑ j ∈ Finset.range (t + 1), (k.choose j : ℝ) * (1 - 95923 / 100000) ^ j * (95923 / 100000) ^ (k - j) ≤
-      1 / 100) :
-    binTail k t (ENNReal.ofReal (95923 / 100000)) ≤ ENNReal.ofReal (Params.δ : ℝ) := by
-  rw [binTail_ofReal k t (by norm_num) (by norm_num)]
-  exact ENNReal.ofReal_le_ofReal (by norm_num [Params.δ]; linarith)
 
 theorem choose_203_2 : Nat.choose 203 2 = 20503 := by
   rw [Nat.choose_eq_descFactorial_div_factorial]; rfl

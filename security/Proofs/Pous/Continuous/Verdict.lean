@@ -280,13 +280,6 @@ theorem ripple_length : ∀ (xs ys : List Bool) (c : Bool), xs.length = ys.lengt
   | [], _ :: _, _, h => by simp at h
   | _ :: _, [], _, h => by simp at h
 
-theorem bitsVal_lt : ∀ l : List Bool, bitsVal l < 2 ^ l.length
-  | [] => by simp [bitsVal]
-  | b :: l => by
-    have := bitsVal_lt l
-    have hb : b.toNat ≤ 1 := by cases b <;> simp
-    simp only [bitsVal, List.length_cons, pow_succ]
-    omega
 
 theorem bitsVal_not : ∀ l : List Bool, bitsVal (l.map (!·)) + bitsVal l + 1 = 2 ^ l.length
   | [] => by simp [bitsVal]

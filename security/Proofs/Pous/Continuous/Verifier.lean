@@ -45,17 +45,6 @@ theorem contProg_depth_le (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.
     (contProg mach D_late W pp C ω arr s i).depth f ≤ D_late :=
   round_depth_le _ _ _ _ _ _ _ _
 
-/-- **Requirement 2.** A round closes within `D_late` units of its own send time. -/
-theorem closed_le (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code) (ω : M.Ω)
-    (arr : ℕ → ℕ) (s : ContState sch.B) (i : Fin sch.B) :
-    (contNext mach D_late W pp C ω arr s i).closed ≤ contSend arr s + D_late :=
-  Nat.add_le_add_left (contProg_depth_le _ _ _ _ _ _ _ _ _ _) _
-
-/-- **Requirement 1.** The next challenge is sent no earlier than the last round closed, and no earlier than its
-arrival. -/
-theorem close_le_send {B : ℕ} (arr : ℕ → ℕ) (s : ContState B) :
-    s.closed ≤ contSend arr s ∧ arr s.sent.length ≤ contSend arr s :=
-  ⟨le_max_right _ _, le_max_left _ _⟩
 
 /-- **Requirement 3.** A hit returned the right block within `D` units and `Q` queries. -/
 theorem hit_on_time {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
@@ -69,21 +58,6 @@ theorem hit_on_time {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.
     subst h3
     exact ⟨ha, by omega, by omega⟩
 
-/-- **Requirement 3.** An answer past `(D, Q)` is never a hit. -/
-theorem late_not_hit {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
-    (c : Bits ℓ) (hl : D < p.depth f ∨ Q < p.work f) : contVerdict D Q Q_late f p c ≠ .hit := fun hh => by
-  obtain ⟨-, h1, h2⟩ := hit_on_time D Q Q_late f p c hh
-  omega
-
-/-- **Requirement 2.** A round that is not rejected returned an answer, within `Q_late` queries. -/
-theorem not_reject {ℓ : ℕ} {σ : Type} (D Q Q_late : ℕ) (f : M.Qry → M.Ans) (p : OracleAlgorithm M (Option (Bits ℓ) × σ))
-    (c : Bits ℓ) (hr : contVerdict D Q Q_late f p c ≠ .reject) :
-    (∃ a, (p.run f).1 = some a) ∧ p.work f ≤ Q_late := by
-  unfold contVerdict at hr
-  split at hr
-  · exact absurd rfl hr
-  · rename_i a ha
-    exact ⟨⟨a, ha⟩, Nat.le_of_not_lt fun hq => hr (by simp [hq])⟩
 
 /-- The indices sent after `h` from `s` are `s`'s followed by `h`. -/
 theorem foldl_contNext_sent (mach : ContMachine sch) (D_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
@@ -114,15 +88,6 @@ theorem contRecords_getElem? (mach : ContMachine sch) (D Q D_late Q_late : ℕ) 
     simp only [contRecords, List.getElem?_cons_succ, List.take_succ_cons, List.foldl_cons]
     exact contRecords_getElem? mach D Q D_late Q_late W pp C ω arr _ is j
 
-/-- **Requirement 1: no pipelining.** Round `j`'s record depends only on the indices up to `i_j`. -/
-theorem no_pipelining (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)
-    (C : sch.Code) (ω : M.Ω) (arr : ℕ → ℕ) (s : ContState sch.B) (l l' : List (Fin sch.B)) (j : ℕ)
-    (hl : l.take (j + 1) = l'.take (j + 1)) :
-    (contRecords mach D Q D_late Q_late W pp C ω arr s l)[j]? =
-      (contRecords mach D Q D_late Q_late W pp C ω arr s l')[j]? := by
-  have h1 : l.take j = l'.take j := by simpa [List.take_take] using congrArg (List.take j) hl
-  have h2 : l[j]? = l'[j]? := by simpa [List.getElem?_take] using congrArg (·[j]?) hl
-  rw [contRecords_getElem?, contRecords_getElem?, h1, h2]
 
 /-- The audit's records over `List.ofFn I`: round `j` is the record of `I j` after `I 0, …, I (j − 1)`. -/
 theorem contRecords_ofFn (mach : ContMachine sch) (D Q D_late Q_late : ℕ) (W : Bits sch.n) (pp : Bits sch.t)

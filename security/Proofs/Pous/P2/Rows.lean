@@ -228,27 +228,5 @@ theorem hist_gamma_le (B ℓ S T g k : ℕ) (hk : 1 ≤ k) (hgB : g ≤ B)
 theorem pr_false {α : Type} [Fintype α] : pr (fun _ : α => False) = 0 := by
   rw [pr_def, Finset.filter_false, Finset.card_empty, Nat.cast_zero, ENNReal.zero_div]
 
-/-- **`m1` meets the requirement, given A2 and a certificate row at its state bound.** -/
-theorem meets_m1_of_row (hA2 : Guarantees.A2LemmaAM1) (B ℓ Q k : ℕ) [NeZero B] (hk : 1 ≤ k)
-    (hrow : P2Row B ℓ ((m1 B ℓ).stateBound Params.ρ) Q k) (D : ℕ) :
-    Meets (m1 B ℓ) .sequential D Q k Params.εMax := by
-  obtain ⟨g, -, hgB, hpow, hlog⟩ := hrow
-  refine ⟨le_rfl, m1_correct B ℓ, m1_codeHoldsW B ℓ, m1_spaceBound B ℓ, ?_⟩
-  intro W A₁ A₂
-  have h := PousTrackA.a3_prime_lam (m1 B ℓ) _ D Q k g 128 _ (fun _ _ => True)
-    (lemmaA_of_A2 hA2 B ℓ ((m1 B ℓ).stateBound Params.ρ) D Q g)
-    (hist_gamma_le B ℓ _ Q g k hk hgB hlog) W A₁ A₂
-  refine h.trans ?_
-  simp only [not_true_eq_false, pr_false, add_zero]
-  have hB0 : (0 : ℝ) < B := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne B)
-  have hδ : ((((g - 1 : ℕ) : ℝ≥0∞) / (m1 B ℓ).B) ^ k) ≤ ENNReal.ofReal Params.δ := by
-    change ((((g - 1 : ℕ) : ℝ≥0∞) / (B : ℝ≥0∞)) ^ k) ≤ ENNReal.ofReal ((1 / 100 : ℚ) : ℝ)
-    rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast B, ← ENNReal.ofReal_div_of_pos hB0,
-      ← ENNReal.ofReal_pow (by positivity)]
-    refine ENNReal.ofReal_le_ofReal ?_
-    have := (Rat.cast_le (K := ℝ)).2 hpow
-    push_cast at this ⊢
-    exact this
-  exact add_le_add hδ le_rfl
 
 end PousP2
