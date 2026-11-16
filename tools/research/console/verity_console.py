@@ -216,7 +216,7 @@ def check_panel(idx, now: datetime) -> dict:
                  ["Run", "Started (UTC)", "Minutes", "Result", "Commit", "Landed as", "Machine"], rows,
                  updated_at=iso(max(ends)) if ends else iso(now), source="evidence store: tool=check Attempts and their landed labels",
                  note="Landed as is main's commit whose Check: trailer names the run (its `landed` label); the others are checks of "
-                      "branches or of trains that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
+                      "branches or of candidates that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
 
 
 # ---------------------------------------------------------------------------------------------------------------- node1 group

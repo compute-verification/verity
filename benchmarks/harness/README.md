@@ -7,7 +7,7 @@ interface (`adapters/vllm/verity_vllm/protocols/interface.py`), and the harness 
 file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
 point is timed, metrics, results, dispatch and resume, a steady-state spec (the second schema `plan`, `run` and `check`
 take), settings, the two tables `served-table` and `breakdown` render, and the kit benchmarks' runners share.
-`benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
+`tests/benchmarks/harness/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
 
@@ -29,8 +29,8 @@ verity-bench prove --system S --workload W  # a proof system's prover on a workl
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
                                                 # reads (`verity bench prove lean-verify`, the same README)
-verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof system by layer, a row each read from
-                                                # its run's out/ or run id (`verity bench prove layers`, the same README)
+verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof benchmark by layer, the benchmark result
+                                                # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
 ## Specs
@@ -340,7 +340,7 @@ how long things run) or `debug` (refused on a point, which is always a run of re
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
 harness writes one through `verity_vllm.engine.env`, part of the vLLM adapter's public interface.
-`benchmarks/harness/tests/test_settings.py` holds the harness's
+`tests/benchmarks/harness/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table

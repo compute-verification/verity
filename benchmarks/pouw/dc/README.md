@@ -96,16 +96,16 @@ uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json 
 | `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The ACCEL model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
 | `probes/h32.cuh`, `probes/h32_mma.cuh`, `probes/sm90_h32.cu`, `probes/sm90_h32_tc.cu`, `probes/sm90_h32_sp.cu`, `probes/sm90_h32_mem.cu`, `probes/sm90_h32_pu.cu`, `h32.py` | H32 on the H200: every register writer of MH100's classes, alone and co-issued across pipes. The scalar forms of ffma, int32, fp64 and other, each at 512 an iteration and 64 (`x_`), and mixes in one warp (`m_`); wgmma of every `Shape100` shape at N 8 to 256, FP16 accumulate included (`wa_`), legacy mma.sync, DMMA and mma.sp at 128 a trip (`ms_`, `sp_`), each followed by a scalar round (`mm_`), and wgmma with lane warps beside it (`wu_`, `wu256_`); lookups whose address is the last one's result, and atomics (`d_`, `a_`); the carry writers, add.cc and addc chains of a 64-bit and a 128-bit add, priced under int32 by the general registers a lane writes (`c_`). Each probe's note is its class and the registers one warp instruction writes a lane. `emp.sh` builds, gates and times them (`emp_cuda.sh RELEASE` builds at a named CUDA release's nvcc, from NVIDIA's redistributable archives, for a node without that toolkit or with an older libc; `glibc_compat.h`); `h32.py` prices rows.jsonl in MH100's unit (4,096 over the registers a SM writes a clock): the `Prices100` table by Round 7's rule, H32 and FloorTc, the co-issue minimum and the table as a Lean literal |
 
-The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
+The tests are `../../../tests/benchmarks/pouw/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
 pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock, h32.py's
 prices and table),
-`../tests/test_dc_jbreak.py` (sm90_jbreak.inc current),
-`../tests/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
-trip), `../tests/test_dc_uniform.py` (the table writer),
-`../tests/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
-`../tests/test_dc_device_gate.py` (each job's check of the card it runs on, with stand-ins for nvidia-smi and nvcc) and
-`../tests/test_ffill.py` (ffill's reference against the integer FP32 pipe, its `coins`, chains and pinned receipts, its
+`../../../tests/benchmarks/pouw/test_dc_jbreak.py` (sm90_jbreak.inc current),
+`../../../tests/benchmarks/pouw/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
+trip), `../../../tests/benchmarks/pouw/test_dc_uniform.py` (the table writer),
+`../../../tests/benchmarks/pouw/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
+`../../../tests/benchmarks/pouw/test_dc_device_gate.py` (each job's check of the card it runs on, with stand-ins for nvidia-smi and nvcc) and
+`../../../tests/benchmarks/pouw/test_ffill.py` (ffill's reference against the integer FP32 pipe, its `coins`, chains and pinned receipts, its
 dump checks, the header's host build, the design that prices it). A probe's rate is opcode_probe's: warp instructions a
 SM a clock, timed only after its SASS gate, its poisoned sink and its no-write control pass
 (`../opcode_probe/README.md`).
@@ -136,74 +136,3 @@ general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_`'s lanes
 and under the block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined
 sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
 that), s4 m16n8k64 a CALL (not timed).
-
-## Measured results with no run in the evidence store
-
-These stay here until a rerun's are in the evidence store. `emp.py` prices a timing run on its build run's `sass/`: a
-timing run holds none, and the tree names no build run. No B300 has run, and the probe `fpx` is not in the tree.
-
-### Combined routes beside wgmma (`emp.sh`, 1× H200)
-
-`probes/sm90_emp.cu` runs the routes the ACCEL model's red team named beside
-a saturated wgmma, and `emp.py` prices each timed loop's whole SASS on DS-90's facets. Three rounds, 69 loops, none
-above a facet:
-
-- **A uniform instruction takes an issue slot beside a saturated wgmma.** `emp_pack3_i_r1024_k{0,64,128}` runs 3 warps a
-  SMSP, each with 4 wgmma s8 n128 a group, the honest step's 8 IMMA, 1024 FFMA and K uniform instructions an iteration.
-  The chain stays uniform, and the loop's SASS adds only uniform opcodes as K grows. It issues 0.870 / 0.869 / 0.871 a
-  SMSP-cycle, and each added uniform instruction costs 1.19 (K 0 → 64) and 1.08 (K 64 → 128) SMSP-cycles. So A2u holds
-  beside async wgmma on the H200, and JI90_0's 0.965 sits below the measured price, the conservative side. Beside a
-  saturated async tensor op a co-located uniform chain fills idle issue slots, and with the SMSP's issue saturated it
-  takes one (`UNI_TABLES=async` and `a2u`, and `emp_pack3` on sm_90).
-- **2:4 sparse wgmma reaches A3's sparse line only with A in registers.** `wgsprs_s8` (m64n256k64.sp) runs at its dense
-  twin's instruction rate, 4095.6 physical (8191 logical) MACs a SM-clock. With A in shared memory (`wgsp_s8`, `_e4m3`,
-  `_f16`) it runs at 0.889 of it: 18 KB of operands an instruction at the dense rate is 144 B a SM-clock against the
-  128 B shared port. B is always in shared memory, so the port limits a 2:4 form to 4096/b physical MACs a SM-clock for
-  b-byte operands, each type's dense peak.
-- **SS wgmma's operand reads share the shared-memory port with LDS.** `emp_smem`: wgmma n128 SS reads 94.3 B a SM-clock
-  and LDS.128 beside it 28.7, 123.0 of 128; LDS.128 alone 127.96.
-- **setmaxnreg changes no rate.** ptxas drops a release it can't honor (C7507, no USETMAXREG: 232/40 and 208/64 at 384
-  threads) and keeps 184/96 (`emp_reg_d96`). All three run tensor 0.9996 beside IMAD 0.789 a SM-clock.
-- **The clock under a saturated wgmma is under the 1830 MHz tensor clock.** NVML's sample reads 1905–1965 MHz there, but
-  the event clock (`emp.py`'s evMHz: the longest block's cycles over the event time a call) is 1518–1797 MHz on every
-  loop at tensor ≥ 0.99. A second, the H200 does at most 1942.7 dense s8 TOPS (1.8% under its
-  sheet's 1979), 899.7 f16 TFLOPS and 473.8 tf32. Light loops (scalar, shared memory) read the same on both clocks.
-- **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 8× its MACs: k 256 against 32) and BMMA.168256 at
-  0.656, as IMMA.16832; DS-90 prices b1 on issue alone.
-
-### B300 (sm_103a)
-
-sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not supported on .target 'sm_103a'`; CUDA
-13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
-an FP kind, which the protocol states as its own T1 table (an FP design or kind::ti16, sm_107f only):
-
-- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba: balanced
-  base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
-  (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
-  fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade. **On the B200 it does**:
-  k3 and k4 on all five adversarial classes, 0 bad accumulators and 0 bad k32 words in two runs, so the E4M3 route
-  holds for a k32 step.
-- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's FP4 route writes U as two E2M1 terms
-  under per-block scales; its adder matches the existing silicon model (SIL BLACKWELL_SM100_NVF4/MXF4).
-
-Cost against B200's kind::i8 kernel, at the rates the tensor table gives every 32-deep kind (256 slots a SM a clock):
-
-| | B200 kind::i8 | B300 k3 (E4M3) |
-|---|---|---|
-| MMAs a k32 step a tile | 1 | 3 |
-| committed words a SM a clock, tensor-bound | 256 | 85.3 |
-| TMEM words loaded a committed word | 1 | 2 (acc1, acc2) |
-| fold ops a word | 3 (duo) | 5 (2 IMAD + duo) |
-| honest time at L = 32 (fold-bound on both) | 1 | ≈ 5/3 a SM (scaled by SM count and lane rate) |
-| honest time where the tensor pipe binds | 1 | 3 |
-
-So at L = 32, where the tensor table has both parts fold-bound, the missing int8 costs B300 the two recombination IMADs (≈
-1.67× the fold's time a SM); where the tensor pipe binds, k3 costs 3× (k4 4×). The B300 measurements: `fp8acc` built
-for sm_103a (its guard and device check name sm_100a today) and extended from one k32 step to emu8's K up to 16384,
-then sm100_tcgen05.cu's f8f6f4, f16 and tcgen05.ld probes (its i8 forms removed) and `scalar.cu`: about 2 GPU-hours on
-a 1× B300.
-
-Both routes have since run end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
-the accumulator restored to its binade by tcgen05.st after each word leaves, costs one IADD3 a word (no IMAD) and is
-1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. The probe that ran them
-(`fpx`: every tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) also built for sm_103a.

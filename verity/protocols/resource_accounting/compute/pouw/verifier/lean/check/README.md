@@ -12,7 +12,7 @@ Python reference held to it.
 | `Evidence` | the proof system's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's sample as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
 | `check` | `PouwCheck.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
-| `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units sampled subset:K′ at the execution phase's δ, and the sample is subset:K′ over N |
+| `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N proof blocks sampled subset:K′ at the execution phase's δ, and the sample is subset:K′ over N |
 
 A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a credit period's credit
 and onsite's PoUW subprotocol (`Core.Onsite.components`), with `verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py` its Python
@@ -38,7 +38,7 @@ execution phase of the credit period's close is credited.
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Period` | `period_check.py`: the credit period's `Core.Protocol` value over `Credit.periodCredit`, its decoders and its digest |
 | `PouwCheck.PeriodMain` | `pouw-period`'s entry point |
-| `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified execution phase's under its certified salt |
+| `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one proof block's opening beside the check (`served_commit.check`'s rule), a certified execution phase's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the execution phase's pass and its sample (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt execution phase's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live execution phase's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the execution phase (`Spot.Challenger.auditedChallengePhase`, `challengePhaseNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`, `ratio`) |
@@ -47,7 +47,7 @@ execution phase of the credit period's close is credited.
 | `PouwCheck.CreditOnce` | `Credit.periodCredit` as compiled: `periodCreditOnce` replays the auditor's ledger (`Spot.Challenger.checked`) once at the verifier's key and hands it to each step that reads it, where `periodCredit` replays it 5W + 1 times; each step's twin (`…With`) is its function as written with the replay a parameter, equal to it by `rfl`, and `periodCredit_once` (`@[csimp]`) compiles `periodCreditOnce` wherever `periodCredit` is called, so nothing a guarantee reads changes |
 | `PouwCheck.CreditUnwritten` | `Credit.periodRoots` and `Credit.pearlCMonitoringPeriodCredit`, the checks of `credit.period` and `credit.pearl_c_period_credit` not yet written in Lean: each refuses everything (`NOT_WRITTEN`), beside `PouwCheck.Credit`, which is past `LONG` lines |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
-| `PouwCheck.LeafOwn` | not `credit.py`'s: an execution phase unit's leaf statements' tile and the placement of the values they read in the execution phase's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the execution phase's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
+| `PouwCheck.LeafOwn` | not `credit.py`'s: an execution phase's proof block's leaf statements' tile and the placement of the values they read in the execution phase's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the proof block's base row), from the execution phase's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
 | `PouwCheck.Lanes` | `credit.py`'s lanes form: a sampled leaf at a K the circuit files commit as `lane<K>` and `combine<K>` (`lanesFiles`, `formOf`) verified as its lanes and combine statements (`leafAsks`), each against its own leaf Program (`leafOf`, a population of one) and the `--registered` file credit builds from the descriptor (`leafRegisteredFile`: the execution phase's tables at the leaf's place, its partials at the produced record's root under the execution phase's `draw_root`, its known rows the verifier's own), then the produced record's opened roots and shared openings (`outcomes`); a leaf outside `LeafLanesSound`'s reach is refused (`lanesShape`, `lanes-shape`) |
 | `PouwCheck.Verified` | `credit.py`'s `_asks` and `_verified`: a served execution phase's statements verified, the verdict `credit.window` and `credit.period_credit` take each sampled proof block's outcome from (`credit._lean_verified`). The verifier runs outside, so `verified` is asked twice: it names each run (the statement, its K's committed circuit file, the call's `--registered` file and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, a session that opened its call's public table or the ok rows elsewhere than the `--registered` file's value and root, or a unit of another call, refuses the execution phase); an execution phase's lanes evidence adds each sampled lanes-form leaf's runs after the call statements' (`PouwCheck.Lanes`) |
@@ -55,24 +55,24 @@ execution phase of the credit period's close is credited.
 | `PouwCheck.CommittedFiles` | `credit.py`'s `committed_files`: the circuit files a credit period's open committed (`circuit_files`, each K's template's and the live Program's, or a lanes-form K's `lane<K>` and `combine<K>` with `leaf_programs`), which `credit.period_credit` reads from here (`credit._lean_committed_files`) |
 | `PouwCheck.VerifiedDifftest` | the difftest's `credit-verified`, `credit-live-verified` and `credit-committed-files` behind `pouw-check-difftest` (`VerifiedDifftest.all`, `CreditDifftest.all`'s then it, the functions `DifftestMain` serves) |
 
-`opening` holds a tile proof's public file to the registered execution phase: the unit sampled (or opened unsampled, the filler's),
+`opening` holds a tile proof's public file to the registered execution phase: the proof block sampled (or opened unsampled, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
-its salt that root's leaf, the unit one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
+its salt that root's leaf, the proof block one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
 pins for the check's template (its header's `circuit_sha512`, which `verity-verify-proof verify --zk` binds to the circuit it
-verifies against), and each opened row's b ‖ c its side tree's leaf at the unit's row. An unsalted template's proof's
+verifies against), and each opened row's b ‖ c its side tree's leaf at the proof block's row. An unsalted template's proof's
 first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
-(`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
+(`Salted`: today the H1 tile proof block at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each
 `hm96-sha512/row/v2`, its entry's side trees holding R rows per tile row and C per tile column. Each schema is read by
 port name, and Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so a header whose
 keys, in key order (serde's), don't list the opened side rows first and in port order (`portsOf`) is refused, never
 read in its own order (every pinned template's side ports sort in port order). The public row's
 b ‖ c must be `publicBc` of the execution phase's context, the certified salt the verifier passes (`opening`'s `salt`,
-`core_check.certified_salt`, the salt `passEpoch` checked), the unit's position and the entry's side roots. Only a
-certified execution phase opens a salted template's units, and only under a 64-byte salt; it opens no unsalted template's unit,
-so a certified execution phase passed no salt opens nothing. So the circuit an execution phase's units are proved over is
+`core_check.certified_salt`, the salt `passEpoch` checked), the proof block's position and the entry's side roots. Only a
+certified execution phase opens a salted template's proof blocks, and only under a 64-byte salt; it opens no unsalted template's proof block,
+so a certified execution phase passed no salt opens nothing. So the circuit an execution phase's proof blocks are proved over is
 the pinned one, not whatever builds it: a change to a template's Definition or to Flock's lowering lands its new digest
-in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128. A
-template has one circuit, so its units proved under an earlier lowering no longer open.
+in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's test of a staged proof block enforces at K = 128. A
+template has one circuit, so its proof blocks proved under an earlier lowering no longer open.
 `served_commit.check` keeps the sample, the level and the population's domain and calls the opening rule for the rest.
 
 `passEpoch` re-starts the execution phase's pass's execution phase from its manifest under the challenger's own coin commitment: a pass
@@ -84,7 +84,7 @@ root (`epochOpenRoot` of its weights' root and its `pass_index`, computed by the
 beacon; either way the manifest's salt is the execution phase's, and
 the execution phase's context names the pass by its SHA-512. A certified execution phase's verifier holds the network attester's salt for
 the PoUW execution phase its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), the execution phase's stream and prover, and
-the record the certifier made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
+the record the attester made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
 `salt.pouw_record`), and passes only a pass whose salt is `pouwSalt` of them (`salt.pouw_salt`) over those weights, a v3
 manifest; no other verifier passes a v3 manifest. The difftest's pass cases (below) hold honest certified
 execution phases and a mutation per certified refusal too. `drawCheck` holds the execution phase's sampled proof blocks to the execution phase's sampling coin,
@@ -106,20 +106,20 @@ difftest reaches), so no caller credits an execution phase with a step skipped.
 credited row its z table's root (`tables.z`), and the sample root over the rows (`calls_root`), the last round's receipts
 and every round's root and coin must be the one root the challenger's log shows its sampling coin followed, read through the
 session the auditor's ledger opens for the execution phase; so a bit changed after the sampling coin is refused, and the credited
-calls are the rows whose bit is true. `drawn`: the units the sampling coin selects, never a list handed in: `drawCheck`'s rule
-under the sampling design `work:k` (`workUnits`), over the execution phase's layout (`h1window.program`'s arguments, its units the compiled
-Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
-the K its credit period's open committed (`samplingDesign`; `committedK` reads `draw_k`, and an execution phase with fewer units than K is refused).
+calls are the rows whose bit is true. `drawn`: the proof blocks the sampling coin selects, never a list handed in: `drawCheck`'s rule
+under the sampling design `work:k` (`workUnits`), over the execution phase's layout (`h1window.program`'s arguments, its proof blocks the compiled
+Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each proof block's work R·C·K, at
+the K its credit period's open committed (`samplingDesign`; `committedK` reads `draw_k`, and an execution phase with fewer proof blocks than K is refused).
 `servedRows`: each manifest row states its call's served rows m_s (`served`, under `calls_root`, so fixed before the
 sampling coin), a natural at most the T table rows its credit period's open committed (`committedRows` reads `rows`, and an
 execution phase whose A slot M is not `slotOf` T, the least power of two at or above T and at least R, is refused), one m_s for
 every call of a step (call c at step `c / (C/S)`); else the
 execution phase is refused (`manifest`). A credited call with m_s = 0 is no credit. `established`: the ε that sample established at
 δ = 2⁻⁴⁰ over the execution phase's credited served work, `PouwWindow.epsAt` (`k_prime` inverted) as `epsAt K δ C W 1`, C the
-credited calls' served work (`servedWork`, m_s·n·K a call, never its M slot rows') and W the execution phase's units'
+credited calls' served work (`servedWork`, m_s·n·K a call, never its M slot rows') and W the execution phase's proof blocks'
 (`callWork`, the sample's population, padded slots included), which `periodCredit` reports with C as the execution phase's
 `work`, null when it establishes no ε ≤ 1; PoUW has no ε target. That m_s counts the step's input-ids table's served
-slots is not yet proved: it is the serving process's statement, fixed before the sampling coin. `outcome`: the execution phase is accepted only when every unit `drawn` samples has exactly one
+slots is not yet proved: it is the serving process's statement, fixed before the sampling coin. `outcome`: the execution phase is accepted only when every proof block `drawn` samples has exactly one
 proof outcome and it is an accept; a failed or missing one refuses the whole execution phase. `layoutOf`: the layout is the
 committed circuit's, never the execution phase's evidence: read from the descriptor whose SHA-512 the credit period's open committed
 (its program function's record, its templates' A and B rows for R and C), whose root's nodes other than inputs must be
@@ -143,9 +143,9 @@ subtrees and its domain's pads. `registration`: each sampled proof block's proof
 the Lean verifier's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
 SHA-512 and, for every value but the weights' `…/b/<K>`, the execution phase's open root (`Spot.Registered.domainAt`); and each proof was verified against that descriptor, opened only values the execution phase registers once, each at
-its registered root, and opened its unit's K's A value, the execution phase's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another execution phase or circuit, a proof verified against another registration, and an entry whose root
+its registered root, and opened its proof block's K's A value, the execution phase's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another execution phase or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused. `length`: the credit period's open commits each request's public max_tokens
-with the public-cap done source (`committedLength`, `{max_tokens, stop}`, stop `fixed`), and the
+with a done source that stops there (`committedLength`, `{max_tokens, stop}`, stop `fixed`), and the
 served rows m_s each step's manifest rows fixed before the sampling coin (`servedRows`) are that fixed length's schedule,
 every request admitted in round 0: round 0 serves at least one row a request, round s ≥ 1 one decode row for each
 request whose max_tokens is past s. A credit period whose open commits no length is
@@ -162,7 +162,7 @@ execution phases and one mutation per refusal, the case's own framing among them
 undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_check.opening` as a `Port`, comparing
 reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
-every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
+every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch_twin` and `core_check.draw_twin` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest samples, and one mutation
 per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live execution phase's
 round roots and coins, read through the challenger's session (its record and close signed under the execution phase's pinned key,
@@ -170,19 +170,19 @@ its release log, and the auditor's signed ledger opening and ending it for the e
 in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
 end, a second session for the execution phase, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign execution phase's, a seeded execution phase's commitment or another
-layout's). `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+layout's). `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
 verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
 `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
-`tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or
+`tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, proof blocks the prover chose, a sampled proof block failed or
 missing, a credit period unclosed or an execution phase of it missing or out of order, an A tree the round roots didn't commit, a
 descriptor whose record names another layout than its nodes, a round log the challenger never received, entries or a
 sampled proof block's proof of another registration than the execution phase's, an entry whose root is not its sessions', an execution phase of a
 credit period whose B rows, one row's s_w or every code, are not the ones the credit period's open signed, a credit period whose open signs
 no weights' root, an execution phase whose request runs past its public max_tokens or stops before it, a credit period whose open
-commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit.py`
+commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean

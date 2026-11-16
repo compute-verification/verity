@@ -28618,47 +28618,47 @@
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
     "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, security/Proofs/Pous/P2/RingTrunc.lean); and, at k = 105, from L >= 2^169 with D >= 2 and Q >= 2 (Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc, security/Proofs/Pous/PeriodDeployed.lean: 501,819 blocks without their low 168 bits), so the deployed budget (16,446, 2^20, 2^64) lies outside every refuted region. Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    },
    "Pous.P2.Assumptions.P2RingReducesToM1p": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
     "why": "Every ring-model responder against P2 at k = 105 is matched up to 2^-130 by an m1p responder with 128 more bits per block (P2-M1-SGI); open, and it implies P2RingAuditSecure, so a refutation of that is one of this."
    },
    "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_h1t_conjectures.py::test_distinct_live_h1t",
+    "test": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_h1t_conjectures.py::test_distinct_live_h1t",
     "why": "On every legal unit, H-1T's credited words are pairwise distinct functions of the unit's salt and none is free; open, with no counterexample on the legal units its test enumerates or samples."
    },
    "Pous.P2.Assumptions.P2RingRoundSecure": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which security/Proofs/Pous/P2/RoundTests.lean proves."
    },
    "ResourceAccounting.Assumptions.TS.FoldOptFoldedAt": {
     "status": "open",
-    "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
+    "test": "tests/benchmarks/pouw/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
     "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the B200's two readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds); on the H200's three (DC-90-ri's at 1/2 and its (I3) twin at 3/5 among them) that fold breaks it at no certificate, since the H200's menu holds each route with LI's multiplies as IMAD.WIDE and N_w times one of those prices at most that fold on every row. The data-center headlines' test of it prices ♭'s fold and that one at each of the five pi* and checks both facts. At those pi* it is open on all five, and every class a fold route issues prices above 0 at each (a free class would make it harder to meet, not easier: HB-PROOF's M1). On the H200 the cheater's menu holds every counted fold known to come near the bit-exact loops, none built: RT4-SHEET-13's and -14's moves of LI on li and each loop (its XORs as a memory round trip of three issue slots, its multiplies as IMAD.WIDE, or both), their classes at the JI90 lines the H200 measured beside the IGMMA, and li-bulk at its measured cost with its counted BT1024 and trimmed infinite-W members (RT4-SHEET-17, -22), so there it is a premise only about folds off the cheater's menu, and a counted fold priced below what it would cost built only lowers the proved credit (1 - epsilon)·B_flat, which reads w* and phi* at pi* and not B_flat (RT4-SHEET-27); B_flat doesn't move with it, since flat folds by the built routes alone. The two-slot round trip is off the menu: li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two. At the (I3) twin's pi* it doesn't follow from FOLD-OPT at 1/2's (HB-PROOF's M1), and phi* there is li-bulk's trimmed member."
    },
    "ResourceAccounting.Assumptions.SquaringFloor": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/poub/verifier/tests/test_encode_chain.py::test_squaring_floor_known_constructions",
+    "test": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_encode_chain.py::test_squaring_floor_known_constructions",
     "why": "In the circuit model's nonlinear units (Definitions/ResourceAccounting/Gates: window proven by interval analysis; the only free operations are linear maps with coefficients fixed before the coins, so a cost is the budgeted units and a unit per data product, an s8-family lane whose two multiplicands both depend on run or coin data, whatever their range), one squaring mod p from a word's canonical bytes to n/8 byte-format limbs congruent to its square, right on more than ε of the words, costs at least e nonlinear units, at ε ≥ 2^−64 and p ≥ 2^66; open, priced e = (2L − 1) + (L − d(ε)), d(ε) = 4 + ⌈log₂(1/ε)/8⌉ (374 at p1024 and ε = 2^−40): the 2L − 1 column sums' multiplicative complexity (sketched) plus the red team's Lemma R at c = 0. Every known construction sits above it (ripple carries 16,896, 3-limb look-ahead 16,726). Its test builds them and checks each costs at least e, its column sums L² data products."
    },
    "ResourceAccounting.Assumptions.ChainSum": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/poub/verifier/tests/test_encode_chain.py::test_chain_sum_known_chains",
-    "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in benchmarks/property_redteam/tests/test_bitwise_codec.py."
+    "test": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_encode_chain.py::test_chain_sum_known_chains",
+    "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in tests/benchmarks/property_redteam/test_bitwise_codec.py."
    },
    "Pous.P2.Assumptions.P2RingRoundSecureWide": {
     "status": "open",
-    "test": "verity/protocols/resource_accounting/memory/pous/verifier/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "test": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (nobody has checked the eps0 a proof would give against N there); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    },
    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
     "status": "open",
-    "test": "benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py::test_cross_group_joint_skips_stay_within_the_gap",
+    "test": "tests/benchmarks/pouw/test_tt_out_tile_h100_rev1.py::test_cross_group_joint_skips_stay_within_the_gap",
     "why": "TT_OUT(1/400) per audit tile at the H100 rev1's tensor-clock record (devH100Tensor), over W1 on the H100 with INT8 at zero SHA-512 and fetch prices (tt-out-tile-pearl-c-h100-rev1); an open premise, not a named assumption. No program beats the bound on the census's known skip classes that its file replays: cross-group joint skips (this test) and the first promotion (test_first_promotion_skip_is_outside_rev1s_credit). TT_OUT rev1 is refuted by the proofs red team's rating."
    },
    "Pouw.PearlC.Assumptions.W1CompleteH100": {
@@ -28667,17 +28667,17 @@
    },
    "Slowdown.Assumptions.ReferenceLayered": {
     "status": "open",
-    "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
+    "test": "tests/benchmarks/nci/test_tiers.py::test_reference_layered_at_kimi_k2",
     "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\"), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) in the steps of the declared BF16 GEMM (GEMM_HOPPER's HopperBF16WgmmaDot16, 16 activations a step, verity/definitions/ops/boolean/gemm.py), at capacity factor 1 and with bf16 embeddings, neither of which any workload declares, and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
    },
    "Slowdown.Assumptions.Reach": {
     "status": "open",
-    "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
+    "test": "tests/benchmarks/nci/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
     "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
    },
    "Slowdown.Assumptions.ReachSlots": {
     "status": "open",
-    "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
+    "test": "tests/benchmarks/nci/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
     "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
    }
   },
@@ -41252,7 +41252,7 @@
    }
   },
   "Definitions.Slowdown.Cut": {
-   "digest": "7fadbe21be65ed39324bdbb462928755d789d4085e3504bb64db98b2f53a1f71",
+   "digest": "b2260f9e67aaa29c5e21528c0a5c4372f50ec367fc34a45338916e720de0a06f",
    "definitions": {
     "Slowdown.Cut.Arrays": "5e8d40c083f394210890dd4fec1a7b15b1f5f48e44d19446e9b87e2ebb090cfc",
     "Slowdown.Cut.Connected": "d1208688f479b209d66fc7fff37177a6999eb6e13e405a03a729adfdfe380aef",
@@ -41267,7 +41267,6 @@
     "Slowdown.Cut.Matmul.y": "163ac8b74aeb236ec27642c0408202f0c8b429a3a0fd31fff4aa3d2c7b7fd07d",
     "Slowdown.Cut.NoSharedPair": "7654fc2aef8cd08e83c42c0e0a9a0c903667af4ef1cd9d42e4418f74b176bbde",
     "Slowdown.Cut.ReadsAtMost": "1b47e61421e7dcbf59c909b83e765094b02aaf4a485dac8fff2d61160c266afd",
-    "Slowdown.Cut.ReadsOn": "477e26c72bf3b2d1d8683a80d281a64a86eccba692cb26da63c3731d479cb439",
     "Slowdown.Cut.Separates": "42ffd98c6312649574432ef3e3d46fcbc61108aa0d0e2c493fa88c5f3765ff72",
     "Slowdown.Cut.ValuesInjective": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
     "Slowdown.Cut.Work": "b2997ad23d7f32b6042baf6f9231dd28c8af436a810a308d9e70d691a43bcde7",
@@ -41281,7 +41280,6 @@
     "Slowdown.Cut.Work.bY": "9519e4e79cd3384793e1efdcc3a2c5c6694c880de8deb8de8c79a19ac02fdb46",
     "Slowdown.Cut.Work.clear": "1a39859bcff774c329df322d7f37ef0642b61dbe0a8964e5bdc121622bee304f",
     "Slowdown.Cut.Work.fed": "cc5b927c291bc380e97f0b7197da2bcc3291da533647eae31d5a2e2e8df224ca",
-    "Slowdown.Cut.Work.inside": "71bdb1e438f0b9f5fdeb7400b3776727a5ae9bfd71d9e6b02a7a773d710c80a1",
     "Slowdown.Cut.Work.mac": "3cd949d795a7f06b4ad57e010caa3ef7f67a56962224f04b299654a1702d413d",
     "Slowdown.Cut.Work.out": "391e407d344c41ac1ebbf6edf9280fee6a9a027ce38d171c63f749184de24f18",
     "Slowdown.Cut.Work.pi": "93d1be9626bea34c16237bb31d5390db934b0de112491230d422f6125fdbae1d",
@@ -41295,8 +41293,7 @@
     "Slowdown.Cut.piMax": "232573ffd4f01883a2cbae98d4864faec008b614442fa02ff547db5d6e0a7a11",
     "Slowdown.Cut.shareF": "7e3dd7f641716d1f65bcc93e08229472a324cab684c4e90f81df98e01787e292",
     "Slowdown.Cut.unregisteredInputs": "891112a9ec127fd904e70b0031c1b335e1fa6c821c7430d3cf618dc9f8538d43",
-    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027",
-    "Slowdown.Cut.workHEOn": "88a70f61640077129463928c089f6bdd2ef74923c819545ce92fc75559ffcbd2"
+    "Slowdown.Cut.workHE": "0d68b3f1e7844c42ccf924a61a6481a67331a6f8390baeee54db0b79b7692027"
    }
   },
   "Definitions.Slowdown.Cut.Toy": {
@@ -41506,7 +41503,7 @@
    }
   },
   "Definitions.Slowdown.Guarantees.Cut": {
-   "digest": "b7e8c7b1007e3e4905051456aad2b5e1832e2417844812a89bd2be1ecf73fee7",
+   "digest": "3b453082266cd30f141fdbe59a463adb7e63ee146b9891c9ab90384ecdda05f2",
    "definitions": {
     "Slowdown.Cut.Guarantees.Bound": "90ea079f4581a0265c3119307349e0e5ec2b57c74734190bd4b8252354ae9f11",
     "Slowdown.Cut.Guarantees.Bound_nontrivial": "a27de39899bfe100337575a717f5ef2071cb63824f32ae7b50d609cc8db1ae1a",
@@ -41515,12 +41512,9 @@
     "Slowdown.Cut.Guarantees.CountHE_nontrivial": "6354fe14217cc46cfe039e92be8660f4c990084441667247f90dad4db7ba35ca",
     "Slowdown.Cut.Guarantees.Cut_honest": "5ebbe543c32a5f45df4cc136f9c321ad688e4ac40feeb786a23d213ed4925e46",
     "Slowdown.Cut.Guarantees.HE": "4839f27c960a8da2fd2607bbf7dc3418bfbce0d8309bc49369883b7bb53618e0",
-    "Slowdown.Cut.Guarantees.HECharged": "28fd59d9e853c7f4cff068ee0e4b8ad496364723d0ff1e8ddc01c6b308a357a1",
     "Slowdown.Cut.Guarantees.HEChargedUntied": "42317050fd85b0d0d8b560c16599868e51e38980123a9043e3b79ec893f01032",
     "Slowdown.Cut.Guarantees.HEChargedUntied_honest": "5e2f2ed6d87fc6feef81ff4e06e87d3c053b9b599b507229a4c9bdef520fa274",
     "Slowdown.Cut.Guarantees.HEChargedUntied_nontrivial": "69aa356334f8bb95d28dc95064ba1884cd98b42c46632a9b64412ae8a213a2d1",
-    "Slowdown.Cut.Guarantees.HECharged_honest": "b6937dc2b06bce6ec26876fab8d016b131d0d0dbe03bc74e9bfdf357abd5244e",
-    "Slowdown.Cut.Guarantees.HECharged_nontrivial": "3e9b94665ae52352dda3ddcc305340d43b32adaed959d88b91e83de3bdd953d7",
     "Slowdown.Cut.Guarantees.HEShared": "9ce1327b37db117991d8c704b373b4d5ac1a870315c19899d0aaa6973c93dab9",
     "Slowdown.Cut.Guarantees.HEShared_nontrivial": "5055415c97533801e272ead3797af4d21c77f478608ad45f1f761ae2aab1bfdb",
     "Slowdown.Cut.Guarantees.HE_nontrivial": "7b6426bdc6c4b71f4a60121d1fd964998a5ac99679e0cdd7f571d173b09891fe",

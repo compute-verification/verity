@@ -17,7 +17,7 @@ from pathlib import Path
 
 import verity_difftest as D
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"))
 import pouw_credit_cases as credit_cases
 import pouw_period_cases as period_cases
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check
