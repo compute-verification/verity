@@ -7,28 +7,35 @@ the store side and the table, and `kit.py`, the harness's kit, the run's lease, 
 with their host stamp); this directory holds its runner.
 
 ```text
-verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
+verity bench overhead points [--card h200] [--model M]       sweep m on one GPU of NODE for C and L (a research run)
+    [--on NODE] [--gpu I] [--cores CPUS]                      the node, the GPU and the CPUs it leases
 verity bench overhead points --store RUN                      store RUN's points as the card's next version, of record
 verity bench overhead run --scheme S [--point C|L|all]        time S against stock at the card's points (a research run)
+    [--model M]                                               at the model's points (`--on`, `--gpu`, `--cores` as above)
     [--cubin ART]                                             the cubin S's arm loads, sent with the run
 verity bench overhead run --record RUN                        label RUN a run of record, once it stands as a whole
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
 Under a research run, `table` also writes the numbers `metrics.toml` holds it to into the run's result: Pearl+'s γ of
-record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), each with the scheme gate as its target.
+record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), each with the scheme gate as its target:
+Llama-3.1-70B's γ is each metric's own reading, and every other model's is written beside it as its `member`
+(`llama3.2-1b`), with no value and why while no run of record times it. `table` prints each other model's rows under its
+own heading, or says that no labelled run times it.
 Today's run of record times no commitment of the output (each layer's output hash isn't counted, the note below), so
 their titles say so until a run of record whose arm commits y is labelled.
 
 A run takes one GPU of its node through the node's `gpu-lease`, which waits for it and holds it for the run's bound
-(`research run --on NODE -- gpu-lease 1 --wait --max-min M -- bash benchmarks/harness/overhead_node.sh ...`; `research run
---gpus` is refused on a node whose GPUs gpu-lease doesn't hand out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
+(`research run --on NODE -- gpu-lease 1 --wait [--on I] [--cores CPUS] --max-min M -- bash
+benchmarks/harness/overhead_node.sh ...`; `research run --gpus` is refused on a node whose GPUs gpu-lease doesn't hand
+out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
 `bench.py` result and log.
 
 ## The operating points
 
 A card's points belong to it, a model and a precision (`overhead.MODELS`: Llama-3.1-70B's four linears for the kernel
-points). Every figure of the door is over those four linears of one layer and leaves the LM head out
+points, and Llama-3.2-1B's, `--model llama3.2-1b`, from the config of record `adapters/vllm/manifests/checkpoints.json`
+pins for `unsloth/Llama-3.2-1B`). Every figure of the door is over those four linears of one layer and leaves the LM head out
 (`overhead.LEFT_OUT`), though serving computes it: `table` says so in its coverage line (`overhead.covers`, the JSON's
 `covers`). Each point is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs
 (on the H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the

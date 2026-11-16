@@ -1,6 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
-- `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
+- `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -103,16 +103,18 @@ KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
 
-def lease(gpus: int, minutes: float) -> list[str]:
-    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node, held for the job's bound of
-    `minutes` (gpu-lease's `--max-min`, in whole minutes). The job takes the lease itself, since `research run --gpus` is
-    refused on a node whose GPUs gpu-lease doesn't hand out."""
+def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None = None) -> list[str]:
+    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node (only those `on` lists, and the
+    job pinned to the CPUs `cores` lists, where given), held for the job's bound of `minutes` (gpu-lease's `--max-min`, in
+    whole minutes). The job takes the lease itself, since `research run --gpus` is refused on a node whose GPUs gpu-lease
+    doesn't hand out."""
 
     if isinstance(gpus, bool) or not isinstance(gpus, int) or gpus < 1:
         raise ValueError(f"a lease holds one GPU or more, not {gpus!r}")
     if not (isinstance(minutes, numbers.Real) and math.isfinite(minutes) and minutes > 0):
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
-    return ["gpu-lease", str(gpus), "--wait", "--max-min", str(math.ceil(minutes)), "--"]
+    return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
+            "--max-min", str(math.ceil(minutes)), "--"]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
