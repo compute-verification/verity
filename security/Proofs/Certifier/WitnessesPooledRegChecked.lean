@@ -284,17 +284,31 @@ theorem pr_fst_true {β : Type} [Fintype β] [Nonempty β] : Pr (fun p : Bool ×
 with the registered openings is empty, at every prover. -/
 theorem twoL_FregR_certOps (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
     FregR H (twoL Bool) P x (fun _ => certOps) = ∅ := by
+  classical
   have hp : (twoL Bool).parse x = some twoStmt := rfl
   have hb : ((twoL Bool).part twoStmt).blocks = [[0], [1]] := rfl
-  simp only [FregR, hp, hb]
+  simp only [FregR, hp]
   refine Finset.filter_eq_empty_iff.2 fun v hv => ?_
   rw [not_not]
-  have hv2 : v < 2 := by simpa using hv
+  have hv2 : v < 2 := by simpa [hb] using hv
   refine ⟨[v], ?_, regValR H (twoL Bool) P x certOps, fun _ => true, fun _ _ => rfl, ?_⟩
-  · interval_cases v <;> rfl
-  · interval_cases v <;>
-      simp [Prog.Correct, Prog.refIn, Prog.Boundary, Prog.runIn, Prog.read, BGate.val, BGate.reads, regValR,
-        certOps, certifierVal, twoStmt, twoProg]
+  · rw [hb]
+    interval_cases v <;> rfl
+  · intro g hg
+    rw [List.mem_singleton] at hg
+    subst hg
+    have hin : twoStmt.prog.gates[g]? = some .input := by interval_cases g <;> rfl
+    have hval : regValR H (twoL Bool) P x certOps g = some true := by
+      interval_cases g <;> simp [regValR, certOps, certifierVal]
+    have hbd : twoStmt.prog.Boundary [g] g = true := by simp [Prog.Boundary, hin]
+    have href : twoStmt.prog.refIn [g] (regValR H (twoL Bool) P x certOps) (fun _ => true) g = some true := by
+      simp [Prog.refIn, hbd, hval]
+    refine ⟨fun b hb' i hi _ => ?_, fun _ => ⟨true, href, ?_⟩⟩
+    · rw [hin] at hb'
+      cases hb'
+      simp [BGate.reads] at hi
+    · rw [Prog.runIn, hin]
+      simp [BGate.val, href]
 
 /-- The run at the trace with the registered openings at `coinP₂`. -/
 noncomputable abbrev coinRun₂ : ℕ → Bool :=
