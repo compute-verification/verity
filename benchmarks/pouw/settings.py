@@ -146,7 +146,7 @@ REGISTRY = Registry(
                                    "layout mode the templated one (h1unit.layout)"),
     S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
                                         "test_lane_refs.py); unset, they skip"),
-    S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "
+    S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build, which "
                                               "test_served_h1_producer.py's GPU tests load; unset, they skip"),
     S("VERITY_POUW_NOISE_CUBIN", str, None, WHERE, "noise.cu built for the device (`receipts.Cubin`), for "
                                                    "test_served_h1_producer.py's GPU tests of its J10-R streams; unset, they "
