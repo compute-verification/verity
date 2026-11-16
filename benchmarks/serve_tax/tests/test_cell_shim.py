@@ -15,7 +15,7 @@ import pytest
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.network.verifier.network_certifier import (NetworkCertifier as Certifier, NetworkCertifierParams as CertifierParams,
+from verity.protocols.resource_accounting.network.verifier.network_attester import (NetworkCertifier as Certifier, NetworkCertifierParams as CertifierParams,
                                                                     audit)
 
 PARAMS = CertifierParams(cell_bytes=256, slots=1, bucket_ms=100, delay=4, lanes=2, queue=2, window=40, ingress_cells=8,

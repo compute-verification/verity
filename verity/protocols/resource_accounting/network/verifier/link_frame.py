@@ -7,7 +7,7 @@ from __future__ import annotations
 import struct
 
 #: the workload declares the same header (`certifier.prover.workload.FRAME_HEADER`), held equal by
-#: `tests/test_network_certifier_id_request_writers.py`
+#: `tests/test_network_attester_id_request_writers.py`
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
 #: a request's length (u32be), which opens it in the link's DATA payloads

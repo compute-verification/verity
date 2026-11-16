@@ -66,7 +66,7 @@ from pathlib import Path
 
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-from verity.protocols.resource_accounting.network.verifier.network_certifier import INTEGER_FIELDS, NetworkCertifierParams
+from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkCertifierParams
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
