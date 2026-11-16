@@ -15,7 +15,7 @@ Build it, run its Lean check, and run its difftest against the Python, `verity.c
 
 ~~~sh
 cd verity/circuits/requirement && lake build                 # .lake/build/bin/requirement-difftest
-python tools/verity/lean/check.py verity/circuits/requirement   # the Lean check, from the repository root
+python3 tools/verity/lean/check.py verity/circuits/requirement  # the Lean check, from the repository root
 uv run tools/check/suites.py verity/circuits/requirement # the difftest against the Python
 ~~~
 
