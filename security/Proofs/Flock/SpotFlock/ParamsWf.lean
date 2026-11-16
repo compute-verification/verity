@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.HeldOfReads
 public import Proofs.Flock.SpotFlock.DoWalk
 public import Proofs.Flock.Claims.JsonField
+public import Proofs.Core.CanonicalJson
 public import Batteries.Tactic.OpenPrivate
 
 /-!
@@ -22,6 +23,13 @@ and hold where that tree is well formed (`Claims.Json.Wf`: every object a well-f
 The form reads its boundary's and its interior's parameters through `Core.canonicalJson` (`paramsAt`), so for those
 two the tree is the one `canonicalJson` returned (`paramsAt_ok`); `ports_nodup_form` and `partition_wf_form` state
 the ports and the partition there.
+
+* **no certified entry at the interior** (`interior_parsed`): the form reads its interior audit by one-stage v2's
+  per-member parse from the interior's `params` less `proofs`, which refuses parameters that name `certified`
+  (`OneStage.paramsOfJson`, `membersParamsOfJson_certified`), and its interior's parameters by `paramsAt` from that
+  same object, so that object names no `certified`. `paramsAt` reads it back through its canonical text, as a value
+  alike it (`Verity.CanonicalJson.canonicalJson_same`) with one key set (`field?_none_same`), so the tree its
+  interior's parameters are parsed from names no `certified` either.
 
 ## How the readers are walked
 
@@ -329,5 +337,157 @@ theorem partition_wf_form (hcj : ∀ b j, Core.canonicalJson b = .ok j → Wf j)
   obtain ⟨b₁, j₁, hc₁, hp₁⟩ := paramsAt_ok hb
   obtain ⟨b₂, j₂, hc₂, hp₂⟩ := paramsAt_ok hi
   exact ⟨fun _ ho => partition_wf (hcj b₁ j₁ hc₁) hp₁ ho, fun _ ho => partition_wf (hcj b₂ j₂ hc₂) hp₂ ho⟩
+
+end SpotFlock.ParamsWf
+
+/-! ## No certified entry at the interior -/
+
+namespace SpotFlock.ParamsWf
+
+open Lean (Json)
+open Claims.Json (Wf Same)
+open Spot (getD)
+open Properties.Spot.SecurityProofs (bind_eq_ok)
+open Properties.Spot.Units (wf_getD)
+
+/-- `field?` of an object at `k` is its map's entry at `k`. -/
+theorem field?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) : Spot.field? (.obj m) k = m[k]? := by
+  cases hk : m[k]? <;>
+    simp [Spot.field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?, hk, Except.toOption, pure, Except.pure,
+      throw, throwThe, MonadExceptOf.throw]
+
+/-- **`Json.mkObj l` has a field at `k` exactly where an entry of `l` has the key `k`.** -/
+theorem field?_mkObj_isSome (l : List (String × Json)) (k : String) :
+    (Spot.field? (Json.mkObj l) k).isSome = (l.map Prod.fst).contains k := by
+  rw [Json.mkObj, field?_obj, ← Std.TreeMap.Raw.contains_eq_isSome_getElem? Std.TreeMap.Raw.WF.ofList,
+    Std.TreeMap.Raw.contains_ofList]
+
+/-- **A value alike one with no field at `k` has none** (`Claims.Json.Same`: alike objects have one key set). -/
+theorem field?_none_same {a b : Json} (h : Same a b) {k : String} (ha : Spot.field? a k = none) :
+    Spot.field? b k = none := by
+  cases h
+  case obj m n hm hn hk hv =>
+    rw [field?_obj] at ha ⊢
+    have e := hk k
+    rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.get?_eq_getElem?, ha] at e
+    cases hb : n[k]? with
+    | none => rfl
+    | some _ =>
+      rw [hb] at e
+      simp at e
+  all_goals first
+    | exact ha
+    | rfl
+
+/-- **Parameters `OneStage.paramsOfJson` returns name no `certified`** (`CERTIFIED_REFUSED`). -/
+theorem paramsOfJson_field {x : Json} {b : Spot.OneStage.Params} (h : Spot.OneStage.paramsOfJson x = .ok b) :
+    Spot.field? x "certified" = none := by
+  unfold Spot.OneStage.paramsOfJson at h
+  cases hf : Spot.field? x "certified" with
+  | none => rfl
+  | some _ => simp [hf, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+
+end SpotFlock.ParamsWf
+
+namespace SpotFlock.ParamsWf
+
+open Lean (Json)
+open Properties.Spot.SecurityProofs (bind_eq_ok)
+open private without from Spot.OneStageZkStatement
+
+/-- A key of `Json.mkObj l` other than `k0` is a key of it less `k0` (one-stage v2's `without`). -/
+private theorem contains_zkWithout {l : List (String × Json)} {k k0 : String} (hne : k ≠ k0)
+    (hk : (Spot.field? (Json.mkObj l) k).isSome) : ((without (Json.mkObj l) k0).map Prod.fst).contains k = true := by
+  rw [Json.mkObj] at hk ⊢
+  rw [field?_obj, Option.isSome_iff_exists] at hk
+  obtain ⟨v, hv⟩ := hk
+  exact List.elem_eq_true_of_mem (List.mem_map.2 ⟨(k, v), Array.mem_toList_iff.2 (Array.mem_filter.2
+    ⟨(Std.TreeMap.Raw.mem_toArray_iff_getElem?_eq_some Std.TreeMap.Raw.WF.ofList).2 hv, by simpa using hne⟩), rfl⟩)
+
+/-- **One-stage v2's parameters name no `certified`**: `OneStageZk.paramsParsed` reads its base parameters by
+`OneStage.paramsOfJson` from the object less `proofs` (`paramsOfJson_field`). -/
+theorem zkParamsParsed_certified {l : List (String × Json)} {p : Spot.OneStageZk.Params}
+    (h : Spot.OneStageZk.paramsParsed (Json.mkObj l) = .ok p) : (l.map Prod.fst).contains "certified" = false := by
+  unfold Spot.OneStageZk.paramsParsed at h
+  repeat' first
+    | (have h' := bind_eq_ok.1 h; clear h; obtain ⟨_, _, h⟩ := h')
+    | head_zeta at h
+    | throws h
+    | split at h
+  all_goals
+    have hr := paramsOfJson_field (by assumption : Spot.OneStage.paramsOfJson _ = .ok _)
+    have h1 := field?_mkObj_isSome (without (Json.mkObj l) "proofs") "certified"
+    rw [hr] at h1
+    cases hc : (l.map Prod.fst).contains "certified"
+    · rfl
+    · have h2 : (Spot.field? (Json.mkObj l) "certified").isSome := by rw [field?_mkObj_isSome]; exact hc
+      rw [contains_zkWithout (by simp) h2] at h1
+      simp at h1
+
+/-- **One-stage v2's per-member parameters name no `certified`**: `OneStageZk.membersParamsOfJson` reads them by
+`OneStageZk.paramsParsed` from the object less `proofs` (`zkParamsParsed_certified`). -/
+theorem membersParamsOfJson_certified {l : List (String × Json)} {p : Spot.OneStageZk.Params}
+    (h : Spot.OneStageZk.membersParamsOfJson (Json.mkObj l) = .ok p) :
+    (l.map Prod.fst).contains "certified" = false := by
+  unfold Spot.OneStageZk.membersParamsOfJson at h
+  repeat' first
+    | (have h' := bind_eq_ok.1 h; clear h; obtain ⟨_, _, h⟩ := h')
+    | head_zeta at h
+    | throws h
+    | split at h
+  all_goals
+    have hr := zkParamsParsed_certified (by assumption : Spot.OneStageZk.paramsParsed (Json.mkObj _) = .ok _)
+    rw [List.map_append, List.contains_append, Bool.or_eq_false_iff] at hr
+    cases hc : (l.map Prod.fst).contains "certified"
+    · rfl
+    · have h2 : (Spot.field? (Json.mkObj l) "certified").isSome := by rw [field?_mkObj_isSome]; exact hc
+      rw [contains_zkWithout (by simp) h2] at hr
+      simp at hr
+
+end SpotFlock.ParamsWf
+
+namespace SpotFlock.ParamsWf
+
+open Lean (Json)
+open Claims.Json (Wf)
+open Spot (getD)
+open Properties.Spot.SecurityProofs (bind_eq_ok)
+open Properties.Spot.Units (wf_getD)
+open private without from VStarRecursive.SampledTwo
+
+/-- The form reads its interior's parameters (`paramsAt`) and its interior audit (`membersParamsOfJson`) from one
+object: the interior's `params` less `proofs`, the audit's with its members as `proofs`. -/
+private theorem interior_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
+    (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
+    ∃ j' a, VStar.Recursive.SampledTwo.split j "parameters" = .ok j' ∧
+      VStar.Recursive.SampledTwo.paramsAt (Json.mkObj (without (getD (getD j' "interior") "params") "proofs")) =
+        .ok p.interior ∧
+      Spot.OneStageZk.membersParamsOfJson (Json.mkObj (without (getD (getD j' "interior") "params") "proofs" ++
+        [("proofs", Json.mkObj [("members", getD (getD j' "interior") "members")])])) = .ok a := by
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
+  do_walk h to p
+  cases h
+  exact ⟨_, _, by assumption, by assumption, by assumption⟩
+
+/-- **The form's interior's parameters are parsed from a tree that names no `certified`**, where the tree the form's
+parameters were read from is well formed: the interior audit's parse refuses `certified` on the object the
+interior's parameters are read from (`membersParamsOfJson_certified`), and `paramsAt` parses that object's canonical
+text, read back as a value alike it (`Verity.CanonicalJson.canonicalJson_same`). -/
+theorem interior_parsed {j : Json} {p : VStar.Recursive.SampledTwo.Params} (hj : Wf j)
+    (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
+    ∃ j', Spot.field? j' "certified" = none ∧ Spot.OneStage.paramsParsed j' = .ok p.interior := by
+  obtain ⟨j', a, hs, hi, ha⟩ := interior_audit h
+  have hw := wf_without (wf_getD (wf_getD (split_wf hj hs) "interior") "params") "proofs"
+  have hc := membersParamsOfJson_certified ha
+  rw [List.map_append, List.contains_append, Bool.or_eq_false_iff] at hc
+  have hn : Spot.field? (Json.mkObj (without (getD (getD j' "interior") "params") "proofs")) "certified" = none := by
+    rw [← Option.not_isSome_iff_eq_none, field?_mkObj_isSome, hc.1]
+    simp
+  unfold VStar.Recursive.SampledTwo.paramsAt at hi
+  obtain ⟨s, hs', hi⟩ := bind_eq_ok.1 hi
+  obtain ⟨j'', hc', hq⟩ := bind_eq_ok.1 hi
+  exact ⟨j'', field?_none_same (Verity.CanonicalJson.canonicalJson_same
+    (Verity.CanonicalJson.good_of_canon _ hw s hs') hs' hc') hn, hq⟩
 
 end SpotFlock.ParamsWf
