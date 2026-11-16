@@ -1,4 +1,4 @@
-"""One execution phase's network certificates through the proof system (N2): the network `Spec`, the ZK server's salted
+"""One execution phase's network certificates through the proof system (N2): the network `Spec`, the ZK server's hiding
 commitment to the execution phase's certified records, and the check's verifier.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the execution phase's two
