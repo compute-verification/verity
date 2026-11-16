@@ -4730,6 +4730,23 @@
       "paths": {
         "verity/protocols/compose/verifier/lean/tests/test_registration_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_registration_difftest.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/": "verity/protocols/resource_accounting/",
+        "verity/protocols/accounting/pouw/": "verity/protocols/resource_accounting/compute/pouw/",
+        "verity/protocols/accounting/pous/": "verity/protocols/resource_accounting/memory/pous/",
+        "verity/protocols/accounting/pous/device/": "verity/protocols/resource_accounting/memory/pous/attester/",
+        "verity/protocols/accounting/poub/": "verity/protocols/resource_accounting/memory/poub/",
+        "verity/protocols/accounting/poub/device/": "verity/protocols/resource_accounting/memory/poub/attester/",
+        "verity/protocols/accounting/certifier/": "verity/protocols/resource_accounting/network/",
+        "verity/protocols/accounting/certifier/device/": "verity/protocols/resource_accounting/network/attester/",
+        "verity/protocols/accounting/registration/": "verity/protocols/registration/",
+        "verity/protocols/policy/": "verity/protocols/workload_classification/",
+        "verity/protocols/policy/inference_only/": "verity/protocols/workload_classification/training_detection/inference_only/",
+        "verity/protocols/proofs/spot/device/": "verity/protocols/proofs/spot/verifier/challenger/",
+        "verity/protocols/compose/device/": "verity/protocols/compose/verifier/"
+      }
     }
   ]
 }

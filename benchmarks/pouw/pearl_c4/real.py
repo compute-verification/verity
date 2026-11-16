@@ -37,9 +37,9 @@ import numpy as np
 from verity_config.settings import of
 
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
 
 settings = of(__file__)
 TILE, ROWS_PER_TASK, ALIGN = 64, 2048, 128

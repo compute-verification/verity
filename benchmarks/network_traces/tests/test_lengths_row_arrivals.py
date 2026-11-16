@@ -2,7 +2,7 @@
 slots without a cap bit."""
 from __future__ import annotations
 
-from verity.protocols.accounting.certifier.prover import lengths_row as LR
+from verity.protocols.resource_accounting.network.prover import lengths_row as LR
 from verity_vllm.compiler import replay_chain as RC
 
 

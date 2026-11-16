@@ -13,12 +13,12 @@ import pytest
 import pearl_c4_vectors as V4
 import test_circuit_rowk as R
 from verity.circuits.evaluation import evaluate
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.experimental.pearl_c4.prover import pc4, pc4_rowk
-from verity.protocols.accounting.pouw.prover.circuit import plan, rowk
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan, rowk
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 
 SEED = R.SEED
 K4, KS4 = 256, 64

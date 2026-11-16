@@ -305,7 +305,7 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
            "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):

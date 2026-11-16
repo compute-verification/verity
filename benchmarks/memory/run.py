@@ -91,8 +91,8 @@ from pathlib import Path
 
 from verity.device import load_card, load_node
 from verity.protocol import no_bound
-from verity.protocols.accounting.poub.verifier import ledger as poub_ledger
-from verity.protocols.accounting.poub.verifier import receipts, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
 from verity_bench import kit
 from verity_config.settings import of
 
@@ -129,7 +129,7 @@ LOCAL = "local: the verifier and its coins ran on the machine being measured"
 #: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
 LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
-VERIFIER = ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier"
+VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
 SHEETS = ROOT / "hardware"
 #: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
 #: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
@@ -151,7 +151,7 @@ UTIL, VLLM_ROOM_GIB = 0.88, 12
 #: not the card's, and its share is not this benchmark's
 STORE_MIN = 0.5
 #: the pin of the checkpoint ROLE serves: its repo, revision and files, fetched into LOCAL_WORK/hf
-PIN = ROOT / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "check" / "models.json"
+PIN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 FETCH = ("import sys; from huggingface_hub import snapshot_download as d; "
          "print(d(sys.argv[1], revision=sys.argv[2], allow_patterns=sys.argv[3:], max_workers=8))")
 #: who drew a session's coins, by its verifier's `--challenger`, in the kit's words (`kit.COINS`): its own challenger
