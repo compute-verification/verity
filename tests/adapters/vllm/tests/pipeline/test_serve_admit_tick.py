@@ -903,7 +903,7 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
     middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+    late: list[dict] = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
             [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
     app = Held(head, late)
     feed, sent = tp.TickFeed(app), []
