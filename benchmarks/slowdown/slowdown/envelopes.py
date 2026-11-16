@@ -7,7 +7,7 @@ route, which no inference block constrains) and its `delta`, split into the coin
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
+  (registered capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -84,7 +84,7 @@ class Context:
 
     @property
     def capacity(self) -> float:
-        """The monitored fleet's gates over the monitoring period at capacity."""
+        """The registered fleet's gates over the monitoring period at capacity."""
         return self.fleet.count * self.location.phi * self.period.seconds
 
 
@@ -149,7 +149,7 @@ SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck",
 
 @dataclass(frozen=True)
 class Detection:
-    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every unit is proved
+    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every proof block is proved
     (`q = 1`, `χ = θ = 0`). Each field is `tiers.py`'s parameter of the same name (`proof_share` is its `share`)."""
 
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
@@ -209,8 +209,8 @@ class Detection:
         return out
 
     def tail(self) -> float:
-        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every unit is proved."""
+        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's incorrect proof blocks escape
+        past `K` (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()
@@ -615,7 +615,7 @@ class Onsite(Remote):
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites() + self.BOUND, budget.inputs)
-        # The uncertified block may take the whole server block's input: generous to the adversary, since the
+        # The uncertified block may take the whole server block's input: generous to the malicious developer, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},

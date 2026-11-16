@@ -1,26 +1,26 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## Advice v0 (`advice`)
 
 Network certification for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
-encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
-certifies the I/O, and SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is
+encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The network
+attester certifies the I/O, and SPOT holds the committed values to the compiled circuits and to the certified I/O. v0 is
 the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
-`verity/advice/v0`. The module's docstring carries the same layout and its split by window.
+`verity/advice/v0`. The module's docstring carries the same layout and its split by execution phase.
 
 **The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
 n·log2 D`, is the advice's length under the residual code's compression (`code_v1`), not v0's. v0 is the committed form, as hm96 hiding
 rows, and the form the compiler reads. The advice is private: a compile slice's proof block, always proved in zero
 knowledge, states that the committed Programs are compile(advice) under the advice's hiding root, with the compiler's
 digest registered. The advice's root is registered before the live sample, and the compiler refuses every ill-formed
-advice up to the public cap deterministically; v0's validity is that proof block's first part
+advice up to the public length limit deterministically; v0's validity is that proof block's first part
 (`verity_vllm.compiler.advice_check`, below).
 
 **Interface.** The `Advice`, `RequestAdvice`, `StepAdvice`, `Row` and `Source` dataclasses are frozen, and construction
 refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. The module's functions are:
 - `encode(advice) -> bytes` and `decode(data) -> Advice`;
 - `total_bits(advice)`;
-- `bits(advice, window, T)` and `bits_by_window(advice, T)`, v0's bits by egress window;
+- `bits(advice, window, T)` and `bits_by_window(advice, T)`, v0's bits by the execution phase of their egress;
 - `outputs(advice)`, the kept samples;
 - `to_json` and `from_json`, a strict JSON form for debugging.
 
@@ -46,7 +46,7 @@ refuses (`MalformedAdvice`) anything that isn't a schedule vLLM could have run. 
   names the request that computed them, in this step or an earlier one.
 - `release` per kept output, not per step. A step's frames straddle buckets: streams interleave, and vLLM can merge
   tokens into one chunk.
-- `bits` takes T: a window is T buckets of `release`.
+- `bits` takes T: an execution phase (`window` in the code) is T buckets of `release`.
 - `kind` is derived (decode exactly when n = 1 and start ≥ prompt_len) and checked.
 - At most one row past a request's last output, the async one. The position rules admit it and refuse a second.
 - `requests` are in order of first row, with unique ids.
@@ -58,7 +58,7 @@ connectors and external hits (`num_external_computed_tokens`), cascade attention
 `SchedulerOutput`), n > 1 and best_of, stop strings (a finish other than `eos` or `length` is refused), aborts and
 client disconnects, CUDA-graph padding (the advice names the rows that ran, not padding, so either the runner is eager
 or the compiler models the padding), and Mamba or hybrid models. An unseeded stochastic request is in scope: its seed is
-derived from its certified id and the window's seed salt, and its Program's seed rule holds its sampler to it.
+derived from its certified id and the execution phase's seed salt, and its Program's seed rule holds its sampler to it.
 
 **Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
 w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the
@@ -74,7 +74,7 @@ committed values or the rest of the advice, and the encoders (ENC-*) remove it. 
 | `id` | client (the body's `user`) | 6 + L + 8·bytes | yes: certified ingress |
 | `prompt_len` | client | w_len | yes: certified ingress (the precommitted tokenizer) |
 | `output_len` | model, or the client's `max_tokens` | w_len | yes: committed outputs, and the egress frame count |
-| `finish` | model (EOS), or the client's cap | 1 | yes: committed outputs (is the last kept token EOS) |
+| `finish` | model (EOS), or the client's limit | 1 | yes: committed outputs (is the last kept token EOS) |
 | a step's rows − 1 | engine | w_req | free |
 | `Row.request` | engine | w_req per row | free: batch membership and order |
 | `Row.kind` | (derived) | 1 per row | yes: start, n, prompt_len |
@@ -119,13 +119,13 @@ a version other than 0, and every invalid advice. The tests' fixture of two requ
 bytes): a 43-bit header, 22 bits for each request, the steps at 13, 29, 25, 25 and 13, and 3 bits for each of five
 releases.
 
-**By window** (`bits_by_window`). v0's own bits, not the charge, split so that each record goes to the earliest
-egress window it can show in:
-- an output's release goes to its own window, bucket // T;
-- a step's bits go to the earliest window of an output at that step or later, and a step that no output follows goes
-  to the last window;
-- a request goes to the window of its first step, and the header to step 0's.
+**By execution phase** (`bits_by_window`). v0's own bits, not the charge, split so that each record goes to the earliest execution phase
+its egress can show in:
+- an output's release goes to its own execution phase, bucket // T;
+- a step's bits go to the earliest execution phase of an output at that step or later, and a step that no output follows goes
+  to the last;
+- a request goes to the execution phase of its first step, and the header to step 0's.
 
-So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
-is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
+So execution phases 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
+is wholly execution phase 0's. A charge per execution phase over the first m covers at least these records. The charge itself
 is the residual code's (above).

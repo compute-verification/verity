@@ -651,7 +651,7 @@ def _served(ms: Sequence[CS.Member], readers: Sequence[tuple[int, tuple[int, int
                              "length are filled (`boundary_tables.fill`), so its strings never show it")
         e, r = t.entry(), roots.get(t.value, {})
         if [r.get(k) for k in ("root", "leaves", "domain")] != [e[k] for k in ("root", "leaves", "domain")]:
-            raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a drawn span's reads open "
+            raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a sampled span's reads open "
                              "the table served before the coins")
     return tcs
 

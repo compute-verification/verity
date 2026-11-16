@@ -68,7 +68,7 @@ ENDED = ("finished", "errored")
 #: what slot.py says of a slot it can't take (its `blocked` and `held_why`), each under the name it is counted by
 CAUSES = (("slots busy", re.compile(r": busy\b")), ("memory short", re.compile(r"GB of memory free")),
           ("disk short", re.compile(r" has \d+ (inodes|GB) free, under ")), ("a window", re.compile(r"\bwindow .* is open or starts")),
-          ("slots kept for train checks", re.compile(r": for train checks\b")), ("slots under the memory asked", re.compile(r": under \d+ GB")))
+          ("slots kept for candidates' checks", re.compile(r": for train checks\b")), ("slots under the memory asked", re.compile(r": under \d+ GB")))
 W = 150
 
 

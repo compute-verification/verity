@@ -527,7 +527,7 @@ def test_a_command_that_needs_git_is_refused_at_launch_from_a_tree_git_cannot_re
 
 
 def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(tmp_path, repo, machine, monkeypatch):
-    """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the train's
+    """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the candidate's
     recorded checks) was refused.  The clone run makes the shared tree a checkout in place and launches; the source run's tree
     stays where it is."""
     sha = _git(repo, "rev-parse", "HEAD")

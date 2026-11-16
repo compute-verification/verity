@@ -165,7 +165,7 @@ means = "the package, which re-exports nothing"
 
 [[tree]]
 path = "verity/README.md"
-means = "the distribution's module list"
+means = "the distribution's outline"
 
 [[tree]]
 path = "verity/tests/"
@@ -339,9 +339,4 @@ note = "infra's days, 14 Nov: copied there with its history by 20 Nov, cut from 
 [[open]]
 what = "whether a device with parts gets limits of its own in the Lean"
 answers = "top"
-by = "2026-11-13 10:00 PST"
-
-[[open]]
-what = "verity/commitments/windows/, inside verity/commitments/ and so below the levels the test reads: its name (the Glossary retires the word), its place and its day"
-answers = "vllm"
 by = "2026-11-13 10:00 PST"

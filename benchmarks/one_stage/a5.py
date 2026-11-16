@@ -257,8 +257,8 @@ from verity.commitments.periods import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.sampleDesign`)
-PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
-               "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
+PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified sample, hidden outputs "
+               "included (SoundExecH); J tables and the subset sample, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")
 PLAIN_ZK_SERVER = "none: Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
 
@@ -524,7 +524,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
                                     **registering(a, history)))
             if d.draw != draw.draw:
-                raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
+                raise ValueError(f"the replayed sample {d.units} is not the honest sample {draw.units}")
             got, audit = outcome(s, d, coins)
             accepted, side = got.accepted, lean(audit)
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
@@ -852,8 +852,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if (why := plain_refusal(a, mine, registered)) is not None:
         raise SystemExit(f"--plain: {why}")
     if drawn is None and not streamed(a) and sampling_design.get("law") != "subset":
-        raise SystemExit(f"a5 draws by the subset law with Lean on a development challenger's coins; the partition "
-                         f"file's is {sampling_design}: draw it through a rank's service.Stream (--challenger or --coins verifier, "
+        raise SystemExit(f"a5 samples by the subset sampling design with Lean on a development challenger's coins; the partition "
+                         f"file's is {sampling_design}: sample it through a rank's service.Stream (--challenger or --coins verifier, "
                          "a TP Commit)")
     if (why := output_refusal(a, sampled_design := D.derive(program, query, sampling_design, table))) is not None:
         summary["refused"] = why
@@ -1533,7 +1533,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     pm, pe, blobs = PF.members_v2(members, names)
     v1 = json.loads(bytes.fromhex(case["evidence"]))
     if [s["name"] for st in pe["statements"] for s in st["sessions"]] != v1.get("sessions"):
-        raise ValueError("the statements' sessions, in the members' order by first unit, are not the evidence's sessions "
+        raise ValueError("the statements' sessions, in the members' order by first proof block, are not the evidence's sessions "
                          "in order: the sampled members' sessions ran in another order")
     evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
     return {"blobs": list(dict.fromkeys(str(b) for b in (*blobs, *tables))), "commitment": case["commitment"],
@@ -1630,7 +1630,7 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
     if len(done) != 1:
-        return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
+        return f"v2 verifies one table's session on its circuit and public file; this audit sampled {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
     reads = st.get("registered_file")
@@ -2392,7 +2392,7 @@ def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | No
     if not plain(a):
         return None
     m = mine.members[0] if len(mine.members) == 1 else None
-    rules = [(streamed(a), "a plain audit draws through a rank's service.Stream (--challenger)"),
+    rules = [(streamed(a), "a plain audit samples through a rank's service.Stream (--challenger)"),
              (mine.law.get("law") == "stratified",
               f"a plain session's draw is stratified (Lean refuses a plain {mine.law.get('law')} draw, ProvedScope.sampleDesign)"),
              (m is not None, f"plain covers one table: the window has {len(mine.members)} members"),
@@ -2536,7 +2536,7 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     ok_all = True
     if a.challenger:
         if len(ranks) > 1 and a.jobs < len(ranks):
-            raise SystemExit(f"--challenger draws every rank from the step's one session, which ends once every rank has drawn: "
+            raise SystemExit(f"--challenger samples every rank on the step's one session, which ends once every rank is sampled: "
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
         manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
@@ -2583,11 +2583,11 @@ def main() -> int:
     ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
                     "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
     ap.add_argument("--transfer-gate", action="append", default=[], help="with --advice-opening: a template the registered compiler "
-                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN)")
+                    "lists as holding transfer gates, every proof block of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN)")
     ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
                     "given to the verifier (a negative)")
     ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
-                    "negative: a unit committed under other advice)")
+                    "negative: a proof block committed under other advice)")
     ap.add_argument("--ranks", default=None, help="with --tp-commit: the ranks to audit, comma-separated (default every rank)")
     ap.add_argument("--jobs", type=int, default=1, help="with --tp-commit: audit up to this many ranks at once, each in its own process")
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
@@ -2610,10 +2610,10 @@ def main() -> int:
     ap.add_argument("--archive-link", action="store_true", help=ARCHIVE_LINK_HELP)
     lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
-                    help="each drawn member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "
+                    help="each sampled member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
                          "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
-    ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
+    ap.add_argument("--challenger", help="with --tp-commit: sample each rank on the auditor's challenger's coins, one session on the TP "
                     "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
                     "infra's gate, with --peer and --challenger-key)")
     ap.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it")
@@ -2632,15 +2632,15 @@ def main() -> int:
     if missing := [f"--{x.replace('_', '-')}" for x in need if not getattr(a, x)]:
         ap.error(f"{'--bundle' if a.bundle else '--tp-commit'} needs {' '.join(missing)}")
     if a.bundle and a.advice_opening:
-        ap.error("--advice-opening draws a TP Commit's ranks (--tp-commit)")
+        ap.error("--advice-opening samples a TP Commit's ranks (--tp-commit)")
     if (a.other_advice_opening or a.other_windows or a.transfer_gate) and not a.advice_opening:
         ap.error("--other-advice-opening, --other-windows and --transfer-gate are an advice window's: give --advice-opening")
     a.coins, a.rule, a.window_root = None, None, None
     if a.plain and not a.challenger:
-        ap.error("--plain draws through a rank's service.Stream: give --challenger")
+        ap.error("--plain samples through a rank's service.Stream: give --challenger")
     if a.challenger:
         if a.bundle:
-            ap.error("--challenger draws a TP Commit's ranks (--tp-commit)")
+            ap.error("--challenger samples a TP Commit's ranks (--tp-commit)")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:
@@ -2648,12 +2648,12 @@ def main() -> int:
                      "session's pin")
         a.rule = json.loads(Path(a.partition).read_text()).get("law")
         if not isinstance(a.rule, str):
-            ap.error(f"--challenger draws by the partition file's rule, a rate's text (rate:NUM/DEN, stratified-rate:NUM/DEN, "
+            ap.error(f"--challenger samples by the partition file's rule, a rate's text (rate:NUM/DEN, stratified-rate:NUM/DEN, "
                      f"work-rate:NUM/DEN), not {a.rule!r}")
         try:
             S.SamplingDesign(a.rule)
         except ValueError as e:
-            ap.error(f"--challenger draws by the partition file's rule: {e}")
+            ap.error(f"--challenger samples by the partition file's rule: {e}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sets = template_sets(Path(a.template_sets))

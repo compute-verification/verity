@@ -4,8 +4,8 @@ as `top/lint-sites-found`, `top/lint-sites-allowed` and `top/lint-sites-past-ent
 past its entry and never nets them against an entry that allows more than is found, so it is not found minus allowed.
 Each is written as the total and once for each lead, the handle whose longest `owns` entry in
 `.agents/skills/using-slack/registry.json` covers the file, as its `member`; a file no entry covers is `unowned`'s.
-The leads' readings are written first and the total last, since a reader that keys by name alone takes an id's
-last-written reading as the row's. Lower is better; the tree holds no site a lint finds at zero.
+The leads' values are written first and the total last, since a reader that keys by name alone takes an id's
+last-written value as the metric's. Lower is better; the tree holds no site a lint finds at zero.
 
     research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py
 
