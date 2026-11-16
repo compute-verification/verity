@@ -13,7 +13,7 @@ What code outside this directory may use. Everything else here is internal.
 | `uv run tools/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
-| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's device. It writes its core answer to `DIR/answer.json`. |
+| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory attester on the auditor's device. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
@@ -51,7 +51,7 @@ Implementations:
   - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
     on plaintext, both forwards from a CUDA graph where the path is capturable, the plain arm's bandwidth against a measured
     device copy, and every T where it is launch-bound flagged; every rep is recorded;
-  - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote memory challenger's round trip
+  - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote memory attester's round trip
     adds to it), then timed audits against the native responder under PoUS forwards, and three controls against that one
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
     reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
@@ -159,23 +159,23 @@ bash benchmarks/pous/streamed_wipe/run.sh   # on an RTX PRO 6000 node, from the 
 ~~~
 
 `streamed_wipe/served_wipe.sh` is the wipe's piece of a served window: `demo.sh`'s wipe of the H200 a
-window is served on, before its engine loads, with the memory challenger on vy-auditor-2. It writes the core answer
+window is served on, before its engine loads, with the memory attester on vy-auditor-2. It writes the core answer
 (verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
 `benchmarks/one_stage/served_verdicts.sh` runs it as
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. Outside the serve's lease it takes a card
 of its own by the node's `gpu-lease`, else by the tree's `gpu_lease.sh`. It refuses a card that isn't idle or a gate
-key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
-SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory challenger's wipe,
+key that isn't on the node, and kills nothing. Its verdict trusts the one memory-attester key `WIPE_KEY_SHA512` pins (the
+SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory attester's wipe,
 `VERITY_PINS`): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
 card. Its record says `trusted-device` holds only under a committed configuration (`VERITY_CONFIGURATION`, in
 `tools/verity/cli/verity_cli/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
-bound. Its header lists the challenger's
+bound. Its header lists the memory attester's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
 `served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`), in two parts. On the card, under one lease (the
 node's `gpu-lease`, else the tree's `gpu_lease.sh`; none of its own only inside the caller's),
 `served_piece.py --sessions` holds the served weights (the decoder's linears as the model's pin has them, int8 with their
-scales or plain BF16) as `C*` for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session
+scales or plain BF16) as `C*` for one session with the memory attester on vy-auditor-2, then runs PoUB-P2's session
 over the same store (`held_bandwidth.py`), and keeps what the two left in the window's private directory. Once that
 process and its lease have ended, `served_piece.py --answers` answers both with no card: each case by its Lean verifier,
 `pous-run-protocol` and `poub-p2-protocol`, which the script builds in a scratch copy of `verity/` before it asks
@@ -183,9 +183,9 @@ for the card; PoUS's must agree with the Python, and a verifier that doesn't bui
 Before the card it also loads `libp2v1.so` once in the sessions' Python: a library that doesn't load ends the piece
 there, and so does a node that refuses `setarch -R`, where the library doesn't build and `P2_LIB` names one built
 elsewhere.
-PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default the one the run's configuration pins
-for the memory challenger's PoUS sessions (`VERITY_PINS`). Its record says `trusted-device` holds only under a
-committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
+PoUS's verdict trusts the one memory-attester key `--trusted-sha512` pins, by default the one the run's configuration pins
+for the memory attester's PoUS sessions (`VERITY_PINS`). Its record says `trusted-device` holds only under a
+committed configuration, for a session signed under a key its `[[pin]]` entries give the memory attester
 (`memory_challenger.trusted_device`), whatever the names say; a run that pins its own key has its session accepted, and
 its record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
 The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is

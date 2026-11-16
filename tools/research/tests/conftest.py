@@ -141,5 +141,6 @@ def reap(tmp_path):
                 pgid = os.getpgid(int(proc.name))
                 if pgid != own:
                     os.killpg(pgid, signal.SIGTERM)
-        except OSError:
-            continue
+        except OSError as e:
+            if proc.exists():
+                print(f"reap: pid {proc.name} left as it is ({type(e).__name__}: {e})", file=sys.stderr)

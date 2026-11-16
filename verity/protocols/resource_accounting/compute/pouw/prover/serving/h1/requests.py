@@ -1,4 +1,4 @@
-"""H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
+"""H1's requests and rounds (`ResourceAccounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. The engine's scheduler admits a request in the step that first schedules it,
@@ -87,7 +87,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 
 @dataclass(frozen=True)
 class RequestEntry:
-    """An admitted request's entry (`Accounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
+    """An admitted request's entry (`ResourceAccounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
     among the window's admitted requests, the round that admitted it (its engine step), its first slot there (the first of
     its rows in that step's A tables, which round ``round``'s slot table names it at), its token cap and its prompt's token
     ids. It is a value, a hiding leaf of its round's request table under that round's root."""

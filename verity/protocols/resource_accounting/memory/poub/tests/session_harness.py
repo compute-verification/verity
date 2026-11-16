@@ -2,7 +2,7 @@
 (`poub/prover/remote_session/prover.py`, the driver's reference as its backend) over a loopback socket, on a clock that
 advances one tick per pass with both sides settled around each tick, so a session runs one schedule (`run`). PoUB's
 session tests (`benchmarks/remote_session/tests/test_session.py` and the tests beside it) and the live verifier's stub
-(`poub/device/live_verifier/tests/stub_verifier.py`) run it."""
+(`poub/attester/live_verifier/tests/stub_verifier.py`) run it."""
 from __future__ import annotations
 
 import os

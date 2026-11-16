@@ -21,7 +21,7 @@ one for each `z`, that the state held before every challenge reads back as `z`. 
 
 @[expose] public section
 
-namespace Accounting.Memory
+namespace ResourceAccounting.Memory
 
 /-- The `M`-bit states from which `π` reads `z`. -/
 def fibre {M q : ℕ} (π : (Fin M → Bool) → Fin q → Bool) (z : Fin q → Bool) : Finset (Fin M → Bool) :=
@@ -56,4 +56,4 @@ def DeterminesAdvice {I : Pous.IdealModel} (sch : Pous.Scheme I) {N a q : ℕ} (
     π j (Pous.Sampled.seqState (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
       (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) α = z
 
-end Accounting.Memory
+end ResourceAccounting.Memory

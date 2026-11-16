@@ -225,7 +225,7 @@ def openBreak (log : List Release) (l : List Release) : Option (ByteArray × Byt
 
 /-! ## The read finder and the forger -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **`findBreak`'s SHA-512 calls on the two sessions' records** at the device's history `dev`, as
 `Binding.breakCalls` counts them on one. -/

@@ -3,8 +3,8 @@ module
 public import Proofs.Compose.Compose.ServiceBudget
 public import Proofs.Compose.Compose.ServiceCovers
 public import Proofs.Compose.Compose.CircuitWork
-public import Proofs.Accounting.Lemmas.Compose
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # `CircuitWorkSeeded`: the circuit's work under seeded coins
@@ -28,10 +28,10 @@ public import Proofs.Accounting.Lemmas.TS
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.Compose.Seeded
+namespace ResourceAccounting.SecurityProofs.Compose.Seeded
 
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.TS.Stages (prob_prod expect_empty)
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod expect_empty)
 
 /-! ## One oracle answer redrawn -/
 
@@ -133,7 +133,7 @@ theorem bad_le [Fintype B] (r : Fin M) (g : Fin Tq → Paths (Fin Tq → B) M �
   by_cases hθ : 0 < θ
   · exact (prob_mono fun a h => h.2).trans (grind_le r g θ δg hθ hδg hm)
   · refine (prob_mono (q := fun _ => False) fun a h => absurd h.1 hθ).trans ?_
-    rw [Accounting.SecurityProofs.TS.Rounds.prob_false]
+    rw [ResourceAccounting.SecurityProofs.TS.Rounds.prob_false]
     exact hδg.le
 
 /-! ## A round's gain and the premium -/
@@ -260,7 +260,7 @@ theorem live_le {A Ξ : Type} [Fintype A] [Fintype Ξ] {Np : ℕ} (R : JointRun 
       _ ≤ Real.exp (-Real.log (1 / δs)) := Real.exp_le_exp.mpr (by linarith)
       _ = δs := by rw [Real.exp_neg, Real.exp_log (one_div_pos.mpr hδs), one_div, inv_inv]
   · refine (prob_mono (q := fun _ => False) fun _ h => absurd h.2 hU).trans ?_
-    rw [Accounting.SecurityProofs.TS.Rounds.prob_false]
+    rw [ResourceAccounting.SecurityProofs.TS.Rounds.prob_false]
     exact hδs.le
 
 /-- An event of the window's one round's coin has its probability on the coin. -/
@@ -275,12 +275,12 @@ theorem prob_lift_fst {A Y : Type} [Fintype A] [Fintype Y] (P : A → Prop) {κ 
 /-! ## The work -/
 
 open Classical in
-theorem circuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := by
+theorem circuitWorkSeeded : ResourceAccounting.Guarantees.Compose.CircuitWorkSeeded := by
   intro ι K T' L U B Ξ V _ _ _ _ _ _ _ Tq Sc Cd Np Kd hN hr hK R Pl pr folded sq εid T J ρ a b κ0 δs δg δb δbind δks
     hS hδg hKd hρ hρN ha hb hκ hG hOf hMoved hJS hPins hSE hSLF hSLW hUF
   obtain ⟨hwf, -, -, hδs, -⟩ := hS
   have hw0 := WorkProof.shareCone_nonneg Sc Cd Np
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) 1
+  obtain ⟨E, hE, hEoff⟩ := ResourceAccounting.SecurityProofs.TS.SampledRightOff (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) 1
     _ Kd (Cd.atSample.layer hr hK pr) δbind δks hMoved hJS hPins
   have hE' : prob E ≤ δbind + δks := by simpa using hE
   obtain ⟨Off, hOffP, hOffS⟩ := hSE
@@ -406,4 +406,4 @@ theorem circuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := b
     (add_le_add ((prob_or_le _ _).trans (add_le_add hE' hOff')) hBad)) hLive).trans (le_of_eq ?_)
   ring
 
-end Accounting.SecurityProofs.Compose.Seeded
+end ResourceAccounting.SecurityProofs.Compose.Seeded

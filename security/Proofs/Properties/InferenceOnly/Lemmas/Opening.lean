@@ -4,8 +4,8 @@ public import Properties.InferenceOnly.Opening
 public import Properties.InferenceOnly.PinnedRead
 public import Properties.Verity.Sha512
 public import Flock.Hm96
-public import Proofs.Accounting.ReadUnit
-public import Proofs.Accounting.ReadUnit.BitsPorts
+public import Proofs.ResourceAccounting.ReadUnit
+public import Proofs.ResourceAccounting.ReadUnit.BitsPorts
 public import Proofs.Properties.InferenceOnly.RecordForm
 
 /-!
@@ -27,11 +27,11 @@ ones the read's check proves the read at:
   columns each of those bits' gates sits at.
 * `fieldBit_at`: `Spot.Bits.fieldBit` at a bit of a field's first instance, where no two fields share a name.
 * `rowGate_copyGate`, `outRowGate_copyGate`: the map's gate on a parameter's bit, and on an output row's, is the copy's
-  gate at the bit's column (`Accounting.ReadUnit.copyGate_colAt_inGate`, `copyGate_colAt_outGate`).
-* `portsOf_portsAt`: so the map's ports are the read template's (`Accounting.ReadUnit.portsAt`), at copy 0.
+  gate at the bit's column (`ResourceAccounting.ReadUnit.copyGate_colAt_inGate`, `copyGate_colAt_outGate`).
+* `portsOf_portsAt`: so the map's ports are the read template's (`ResourceAccounting.ReadUnit.portsAt`), at copy 0.
 
-There the read's gates compute its reference (`Accounting.ReadUnit.gatesRefine_check`). Inside the table the row is
-the table's by `Accounting.SecurityProofs.readUnitBinds`; at or past the count it is the fill row by the gates'
+There the read's gates compute its reference (`ResourceAccounting.ReadUnit.gatesRefine_check`). Inside the table the row is
+the table's by `ResourceAccounting.SecurityProofs.readUnitBinds`; at or past the count it is the fill row by the gates'
 refinement alone.
 
 **What it does not say.** It is on the row returned, not on the opened ports: at a key at or past the count the
@@ -49,7 +49,7 @@ than the table's own opening holds.
 namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Defn)
-open Accounting
+open ResourceAccounting
 
 /-! ## The gates `portsAtGates` gives -/
 
@@ -270,7 +270,7 @@ theorem parseTmpl_of_parseStmt {tags : Flock.Tags} {bytes : ByteArray} {tables :
 /-- **The map's ports are the read template's.** Let the templated statement parse into `ct`, with its unit template
 passing the read's check for a table of `V` rows of `H` words and its unit returning the circuit's outputs. Where
 `portsOf` gives the read unit's gates `q` of unit `u` at the roles `ro` of a Definition and the output row `out`, they
-are the gates of copy 0 of `u` at the read template's columns (`Accounting.ReadUnit.portsAt`). -/
+are the gates of copy 0 of `u` at the read template's columns (`ResourceAccounting.ReadUnit.portsAt`). -/
 theorem portsOf_portsAt {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit} (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct)
     (ht : ct.tmpl = some tu) (hcheck : Flock.ReadNet.check V H tu.t = true) (ho : ct.outNet = ct.unitNet)
@@ -338,7 +338,7 @@ theorem pinnedReadBinds : PinnedReadBinds := by
   have hrows : ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf (.tmpl ct) hB n) u q (q.rootOf Yc)
       (q.domainOf Yc) Yc :=
     ⟨rfl, rfl, hok, hconsts⟩
-  have hb := Accounting.SecurityProofs.readUnitBinds Verity.sha512 Verity.sha512
+  have hb := ResourceAccounting.SecurityProofs.readUnitBinds Verity.sha512 Verity.sha512
     Flock.Hm96.Default512.key.data.toList consts (Flock.Bridge.partsOf (.tmpl ct) hB n) u q _ _ Yc hgates hcorrect
     hrows
   obtain ⟨hh, -⟩ := hgates.computes Yc hcorrect hconsts

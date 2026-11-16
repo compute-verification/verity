@@ -33,10 +33,10 @@ matter do. A method that reduces the restricted state or dependence and reaches 
 at that target and operating point. Full-parameter training being the unrestricted optimum is not enough: a
 compact-state method at twice the cost bounds the slowdown by two. It is the largest scientific conjecture here; a first
 result states it for an explicit implementation family. -/
-def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Slowdown.Task In (Fin m → List Bool))
-    (𝒜 : Accounting.Slowdown.Class In L) (Core : (In → Accounting.Actual.Run L) → In → Prop)
-    (cost : Accounting.Actual.Run L → ℕ) (Tmax : ℕ) (η : ℝ≥0∞) : Prop :=
-  ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
-    G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
+def CoversEfficientMethods {In L : Type} {m : ℕ} (G : ResourceAccounting.Slowdown.Task In (Fin m → List Bool))
+    (𝒜 : ResourceAccounting.Slowdown.Class In L) (Core : (In → ResourceAccounting.Actual.Run L) → In → Prop)
+    (cost : ResourceAccounting.Actual.Run L → ℕ) (Tmax : ℕ) (η : ℝ≥0∞) : Prop :=
+  ∀ (C : In → ResourceAccounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
+    G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ ResourceAccounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
 
 end Slowdown.Assumptions

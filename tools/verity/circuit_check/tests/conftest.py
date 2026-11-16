@@ -42,9 +42,9 @@ from circuit_check import targets as TG
 from circuit_check import units as UN
 
 #: circuit-check's settings registry (the `settings.py` beside its `pyproject.toml`), which declares the variables read here
-SETTINGS = of(__file__)
+SETTINGS = of(cli.__file__)
 #: one xdist worker's share of the memory suites.py runs the suite in (`[tool.verity.tests] worker_gb`, which it divides by)
-WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
+WORKER_GB = tomllib.loads((Path(__file__).resolve().parent / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
 
 #: where `check`'s circuit-check keeps the catalog bindings' records (`--cache cache_dir()/circuit-check --catalog-units`, with
 #: `cache_dir` of tools/check/common.py at its default), or `CIRCUIT_CHECK_RECORDS`: not `CHECK_CACHE`, which the suite

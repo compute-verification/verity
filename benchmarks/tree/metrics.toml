@@ -43,3 +43,13 @@ axis = "Sites on main that the ratchet lints' committed allowlists permit, in to
 better = "lower"
 command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
 every = "1d"
+
+[[metric]]
+id = "top/lint-sites-past-entries"
+title = "Sites past their allowlist entries"
+owner = "top"
+unit = "sites"
+axis = "Sites on main that the ratchet lints find past what their allowlist entries allow, summed by key and never netted, in total and for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run --all-packages --extra torch-cpu python benchmarks/tree/lint_sites.py"
+every = "1d"

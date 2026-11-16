@@ -6,7 +6,7 @@ the trusted clock (`ticks`, strictly increasing). A registered input needs no de
 every block that reads it, before the epoch, as serving holds its weights and as PoUB registers each copy.
 A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
 in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
-Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+Lean's `ResourceAccounting.Placed` (and `ResourceAccounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
 node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.

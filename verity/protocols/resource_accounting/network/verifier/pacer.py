@@ -5,7 +5,7 @@ bucket leaves.
 The loop that runs a grid's ticks also reads the link and every server connection, so when the server writes, which
 the prover chooses, moves when the tick runs, and a bucket written on the loop leaves when its tick does. A thread of the
 same process would wait on the same interpreter lock. The pacer waits on neither: the network attester
-(`network_attester.NetworkCertifier(paced=…)`) hands it each bucket's bytes with its time once the tick has made
+(`network_attester.NetworkAttester(paced=…)`) hands it each bucket's bytes with its time once the tick has made
 them (`Pacer.hand`), and it releases them at that time on the handing process's clock, which its starter names
 (`CLOCKS`: the proxy's is the host's monotonic clock, the network attester's the host's raw one, `raw_clock`),
 waiting in `poll` until `SPIN_S` before it and spinning on the clock for the rest. A bucket is parts, each for one

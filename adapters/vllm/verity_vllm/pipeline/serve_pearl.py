@@ -103,8 +103,8 @@ def refusal(opts: Any) -> str | None:
         return None
     after = getattr(getattr(opts, "retention", None), "release_after", "") or ""
     if DRAWER in (p.strip() for p in after.split(",")):
-        return (f"--release-after {DRAWER} waits for PoUW H1's draw of each window, and Pearl+ puts none: its verifier's "
-                "coin is drawn after its window record W (served_passes.py verify)")
+        return (f"--release-after {DRAWER} waits for PoUW H1's sample of each window, and Pearl+ puts none: its verifier's "
+                "coin is flipped after its window record W (served_passes.py verify)")
     g = opts.gate
     if h1 := [f"--{f.name.replace('_', '-')}" for f in dataclasses.fields(g) if f.name not in GATE and getattr(g, f.name)]:
         return (f"{', '.join(h1)}: PoUW H1's, not Pearl+'s, whose salt coin comes from a live salt-only session "

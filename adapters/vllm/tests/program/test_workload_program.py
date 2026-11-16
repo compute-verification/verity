@@ -523,6 +523,21 @@ def test_an_fp8_edge_carries_the_cache_rows_three_parts_in_ports_of_their_own():
     assert evaluate(wl.fn, [1, 2, 3, 4, 5, 6], kv, sc, ro, ik, iks, [10, 11, 12]) == (10 + 1 + 501,)
 
 
+def test_an_edge_member_holds_an_fp8_cache_rows_three_parts_together_or_none():
+    """`prefix`, `prefix_scale` and `prefix_rope` are one fp8_ds_mla row's three parts: a member whose groups hold some of them
+    and not all is refused, an idle one passed through and a request reading its history alike (neither of which another
+    check of the edge refuses); a bf16 member's `prefix` alone and an fp8 member's three pass."""
+    split = [tuple(g for g in _FP8_ROWS if g != drop) for drop in _FP8_ROWS[:3]]
+    apart = r"in-port groups .* hold part of an fp8_ds_mla cache's rows: prefix, prefix_scale, prefix_rope come together"
+    for rows in split:
+        with pytest.raises(ValueError, match=r"request 3's " + apart):
+            _edge_wl({0: (3, 0, 0, False)}, W.Edge(ins=((3, _groups(1, rows=rows)),), outs=((3, _groups(1, rows=rows)),)))
+    with pytest.raises(ValueError, match=r"request 0's " + apart):
+        _edge_wl({0: (3, 2, 0, False, False, True)}, W.Edge(ins=((0, _groups(2, rows=split[2])),)))
+    for rows in (_ROWS, _FP8_ROWS):
+        _edge_wl({0: (3, 0, 0, False)}, W.Edge(ins=((3, _groups(1, rows=rows)),), outs=((3, _groups(1, rows=rows)),)))
+
+
 def test_an_edge_request_returning_checks_keeps_them_its_output():
     """A request Program whose rows read past INDEX_TOPK returns its samples, then its checks, then its edge rows (`with_checks`,
     then `build_program(edge=)`): GP-01's output for it is (samples, checks), as for a request no edge carries, and its out-port
