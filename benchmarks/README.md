@@ -16,7 +16,7 @@ The numbers the core protocols are judged by:
 | Memory | The share of a card's memory read rate that a PoUB audit leaves uncertified. | `verity bench memory --local` |
 | Network | Exfiltration capacity: the most gigabytes about the weights that can leave over a monitoring period. | `verity bench exfiltration` |
 | Inference-only | The least slowdown of training run inside the inference-only policy's inference blocks. | `verity bench inference_only` |
-| Proofs | The time and bytes of a proof, layer by layer: Flock alone, with zero knowledge, with sampling, with recursion. | [`one_stage/`](one_stage/README.md), `verity bench recursion_e2e` |
+| Proofs | The time and bytes of a proof, layer by layer: Flock alone, with zero knowledge, with sampling, with recursion. | `verity bench prove layers` prints the table; [`one_stage/`](one_stage/README.md) and `verity bench recursion_e2e` run its layers |
 
 Each one's README says what it needs and how to run it. Most need a GPU node. The network benchmark reads its inputs
 from our evidence store, so it does not run from a clone yet.
@@ -146,7 +146,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_sim/` | the workload's Programs that `verifier_cost` measures a verifier on | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers | maintained |
-| `mempool/` | the certifier's prefix-cache pool as memory-checked RAM | maintained |
+| `mempool/` | the network attester's prefix-cache pool as memory-checked RAM | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API | maintained |
 
 ### Memory
