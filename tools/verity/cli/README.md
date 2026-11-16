@@ -50,7 +50,7 @@ subprotocols on the `served-window` workload: one execution phase of Llama-3.2-1
 committing endpoint. `verity run` executes it, reading `verity_cli/served_table.py`. The file is
 `served_table.configuration` rendered by `verity.config.render`, and `tests/test_onsite_served.py` holds it to that byte for
 byte, as it does each other demo file. It names no host and no address: those are the bindings' (`--bindings`, `verity_cli.run`'s
-docstring), so binding another host changes no hash. It pins the memory challenger's two keys, one for PoUS's runs
+docstring), so binding another host changes no hash. It pins the memory attester's two keys, one for PoUS's runs
 and one for the wipe's (`[[pin]]`, their only statement: `served_table.configuration` reads them from this file, and each
 smaller demo file holds those of the subprotocols it lists), and they are inside its hash, which
 `verity_cli/configurations.toml` holds.

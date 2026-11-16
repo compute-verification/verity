@@ -220,7 +220,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(ks[0], ks[-1])
-        ax.set_xlabel("block's novel input budget k (bits)")
+        ax.set_xlabel("block's fresh input budget k (bits)")
         ax.set_title(f"at {title}\nc = {gates:.3g} gates", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)
         data["panels"].append(panel)

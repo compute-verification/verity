@@ -18,7 +18,9 @@ import subprocess
 
 import pytest
 import verity_torch.pouw  # noqa: F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import use_int8_arm
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    use_int8_arm,
+)
 
 #: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"

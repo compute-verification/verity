@@ -9,12 +9,13 @@ absorb committed words with, and the TS premises their accounting reads (`Resour
 `NoSum`, `ScalarRoute`, `SideUnits`, `WordsWritten`). Dither, PoUW's no-fold design, has none of them. When the TS fold
 premises are retired, their scripts are deleted with them.
 
-The directory is scripts run by their paths, and no package. Seven are imported by another script here, under their
-bare names: `checked_strip.py`, `cpw_sass_count.py`, `fold_kernel_check.py`, `fold_opt_fx.py`, `fold_root_sweep.py`,
-`fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take, and every other
-name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
-`checked_strip.py` is read: the references of `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/` load it by file (`cgemm_ref.py`) and
-`../tests/test_segment_h1.py` imports it. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
+The directory is scripts run by their paths, and no package. Eight are imported by another script here, under their
+bare names: `checked_strip.py`, `cpw_sass_count.py`, `egemm_depthr_check.py`, `fold_kernel_check.py`, `fold_opt_fx.py`,
+`fold_root_sweep.py`, `fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take,
+and every other name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
+`checked_strip.py` is read, by `../tests/test_segment_h1.py`; it loads by file the words the checked kernels commit,
+`co_words.py` of `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/`, which that
+directory's references recompute. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
 starts only `gcc` and the C program it built, and `run.py` the checks; each writes only in a temporary directory and
 where its command says (`--verdict`, `--json`, `--out`).
 
@@ -42,7 +43,7 @@ where its command says (`--verdict`, `--json`, `--out`).
   for `duo_kernel.c`). Its header comment gives its arguments and output, and `duo_proj.c` runs on its own.
 - **An sm_120 probe** (`*.sh` beside its `*.cu`) runs from a pushed commit through `research run` on an RTX PRO 6000.
   Its header has the command; the `*_count.py` beside it counts the SASS and sets the device's timings beside the count.
-- **The tests** are `tests/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
+- **The tests** are `../tests/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
   `uv run tools/check/suites.py` runs them when their inputs change.
 
 ## The scripts
@@ -82,11 +83,15 @@ What each one checks, and the Lean or the test that reads it.
 ### The receipt's binding
 
 - `duo_kernel.c`, driven by `duo_kernel_sweep.py`: duo's all-state kernel at small widths, the word runs that leave a
-  committed value unchanged on every start state (`receipts/README.md`).
+  committed value unchanged on every start state
+  (`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/README.md`).
 - `duo_proj.c`: word runs whose served receipts differ by one constant on every start state. Cited by `Receipt.lean`,
   for the three-word constant kernel beside `DuoWordProjNoKernel`.
 - `fold_kernel.c`, driven by `fold_kernel_check.py`: the whole all-state kernel K_R of the same-word R-round XOR-in fold
-  at width 8 or less, an independent check of `edited_gemm`'s depth-R binding check.
+  at width 8 or less, an independent check of `egemm_depthr_check.py`.
+- `egemm_depthr_check.py`: the depth-R binding check of `edited_gemm`'s `egemm.cu`, which absorbs the same committed
+  word R times: a search for a change to the word that the R-round fold does not see, over one family of changes.
+  `fold_open_shape_check.py` imports its reduced key rules (`key_ok_r11`, `key_ok_r11_32`).
 - `fold_root_kernel.c`, driven by `fold_root_check.py` and `fold_root_sweep.py`: K_R by a meet in the middle at width 16
   or less, and K_R = K_1 under the scaled key rule.
 - `fold_open_shape_check.py`: the three keys the reduced key rule admits where K_R = K_1 fails.
@@ -95,13 +100,13 @@ What each one checks, and the Lean or the test that reads it.
 ### The checked strip and attention's noise
 
 - `checked_strip.py`: the exact check of the two-sided noise whose served output is a checked word. It is the one module
-  other code reads (`edited_gemm`'s `cgemm_ref.py` and `tests/test_segment_h1.py`), and `edited_gemm`'s
-  references build on its `pv_words`, `pv_served`, `co32c_words` and `digits`.
+  other code reads (`../tests/test_segment_h1.py`). Its `pv_words`, `pv_served`, `co32c_words` and `digits` are
+  `edited_gemm`'s `co_words.py`, loaded by file, which `edited_gemm`'s references recompute.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
-- `attn_noise.py`: attention's committed words at every operand value, and its noise's h. Core's
-  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py` cites its `h_table` for the attention forms H1 is to
-  carry.
+- `attn_noise.py`: attention's committed words at every operand value, and its noise's h.
+  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py` cites its `h_table` for the attention
+  forms H1 is to carry.
 
 ### The sm_120 unit's checkpoint and issue
 

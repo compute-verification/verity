@@ -63,7 +63,9 @@ COVERS = "linears"
 
 
 def schemes() -> tuple[str, ...]:
-    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
     return tuple(sorted(pous_schemes.REGISTRY))
 
 
@@ -86,7 +88,9 @@ def _source_refusal(source: Any) -> str | None:
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
-    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
 
     out, own = [], ctx.settings_of(NAME)
     stray = sorted(set(own) - set(SETTINGS))
@@ -232,7 +236,9 @@ def _wrapper(names: Mapping[int, str], decoded: Callable[[str], Any]) -> Callabl
 def install(scheme: str, target: Target) -> PousOption:
     import torch
     from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import (
+        p2 as P2,
+    )
 
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)

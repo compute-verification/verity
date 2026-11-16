@@ -25,7 +25,7 @@ LANES = {
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "proofs": {
         # Needs, outside spot's verifier/ and device/: the registered rows' record (`Registered`, its schemas, domains and
-        # widths), the docket's and partition's digests and template ids, the draw design's parsers, the second stage's
+        # widths), the docket's and partition's digests and template ids, the sampling design's parsers, the second stage's
         # row links, registration's `Declaration`, and the challenger's client types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/commit/registered_rows.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/compiler/replay_chain.py": (

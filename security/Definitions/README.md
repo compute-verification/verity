@@ -34,7 +34,7 @@ path: `research msg owners PATH`.
 | `InferenceOnly` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
 | `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
 | `Pouw` | PoUW's protocol: the definitions its statements read |
-| `Spot` | Populations: units over committed value slots, their dataflow, cones and egress |
+| `Spot` | Populations: proof blocks over committed value slots, their dataflow, cones and egress |
 | `WeightSecurity` | Model weight security: the setting |
 
 ## Generated files

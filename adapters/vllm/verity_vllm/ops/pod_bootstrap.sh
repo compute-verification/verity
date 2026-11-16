@@ -22,8 +22,10 @@
 #     GPU checks (torch_cuda, fa2_tap_so, fa3_tap_so) replaced by torch_cpu, plus "mode": "cpu",
 #     "cuda_available": <torch.cuda.is_available()> and a cpu{nproc, model} measurement; `ok` = AND of the CPU checks.  The gpu-mode
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
+#   Headers: in gpu mode, after step 2, the CUDA library headers torch reads that CUDA_HOME's toolkit lacks come from the
+#     environment's NVIDIA wheels (CPATH, cuda_headers.sh; one line says which), and a header in neither fails BOOTSTRAP_FAIL_HEADERS.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
-#     $OUT/{pip,checkpoints,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
+#     $OUT/{pip,cuda_headers,checkpoints,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
 #     failure, $OUT/staged-<case> for a checkpoint this run staged (and its `staged` label in the store); the last stdout line is BOOTSTRAP-OK.
 #   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
@@ -51,7 +53,7 @@ if [ "$MODE" = auto ]; then
 fi
 if [ "$DRY_RUN" = 1 ]; then
   echo "mode=$MODE cases=$CASES out=$OUT venv=$VENV"
-  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo "4 native taps (fa2_tap, fa3_tap on cc 9.0; row taps ROW_TAPS=${ROW_TAPS:-1}); " || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
+  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129$([ "$MODE" = gpu ] && echo ", then the CUDA library headers torch reads (the toolkit's, else the NVIDIA wheels')"); 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo "4 native taps (fa2_tap, fa3_tap on cc 9.0; row taps ROW_TAPS=${ROW_TAPS:-1}); " || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
   echo BOOTSTRAP-DRY-RUN; exit 0
 fi
 mkdir -p "$OUT" "$WORK/wheels"
@@ -100,6 +102,14 @@ uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCO
 printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
 [ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
+# the CUDA library headers torch reads, which every tap build below includes: the toolkit's, else the wheels just installed
+if [ "$MODE" = gpu ]; then
+  if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
+  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+  . verity_vllm/ops/cuda_headers.sh
+  cuda_headers "$PY" >"$OUT/cuda_headers.log" 2>&1 || fail HEADERS "$(tail -1 "$OUT/cuda_headers.log")"
+  [ -s "$OUT/cuda_headers.log" ] && log "$(cat "$OUT/cuda_headers.log")"
+fi
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------
 # A checkpoint this run downloads and checks is staged: its staging event goes to the store (`verity-vllm records staged`) through
