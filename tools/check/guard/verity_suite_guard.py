@@ -492,8 +492,15 @@ def pytest_assertrepr_compare(config, op, left, right):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Under `VERITY_STORE_REQUIRED=1`, a skip whose reason says the store is unreachable (`STORE_UNREACHABLE`) fails instead."""
+    """A teardown error pytest charges to a test an allowance names (`ALLOWED_OPT`) is an error: the allowance excuses that
+    test's own setup and call, never the finalizer of a module or session fixture whose last user it happens to be. Under
+    `VERITY_STORE_REQUIRED=1`, a skip whose reason says the store is unreachable (`STORE_UNREACHABLE`) fails instead."""
     report = (yield).get_result()
+    if (call.when == "teardown" and call.excinfo is not None and item.nodeid in _allowed_red
+            and getattr(report, "wasxfail", None) is not None):
+        report.outcome = "failed"
+        del report.wasxfail
+        return
     if not (_STORE_REQUIRED and report.skipped) or getattr(report, "wasxfail", None) is not None:
         return
     reason = report.longrepr[2] if isinstance(report.longrepr, tuple) else str(report.longrepr)

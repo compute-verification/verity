@@ -1309,6 +1309,7 @@ def test_a_check_slot_reuses_a_pass_another_slot_of_its_machine_keeps_and_writes
     p = _run_suite(root, tmp_path, "--run", "r-b", extra=b)
     assert p.returncode == 0 and "passed  one" in p.stdout, p.stdout + p.stderr
     assert re.search(r"cached  two +passed at \S+ \S+ \S+ in run r-a\n", p.stdout), p.stdout
+    assert f"suites: {one} is no pass (JSONDecodeError" in p.stderr, "the file that didn't parse is named: " + p.stderr
     assert "2 suites: 2 passed (1 cached)" in p.stdout, p.stdout
     assert {f: f.read_bytes() for f in (caches / "tests-slot-a").rglob("*") if f.is_file()} == kept
 
@@ -2711,6 +2712,28 @@ def test_a_suite_red_only_on_allowed_tests_passes_and_is_reused_until_the_allowa
     for flag in (["--quick"], ["--changed", live]):
         p = _run_suite(root, tmp_path, "--allowances", live, *flag)
         assert p.returncode == 2 and "--allowances takes neither --quick nor --changed" in p.stderr, p.stderr
+
+
+def test_an_allowance_does_not_excuse_a_teardown_error_charged_to_its_test(tmp_path):
+    """pytest charges a module fixture's finalizer to the fixture's last user, and reports an expected failure's teardown error
+    as one more expected failure. When that user is a test an allowance names, the guard reports the error as an error, so the
+    suite fails and names the test; the same module without the failing finalizer passes under the same allowance."""
+    root, out = tmp_path / "tree", tmp_path / "out.json"
+    red = "tests/test_it.py::test_red"
+    module = ("import pytest\n\n\n@pytest.fixture(scope='module')\ndef held():\n    yield 1\n    FINALIZER\n\n\n"
+              "def test_ok(held):\n    pass\n\n\ndef test_red(held):\n    assert False\n")
+    _env_workspace(root, {"a": module.replace("FINALIZER", "raise RuntimeError('the finalizer of held')")})
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout + p.stderr
+    [row] = json.loads(out.read_text())
+    assert (row["status"], row["failed_tests"]) == ("failed", [red]), row
+    assert not list((tmp_path / "cache").glob(f"{row['key']}.json")), "no pass is kept"
+
+    (root / "a" / "tests" / "test_it.py").write_text(module.replace("FINALIZER", "pass"))
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout + p.stderr
 
 
 def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tmp_path, monkeypatch):
