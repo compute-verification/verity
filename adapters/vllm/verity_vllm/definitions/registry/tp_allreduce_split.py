@@ -6,7 +6,7 @@
                                               (the norm's G normed elements from rs: any G columns of the row)
 
 Both are `tp_allreduce`'s own pieces of the norm (`_mnnvl_scale`, `_mnnvl_apply`), so the sum of squares and N / G apply units
-return `RmsNormMnnvl_v1`'s words (`adapters/vllm/verity_vllm/definitions/tests/test_mnnvl_and_dsa_norm_splits.py`). Their Boolean versions are
+return `RmsNormMnnvl_v1`'s words (`tests/adapters/vllm/verity_vllm/definitions/test_mnnvl_and_dsa_norm_splits.py`). Their Boolean versions are
 `boolean_sigma`'s, `_v2`.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ __all__ = ["RmsNormMnnvlApply", "RmsNormMnnvlSumSq"]
 
 _MNNVL_SPLIT = ("not-yet-established: `RmsNormMnnvl_v1` cut at its scale, the norm of AllReduceRmsNormMnnvl_v1 whose captures are "
                 "exact-model-tested; the scale and N / G apply units return RmsNormMnnvl_v1's words "
-                "(`adapters/vllm/verity_vllm/definitions/tests/test_mnnvl_and_dsa_norm_splits.py`)")
+                "(`tests/adapters/vllm/verity_vllm/definitions/test_mnnvl_and_dsa_norm_splits.py`)")
 
 
 @composite("RmsNormMnnvlSumSq", 1, ["N", "SHOT", "CLUSTER", "EPS", "FMA"], lambda S: ((("r", Array(S.N, BF16)),), F32),
