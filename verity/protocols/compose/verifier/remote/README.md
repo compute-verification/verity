@@ -67,7 +67,7 @@ the period must name the policy's record as its Commit record (`executionPhaseRe
 remote unless it rejects already. v0's executable is `remote` (`RemoteMain.lean`); each runs as
 `id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] | serve`. The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). Remote's
 rule and its difftest are the composition's ([README](../lean/README.md),
-`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`).
+`tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py`).
 
 ## Lifecycle
 
@@ -551,7 +551,7 @@ run runs both halves on one served run, PoUW's as a development run:
 
 What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
 suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
-(`verity/protocols/compose/verifier/lean/tests`).
+(`tests/verity/protocols/compose/verifier/lean`).
 
 ## Read next
 

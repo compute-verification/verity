@@ -46,4 +46,4 @@ row commitments `statement.py` loads; `of_record.py` runs each of PoUW's checks 
 its Python reference on one input, its Lean side from `benchmarks/pouw/served_zk/of_record_lean.py`. What verity does
 not import (`verity_difftest`, the device library, `fast_tile`, the evidence store) the benchmark-side files pass in or supply.
 `rows_bench.py` and `statement.py` list in `__all__` the names other files read, the tests' included. Their tests are
-the `test_served_zk*.py` files under `benchmarks/pouw/tests/`.
+the `test_served_zk*.py` files under `tests/benchmarks/pouw/`.
