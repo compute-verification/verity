@@ -130,7 +130,7 @@ S=$(mktemp -d -p "$(dirname "$O")" scratch.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 export TMPDIR=$S PYTHONDONTWRITEBYTECODE=1
 nvcc --version > "$O/nvcc.txt" 2>&1
-nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -I"$D" -I"$D/../int8_class_rate" -o "$S/duty" \
+nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -I"$D" -o "$S/duty" \
   "$D/duty.cu" > "$O/build.log" 2>&1
 echo "build rc $?" | tee -a "$O/rc.txt"
 [ -x "$S/duty" ] || { tail -40 "$O/build.log"; exit 1; }
