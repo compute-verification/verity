@@ -36,33 +36,43 @@ from verity.commitments import row_table as RT
 from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity_vllm.commit import row_tables as RTB
 from verity.commitments.periods import rows as SR
+from verity_bench import kit
 
-RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K
 LINEARS = {"self_attn.qkv_proj": 4096, "self_attn.o_proj": 4096, "mlp.gate_up_proj": 4096, "mlp.down_proj": 14336}
+MODELS = {
+    "llama31-8b": ("Llama-3.1-8B int8", LINEARS, 32),
+    "llama32-1b": ("Llama-3.2-1B int8",
+                   {"self_attn.qkv_proj": 2048, "self_attn.o_proj": 2048, "mlp.gate_up_proj": 2048, "mlp.down_proj": 8192}, 16),
+}
+METRIC = "proofs/step-roots-seconds"
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--model", choices=sorted(MODELS), default="llama31-8b")
     ap.add_argument("--batch", type=int, default=32, help="decode batch: each table's rows")
-    ap.add_argument("--layers", type=int, default=32)
+    ap.add_argument("--layers", type=int, default=None)
     ap.add_argument("--k-scale", type=int, default=1, help="divide every K by this (tests)")
     ap.add_argument("--workers", default="1", help="comma-separated worker counts")
     ap.add_argument("--reps", type=int, default=5, help="warm calls after the cold one, per worker count")
     ap.add_argument("--out", default=None, help="directory for result.json (default $RESEARCH_RUN_DIR)")
     ns = ap.parse_args(argv)
     ns.workers = [int(w) for w in ns.workers.split(",")]
+    ns.model_name, ns.linears, layers = MODELS[ns.model]
+    ns.layers = layers if ns.layers is None else ns.layers
     if min(ns.batch, ns.layers, ns.k_scale, ns.reps, *ns.workers) <= 0:
         ap.error("--batch, --layers, --k-scale, --reps and --workers must be positive")
     return ns
 
 
-def outputs(batch: int, layers: int, k_scale: int, seed: int = 7) -> dict[str, tuple[list[tuple[str, int]], np.ndarray, np.ndarray]]:
+def outputs(batch: int, layers: int, k_scale: int, seed: int = 7,
+            linears: dict[str, int] = LINEARS) -> dict[str, tuple[list[tuple[str, int]], np.ndarray, np.ndarray]]:
     rng = np.random.default_rng(seed)
     ids = [(f"r{b:03d}", 0) for b in range(batch)]
     return {f"model.layers.{layer}.{lin}": (ids, rng.integers(-128, 128, (batch, k // k_scale), dtype=np.int8),
                                             (np.abs(rng.standard_normal(batch)) / 127).astype(np.float32))
-            for layer in range(layers) for lin, k in LINEARS.items()}
+            for layer in range(layers) for lin, k in linears.items()}
 
 
 def reference(ctx: bytes, step: int, outs: dict[str, Any], key: bytes) -> bytes:
@@ -98,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
     ctx, key, step = hashlib.sha512(b"step-root-cost/context").digest(), hashlib.sha256(b"step-root-cost/row-key").digest(), 1
-    outs = outputs(ns.batch, ns.layers, ns.k_scale)
+    outs = outputs(ns.batch, ns.layers, ns.k_scale, linears=ns.linears)
     tables, rows = len(outs), sum(len(v[0]) for v in outs.values())
     hashed = sum(x.nbytes + s.nbytes for _ids, x, s in outs.values())
     by_workers, root = {}, None
@@ -134,35 +144,32 @@ def main(argv: list[str] | None = None) -> int:
         d = Path(out)
         d.mkdir(parents=True, exist_ok=True)
         (d / "step_root_cost.json").write_text(json.dumps(summary, indent=1) + "\n")
-        result: dict[str, Any] = {
-            "schema": RESULT_SCHEMA,
-            "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
-            "kind": "bench-result/v1",
-            "workload_fingerprint": {"workload": "step_root_cost", "model": "Llama-3.1-8B int8", "linears": LINEARS, "batch": ns.batch,
-                                     "layers": ns.layers, "k_scale": ns.k_scale, "row_schema": RT.SCHEMA, "roots_schema": RT.ROOTS_SCHEMA,
-                                     "implementation": "verity_vllm.commit.row_tables.step_roots (hashlib SHA-512, numpy ChaCha20, fork pool)",
-                                     "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
-                                     "nproc": os.cpu_count(), "python": sys.version.split()[0]},
-            "validation": {"status": "passed" if ok else "failed",
-                           "checker": "the step root equals verity.commitments.row_table.commit_step's over the same rows and salts",
-                           "detail": "ok" if ok else f"reference root {ref.hex()[:16]}", "evidence": []},
-            "measurements": [{"name": f"proofs/step-roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
-            + [{"name": f"step_roots.w{w}.cold_seconds", "value": v["cold_s"], "unit": "s"} for w, v in by_workers.items()]
-            + ([{"name": "step_roots.w1.cpu_seconds", "value": by_workers[1]["cpu_s"], "unit": "s"}] if 1 in by_workers else [])
-            + [{"name": f"sha512_floor.w{w}.seconds", "value": v, "unit": "s"} for w, v in floor.items()]
-            + [{"name": f"sha512_floor.w{w}.cpu_seconds", "value": v, "unit": "s"} for w, v in floor_cpu.items()]
-            + [{"name": "salts.seconds", "value": salts_s, "unit": "s"}, {"name": "row_digests.seconds", "value": digest_s, "unit": "s"},
-               {"name": "salts.cpu_seconds", "value": salts_cpu, "unit": "s"},
-               {"name": "row_digests.cpu_seconds", "value": digest_cpu, "unit": "s"},
-               {"name": "reference.seconds", "value": ref_s, "unit": "s"}, {"name": "rows", "value": rows, "unit": "count"},
-               {"name": "bytes_hashed", "value": hashed, "unit": "bytes"},
-               {"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
-            "measurement_files": ["step_root_cost.json"],
-            "artifacts": [],
-        }
-        tmp = d / "result.json.tmp"
-        tmp.write_text(json.dumps(result, indent=1) + "\n")
-        os.replace(tmp, d / "result.json")
+        res = kit.writer(d, "bench-result/v1")
+        res.fingerprint(workload="step_root_cost", model=ns.model_name, linears=ns.linears, batch=ns.batch, layers=ns.layers,
+                        k_scale=ns.k_scale, row_schema=RT.SCHEMA, roots_schema=RT.ROOTS_SCHEMA,
+                        implementation="verity_vllm.commit.row_tables.step_roots (hashlib SHA-512, numpy ChaCha20, fork pool)",
+                        workers=ns.workers, reps=ns.reps, cpu=platform.processor() or platform.machine(),
+                        nproc=os.cpu_count(), python=sys.version.split()[0])
+        res.validation("passed" if ok else "failed",
+                       "the step root equals verity.commitments.row_table.commit_step's over the same rows and salts",
+                       "ok" if ok else f"reference root {ref.hex()[:16]}")
+        model = {"model": ns.model_name, "batch": ns.batch}
+        why = None if ok else "the step root is not the reference's"
+        for w, v in by_workers.items():
+            res.measurement(METRIC, v["seconds"] if ok else None, "s", why=why, mark="measured", member=f"w{w}", extra=model)
+        best = min(by_workers, key=lambda w: by_workers[w]["seconds"])
+        rest = ([(f"step_roots.w{w}.cold_seconds", v["cold_s"], "s") for w, v in by_workers.items()]
+                + ([("step_roots.w1.cpu_seconds", by_workers[1]["cpu_s"], "s")] if 1 in by_workers else [])
+                + [(f"sha512_floor.w{w}.seconds", v, "s") for w, v in floor.items()]
+                + [(f"sha512_floor.w{w}.cpu_seconds", v, "s") for w, v in floor_cpu.items()]
+                + [("salts.seconds", salts_s, "s"), ("row_digests.seconds", digest_s, "s"), ("salts.cpu_seconds", salts_cpu, "s"),
+                   ("row_digests.cpu_seconds", digest_cpu, "s"), ("reference.seconds", ref_s, "s"), ("rows", rows, "count"),
+                   ("bytes_hashed", hashed, "bytes"), ("workload_wall", time.perf_counter() - started, "s")])
+        for name, value, unit in rest:
+            res.measurement(name, value, unit, mark="measured")
+        res.measurement(METRIC, by_workers[best]["seconds"] if ok else None, "s", why=why, mark="measured",
+                        extra=model | {"workers": best})
+        res.measurement_file("step_root_cost.json")
     return 0 if ok else 1
 
 

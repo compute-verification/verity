@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/step-roots-seconds"
+title = "Commitment time per decode step"
+owner = "proofs"
+unit = "s"
+axis = "Seconds the serving loop takes on one CPU to commit one int8 decode step's row tables at batch 32 for the model each point names, at its fastest worker count, with each worker count listed beside it as a member."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/commitments/step_root_cost.py --model llama32-1b --workers 1,2,4'"
+every = "7d"
