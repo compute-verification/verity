@@ -67,7 +67,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`verity.runtime.stream.Side`) and the challenger's parties run on
-          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
+          "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "tests/verity/tests/test_channel.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           # p2_store/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
@@ -84,4 +84,4 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pous_wipe_resume.py"]
-paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/resource_accounting/memory/pous", "verity/channel.py", "verity/tests/tests/test_channel.py"]
+paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/resource_accounting/memory/pous", "verity/channel.py", "tests/verity/tests/test_channel.py"]
