@@ -21,5 +21,3 @@ inputs = ["benchmarks/security_findings", "tools/research/src/research/__init__.
     "benchmarks/harness/verity_bench/settings.py",
     "tools/research/src/research/pods/nebius/deploy.toml",
 ]
-# the checks run git in toy checkouts, which the read guard can't trace: keyed on the suite's whole tree
-untraced = ["test_open_findings.py"]

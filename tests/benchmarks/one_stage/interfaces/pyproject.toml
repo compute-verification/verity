@@ -11,10 +11,3 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity/commitments/cuda/commit_slots/slots.py`: kernels' commit call, which builds the bundle's step commitments.
 # `benchmarks/census/deployments.json`: the reference deployment test_block_record holds the block record's to.
 inputs = ["verity", "verity/commitments/cuda/commit_slots/slots.py", "benchmarks/census/deployments.json", "benchmarks/one_stage/interfaces"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_replay_bundle.py"]
-paths = ["verity/circuits", "verity/circuits/ops", "verity/circuits/silicon"]

@@ -15,20 +15,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_agent_watch.py",
-    "test_agent_watch_relay.py",
-    "test_control_door.py",
-    "test_deploy.py",
-    "test_deploy_register.py",
-    "test_drive_sh.py",
-    "test_gh_read_token.py",
-    "test_keeper.py",
-    "test_loop_metrics.py",
-    "test_vqueue_unit.py", "test_nightly_check.py",
-    "test_watchers.py",
-]
 # deploy installs research's pod tooling and reads its pods/nebius/deploy.toml, the environment files and units it names and the
 # keeper; its test reads the Slack registry for owners. What verity_ops imports of research is research's `exports`, and the
 # telemetry modules its run cancelling and classifying import, and research.flags (the old flag names deploy still reads). The agent
@@ -84,14 +70,3 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/loop_metrics.py", "infra/control/metrics.toml", "infra/control/store_index.sh",
           "tools/research/src/research/metrics.py"]
 parallel = true
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_keeper.py"]
-paths = ["tools/research/src/research/pods/nebius"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_top_watch.py", "test_nightly_check.py"]
-paths = ["tools/research/src/research"]

@@ -18,43 +18,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_after_lean.py",
-    "test_anchors.py",
-    "test_check.py",
-    "test_cold_start.py",
-    "test_declaration.py",
-    "test_deferred_run.py",
-    "test_guard.py",
-    "test_lean_audit.py",
-    "test_lean_changed.py",
-    "test_lean_prebuild.py",
-    "test_lean_records.py",
-    "test_markdown_caps_gate.py",
-    "test_merge_map.py",
-    "test_merge_rows.py",
-    "test_move_check.py",
-    "test_mutants.py",
-    "test_node_keys.py",
-    "test_pins.py",
-    "test_placement.py",
-    "test_plan.py",
-    "test_post_train.py",
-    "test_preflight.py",
-    "test_record_clone.py",
-    "test_record_pool.py",
-    "test_records.py",
-    "test_settings.py",
-    "test_shard_plan.py",
-    "test_shards.py",
-    "test_shipped_checkout.py",
-    "test_slot.py",
-    "test_suite_parts.py",
-    "test_suites.py",
-    "test_tasks.py",
-    "test_verdicts.py",
-]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
 # lints the preflight names (and the direct environment read's detector, by which test_settings counts the reads left
@@ -91,25 +54,3 @@ inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json
           "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
           "tools/verity/circuit_check/src/circuit_check/cli.py", "tools/verity/cli/verity_cli/__init__.py",
           "tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/one_stage/test_two_stage_driver.py"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_settings.py"]
-paths = ["tools/check"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_shard_plan.py"]
-paths = ["artifacts.json"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_shards.py"]
-paths = ["tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/one_stage/test_two_stage_driver.py"]
-
-# `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
-[[tool.verity.tests.reads]]
-tests = ["test_check.py", "test_declaration.py", "test_deferred_run.py", "test_lean_slot.py", "test_live.py",
-         "test_record_pool.py", "test_records.py", "test_settings.py", "test_shard_plan.py", "test_shards.py",
-         "test_verdicts.py"]
-paths = ["tools/verity/circuit_check/src/circuit_check/cli.py"]

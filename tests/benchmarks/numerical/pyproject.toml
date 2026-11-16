@@ -15,8 +15,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["bench/test_input_sets.py", "bench/test_lowerings.py", "bench/test_served_templates.py"]
 # Test-only: the bench spine's tests drive Flock's lowerings over the repository's fixtures and census; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
@@ -24,27 +22,3 @@ inputs = ["verity/protocols/proofs/flock/verifier/VStar/Menu/Pinned.lean", "veri
           "tests/adapters/vllm/tests/regression/expected",
           "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/regression/__init__.py"]
 parallel = true
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["bench/test_bench_contract.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
-tests = [
-    "bench/test_cell.py",
-    "bench/test_placement.py",
-    "bench/test_subcircuit_catalog.py",
-    "bench/test_unit_costs.py",
-]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["bench/test_lowerings.py"]
-paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
-tests = ["bench/test_bench_judge.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench/judge.py"]

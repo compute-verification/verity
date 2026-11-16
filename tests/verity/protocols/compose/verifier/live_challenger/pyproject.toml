@@ -7,14 +7,6 @@ testpaths = ["."]
 pythonpath = ["../../../../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_auditor_load.py",
-    "test_auditor_rt4.py",
-    "test_auditor_network_attester.py",
-    "test_coin_link.py",
-    "test_serve.py",
-]
 # The load's verbs read and write the store with `verity/protocols/resource_accounting/network/attester/load_relay.py`, which commits with the
 # certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
 inputs = ["verity/protocols/resource_accounting/network/attester/load_relay.py", "verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous",

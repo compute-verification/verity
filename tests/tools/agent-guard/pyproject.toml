@@ -5,10 +5,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# the boot test and the shell hook's run shells and git, the kept session's runs tmux, and the names reader's makes its
-# throwaway key with ssh-keygen, none of which the read guard can trace: keyed on the suite's whole tree
-untraced = ["test_agent_guard_boot.py", "test_shell_hook.py", "test_hooks_file.py", "test_secret_files.py", "test_envnames.py",
-            "test_pre_push.py", "test_carriers.py", "test_kept_session.py", "test_research_shim.py"]
 # The tests hold the hooks to the hooks file Cursor reads, and the boot test copies it into a scratch workspace.
 # two tests copy this package whole, its README with it; the kept session's holds research's name for it to the guard's;
 # the Fable rule's holds the guard's lead ids to launch_coordinator's; the shim's runs research's at_main.py as it does;
@@ -16,11 +12,3 @@ untraced = ["test_agent_guard_boot.py", "test_shell_hook.py", "test_hooks_file.p
 inputs = [".cursor/hooks.json", "tools/agent-guard/README.md", "tools/research/src/research/secret_hint.py",
           "infra/cursor/launch_coordinator.py", "tools/research/src/research/at_main.py",
           "tools/research/src/research/timefmt.py", "tools/agent-guard"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-# the shell hook the listings test runs imports the checkout rule by a name it is handed (`shell_hook.guard`)
-[[tool.verity.tests.reads]]
-tests = ["test_process_listings.py"]
-paths = ["tools/agent-guard/worktree_guard.py"]

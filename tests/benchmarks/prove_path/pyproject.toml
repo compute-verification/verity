@@ -5,14 +5,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_prove_path.py",
-    "test_records_audit.py",
-    "test_run_keep.py",
-    "test_run_request_values.py",
-    "test_run_rows.py",
-]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `adapters/torch`: the
 # frontend class_rows and the tie tests load beside it; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
@@ -50,14 +42,3 @@ inputs = ["verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest", "benchmarks/prove_path"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_prove_path.py"]
-paths = ["verity"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_records_audit.py"]
-paths = ["verity/circuits/ops"]

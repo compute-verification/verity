@@ -23,25 +23,6 @@ verity-difftest = { workspace = true }
 verity-exact-kit = { workspace = true }
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_ffill.py",
-    "test_pearl_c_hash_decode.py",
-    "test_pearl_c_hash_host.py",
-    "test_pearl_c_hash_wide.py",
-    "test_pearl_c_sm120.py",
-    "test_pearl_c_sm90.py",
-    "test_pearl_c_sm90_prefill.py",
-    "test_pearl_c_vllm.py",
-    "test_receipts_adopters.py",
-    "test_salt_bind.py",
-    "test_served_zk.py",
-    "test_theory_duo_kernel.py",
-    "test_theory_fold_kernel.py",
-    "test_theory_fold_root.py",
-    "test_theory_fold_wide3.py",
-    "test_theory_fold_wide32.py",
-]
 # test_lean_headline compares the headline instances' Lean data (security/Definitions/Pouw/Headline) with what
 # lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (security/Definitions/Pouw/HeadlineDc)
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
@@ -214,74 +195,3 @@ testpaths = ["."]
 # test_proved_ticks_placed imports `datacenter` (not an installed package) by path.
 pythonpath = ["../../../benchmarks/datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_dc.py"]
-paths = ["benchmarks/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
-tests = [
-    "test_dither_j10r_form.py",
-    "test_pearl_c4_real.py",
-    "test_pearl_c_sm90_glm53.py",
-    "test_served_h1.py",
-    "test_served_h1_producer.py",
-]
-paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ledger.py"]
-paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/Properties/Pouw"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_facet_break.py"]
-paths = ["benchmarks/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ffill.py"]
-paths = ["verity/circuits/ops"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_h1_prove_live.py"]
-paths = [
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
-    "verity/protocols/proofs/spot/verifier/one_stage",
-    "verity/circuits",
-    "verity/commitments/frame_v3",
-    "verity/protocols/proofs/flock/prover/python/verity_flock",
-]
-
-[[tool.verity.tests.reads]]
-tests = ["test_hidden_zk_summarize_rows.py"]
-paths = ["benchmarks/pouw/hidden_zk"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_pearl_c_sm120.py", "test_pearl_c_sm90.py"]
-paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "verity/circuits/kernels"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_pearl_c_sm90_grouped.py"]
-paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_pearl_c_sm90_prefill.py"]
-paths = ["benchmarks/pouw/pearl_c_sm120", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_receipts_adopters.py"]
-paths = ["benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_salt_bind.py"]
-paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_served_zk.py"]
-paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_theory_cpw.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier", "verity/circuits", "verity/circuits/kernels"]

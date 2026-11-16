@@ -15,9 +15,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_lean_deployed.py", "test_lean_try.py", "test_onsite_served.py", "test_run.py",
-            "test_verify_proof.py"]
 # `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
 # (`verity.config`), what step 0's declarations read (`NetworkAttesterParams`, the sampling design's parser) and the core parties
 # the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
@@ -35,10 +32,3 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/network_traces/certifier_piece.py", "demos/onsite_full.toml", "demos/onsite_compute.toml",
           "demos/onsite_network.toml", "demos/remote.toml"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_onsite_served.py"]
-paths = ["verity"]

@@ -6,8 +6,6 @@
 testpaths = ["."]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_sketch.py"]
 # layout.py and stage.py (PoUB's prover's p2_stage/, which the tests load by path) read the store's load (the
 # prover's p2_store/load.py), which reads the registered scheme
 # (verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2), the P2 spec's reference (the verifier's p2_v1/reference.py, pinned by
@@ -42,10 +40,3 @@ inputs = ["tools/config/verity_config",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/torch_gpu/p2_stage"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_p2_stage.py"]
-paths = ["verity/protocols/resource_accounting/memory/pous/prover/served_weights.py"]

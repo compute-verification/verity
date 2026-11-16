@@ -17,24 +17,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_audit.py",
-    "test_axiom_probe.py",
-    "test_cache.py",
-    "test_cold_start.py",
-    "test_lean_changed.py",
-    "test_merge.py",
-    "test_moved.py",
-    "test_not_read.py", "test_programs.py", "test_records_allow.py",
-    "test_sandbox.py",
-    "test_setup.py",
-    "test_siblings.py",
-    "test_upstream.py",
-    "test_unread.py",
-    "test_unread_gate.py",
-    "test_warm.py",
-]
 # The tests read this directory's README, so its Markdown is keyed (`suites.markdown`), and load `lean_audit.py`, which loads
 # `tools/check/common.py`, and `module_keys.py`, which loads `verity_graph/contract.py`, whose key vectors
 # (`key_vectors.json`) `test_module_keys.py` reproduces; `test_lean_changed.py` loads `lean_changed.py`, which loads the check tool's
@@ -49,10 +31,3 @@ inputs = ["tools/verity/lean/README.md", "tools/check/common.py", "tools/check/l
 # check runs it as three parts by test id (`lean-suites:verity-lean-audit:K/3`, `suites.py`'s `id_part_of`), each collecting
 # every file and running the tests whose node id hashes to K, so that ci.toml's plans spread its one process over three shards
 parts = 3
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_cache.py"]
-paths = ["tools/check"]

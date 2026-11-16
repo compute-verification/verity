@@ -36,9 +36,6 @@ inputs = ["benchmarks/slowdown",
           "benchmarks/nci/calibrations.json", "tools/config/verity_config", "tools/difftest/python/verity_difftest",
           "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
           "adapters/torch/verity_torch", "tests/test_vllm_public_api.py", "tests/benchmarks/harness/test_adapter.py", "benchmarks/inference_only"]
-# test files that start a program the read guard can't trace (the record check's script, its compiled command, lake):
-# keyed on the suite's whole tree
-untraced = ["test_served_record.py"]
 
 [tool.verity.interface]
 core = "verity bench inference_only"

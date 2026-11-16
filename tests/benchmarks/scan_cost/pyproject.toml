@@ -16,5 +16,3 @@ inputs = ["benchmarks/scan_cost", "tools/config/verity_config",
     "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
 ]
-# run.sh's tests start bash, which the read guard can't trace: keyed on the suite's whole tree
-untraced = ["test_scan_cost.py"]

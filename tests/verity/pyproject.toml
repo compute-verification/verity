@@ -4,8 +4,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_periods_difftest.py"]
 # What the tests import of `verity`: the Site, the wire whose canonical JSON its digests are taken over, and what the
 # wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys; and the
 # monitoring periods (`verity/protocol.py`). Each module is named by its file, so it stays an input wherever it sits;

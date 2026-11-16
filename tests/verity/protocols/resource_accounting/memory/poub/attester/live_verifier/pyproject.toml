@@ -9,8 +9,6 @@ pythonpath = ["../../../../../../../.."]   # the repository root: its tests impo
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_host.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/channel.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/memory/poub/verifier", 

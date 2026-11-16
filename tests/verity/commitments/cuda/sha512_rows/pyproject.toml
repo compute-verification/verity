@@ -4,8 +4,6 @@
 testpaths = ["."]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_engine.py"]
 # engine.py reads no settings; the tests read the H200 layer's rows from commit_slots' frozen layout (slots.py).
 # The tests import `verity` by its dotted names: what they load of it is listed after slots.py.
 inputs = ["verity/commitments/cuda/commit_slots/slots.py",

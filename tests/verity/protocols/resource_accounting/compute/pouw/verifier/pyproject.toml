@@ -13,16 +13,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "verity/circuits/kernels",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear"]
 parallel = true
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_pouw_credit_statements.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_pouw_epoch_coins.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/proofs/spot"]

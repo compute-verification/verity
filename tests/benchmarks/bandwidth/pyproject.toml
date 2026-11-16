@@ -6,7 +6,4 @@ testpaths = ["."]
 pythonpath = ["../../../benchmarks/bandwidth"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_run.py"]
 inputs = ["benchmarks/bandwidth"]
-

@@ -6,10 +6,6 @@ pythonpath = ["../../../benchmarks/training_slowdown"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (bash, around the queued job's script; git, for the run's
-# commit): keyed on the suite's whole tree
-untraced = ["test_command.py", "test_grade.py", "test_job_shell.py", "test_repeats.py",
-            "test_resume.py", "test_routes.py", "test_run.py", "test_sandbox.py", "test_windows.py"]
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price; the lf
 # model (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator
 # (`benchmarks/slowdown`), whose registry, fleets, periods and min-cut module (the bound and its rows
@@ -33,10 +29,3 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "benchmarks/census/deployments.json",
           "benchmarks/nci/calibrations.json", "tools/config/verity_config",
           "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties", "adapters/torch", "benchmarks/training_slowdown"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_one_calculator.py"]
-paths = ["benchmarks/training_slowdown"]

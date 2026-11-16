@@ -5,16 +5,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_pous_harness.py",
-    "test_pous_onsite_cases.py",
-    "test_pous_p2_bandwidth.py",
-    "test_pous_p2v1.py",
-    "test_pous_served_case.py",
-    "test_pous_served_piece_sh.py",
-    "test_pous_served_wipe.py",
-]
 # tests/ checks the harness against PoUS itself (verity.protocols.resource_accounting.memory.pous.verifier) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
@@ -78,10 +68,3 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # the lease script served_piece.sh and served_wipe.sh take where a node has no gpu-lease: their tests check
           # that it is where the scripts look for it
           "tools/research/src/research/pods/sh/gpu_lease.sh", "benchmarks/pous"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_pous_wipe_resume.py"]
-paths = ["verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/protocols/resource_accounting/memory/pous", "verity/channel.py", "tests/verity/tests/test_channel.py"]

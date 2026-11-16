@@ -18,21 +18,6 @@ pythonpath = ["../../.."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_capture_loopback.py",
-    "test_certifier_piece.py",
-    "test_certifier_term.py",
-    "test_chain_record.py",
-    "test_chain_record_guard.py",
-    "test_kept_scan.py",
-    "test_negatives.py",
-    "test_out_request_values.py",
-    "test_scan_zk_challenger.py",
-    "test_scan_zk_lean_one.py",
-    "test_served_session.py",
-    "test_wipe_gate.py",
-]
 # record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor device's gate, whose
 # session served_session starts, is live_challenger's auditor device. compile_slice_zk's engine class is vLLM 8eb1's trace
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
@@ -96,18 +81,3 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
 # and test_egress_zk run on their staged members.
 artifacts = ["verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-rows",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_certifier_piece.py"]
-paths = ["benchmarks/network_traces"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_compile_slice_zk.py"]
-paths = ["benchmarks/network_e2e/encodings", "verity/protocols/resource_accounting/network"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_demo_stub.py"]
-paths = ["adapters/vllm/verity_vllm/pipeline"]

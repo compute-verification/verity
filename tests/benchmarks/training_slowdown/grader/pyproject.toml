@@ -7,8 +7,6 @@ pythonpath = ["../../../../benchmarks/training_slowdown/grader"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_slowdown_code.py"]
 # `verity`: the circuits' codec, census and Boolean prices the grader reads with; `adapters/vllm/verity_vllm`: the
 # training-step frontend that derives the steps (`step_program`, `primitives`); its tests' lf model (`train_step_lf.py`),
 # the step the tests derive, loaded by path; `tools/config/verity_config`: settings.py's registry;

@@ -19,21 +19,6 @@ pythonpath = ["../../.."]   # the repository root: its tests import others' as `
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "test_auditor_line_lean.py",
-    "test_challengers.py",
-    "test_gate.py",
-    "test_gate_lease.py",
-    "test_gate_run.py",
-    "test_gate_whatif.py",
-    "test_host_read_tiers.py",
-    "test_lease.py",
-    "test_live_verifier_host.py",
-    "test_run_serve.py",
-    "test_session.py",
-    "test_store_layout.py",
-]
 inputs = ["verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/__init__.py",
           # the sessions' harness (PoUB's own tests'), and the verifier host whose run's out/ auditor_line.py reads
           # (test_live_verifier_host.py: its gate, its stub verifier and the challenger's tunnel client)
@@ -91,10 +76,3 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/remote_sessio
           # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
           # CPU test loads without the adapter
           "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/remote_session"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_gate_whatif.py"]
-paths = ["tests/verity/protocols/compose/verifier/live_challenger"]

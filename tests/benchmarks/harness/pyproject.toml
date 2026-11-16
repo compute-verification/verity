@@ -16,12 +16,6 @@ addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
-            "test_bench_resume.py", "test_bench_served.py", "test_env.py",
-            "test_spot_status.py", "test_steady_launch.py", "test_steady_node.py",
-            "test_steady_node_kept.py", "test_steady_node_refusals.py", "test_steady_point.py",
-            "test_steady_runs.py", "test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -148,34 +142,3 @@ inputs = [
     # are listed here, which the test checks
     "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
 ]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
-         "test_bench_resume.py", "test_bench_served.py"]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_breakdown.py", "test_overhead_command.py", "test_overhead_node.py",
-         "test_overhead_points.py", "test_overhead_store.py", "test_prove_command.py",
-         "test_prove_lean_warm.py", "test_prove_rows.py", "test_prove_store.py",
-         "test_prove_store_rows.py", "test_served_table.py", "test_steady_launch.py",
-         "test_steady_node.py", "test_steady_node_kept.py", "test_steady_node_refusals.py",
-         "test_steady_point.py", "test_steady_runs.py"]
-paths = ["artifacts.json"]
-
-# env.sh puts every workspace member's packages on PYTHONPATH, which a test checks reaches everything the adapter imports
-[[tool.verity.tests.reads]]
-tests = ["test_env.py"]
-paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_settings.py"]
-paths = ["tests/benchmarks/harness", "benchmarks/harness/verity_bench"]
-
-# the core benchmarks' interface test reads every benchmarks/*/pyproject.toml for its [tool.verity.interface] key
-[[tool.verity.tests.reads]]
-tests = ["test_interface.py"]
-paths = ["benchmarks/*/pyproject.toml"]

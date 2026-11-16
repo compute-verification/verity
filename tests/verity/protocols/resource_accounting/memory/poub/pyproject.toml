@@ -4,9 +4,6 @@ testpaths = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (lake, the Lean session verifier, a pytest): keyed on the
-# suite's whole tree
-untraced = ["test_remote_session.py"]
 # PoUB's prover's node store and serving loop (`../../../../../../verity/protocols/resource_accounting/memory/poub/prover/node_store/`), run against PoUB's verifier and its Lean session
 # verifier, which `lake build`s in its package, and on the commitments and the circuits' requirement they read
 inputs = ["verity"]
