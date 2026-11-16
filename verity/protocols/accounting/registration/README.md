@@ -19,7 +19,7 @@ format:
 | format | what it registers |
 | --- | --- |
 | `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `../../interface/CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON and digest, and its check `verifier/lean/RegistrationLog/SiteCheck.lean`'s |
-| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice limit `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
 Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's

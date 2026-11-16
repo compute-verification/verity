@@ -38,7 +38,7 @@ BIT_ROW_CASES = (0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172, 8192)
 ROW_SEG_CASES = (0, 1, 13, 8191, 8192, 8193, 3 * 8192 + 5, 65536)
 #: sha512/row-seg/v1 word rows, ``(name, word bits, words)``: an A_i BF16 row (8 KiB, 8 segments), a Pearl-C FP32 row (16 KiB,
 #: 16 segments) and a short odd one; the row is ``bit_row((words, bits))``, the words little-endian, and the vectors give the
-#: words as ``elements(label, bits, n)`` (the file stays under the repository's size cap)
+#: words as ``elements(label, bits, n)`` (the file stays under the repository's size limit)
 ROW_SEG_WORD_CASES = (("bf16/k4096", 16, 4096), ("fp32/k4096", 32, 4096), ("bf16/k5", 16, 5))
 #: sha512/row/v2 rows of elements at a small K, ``(name, ((element bits, count), ...))``; the name is a label, never hashed
 FORMAT_ROW_CASES = (("nvfp4/k32", ((4, 32), (8, 2))), ("mxfp4/k64", ((4, 64), (8, 2))), ("e4m3/k5", ((8, 5),)),

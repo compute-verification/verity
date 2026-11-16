@@ -38,7 +38,7 @@ class Workload:
     stager: str
     #: the population's instance count: the units a session's sample is taken from, and the largest B
     n_max: int
-    #: block bits one coordinate takes in a statement (2^k_log), from staging; the cap is MAX_STATEMENT_BITS / 2^k_log
+    #: block bits one coordinate takes in a statement (2^k_log), from staging; the limit is MAX_STATEMENT_BITS / 2^k_log
     k_log: int | None = None
     notes: str = ""
     extra: dict = field(default_factory=dict)

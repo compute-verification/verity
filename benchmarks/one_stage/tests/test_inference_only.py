@@ -149,7 +149,7 @@ def test_the_verdicts_rule_is_the_count_rules_on_its_rows(small):
 
 
 def test_n_is_the_cards_sessions_over_the_lease_on_the_grid():
-    """A 4,32,4 session at its caps is 35 positions' linears, 630 attention pairs and four LM-head rows, 36,241,670,144
+    """A 4,32,4 session at its limits is 35 positions' linears, 630 attention pairs and four LM-head rows, 36,241,670,144
     θ-MACs with attention and the head at half rate; at u = 1/4 over a 60-minute lease the H200's tensor clock serves
     24,570,799 of them, 25,165,824 on the grid, and 62,914,560 over 150 minutes. Nothing but those inputs goes in."""
     w = IO.session_work(IO.window_class("4,32,4"), MODEL)

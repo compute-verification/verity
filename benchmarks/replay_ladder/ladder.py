@@ -12,7 +12,7 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 
 - ``serve`` measures the model's capacity with one burst of ``--burst`` requests (serve_tax's ``compiled`` arm), then
   serves serve_tax's workload (C4 prompts from the shard's first ``--docs`` documents, each opening with the checkpoint's
-  own document start, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to its cap) at
+  own document start, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to its limit) at
   ``--over`` times that capacity for ``--span-s`` seconds with the scheduler's step trace
   (the ``record`` arm): a saturated window of mixed arrivals, prefill chunks beside decodes.
 - ``replay`` replays that window in a fresh process under its recorded schedule, compiled (serve_tax's `replay`), and

@@ -55,7 +55,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 - **W_b and W_p**: execution phase b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
-- **W_F, W_cap and W_S**: a fleet's registered total, or its registered cap, and the total of its accepted replicas'
+- **W_F, W_cap and W_S**: a fleet's registered total, or its registered limit, and the total of its accepted replicas'
   W_reg (see "The fleet").
 - **k**: the number of a replica's execution phases in a period, about 1e8 to 1e9 a week.
 - **q**: the expected number of a replica's execution phases selected in a period. The service's sample sets it.
@@ -267,7 +267,7 @@ is credited"). Its block still checks O for O's consumers, and the credit takes 
 - every selected proof block's proof verifies;
 - the certifier's signed times follow each run's order: every operand-root receipt before its block's seeds, every value
   root within Δ of its seeds, every check coin after its value roots, and every answer within τ_ans of its check coin;
-- its signed counts k_infil and k_exfil are within E_in and E_out, caps set before the period.
+- its signed counts k_infil and k_exfil are within E_in and E_out, limits set before the period.
 
 Otherwise the period is refused. A failed proof is a visible failure and is never retried.
 
@@ -352,11 +352,11 @@ profile.
 
 **The fleet.** A claim over several replicas registers its fleet before any member's first coin, in one of two forms:
 - its members and every member's W_reg,u, with total W_F; a replica that starts later joins the next fleet period;
-- or a fleet cap W_cap, with members joining while Σ_u W_reg,u ≤ W_cap.
+- or a fleet limit W_cap, with members joining while Σ_u W_reg,u ≤ W_cap.
 
 The claim publishes W_F or W_cap beside W_S. A fleet named after the period's outcomes defeats a pooled bound: at
 δ_coin = 1e-6 the claim is then false with probability 0.99999. Grown one replica at a time with no
-cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4.
+limit, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4.
 
 ### Coins
 

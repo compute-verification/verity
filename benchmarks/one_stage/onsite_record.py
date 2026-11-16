@@ -127,7 +127,7 @@ k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in 
 incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
-caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
+limits aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
@@ -144,9 +144,9 @@ is not its wired audit's (RowsStateTied); stateFree, its free inputs with its re
 RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold. Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
-audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
-each audit's ℓ_a, the cap of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
-as a cap and in no term of K (`CAP`), and the figure of record's ``missing`` where the run published none; and
+audits' unregistered inputs, read off the period's parameters, with no advice length and no limit in them); ``cap`` is
+each audit's ℓ_a, the limit of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
+as a limit and in no term of K (`CAP`), and the figure of record's ``missing`` where the run published none; and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
 clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a test run with public inputs
@@ -229,7 +229,7 @@ ONSITE = "verity/remote-network/v0"
 VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
 #: the window report's rows, by verdict
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
-#: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
+#: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and limits
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
 REGISTRATION = "registration.json"
@@ -1128,8 +1128,8 @@ def eps_of(b: Mapping[str, Any]) -> Fraction:
 
 
 def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int, int]:
-    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), the connections its caps count
-    (``cells``), the case's period held to the answer's phases where its params keep ``windows`` and its caps to its
+    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), the connections its limits count
+    (``cells``), the case's period held to the answer's phases where its params keep ``windows`` and its limits to its
     schedule's over them (`CONNECTIONS`), and its egress capacity a phase in bits (`EGRESS`)."""
     params = case["params"]
     if "windows" in params and int(params["windows"]) != phases:
@@ -1824,7 +1824,7 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
               conditional: Sequence[str] = ()) -> dict[str, Any]:
-    """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell``, the tight K's premises
+    """The figure of record (`OPEN`) from the period's public, the audits' limits ``ell``, the tight K's premises
     ``prem`` (`premises`) and the conditions no charge covers (``conditional``: live-coins while the coins are open,
     `COINS`): ``K``, the checks the public holds, what is open (those checks, the premises and the conditions), the
     advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:

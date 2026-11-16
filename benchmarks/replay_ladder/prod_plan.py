@@ -9,13 +9,13 @@
   length, kept when the prompt and the reply each have at least 4 tokens, the prompt at most 1,024 and both at most 2,048;
 - ``multiturn``: up to `TURNS` turns of one ShareGPT conversation, turn k's messages every earlier turn with its reference
   reply, then its own, placed `GAP` plan positions apart so that it arrives after the turn before it and its prefix is
-  in the cache; capped at its reference reply's length, at most `MULTI_CAP`, with prompt and cap at most `MULTI_CONTEXT`;
+  in the cache; capped at its reference reply's length, at most `MULTI_CAP`, with prompt and limit at most `MULTI_CONTEXT`;
 - ``long``: C4 documents, from the shard's, joined to a prompt of 8,192 to 32,768 tokens with a request to summarize them,
   capped at `LONG_CAP`.
 
 Each request is greedy or, with probability `SAMPLED`, at temperature 0.7 with its seed by the public seed rule
 (`corpus.request_seed` of its id), the rest of its sampling the checkpoint's generation_config; every request stops at its
-end of text or its cap. A plan's first requests are a window's: `GAP` keeps a conversation's turns within about a minute of
+end of text or its limit. A plan's first requests are a window's: `GAP` keeps a conversation's turns within about a minute of
 arrivals at the rates a TP8 node serves. Arrivals are Poisson: each request carries its unit-rate exponential gap
 (``gap_draw``, which serve_tax's schedule divides by the load's rate), from a stream of its own so the rest of the plan
 doesn't depend on it.

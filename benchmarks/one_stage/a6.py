@@ -15,7 +15,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
 * **Statements.** One circuit per template, staged by Flock's `UnitStager` bound to the partition: META names the template,
   the partition and the program. A statement holds at most `chunk_cap` instances (flock-circuit's spec shape, m = k_log + nbl
   <= 35: 4096 coordinates at K = 2048, 2048 at K = 8192), so a template's units are staged as consecutive chunks (`--chunk`
-  caps them lower), each a member: its own input set on the template's circuit, and a public file naming its global unit
+  limits them lower), each a member: its own input set on the template's circuit, and a public file naming its global unit
   indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (Flock's
   set-bound domains), holds the public files to the docket, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.

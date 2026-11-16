@@ -28,7 +28,7 @@ log signed when the session ends.
   serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
   "reason"}`, fsynced; `remote.log_hello`) and the next connection is taken, each hello read within 10 s, up to
   `challenger.MAX_HELLOS` refused hellos, the most a session's evidence holds: the next refused past them ends the
-  session (`remote`, "The device's caps"). Once a hello is accepted it stops listening, so every later connection is
+  session (`remote`, "The device's limits"). Once a hello is accepted it stops listening, so every later connection is
   refused.  However the session ends, a tunnel that ends first included, it
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor device
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),

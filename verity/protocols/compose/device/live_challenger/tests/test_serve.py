@@ -3,7 +3,7 @@
 session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
-hello is logged and the next connection taken up to the cap on refused hellos, past which the session ends, a broken
+hello is logged and the next connection taken up to the limit on refused hellos, past which the session ends, a broken
 sequence after the hello ends the session with exit 1, signed as such, an open whose label is past ASCII is refused in
 ASCII and its close written, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's,
 with `--root`, is refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
@@ -292,7 +292,7 @@ def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is
 
 def test_a_session_serves_after_max_hellos_refused_hellos_and_ends_at_the_next_past_them(tmp_path):
     """v2 refuses a session past `MAX_HELLOS` refused hellos (`coins.LIMITS`): a client whose hello is accepted after that
-    many is served, and the next refused past them ends the session, signed, logging no more. The cap is lowered to 2
+    many is served, and the next refused past them ends the session, signed, logging no more. The limit is lowered to 2
     here (the stub's `--max-hellos`); `test_remote.py` holds `remote.log_hello` to the real one."""
     stub = ("--max-hellos", "2")
     proc, out, first = start(tmp_path, "at", None, stub=stub)

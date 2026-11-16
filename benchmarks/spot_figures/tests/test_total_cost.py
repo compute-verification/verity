@@ -175,7 +175,7 @@ def test_every_line_prices_its_blocks_one_way():
 
 def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_log():
     """A residual add of 384 columns, which the card measures only at 6144, 2^4 times smaller as the strata size both:
-    the card's seconds a block over 2^4 and its cap and a table's blocks times 2^4, its statement's fixed seconds
+    the card's seconds a block over 2^4 and its limit and a table's blocks times 2^4, its statement's fixed seconds
     unchanged."""
     c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
     b = next(b for b in po["value"]["blocks"] if b["block"] == "ResidualAdd_v1{N=6144}")

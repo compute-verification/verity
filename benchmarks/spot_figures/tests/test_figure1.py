@@ -476,8 +476,8 @@ def test_a_two_stage_point_is_the_planners_design_at_its_budget(world, two_stage
 
 
 def test_a_statement_pays_its_fixed_cost_over_its_fill():
-    """A type's price over the marginal is 1 + fixed / (blocks in its statement), at most its cap; a type the card
-    measures takes its own fixed cost and cap, the rest the measured blocks' pooled ones."""
+    """A type's price over the marginal is 1 + fixed / (blocks in its statement), at most its limit; a type the card
+    measures takes its own fixed cost and limit, the rest the measured blocks' pooled ones."""
     strata = [{"block": "A", "per_token": 3.0, "macs": 1, "out_bits": 16},
               {"block": "B", "per_token": 1.0, "macs": 1, "out_bits": 16}]
     blocks = [{"block": "A", "macs": 1, "seconds_per_block": 1.0, "fixed_seconds": 10.0, "statement_blocks": 4},
@@ -588,7 +588,7 @@ def test_a_request_serves_each_token_as_the_token_selects_word():
 def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
     """Where the model's certifier card registers a response cap, a request serves at most that many tokens, each the
     token select's 32-bit word, read through the schedule whose digest every record head binds; `served="request"`
-    keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
+    keeps every token.  A schedule without a limit, or no certifier card, leaves every token served, and a limit it
     doesn't register is refused."""
     card = cards.load("certifier", "GLM-5.3")
     schedule = NetworkCertifierParams(**card["value"]["schedule"])

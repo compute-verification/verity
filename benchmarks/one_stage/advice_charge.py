@@ -14,7 +14,7 @@ ADVICE is a serve-openai run's every closed Commit period's advice, as `verity-v
 of ``commit_periods`` is one Commit period's: ``bits``, |a_j|, its advice's encoding (`window_advice.total_bits`), and
 ``registered_bits``, what its registration binds (ℓ_a once the advice is padded before it is committed; |a_j| before),
 with the requests it admits and carries in and its engine steps. ``bits`` summarizes the Commit periods, and
-``prompt_len``, ``output_len`` and ``finishes`` (``eos``: a stop token ended it; ``length``: its cap did; ``abort``) the
+``prompt_len``, ``output_len`` and ``finishes`` (``eos``: a stop token ended it; ``length``: its limit did; ``abort``) the
 requests, each once, in the Commit period that admits it: a Commit period's advice lists the requests it carries in
 first, then those it admits. Where each Commit period's private report records its first step's engine clock reading
 (``t0``), ``start_s`` is it, counted from the first Commit period's, and ``by_phase`` sums the bits of the Commit

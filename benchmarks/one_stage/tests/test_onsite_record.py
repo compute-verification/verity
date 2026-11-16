@@ -2,16 +2,16 @@
 rehearsal's, records each of them missing with its why, and no bound and no period figure. A run whose network
 certifier accepted in the rows form records K term by term in the notation table's symbols, each naming the public
 fields it sums, with its overcount as a note, the seconds it covers, the line that published its verdict, the tree, and
-the connections its schedule's caps count (other caps are the connections' error); its run's own period proved, and
+the connections its schedule's limits count (other limits are the connections' error); its run's own period proved, and
 each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
 by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or not
 the rows form's, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
-its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
+its source (the tied audits' free inputs, no advice length and no limit), and a test run's measurement is stated beside
 the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in `security/`'s lock's place) lists every premise's
 discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
-phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
+phase, ℓ_a the limit of the run's published advice registration (no figure where it published none, and an error where an
 audit's own docket binds an advice), with what is open named and no tighter figure beside it. A tied audit
 drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
 and the served egress is missing. SPOT's coins are live only where
@@ -78,7 +78,7 @@ from verity.circuits.codec import canonical_json  # noqa: E402
 NODE = "computeinstance-toy"
 SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "free": 9088, "faulty_sets": 0,
         "faulty_bits": 0, "faulty_entries": 0, "jitter": 63}
-#: the schedule's 4 · 63 connections of cap 4 (⌈log2 5⌉ = 3 each, as cells and again as schedules) and one execution
+#: the schedule's 4 · 63 connections of limit 4 (⌈log2 5⌉ = 3 each, as cells and again as schedules) and one execution
 #: phase's scan
 PUBLIC = {"K": 756 + 756 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, "units": 1024, "wrong_units": 0}],
           "cells": 756, "eps": "1/1048576", "scans": [SCAN], "schedules": 756, "windows": 1}
@@ -104,7 +104,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
 TREE = "ab12" * 10
 #: the certifier's published verdict line, after an earlier attempt's
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
-#: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
+#: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its limits' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
 #: the auditor's record of its network certifier's key, as `record_files.public_json` writes one, and session; and
 #: the period's params stating them, as `scan_period.rows_case` does: one listed entry, whose stretch holds the
@@ -470,7 +470,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
              registration: dict | None = PUBLISHED, coins: str | None = GATE,
              draws: dict | None = ALL, params: dict | None = None, onsite: bool = True) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
-    ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
+    ``schedule``, whose limits are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
     ``audits``' dockets, with ``registration`` its published advice registration, none where None, ``coins`` its
     COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
@@ -806,7 +806,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
         tmp_path, lock, monkeypatch, text, error):
     """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread``, by its path
     in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
-    is open and the figure of record charges the cap, never a crash."""
+    is open and the figure of record charges the limit, never a crash."""
     write_lock(lock, {COUNTED: None})
     props = tmp_path / "tree" / "security" / "Properties" / "lean-audit.json"
     props.parent.mkdir(parents=True)
@@ -968,7 +968,7 @@ def test_at_the_trees_lock_certifier_key_stays_open_and_the_network_verdict_unes
 
 
 def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
-    """Two audits, each charged the run's cap: with the public naming none, each phase charges both; with
+    """Two audits, each charged the run's limit: with the public naming none, each phase charges both; with
     scans[j].tied, each phase only those it names."""
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, eps="1/524288", windows=2, scans=[SCAN, SCAN])
     rec = record(accepted(tmp_path / "all", two, windows=2, audits=(NO_ADVICE, NO_ADVICE)))
@@ -983,7 +983,7 @@ def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp
 @pytest.mark.parametrize("binds", [{"advice": {"bits": 2 ** 23, "root": "ef" * 64}},
                                    {"compiler": {"digest": "01" * 64, "name": "B"}}])
 def test_an_audit_whose_registration_binds_an_advice_or_a_compiler_leaves_no_figure_of_record(tmp_path, binds):
-    """An audit's own advice is in no term of K and isn't the run's cap: the period takes only a circuit the verifier
+    """An audit's own advice is in no term of K and isn't the run's limit: the period takes only a circuit the verifier
     registered (`records_audit.py period` refuses the rest), so such an audit is the figure of record's error."""
     bound = {**NO_ADVICE, "window": {**NO_ADVICE["window"], **binds}}
     rec = record(accepted(tmp_path, audits=(NO_ADVICE, bound)))
@@ -1078,8 +1078,8 @@ def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path)
 
 
 def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figure_of_record(tmp_path):
-    """ℓ_a is the cap of the run's published advice registration (`REGISTRATION`), never 0 for want of one: with none
-    the figure of record is missing, and one whose advice isn't padded to its compiler's cap is its error. The tight K
+    """ℓ_a is the limit of the run's published advice registration (`REGISTRATION`), never 0 for want of one: with none
+    the figure of record is missing, and one whose advice isn't padded to its compiler's limit is its error. The tight K
     stays the bound's."""
     rec = record(accepted(tmp_path / "none", registration=None))
     assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"missing": OR.NO_REGISTRATION}
@@ -1110,7 +1110,7 @@ def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_refuse
 
 def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_bound(tmp_path):
     """The case's commitment holds the period's audits. Where the record can't read it, the figure of record is its
-    error (the audits' caps), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
+    error (the audits' limits), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
     doesn't hold: the network certifier's verdict is not established and there is no bound."""
     out = accepted(tmp_path)
     case = dict(json.loads((out / OR.CASE).read_text()), commitment="00")
@@ -1227,8 +1227,8 @@ def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_
 
 @pytest.mark.parametrize("caps", [[], [4, 4], [5] * (4 * 63)])
 def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path, caps):
-    """The period's check refuses caps that aren't the schedule's (`Schedule.rowsCells`), an empty list included, so a
-    case's other caps beside an accepted answer leave the connections and the periods unfilled."""
+    """The period's check refuses limits that aren't the schedule's (`Schedule.rowsCells`), an empty list included, so a
+    case's other limits beside an accepted answer leave the connections and the periods unfilled."""
     rec = record(accepted(tmp_path, caps=caps))
     why = (f"{OR.CASE}: ValueError: the case's {len(caps)} caps aren't its schedule's (Schedule.rowsCells: egress_cells = 4 "
            "for each of its lanes · m · T = 252 connections), which the period's check refuses")

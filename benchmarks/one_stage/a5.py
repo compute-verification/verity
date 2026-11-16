@@ -2299,7 +2299,7 @@ def devices(a: argparse.Namespace) -> list[int] | None:
 
 def card_clocks(cards: Sequence[int] | None, run: Callable[[list[str]], str] | None = None) -> dict[str, Any] | None:
     """Each of ``cards``' clock event counters as ``nvidia-smi -q -d PERFORMANCE`` prints them: the microseconds its
-    clocks were held back, by reason (a thermal slowdown, a power cap), under the card's index; a card whose driver
+    clocks were held back, by reason (a thermal slowdown, a power limit), under the card's index; a card whose driver
     prints none has none. Read before and after an audit's sessions, their difference says whether a card was slowed
     while it proved. None without cards. Where nvidia-smi doesn't answer (``run``: the command's output) the audit
     goes on and the record says so: ``{"unread": why}`` in the counters' place."""

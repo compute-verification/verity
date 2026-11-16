@@ -3,7 +3,7 @@ ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the 
 `PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
 reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
-the cap the committed pass row and the public lifetime cap give), one instance of each per step
+the limit the committed pass row and the public lifetime limit give), one instance of each per step
 (`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src \\
@@ -37,10 +37,10 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   sha512/row/v2 digest under one salt), so the prover appends each step's blocks under its payload rows' salts and the
   verifier recomputes the session's chain of appends (`audit.append_head`) from the map member's public file and each
   step's public first and count (`units_heads`): `UnitsLink.mapped` holds of the record when its chain is that one,
-  each pass's head is the chain through the appends of the steps below its own, each map unit's public lifetime cap is
+  each pass's head is the chain through the appends of the steps below its own, each map unit's public lifetime limit is
   the record's, and every map unit is sampled and proved. The heads fix the window each append joined. The passes' steps
   are a value: each map unit's pass row (each window's last pass step, `requirement_units.pass_words`) is bound to one
-  canonical commitment, from which the unit computes each re-key's cap in gates (the stale bound in step form, which no
+  canonical commitment, from which the unit computes each re-key's limit in gates (the stale bound in step form, which no
   public input carries). The bridge (`bridge`) binds the rest on public data: each pass's plan length is its step's
   plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and the
   registered blocks released after each step are its map unit's public frees. The one canonical row it opens is the
@@ -103,10 +103,10 @@ NR = TB + TABLE_ROWS // RPB
 VW = RU.value_bits(SLOTS)
 REQUESTS, ACTIVE, PAUSE = 10, 4, 0.15
 WINDOWS = 4
-#: the remote session's lifetime cap in windows (the memory-map unit's `life`, a U16): more than it has, so no block
+#: the remote session's lifetime limit in windows (the memory-map unit's `life`, a U16): more than it has, so no block
 #: re-keys
 LIFE = 60
-#: the cap on its schedule's bits the remote session commits before its coins (`audit.Params.schedule_cap`): its
+#: the limit on its schedule's bits the remote session commits before its coins (`audit.Params.schedule_cap`): its
 #: schedule check refuses a schedule over it, and a ledger crediting appended blocks credits it as the steering
 SCHEDULE_CAP = 1 << 16
 #: each written value's epochs in the layout row: its production block's and one re-key's
@@ -450,9 +450,9 @@ class UnitsLink:
     rows open, every witness row is bound to its canonical commitment, and the bridge (`bridge`) holds the session to the
     units' public data and the canonical pass row. `mapped` holds of a record, once every map unit is sampled and proved (`proved`), whose chain is
     the one `appends` the map units' writes make, each pass's head (`audit.WindowRecord.heads`) the chain through those
-    of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime cap (`life`) the record's.
+    of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime limit (`life`) the record's.
     The stale bound, which no public input carries, is then what each re-key's old block is held below in the unit, which
-    computes it from its committed pass row and that cap. `read_bits` is the step's reads from complete blocks
+    computes it from its committed pass row and that limit. `read_bits` is the step's reads from complete blocks
     (`RQ.credited_reads`, `creditedReadBits`). `epsilon` and `delta` are what the units' sample established
     (`uncertified`): the most share of the linked credit the incorrect proof blocks it allows can carry, at the audit's delta; until
     they are set, the link credits nothing."""
@@ -523,7 +523,7 @@ def statics(steps: int, sd, layout, store) -> tuple[dict, dict]:
 
 
 def instances(sd, layout, store, SP, SM, plans, pi, life):
-    """Each step's PlanMatch and MemoryMapStep arguments, the latter with the pass row ``pi`` and lifetime cap ``life``."""
+    """Each step's PlanMatch and MemoryMapStep arguments, the latter with the pass row ``pi`` and lifetime limit ``life``."""
     lam = RU.layout_words(SM, sd.req, layout, sd.positions)
     phi = RU.map_words(SM, store)
     reg_block = {v: layout.block[v] for v in sd.req.registered}
@@ -1191,11 +1191,11 @@ def _rebound(m: dict, canons: dict, i: int, row: str, words: list[int]) -> dict:
 
 
 def rekey_negatives(members: list[dict], sd, layout, req, sm, canons: dict, rs) -> dict[str, dict]:
-    """A re-key held by the map unit to the cap its committed pass row and lifetime cap L give: value v of block o, whose
+    """A re-key held by the map unit to the limit its committed pass row and lifetime limit L give: value v of block o, whose
     append joined window w ≥ 1, re-keyed at a step r whose first pass after is window w + age, by a forged instance of r
     with one block more (v at its slot, its epoch-1 layout entry, the new block written at r and freed at v's last structural reader).
     At L = age the unit accepts it; at L = age + 1 the re-key is one window early, and the unit refuses it. Two forged
-    stale bounds at L = age + 1: o's write step forged below the cap in the map row (r's unit accepts, and o's writer,
+    stale bounds at L = age + 1: o's write step forged below the limit in the map row (r's unit accepts, and o's writer,
     whose instance pins the step, refuses), and a pass row that dates r's window one later, window w + age's last pass
     at r (r's unit accepts; the row isn't the canonical one, and a canonical row committed to it isn't the session's
     passes, `bridge`)."""
@@ -1270,8 +1270,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     The appends negatives are a session PoUB accepts whose appends aren't the map units' writes: the
     record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
     is decided by its unit's reference (`opening_prover.reference`), the run's own (``rs0``) by proofs. The stale negatives
-    are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
-    unit holds to the cap its committed pass row gives (`rekey_negatives`)."""
+    are map units whose lifetime limit isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
+    unit holds to the limit its committed pass row gives (`rekey_negatives`)."""
     neg: dict[str, dict] = {}
     plan_m, map_m = members
     req_steps = req.steps
@@ -1409,8 +1409,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
         "chain_is_the_units'": rs.accepted and rs.session.record().appends == link.appends}
 
-    # the stale bound, which no public input carries: the map units' lifetime cap against the record's, and a re-key
-    # held in the unit to the cap its committed pass row gives, one window early or with a forged stale bound
+    # the stale bound, which no public input carries: the map units' lifetime limit against the record's, and a re-key
+    # held in the unit to the limit its committed pass row gives, one window early or with a forged stale bound
     loose = 1
     try:
         audit.ledger(rrec, **common, requirement=replace(link, life=loose))

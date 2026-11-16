@@ -8,7 +8,7 @@ express (README.md).
           [--node-registration PATH]] [--node-points POINT ...] --out DIR [...]
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
-order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
+order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` limits each
 `inference-only-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights

@@ -105,7 +105,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     GPU-second, added to the statement's fixed seconds; without the card, β counts proving only and the caption says
     so.
   - Every line prices a proof block one way (`priced`): at its type's seconds on the `proof_overhead` card, a block's
-    and its statement's fixed ones, with its statement's cap, the type being the card's block of the same name, else
+    and its statement's fixed ones, with its statement's limit, the type being the card's block of the same name, else
     of the same Definition and K; a type the card doesn't measure is computed from its staged witness bits (the
     measured types' median seconds a witness bit, a fixed cost on their least-squares line in k_log, a statement's
     2^35 bits). A line's marginal overhead is what its blocks come to over its MACs at the card's peak. The caption
@@ -228,9 +228,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
       its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
-      the response cap of the model's `certifier` card, the network certifier's schedule (`NetworkCertifierParams`), whose cap
+      the response cap of the model's `certifier` card, the network certifier's schedule (`NetworkCertifierParams`), whose limit
       ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
-      of its tokens (`--served request` takes every token under a cap too), in
+      of its tokens (`--served request` takes every token under a limit too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
       blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request
       workload` sizes a request as the `workload` card's instead of the census's mean. The appendix figure adds the
@@ -365,7 +365,7 @@ Limits of the model:
   that count for one design over the population (`TwoStageCheckPatternsSound`); no Lean statement carries it across
   the scope's verification phases.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
-  returns more (logits, state) serves more, and the cap is then too low. Under the certifier's response cap a
+  returns more (logits, state) serves more, and the limit is then too low. Under the certifier's response cap a
   request serves at most S, which the patterns' form reads as exactly S, and the tie of the statement's served outputs
   to the tokens the certifier releases is pending, so the certifier card is provisional.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of

@@ -51,7 +51,7 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   For exfiltration it is in `consumers.exfiltration_bound`'s form, the incorrect proof blocks' output bits plus which
   ones they are: the adversary makes the widest ones incorrect first (`harm_bound`'s order), so each is charged the
   widest block's output bits, and a sampled one costs the count-weighted mean MACs to prove.
-* `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
+* `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's limit.
 
 Lean checks every point's design unless `run`'s `lean` is off, and a design Lean refuses is an error; a series' `lean`
 says which points it checked, None at the trivial bound, which has no design to check.  A one-stage or request-level
@@ -112,7 +112,7 @@ HEADLINE = {"exfiltration": "two-stage", "skipped_work": "one-stage"}
 TWO_STAGE = {"two-stage": (True, None), "two-stage-uniform": (False, None), "two-stage-capped": (True, "sets"),
              "two-stage-capped-uniform": (False, "sets"), "two-stage-patterns": (True, "patterns"),
              "two-stage-patterns-uniform": (False, "patterns")}
-#: what each served-output cap's form rests on
+#: what each served-output limit's form rests on
 CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "card_influenceTwo_le_patterns"}
 #: what puts the sets' form at most the scope's served bits: the influence set is a set of served outputs
 SERVED_STATUS = "card_influenceTwo_le_min"
@@ -141,7 +141,7 @@ SERVING = ("assumed", "measured")
 SERVING_GOAL = 8 * 300e9
 #: the tokens a request serves: at most the network certifier's registered response cap, or every one of its tokens
 SERVED = ("cap", "request")
-#: what holds each response the network certifier releases to its registered cap
+#: what holds each response the network certifier releases to its registered limit
 CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
@@ -361,8 +361,8 @@ def price(stratum: dict) -> float:
 class Fill:
     """Proving's price over its marginal at a statement's fill, per proof-block type: its share of the proof blocks, its
     share of their proving (`price`), its statement's fixed GPU-seconds over a block's marginal ones, and its
-    statement's cap in blocks: the stratum's own where it is priced in seconds, else the `proof_overhead` card's block
-    of its name, else the measured blocks' pooled fixed cost and least cap.  Proving GPU-seconds go as `price`, so a
+    statement's limit in blocks: the stratum's own where it is priced in seconds, else the `proof_overhead` card's block
+    of its name, else the measured blocks' pooled fixed cost and least limit.  Proving GPU-seconds go as `price`, so a
     design's price is the types' mean weighted by it."""
 
     types: tuple[tuple[float, float, float, int], ...]
@@ -381,7 +381,7 @@ class Fill:
 
     def factor(self, blocks: float) -> float:
         """The price over the marginal when a replay block holds `blocks` sampled proof blocks, each type's in
-        statements of at most its cap."""
+        statements of at most its limit."""
         return sum(m * (1 + c / max(1.0, min(cap, blocks * b))) for b, m, c, cap in self.types)
 
 

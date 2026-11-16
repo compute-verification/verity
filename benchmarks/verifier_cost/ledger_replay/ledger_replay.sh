@@ -3,7 +3,7 @@
 # challenger's writer signs one, with what the `challenger_ledger` piece's reference answers on it, and times the
 # reference's replay; ledger-replay-time (Main.lean, built in a scratch Lake package against the checkout's verifier,
 # main's cached build of it and of the packages it requires) times the compiled replay, `Spot.Challenger.checked`, the
-# piece around it, and the replay's parts. A size whose period's close is past a ledger line's cap is refused by both,
+# piece around it, and the replay's parts. A size whose period's close is past a ledger line's limit is refused by both,
 # and its row says so; PERIOD=N puts the sessions in periods of N, which goes past it. Run:
 #   research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
 #     --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/ledger_replay.sh 10 30 100 300 1000

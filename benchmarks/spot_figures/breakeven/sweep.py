@@ -8,7 +8,7 @@ each through total_cost._point as Figure 1 computes it.
 A case is a base line ((A) `tokens`, or (A′) `per_expert`, optionally with each table read fused into its consumer
 GEMM), its circuit cut further by a `partition` card of another kind where `partition` names one, and its levers: all
 proving scaled (`scale`, a faster prover or another h), the marginal scaled (`marginal`,
-each block's seconds), each statement's cap in blocks multiplied (`cap`) or its fixed cost scaled
+each block's seconds), each statement's bound in blocks multiplied (`cap`) or its fixed cost scaled
 (`fixed`), the registration statements share within (`registration`), and the replay a sampled request costs in
 GPU-seconds (`replay`; default the figure's, a machine's 600 s block).  `tax` is its serve tax, outside beta.
 

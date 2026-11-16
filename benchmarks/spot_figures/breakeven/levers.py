@@ -78,7 +78,7 @@ def set_bits(strata, prefix, bits):
 
 
 def scale_proving(strata, marginal=1.0, fixed=1.0, cap=1.0, where=None):
-    """Each stratum's marginal and fixed seconds scaled, its statement's cap in blocks multiplied by `cap`."""
+    """Each stratum's marginal and fixed seconds scaled, its statement's bound in blocks multiplied by `cap`."""
     return [x | {"seconds_per_block": x["seconds_per_block"] * marginal, "fixed_seconds": x["fixed_seconds"] * fixed,
                  "statement_blocks": max(1, int(x["statement_blocks"] * cap))}
             if where is None or where(x) else x for x in strata]

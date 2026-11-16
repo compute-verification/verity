@@ -428,8 +428,8 @@ def _definition(block: str) -> tuple[str, int | None]:
 def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with every proof block priced in GPU-seconds from the `proof_overhead` card, and the marginal
     overhead they come to.  A stratum whose type the card measures (its block, else the card's block of the same
-    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap.  One the card measures only
-    at another size, 2^Δk its block's, takes 2^Δk its seconds and 2^-Δk its cap: Δk compares the two k_logs as the
+    Definition and K) takes its seconds a block, its statement's fixed seconds and its limit.  One the card measures only
+    at another size, 2^Δk its block's, takes 2^Δk its seconds and 2^-Δk its limit: Δk compares the two k_logs as the
     strata estimate them, the card's block's from the strata where they hold one of its type.  A type the card doesn't
     measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
     fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's

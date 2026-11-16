@@ -288,7 +288,7 @@ READINGS = ("ExpectedCR", "StrictBirthday")
 
 
 def terms(design: Design, at_B: str = "StrictBirthday") -> dict[str, Fraction]:
-    """The bound's terms per sampled replay block, by name: by gate the collision, refused and cap terms; by position
+    """The bound's terms per sampled replay block, by name: by gate the collision, refused and limit terms; by position
     the four, the rewinding term under the premise `at_B` at B and the sessions' term 0 where κ_s is not stated."""
     if design.sessions is None:
         return {"collision": Fraction(design.calls, HASH), "refused": design.p_ref * design.opens,
@@ -345,7 +345,7 @@ def periods(design: Design, phase: int = PHASE, machines: int = 1, first_stage: 
 def most_gates(design: Design, target: int, runs: int = 1, first_stage: int = 1) -> int:
     """The most gates K of a sampled replay block at which the collision term, summed over `runs` runs of
     `first_stage` replay blocks each, is at most 2^-`target`, the design's other fields kept: by gate less its
-    refused and cap terms, 0 where those are above the target alone; by position the first-hit term at
+    refused and limit terms, 0 where those are above the target alone; by position the first-hit term at
     K_s = K_m = K."""
     one, two = (at_run(replace(design, K=K, Km=None), first_stage).calls for K in (1, 2))
     room = Fraction(HASH, 2 ** target * runs)

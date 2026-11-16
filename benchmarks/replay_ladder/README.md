@@ -12,7 +12,7 @@ For each model:
 - `serve`: one burst of 800 requests at 1,000 req/s on stock compiled vLLM measures the model's capacity; then the
   `record` arm serves serve_tax's workload (C4 prompts from the whole shard, each opening with the checkpoint's own
   document start and blank line, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to
-  its cap) at 1.45 times that capacity for 60 s: a saturated window of mixed arrivals, prefill chunks beside decodes.
+  its limit) at 1.45 times that capacity for 60 s: a saturated window of mixed arrivals, prefill chunks beside decodes.
 - `replay`: in a fresh process, the window replayed under its recorded schedule, compiled, compared with serving step by
   step and token by token, and from the second replay on with the first replay too. `run.sh` runs three replays on
   vLLM's compile cache (the first fills it: the server's entries don't match an offline engine's, so it compiles) and
@@ -62,7 +62,7 @@ first's bit for bit, `replay.py --logprobs`), `FLASHINFER` (`1`: CUDA_HOME's nvc
 vLLM's default, so vLLM uses FlashInfer as a stock install with a CUDA toolkit does, its autotune and, at TP > 1 on Hopper
 or Blackwell, its fused all-reduce + RMSNorm included; otherwise FlashInfer is off, since the pin installs neither
 flashinfer-cubin nor nvcc, and so is its sampler, whose JIT needs the toolkit's curand headers), and
-`SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` caps the shard's documents a plan takes prompts
+`SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` limits the shard's documents a plan takes prompts
 from). `engine_env.txt` records `has_flashinfer`, and each arm's `autotune.sha256` the digest of every FlashInfer
 autotune cache after serving and after each replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of
 context (the plan's longest request is 1,024 + 256), where its sparse attention's top-k keeps every key.
@@ -72,7 +72,7 @@ benchmark_serving ShareGPT set (the serve tax's pinned file, `serve_tax.py datas
 downloaded where there is none, its SHA-512 checked), multi-turn ShareGPT
 conversations whose turns share their prefixes, and C4 prompts of 8,192 to 32,768 tokens, each through the model's chat
 template, half greedy and half at temperature 0.7 with a per-request seed, every request stopping at its end of text or
-its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
+its limit; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
 requests down by kind, with each one's context at its first difference, and counts the window's requests whose context
 passed 2,048 keys, the DSA indexer's top-k: a difference that starts within it can't come from the indexer's selection. With `LADDER_ROUTE_CAPTURE=DIR`, a directory holding
 the route capture's plugin module and the settings registry beside it, both servers also load that plugin and write their routes under

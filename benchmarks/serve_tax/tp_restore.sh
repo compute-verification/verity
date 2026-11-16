@@ -15,7 +15,7 @@
 # replays to the second into OUT/ARM/restore (its verdict OUT/ARM/restore/restore.json). An arm after the first starts only
 # if the minutes used so far and the last arm's fit in BUDGET_MIN (OUT/arms.txt says which ran). PERMUTE=1 restores again
 # with the GPUs in reverse order into OUT/ARM/restore-permuted; RESTORE=0 restores nothing. The first DUMP edges' blocks
-# (tens of GB at TP8; NUM_GPU_BLOCKS caps the pool) go to a scratch directory outside the run's, removed at the end
+# (tens of GB at TP8; NUM_GPU_BLOCKS limits the pool) go to a scratch directory outside the run's, removed at the end
 # unless KEEP=1. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
 # (PY and HERE, this directory, set), logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has
 # it, or under `research run --gpus N` by the run's own lease. VENV's vLLM must be d9105ea80, the integration's pin.
