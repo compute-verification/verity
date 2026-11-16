@@ -171,7 +171,7 @@ def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypa
     assert challenger(clock=Clock(1_000_000)).commitment.header()["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
 
 
-CERTIFICATE = b"a start certificate, as the network certifier returned it"
+CERTIFICATE = b"a start certificate, as the network attester returned it"
 
 
 class Reads:
@@ -241,7 +241,7 @@ def test_a_mark_source_that_raises_streams_no_label(how):
     clock, sent = Reads(), []
 
     def source(m: bytes) -> bytes:
-        raise ConnectionError("the network certifier is away")
+        raise ConnectionError("the network attester is away")
 
     c = challenger(clock=clock, mark_source=source)
     with pytest.raises(ConnectionError, match="is away"):

@@ -121,8 +121,8 @@ def test_the_named_wipes(deployed_server):
         params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
         assert seen[name]["public"] == WP.uncounted(params), name
         assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
-            (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
-             "signed: no wipe is certified on it until the check that composes the wipe with the network certifier")], name
+            (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network attester "
+             "signed: no wipe is certified on it until the check that composes the wipe with the network attester")], name
     assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
     assert not seen["zero-egress"]["public"]["certified"]
     none = seen["uncounted"]

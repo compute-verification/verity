@@ -64,8 +64,8 @@ VACUOUS = {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "f
 
 
 def writer(egress_mib: int) -> str:
-    return (f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe is "
-            "certified on it until the check that composes the wipe with the network certifier")
+    return (f"the egress count is {egress_mib} MiB, the evidence writer's, which no network attester signed: no wipe is "
+            "certified on it until the check that composes the wipe with the network attester")
 
 
 def test_an_honest_segment_is_accepted_and_not_certified() -> None:
@@ -448,13 +448,13 @@ def test_the_subprotocol_refuses_a_session_at_other_reads(tmp_path, monkeypatch)
     assert extras == [("--reads", "5231")]
 
 
-UNCOUNTED = ("egress: uncounted, the check was given no network certifier's count over the session, so the bound is "
+UNCOUNTED = ("egress: uncounted, the check was given no network attester's count over the session, so the bound is "
              "vacuous")
 
 
 def writers(egress_mib: int) -> str:
-    return (f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the check "
-            "certifies no wipe on it until the check that composes the wipe with the network certifier")
+    return (f"egress: {egress_mib} MiB, the evidence writer's count, which no network attester signed, so the check "
+            "certifies no wipe on it until the check that composes the wipe with the network attester")
 
 
 def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
@@ -595,7 +595,7 @@ def test_what_the_bound_does_not_cover() -> None:
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
     host = wipe_run.undeclared("host-dram", 100)
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
-    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier")
+    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network attester")
     where = WP.placement("n0", "n0", OTHER, simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
@@ -607,7 +607,7 @@ def test_what_the_bound_does_not_cover() -> None:
                 {k: v for k, v in where.items() if k != "store_gaps"}):
         with pytest.raises(ValueError, match="before the placement named no device"):
             W.uncertified(old, None)
-    assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
+    assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network attester, so what leaves on it is "
                        "outside E")
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
 

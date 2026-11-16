@@ -74,7 +74,7 @@ def EXPERIMENTAL : String :=
   "foreign_bits at eps = 2^-128 is Pous.Guarantees.StreamedWipeMeetsReads' threshold at the session's k and r = " ++
   "ratio(k), proved for the streamed-label fill in the wipe game; that game's acceptance is not this verdict (the " ++
   "guarantee is frozen, no-function), and eps leaves out its PRF advantage and its premises: every tier declared, the " ++
-  "egress certified by the network certifier, no side channel"
+  "egress certified by the network attester, no side channel"
 
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n
@@ -192,8 +192,8 @@ def uncounted (p : StreamedWipe.Params) : Public := certify p StreamedWipe.EGRES
 /-- The evidence's count, when it names one `gaps` doesn't: the evidence writer's, which no network attester signs. -/
 def writerGap (egressMib : Int) : List String :=
   if egressMib < 0 || egressMib ≥ StreamedWipe.EGRESS_MAX_UNITS then []
-  else [s!"the egress count is {egressMib} MiB, the evidence writer's, which no network certifier signed: no wipe " ++
-    "is certified on it until the check that composes the wipe with the network certifier"]
+  else [s!"the egress count is {egressMib} MiB, the evidence writer's, which no network attester signed: no wipe " ++
+    "is certified on it until the check that composes the wipe with the network attester"]
 
 def Public.toJson (p : Public) : Json :=
   Json.mkObj [("certified", .bool p.certified), ("egress_mib", Lean.toJson p.egressMib), ("eps", .str p.eps.toString),
@@ -282,8 +282,8 @@ private def h200 : StreamedWipe.Params := ⟨2365587456, 2906, 1, 1000, #[("gpu-
 #guard ((uncounted segment).certified, (uncounted segment).egressMib, (uncounted segment).foreignBits,
   (uncounted segment).eps.toString) == (false, StreamedWipe.EGRESS_MAX_UNITS, memoryBits segment, "0")
 #guard (uncounted h200).certified == false
-#guard writerGap 0 == ["the egress count is 0 MiB, the evidence writer's, which no network certifier signed: no wipe " ++
-  "is certified on it until the check that composes the wipe with the network certifier"]
+#guard writerGap 0 == ["the egress count is 0 MiB, the evidence writer's, which no network attester signed: no wipe " ++
+  "is certified on it until the check that composes the wipe with the network attester"]
 #guard (writerGap StreamedWipe.EGRESS_MAX_UNITS, writerGap (-1)) == ([], [])
 
 /-- A commitment of no timed reads. -/

@@ -40,7 +40,7 @@ open Flock
 def COUNTED_ID : String := "verity/wipe/counted/v0"
 
 def NO_COUNT : String :=
-  "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"
+  "the evidence gives no egress count: a counted wipe is held to the network attester's count over its span"
 
 def NO_MARK : String :=
   "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
