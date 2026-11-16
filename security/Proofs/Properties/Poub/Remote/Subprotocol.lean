@@ -111,20 +111,20 @@ theorem constantTerms_le {params : Poub.Session.Params} {g : ℕ} {reg : Poub.Re
       simp [Poub.Protocol.sampleReceipts, hp]
     simp only [Poub.Protocol.refusal, hp, hu] at h
     have h1 : ¬ (!(reg.receipt == .sketch && reg.rows == 64)) = true := by
-      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
-    rw [ite_cond_eq_false _ _ (eq_false h1)] at h
+      intro hc; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_eq_right_of_eq_false _ _ (eq_false h1)] at h
     have h2 : ¬ Poub.Protocol.mostBlocks reg n > 2 ^ 64 := by
-      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
-    rw [ite_cond_eq_false _ _ (eq_false h2)] at h
+      intro hc; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_eq_right_of_eq_false _ _ (eq_false h2)] at h
     have h3 : ¬ params.windows * pace.k > Poub.Protocol.PASSES_MAX := by
-      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
-    rw [ite_cond_eq_false _ _ (eq_false h3)] at h
+      intro hc; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_eq_right_of_eq_false _ _ (eq_false h3)] at h
     have h4 : ¬ Poub.Protocol.openingsCoins params g * Poub.Protocol.openingsCoins params g *
         (max g 1 * pace.k * Poub.Protocol.mostBlocks reg n) * params.samples > Poub.Protocol.BINDING_SQ_MAX := by
-      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
-    rw [ite_cond_eq_false _ _ (eq_false h4)] at h
+      intro hc; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+    rw [ite_eq_right_of_eq_false _ _ (eq_false h4)] at h
     have h5 : ¬ Poub.Protocol.openingsCoins params g * params.samples > Poub.Protocol.REJECTION_MAX := by
-      intro hc; rw [ite_cond_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
+      intro hc; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact absurd h (Option.some_ne_none _)
     simp only [constantTerms, hp, hu]
     set G := Poub.Protocol.openingsCoins params g
     set U := max g 1 * pace.k * Poub.Protocol.mostBlocks reg n

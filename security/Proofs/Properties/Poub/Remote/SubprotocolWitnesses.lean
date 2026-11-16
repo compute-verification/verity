@@ -825,7 +825,14 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
 
 /-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
 
-theorem ratio_EPS_ne_zero : Poub.Protocol.ratio Poub.Protocol.EPS ≠ ⟨0, 1⟩ := by decide
+theorem ratio_EPS_ne_zero : Poub.Protocol.ratio Poub.Protocol.EPS ≠ ⟨0, 1⟩ := by
+  intro h
+  have hn : Poub.Protocol.EPS.num.toNat = 0 := congrArg Core.Ratio.num h
+  have hpos : (0 : ℚ) < Poub.Protocol.EPS := by
+    unfold Poub.Protocol.EPS
+    positivity
+  have := Rat.num_pos.mpr hpos
+  omega
 
 /-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one
 byte read at eps 0, accepts the deployed period's log, and 0 is neither the constant nor certifies nothing. -/
