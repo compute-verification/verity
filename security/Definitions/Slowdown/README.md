@@ -133,7 +133,7 @@ Then ρ ≥ cν/μ_*. It assumes nothing about training: T2 says b ≥ β_y, and
 | `HE` and `HEShared` take T1 at two arrays, or at arrays of a graph, a price per array and a value counted once with its casts (`val`); `Hardness` at one-word arrays and `val = id` is T1 | a price per word, conditions 3 to 5 over words | the lemma on T1 and the theorem over words, for any pattern of joined words (F below √2); not planned |
 | the training circuit is five separate premises | one definition | a structure for it, the theorem stated over it; planned |
 | `Slowdown` is a weaker closed form, ρ ≥ (c/\|C\|)(N/(k + α_*) − √(Π O N)/(k + α_*)^{3/2}) | ρ ≥ cν/μ_*, and ρ ≥ cν/μ | the MAC count solved exactly for n; planned |
-| an inference block is also `Slowdown.Covering.InferenceBlock`, on subcircuits | one definition | `Partition.IsCK` alone; planned |
+| an inference block is also `Slowdown.Covering.InferenceBlock`, on subcircuits, which `InferenceOnly.SecurityProofs.PartitionCovers` is stated over | one definition | it moves into `Cut` unchanged; one definition is not planned |
 | a Boolean circuit holds one bit per gate, every gate reading at least one wire, with no bound on predecessors | at most two predecessors | none: the proofs use no bound |
 | every vertex is a gate, the computed gates the statement's gates | wires, inputs and gates | none: Core's circuit, read by every protocol |
 | outputs may repeat | outputs pairwise distinct | none: the Lean is the more general |
