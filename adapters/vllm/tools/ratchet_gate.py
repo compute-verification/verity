@@ -6,7 +6,7 @@ cleanup lanes pay the exceptions down; a feature PR owes none.
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
 them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
-ratchet is a shrink-only allowlist under ``adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
+ratchet is a shrink-only allowlist under ``tests/adapters/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
@@ -21,8 +21,8 @@ counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow wh
 lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
 per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
-ratchet, a ``*.py`` file under ``adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
-``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``adapters/vllm/tests/lint/ruff_vllm.toml``
+ratchet, a ``*.py`` file under ``tests/adapters/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
+``adapters/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``tests/adapters/vllm/tests/lint/ruff_vllm.toml``
 (the integration's lint with vLLM's rules, ``test_ruff_vllm.py``) and the ruff the root ``dev`` group pins.  It passes
 when:
 
