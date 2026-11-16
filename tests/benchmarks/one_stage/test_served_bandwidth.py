@@ -8,6 +8,7 @@ reject that says both. ``collect``, the composed run's piece, reads the answer t
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -54,6 +55,7 @@ for line in sys.stdin:
 """
 
 SIGNER = ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py"
+CLOSER = b"served-bandwidth-test/memory-challenger"
 
 #: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
 #: (`pous_test_signer.AtLeaf`) handed to `main` in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
@@ -63,8 +65,16 @@ spec = importlib.util.spec_from_file_location("pous_test_signer", {str(SIGNER)!r
 ts = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ts)
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
-sys.exit(p2_parties.main(sys.argv[1:], device_key=lambda _directory: ts.AtLeaf(b"served-bandwidth-test/memory-challenger")))
+sys.exit(p2_parties.main(sys.argv[1:], device_key=lambda _directory: ts.AtLeaf({CLOSER!r})))
 """
+
+
+def _pin() -> str:
+    """The SHA-512 of the key `PARTY_EXE`'s party signs its close under, which its command pins."""
+    spec = importlib.util.spec_from_file_location("pous_test_signer", SIGNER)
+    ts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ts)
+    return hashlib.sha512(ts.AtLeaf(CLOSER).public_key).hexdigest()
 
 
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
@@ -80,7 +90,7 @@ def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     party = (f"cd {ROOT} && exec {sys.executable} -S -E {wrapper} "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
              "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000 "
-             f"--challenger {challenger} --session {sid}")
+             f"--challenger {challenger} --session {sid} --trusted-sha512 {_pin()}")
     exe = tmp / "poub-p2-protocol"
     exe.write_text(CASE_EXE)
     exe.chmod(0o755)
