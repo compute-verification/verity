@@ -16,7 +16,7 @@ from pathlib import Path
 import pool_ram as PR
 from pool_ram import RP
 
-FIXTURES = Path(__file__).resolve().parents[1] / "network_e2e" / "encodings" / "tests" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "benchmarks" / "network_e2e" / "encodings" / "fixtures"
 
 
 def load(path: Path) -> tuple[RP.Engine, list[RP.RequestIO], list[int]]:

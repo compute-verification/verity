@@ -19,4 +19,4 @@ record is the harness's. Nothing in this directory is started by itself.
 ## Who reads it
 
 The harness reads `nvf4_plain.cu`: its build compiles it, with the mainloop, into the harness's library, and
-`../tests/test_harness.py` reads its text for its registry entries. Nothing here commits, hashes or checks a proof.
+`../../../tests/benchmarks/pouw/test_harness.py` reads its text for its registry entries. Nothing here commits, hashes or checks a proof.
