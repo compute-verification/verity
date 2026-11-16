@@ -9,6 +9,15 @@ A protocol's check is its own Lake package. It requires this one by path, define
 its executable `def main (args) := myProtocol.main args`. `CoreProtocol/Example.lean` is a toy protocol written that
 way, the one to read first.
 
+## Try it
+
+~~~sh
+bash tools/verity/lean/setup.sh verity/protocols/interface
+(cd verity/protocols/interface && lake build core-protocol-example && .lake/build/bin/core-protocol-example id)
+~~~
+
+It builds the toy protocol and prints its id, `verity/example/v0`; `check` and `serve` answer on the same executable.
+
 ## The interface
 
 | field | type | what it is |
