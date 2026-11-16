@@ -103,7 +103,7 @@ for a new benchmark.
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `infra/` or `tools/` the command names:
+(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
 `benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each row's `owner` owns its file:
 the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's
@@ -124,7 +124,7 @@ stays listed while it is within that window, whether or not the loop still sends
 
 Its owner keeps a row within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches the
 `command` of a row whose newest value is older than its `every` as a `research run`, within the bounds its docstring
-lists, and a row whose command's script is under `infra/` is a loop's, which the loop sends. A row's keys:
+lists, and a row whose command's script is under `infra/control/` is a loop's, which the loop sends. A row's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
@@ -338,4 +338,4 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout | maintained |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout, the machine it runs on and the readings of what it can't reach (`readings.toml`) | maintained |
