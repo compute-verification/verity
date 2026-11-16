@@ -865,41 +865,12 @@ def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M 
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
-theorem run_progMap {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans) (p : OracleAlgorithm M α) :
-    (progMap g p).run f = g (p.run f) := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact ih _
-
-theorem bounded_progMap {M : IdealModel} {α β : Type} (g : α → β) {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) :
-    (progMap g p).Bounded D Q := by
-  have hd : ∀ (f : M.Qry → M.Ans) (p : OracleAlgorithm M α), (progMap g p).depth f = p.depth f := by
-    intro f p
-    induction p with
-    | ret a => rfl
-    | round qs k ih => exact congrArg (· + 1) (ih _)
-  have hw : ∀ (f : M.Qry → M.Ans) (p : OracleAlgorithm M α), (progMap g p).work f = p.work f := by
-    intro f p
-    induction p with
-    | ret a => rfl
-    | round qs k ih => exact congrArg (qs.length + ·) (ih _)
-  exact fun ω => by rw [hd, hw]; exact h ω
 
 theorem two_pow_mul_inv_pow (a b : ℕ) (h : a ≤ b) :
     (2 : ℝ≥0∞) ^ a * (2⁻¹ : ℝ≥0∞) ^ b = (2⁻¹ : ℝ≥0∞) ^ (b - a) := by
   obtain ⟨c, rfl⟩ := Nat.exists_eq_add_of_le h
   rw [pow_add, ← mul_assoc, ← mul_pow, ENNReal.mul_inv_cancel two_ne_zero ENNReal.ofNat_ne_top, one_pow, one_mul,
     Nat.add_sub_cancel_left]
-
-
-theorem sum_pow_le (n t : ℕ) (hn : 2 ≤ n) : ∑ j ∈ Finset.range t, (n : ℝ≥0∞) ^ j ≤ (n : ℝ≥0∞) ^ t := by
-  have h : ∑ j ∈ Finset.range t, n ^ j ≤ n ^ t := by
-    induction t with
-    | zero => simp
-    | succ t ih =>
-      rw [Finset.sum_range_succ, pow_succ]
-      nlinarith [pow_pos (by omega : 0 < n) t]
-  exact_mod_cast h
 
 
 end PousP3Base
@@ -996,15 +967,6 @@ open Pous
 open scoped ENNReal
 
 
-/-- `pr` does not depend on how the sample space is labelled. -/
-theorem pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : β → Prop) :
-    pr (fun a => P (e a)) = pr P := by
-  classical
-  rw [pr_def, pr_def, Fintype.card_congr e]
-  congr 2
-  rw [← Fintype.card_subtype, ← Fintype.card_subtype]
-  exact Fintype.card_congr (e.subtypeEquiv fun _ => Iff.rfl)
-
 theorem pr_le_one {α : Type} [Fintype α] (P : α → Prop) : pr P ≤ 1 := by
   classical
   rw [pr_def]
@@ -1024,45 +986,6 @@ theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α 
   rw [this]
   exact_mod_cast Finset.card_biUnion_le
 
-/-- **Conditioning on the first coordinate.** If every fibre off `E` has probability at most `c`, the product event
-has probability at most `Pr[E] + c`. -/
-theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
-    (P : α → β → Prop) (E : α → Prop) (c : ℝ≥0∞) (h : ∀ a, ¬ E a → pr (P a) ≤ c) :
-    pr (fun x : α × β => P x.1 x.2) ≤ pr E + c := by
-  classical
-  have hα0 : (Fintype.card α : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  have hβ0 : (Fintype.card β : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  have hαt : (Fintype.card α : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
-  have hβt : (Fintype.card β : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
-  have hfib : ∀ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞) ≤
-      (if E a then 1 else 0) * Fintype.card β + c * Fintype.card β := by
-    intro a
-    by_cases ha : E a
-    · simp only [ha, ite_true, one_mul]
-      refine le_add_right ?_
-      exact_mod_cast (Finset.card_filter_le _ _).trans (Finset.card_univ).le
-    · simp only [ha, ite_false, zero_mul, zero_add]
-      have := h a ha
-      rwa [pr_def, ENNReal.div_le_iff hβ0 hβt] at this
-  have hcount : ((Finset.univ.filter fun x : α × β => P x.1 x.2).card : ℝ≥0∞) =
-      ∑ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞) := by
-    rw [Finset.natCast_card_filter, Fintype.sum_prod_type]
-    refine Finset.sum_congr rfl fun a _ => ?_
-    rw [Finset.natCast_card_filter]
-  have hE : ((Finset.univ.filter E).card : ℝ≥0∞) = ∑ a, (if E a then 1 else 0 : ℝ≥0∞) :=
-    Finset.natCast_card_filter _ _
-  rw [pr_def, pr_def, hcount, Fintype.card_prod, Nat.cast_mul, ENNReal.div_le_iff (mul_ne_zero hα0 hβ0)
-    (ENNReal.mul_ne_top hαt hβt)]
-  calc ∑ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞)
-      ≤ ∑ a, ((if E a then 1 else 0) * Fintype.card β + c * Fintype.card β) :=
-        Finset.sum_le_sum fun a _ => hfib a
-    _ = ((Finset.univ.filter E).card : ℝ≥0∞) * Fintype.card β +
-          Fintype.card α * (c * Fintype.card β) := by
-        rw [Finset.sum_add_distrib, ← Finset.sum_mul, ← hE, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-    _ = (((Finset.univ.filter E).card : ℝ≥0∞) / Fintype.card α + c) *
-          (Fintype.card α * Fintype.card β) := by
-        rw [add_mul, ← mul_assoc (_ / (Fintype.card α : ℝ≥0∞)), ENNReal.div_mul_cancel hα0 hαt]
-        ring
 
 /-- **Chain rule, as a bound.** A first-coordinate event of probability at most `c₁`, then a second-coordinate
 event of conditional probability at most `c₂`. -/
@@ -1100,41 +1023,6 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ = c₁ * c₂ * (Fintype.card α * Fintype.card β) := by ring
 
 
-/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
-theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
-    (g : ℝ) ≤ p₀ β S B ℓ * B := by
-  unfold p₀
-  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
-  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
-    exact_mod_cast (by omega : g ≤ B)
-  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
-    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
-    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
-    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
-    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
-      field_simp
-    rw [key]
-    have : ((β : ℝ) - S - B) / ℓ < b := by
-      rw [div_lt_iff₀ hℓ']; linarith
-    linarith
-
-open Classical in
-/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
-theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
-    (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
-    pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
-  have hgb := Finset.card_filter_add_card_filter_not (s := Finset.univ) good
-  rw [Finset.card_univ, Fintype.card_fin] at hgb
-  have hr := good_le_p₀ B ℓ β S _ _ hB hgb (by omega)
-  have hB0 : (B : ℝ≥0∞) ≠ 0 := by exact_mod_cast hB.ne'
-  rw [pr_def, Fintype.card_fin, ENNReal.div_le_iff hB0 (ENNReal.natCast_ne_top _)]
-  calc ((Finset.univ.filter good).card : ℝ≥0∞)
-      = ENNReal.ofReal ((Finset.univ.filter good).card : ℝ) := (ENNReal.ofReal_natCast _).symm
-    _ ≤ ENNReal.ofReal (p₀ β S B ℓ * B) := ENNReal.ofReal_le_ofReal hr
-    _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
-        rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
-
-
 /-- Post-process a program's output; the queries are unchanged. -/
 def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
@@ -1144,76 +1032,9 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact ih _
-
-theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact congrArg (· + 1) (ih _)
-
-theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact congrArg (qs.length + ·) (ih _)
-
-theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
-  fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
 
-
-/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
-theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
-    ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
-  classical
-  obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := T) (β := Bits β) (by simpa using h)
-  refine ⟨fun x => if hx : x ∈ T then e ⟨x, hx⟩ else fun _ => false,
-    fun w => if hw : ∃ y, e y = w then hw.choose.1 else Classical.arbitrary X, fun x hx => ?_⟩
-  have hex : ∃ y, e y = e ⟨x, hx⟩ := ⟨_, rfl⟩
-  simp only [hx, dite_true, hex]
-  exact congrArg Subtype.val (e.injective hex.choose_spec)
-
-/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
-of blocks in total: at most `2^B · 2^L`. -/
-theorem card_patches_le (B ℓ L : ℕ) :
-    (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
-  classical
-  let t : Finset (Fin B) → (i : Fin B) → Finset (Option (Bits ℓ)) := fun D i =>
-    if i ∈ D then Finset.univ.erase none else {none}
-  have hsub : (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L) ⊆
-      (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L).biUnion
-        fun D => Fintype.piFinset (t D) := by
-    intro g hg
-    rw [Finset.mem_filter] at hg
-    rw [Finset.mem_biUnion]
-    refine ⟨Finset.univ.filter fun i => g i ≠ none, by simpa using hg.2, ?_⟩
-    rw [Fintype.mem_piFinset]
-    intro i
-    by_cases hi : g i = none <;> simp [t, hi]
-  refine (Finset.card_le_card hsub).trans ((Finset.card_biUnion_le).trans ?_)
-  have hD : ∀ D ∈ (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L),
-      (Fintype.piFinset (t D)).card ≤ 2 ^ L := by
-    intro D hD
-    rw [Finset.mem_filter] at hD
-    rw [Fintype.card_piFinset]
-    have : ∀ i, (t D i).card = if i ∈ D then 2 ^ ℓ else 1 := by
-      intro i
-      by_cases hi : i ∈ D
-      · simp [t, hi, Finset.card_erase_of_mem, Fintype.card_option]
-      · simp [t, hi]
-    simp_rw [this]
-    rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const, ← pow_mul]
-    exact Nat.pow_le_pow_right (by norm_num) (by rw [mul_comm]; exact hD.2)
-  refine (Finset.sum_le_card_nsmul _ _ _ hD).trans ?_
-  rw [smul_eq_mul]
-  refine Nat.mul_le_mul_right _ ?_
-  refine (Finset.card_filter_le _ _).trans ?_
-  rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
 /-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
@@ -1223,43 +1044,11 @@ block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
-/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
-theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
-  by_cases hβ : S + B ≤ β
-  · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-        (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ β - S - B) := by
-      intro x hx
-      rw [fits, Finset.mem_filter] at hx
-      rw [Finset.mem_product, Finset.mem_filter]
-      exact ⟨Finset.mem_univ _, Finset.mem_univ _, by omega⟩
-    refine (Finset.card_le_card hsub).trans ?_
-    rw [Finset.card_product, Finset.card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
-    calc 2 ^ S * _ ≤ 2 ^ S * (2 ^ B * 2 ^ (β - S - B)) := Nat.mul_le_mul_left _ (card_patches_le B ℓ _)
-      _ = 2 ^ β := by rw [← pow_add, ← pow_add]; congr 1; omega
-  · have : fits S B ℓ β = ∅ := by
-      ext x
-      rw [fits, Finset.mem_filter]
-      simp only [Finset.mem_univ, true_and, Finset.notMem_empty, iff_false]
-      omega
-    rw [this, Finset.card_empty]
-    exact Nat.zero_le _
 
 /-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
 
-/-- The patched block where there is one, else the prediction: this is `C`. -/
-theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
-  by_cases h : P i = C i <;> simp [patch, h]
-
-/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
-theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
-    (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
-  rw [fits, Finset.mem_filter]
-  refine ⟨Finset.mem_univ _, ?_⟩
-  convert h using 4
-  ext i
-  by_cases hi : P i = C i <;> simp [patch, hi]
 
 open Classical in
 /-- **The timed patch compressor.** Let `st` pick an `S`-bit state from the setup (any function of it) and `pred`
@@ -2064,8 +1853,6 @@ def xinAt (f : Bits (r + (r + c)) → Bits (r + (r + c))) (h₀ : Bits (r + c)) 
     Bits (r + (r + c)) :=
   Fin.append (blks.getD (p - 1) padBlk) (stAfter f h₀ blks (p - 1)).2
 
-theorem getD_of_lt {α : Type} (l : List α) (d : α) {i : ℕ} (h : i < l.length) : l.getD i d = l[i] := by
-  simp [List.getD, List.getElem?_eq_getElem h]
 
 theorem ovR_append (b : Bits r) (h : Bits (r + c)) : ovR (Fin.append b h) = b := by
   funext j
@@ -2541,8 +2328,6 @@ theorem inv_two_pow_sub_le {ℓ n : ℕ} (h : 2 * n ≤ 2 ^ ℓ) :
 theorem append_ovR_ovH {r c : ℕ} (o : Bits (r + (r + c))) : Fin.append (ovR o) (ovH o) = o := by
   funext i
   refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;> simp only [Fin.append_left, Fin.append_right, ovR, ovH]
-
-theorem card_bits (n : ℕ) : Fintype.card (Bits n) = 2 ^ n := by simp [Bits]
 
 
 section Pin
@@ -3490,9 +3275,6 @@ theorem le_assemble (K : P3ChainKnow n) : Le K (K.assemble G) :=
   ⟨subset_rfl, Finset.subset_union_left, subset_rfl, Finset.subset_union_left,
     Finset.subset_union_left.trans Finset.subset_union_left, Finset.subset_union_left⟩
 
-theorem Le.trans {K K' K'' : P3ChainKnow n} (h : Le K K') (h' : Le K' K'') : Le K K'' :=
-  ⟨h.1.trans h'.1, h.2.1.trans h'.2.1, h.2.2.1.trans h'.2.2.1, h.2.2.2.1.trans h'.2.2.2.1,
-    h.2.2.2.2.1.trans h'.2.2.2.2.1, h.2.2.2.2.2.trans h'.2.2.2.2.2⟩
 
 theorem le_round (K : P3ChainKnow n) : Le K (K.round G) := (le_step G K).trans (le_assemble G _)
 
@@ -5535,30 +5317,6 @@ open Classical in
 noncomputable def shiftΩ (t : Tweak n) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) : (p3ModelT n wc).Ω :=
   (ω.1, Function.update ω.2 t (xorPerm d * ω.2 t))
 
-theorem shiftΩ_ne {t t' : Tweak n} (h : t' ≠ t) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) :
-    (shiftΩ t d ω).2 t' = ω.2 t' := by
-  classical
-  simp only [shiftΩ]
-  exact Function.update_of_ne h _ _
-
-theorem shiftΩ_self (t : Tweak n) (d y : Lab n wc) (ω : (p3ModelT n wc).Ω) :
-    (shiftΩ t d ω).2 t y = labXor (ω.2 t y) d := by
-  classical
-  simp only [shiftΩ, Function.update_self]
-  rfl
-
-theorem shiftΩ_shiftΩ (t : Tweak n) (d : Lab n wc) (ω : (p3ModelT n wc).Ω) : shiftΩ t d (shiftΩ t d ω) = ω := by
-  classical
-  refine Prod.ext rfl (funext fun t' => ?_)
-  by_cases ht : t' = t
-  · subst ht
-    ext y
-    rw [shiftΩ_self, shiftΩ_self]
-    simp [labXor, Labelling.bxor]
-  · rw [shiftΩ_ne ht, shiftΩ_ne ht]
-
-theorem labXor_eq_iff {a b v : Lab n wc} : labXor a b = v ↔ labXor a v = b := by
-  constructor <;> rintro rfl <;> funext i j <;> simp [labXor, Labelling.bxor]
 
 /-- **The shift count.** For `x`, `b` and `C` invariant under the shifts of `P_t`, the event `P_t(x) = b` is exactly a
 `1/M` share of `C`. -/
@@ -5955,32 +5713,6 @@ theorem card_good :
     omega
 
 
-/-- **`JointClassWeight` is false**, at `N = 2`, `n = 1`, `wc = 24`, `D = 3`, `Q = 2^15`. -/
-theorem not_jointClassWeight : ¬ JointClassWeight := by
-  classical
-  intro h
-  have hok : okLuckyMulti 2 1 24 (2 ^ 15) := ⟨by norm_num, le_rfl, by norm_num⟩
-  have hS := h 2 1 24 3 (2 ^ 15) tagOf G1 W1 pJ hok (by norm_num) tagOf_injective (fun s c => bounded_J s c)
-    {(0, 2), (1, 2)}
-  have hcard : ({(0, 2), (1, 2)} : Finset (ℕ × ℕ)).card = 2 := by decide
-  rw [hcard] at hS
-  obtain ⟨E, hE, hEc⟩ := card_good (wc := 24)
-  have hsub : E ⊆ Finset.univ.filter fun ω => jointLuckySet pJ ω tagOf G1 W1 3 (2 ^ 15) = {(0, 2), (1, 2)} :=
-    fun ω hω => Finset.mem_filter.2 ⟨Finset.mem_univ _, jointLuckySet_J (hE ω hω) _⟩
-  have hlow : E.card * 2 ^ (2 * 24) ≤
-      ∑ ω ∈ Finset.univ.filter (fun ω : (p3ModelT 1 24).Ω =>
-          jointLuckySet pJ ω tagOf G1 W1 3 (2 ^ 15) = {(0, 2), (1, 2)}),
-        2 ^ jointLuckyBits pJ ω tagOf G1 W1 3 := by
-    calc E.card * 2 ^ (2 * 24) = ∑ _ω ∈ E, 2 ^ (2 * 24) := by rw [Finset.sum_const, smul_eq_mul]
-      _ ≤ ∑ ω ∈ E, 2 ^ jointLuckyBits pJ ω tagOf G1 W1 3 :=
-          Finset.sum_le_sum fun ω hω => Nat.pow_le_pow_right (by norm_num) (jointLuckyBits_J (hE ω hω))
-      _ ≤ _ := Finset.sum_le_sum_of_subset hsub
-  have hpos : 0 < Fintype.card (p3ModelT 1 24).Ω := Fintype.card_pos
-  have hfin := hlow.trans hS
-  norm_num at hEc hfin
-  omega
-
-
 end Instance
 
 end PousJointRefute
@@ -6242,11 +5974,6 @@ section Entries
 
 variable [DecidableEq ι] [∀ i, DecidableEq (α i)]
 
-theorem History.mem_dom {h : History α} {i : ι} {x : α i} : x ∈ h.dom i ↔ ∃ e ∈ h, e.inpAt i = some x := by
-  simp only [History.dom, List.mem_toFinset, List.mem_filterMap]
-
-theorem History.mem_rng {h : History α} {i : ι} {y : α i} : y ∈ h.rng i ↔ ∃ e ∈ h, e.outAt i = some y := by
-  simp only [History.rng, List.mem_toFinset, List.mem_filterMap]
 
 theorem History.card_dom_le (h : History α) (i : ι) : (h.dom i).card ≤ h.length :=
   (List.toFinset_card_le _).trans (List.length_filterMap_le _ _)
@@ -7505,10 +7232,6 @@ open Pous Pous.Labelling Pous.Invertible Pous.Sponge
 open scoped ENNReal
 
 
-theorem card_bits (m : ℕ) : Fintype.card (Bits m) = 2 ^ m := by
-  simp [Bits]
-
-
 end Pous.P3Concrete
 
 end
@@ -7524,25 +7247,6 @@ namespace LazyPerm
 
 open scoped ENNReal
 
-theorem prob_mono {Ω : Type} [Fintype Ω] {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) : prob E ≤ prob F := by
-  classical
-  unfold prob
-  gcongr with x
-  exact h x
-
-/-- **The union bound.** -/
-theorem prob_exists_le {Ω γ : Type} [Fintype Ω] (s : Finset γ) (E : γ → Ω → Prop) :
-    prob (fun ω => ∃ g ∈ s, E g ω) ≤ ∑ g ∈ s, prob (E g) := by
-  classical
-  unfold prob
-  simp only [div_eq_mul_inv]
-  rw [← Finset.sum_mul]
-  gcongr
-  norm_cast
-  refine (Finset.card_le_card fun x hx => ?_).trans Finset.card_biUnion_le
-  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx
-  simp only [Finset.mem_biUnion, Finset.mem_filter, Finset.mem_univ, true_and]
-  exact hx
 
 section Bridge
 
@@ -11699,10 +11403,6 @@ namespace HCell
 
 variable {n : ℕ}
 
-theorem known_union {G : TopoDAG n} {A B : P3ChainKnow n} {c : HCell n} :
-    c.known G (A.union B) ↔ c.known G A ∨ c.known G B := by
-  rcases c with ⟨L, u, k⟩ | ⟨L, v, p, k⟩ | ⟨L, v, p, k⟩ | ⟨u, w⟩ <;>
-    simp only [known, P3ChainKnow.union] <;> (try split_ifs) <;> simp [Finset.mem_union]
 
 theorem not_known_empty {G : TopoDAG n} {c : HCell n} : ¬ c.known G P3ChainKnow.empty := by
   rcases c with ⟨L, u, k⟩ | ⟨L, v, p, k⟩ | ⟨L, v, p, k⟩ | ⟨u, w⟩ <;>
@@ -12358,15 +12058,6 @@ theorem tri_pc (hc : (w, u) ∈ K.cols) (hk : (u, w) ∈ K.kc) : (u, w) ∈ K.pc
 
 end Tri
 
-
-theorem known_A {G : TopoDAG n} {K : P3ChainKnow n} {w u : Fin n} :
-    (HCell.lab 0 w u).known G K ↔ (w, u) ∈ K.cols := by simp [HCell.known]
-
-theorem known_B {G : TopoDAG n} {K : P3ChainKnow n} {u w : Fin n} :
-    (HCell.rc 1 u (ovCalls G u) w).known G K ↔ (u, w) ∈ K.kc := by simp [HCell.known]
-
-theorem known_C {G : TopoDAG n} {K : P3ChainKnow n} {u w : Fin n} :
-    (HCell.pin2 u w).known G K ↔ (u, w) ∈ K.pc := by simp [HCell.known]
 
 /-- A credit of round `τ` is in round `τ`'s fresh set. -/
 theorem cred_fresh {c τ : ℕ} {z : HCell n} (h : R.CredAt π c z τ) :
@@ -15435,115 +15126,6 @@ theorem pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : �
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
   exact Fintype.card_congr (e.subtypeEquiv fun _ => Iff.rfl)
 
-/-- **Conditioning on the first coordinate.** If every fibre off `E` has probability at most `c`, the product event
-has probability at most `Pr[E] + c`. -/
-theorem pr_prod_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonempty β]
-    (P : α → β → Prop) (E : α → Prop) (c : ℝ≥0∞) (h : ∀ a, ¬ E a → pr (P a) ≤ c) :
-    pr (fun x : α × β => P x.1 x.2) ≤ pr E + c := by
-  classical
-  have hα0 : (Fintype.card α : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  have hβ0 : (Fintype.card β : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-  have hαt : (Fintype.card α : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
-  have hβt : (Fintype.card β : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
-  have hfib : ∀ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞) ≤
-      (if E a then 1 else 0) * Fintype.card β + c * Fintype.card β := by
-    intro a
-    by_cases ha : E a
-    · simp only [ha, ite_true, one_mul]
-      refine le_add_right ?_
-      exact_mod_cast (Finset.card_filter_le _ _).trans (Finset.card_univ).le
-    · simp only [ha, ite_false, zero_mul, zero_add]
-      have := h a ha
-      rwa [pr_def, ENNReal.div_le_iff hβ0 hβt] at this
-  have hcount : ((Finset.univ.filter fun x : α × β => P x.1 x.2).card : ℝ≥0∞) =
-      ∑ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞) := by
-    rw [Finset.natCast_card_filter, Fintype.sum_prod_type]
-    refine Finset.sum_congr rfl fun a _ => ?_
-    rw [Finset.natCast_card_filter]
-  have hE : ((Finset.univ.filter E).card : ℝ≥0∞) = ∑ a, (if E a then 1 else 0 : ℝ≥0∞) :=
-    Finset.natCast_card_filter _ _
-  rw [pr_def, pr_def, hcount, Fintype.card_prod, Nat.cast_mul, ENNReal.div_le_iff (mul_ne_zero hα0 hβ0)
-    (ENNReal.mul_ne_top hαt hβt)]
-  calc ∑ a, ((Finset.univ.filter (P a)).card : ℝ≥0∞)
-      ≤ ∑ a, ((if E a then 1 else 0) * Fintype.card β + c * Fintype.card β) :=
-        Finset.sum_le_sum fun a _ => hfib a
-    _ = ((Finset.univ.filter E).card : ℝ≥0∞) * Fintype.card β +
-          Fintype.card α * (c * Fintype.card β) := by
-        rw [Finset.sum_add_distrib, ← Finset.sum_mul, ← hE, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
-    _ = (((Finset.univ.filter E).card : ℝ≥0∞) / Fintype.card α + c) *
-          (Fintype.card α * Fintype.card β) := by
-        rw [add_mul, ← mul_assoc (_ / (Fintype.card α : ℝ≥0∞)), ENNReal.div_mul_cancel hα0 hαt]
-        ring
-
-
-/-- If `g` of `B` blocks are right and the other `b` do not fit, `S + B + b·ℓ > β`, then `g ≤ p₀·B`. -/
-theorem good_le_p₀ (B ℓ β S g b : ℕ) (hB : 0 < B) (hgb : g + b = B) (h : β < S + B + b * ℓ) :
-    (g : ℝ) ≤ p₀ β S B ℓ * B := by
-  unfold p₀
-  rcases Nat.eq_zero_or_pos ℓ with rfl | hℓ
-  · simp only [Nat.cast_zero, mul_zero, div_zero, sub_zero, one_mul]
-    exact_mod_cast (by omega : g ≤ B)
-  · have hB' : (0 : ℝ) < B := by exact_mod_cast hB
-    have hℓ' : (0 : ℝ) < ℓ := by exact_mod_cast hℓ
-    have hgb' : (g : ℝ) + b = B := by exact_mod_cast hgb
-    have h' : (β : ℝ) < S + B + b * ℓ := by exact_mod_cast h
-    have key : (1 - ((β : ℝ) - S - B) / (B * ℓ)) * B = B - ((β : ℝ) - S - B) / ℓ := by
-      field_simp
-    rw [key]
-    have : ((β : ℝ) - S - B) / ℓ < b := by
-      rw [div_lt_iff₀ hℓ']; linarith
-    linarith
-
-
-/-- **Codes from counting.** A set of at most `2^β` points has a `β`-bit code that decodes every point of it. -/
-theorem exists_code {X : Type} [Fintype X] [Nonempty X] (T : Finset X) (β : ℕ) (h : T.card ≤ 2 ^ β) :
-    ∃ (c : X → Bits β) (d : Bits β → X), ∀ x ∈ T, d (c x) = x := by
-  classical
-  obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := T) (β := Bits β) (by simpa using h)
-  refine ⟨fun x => if hx : x ∈ T then e ⟨x, hx⟩ else fun _ => false,
-    fun w => if hw : ∃ y, e y = w then hw.choose.1 else Classical.arbitrary X, fun x hx => ?_⟩
-  have hex : ∃ y, e y = e ⟨x, hx⟩ := ⟨_, rfl⟩
-  simp only [hx, dite_true, hex]
-  exact congrArg Subtype.val (e.injective hex.choose_spec)
-
-/-- **Counting patches.** Assignments of an optional `ℓ`-bit block to each of `B` positions, with at most `L` bits
-of blocks in total: at most `2^B · 2^L`. -/
-theorem card_patches_le (B ℓ L : ℕ) :
-    (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L).card ≤ 2 ^ B * 2 ^ L := by
-  classical
-  let t : Finset (Fin B) → (i : Fin B) → Finset (Option (Bits ℓ)) := fun D i =>
-    if i ∈ D then Finset.univ.erase none else {none}
-  have hsub : (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-      (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ L) ⊆
-      (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L).biUnion
-        fun D => Fintype.piFinset (t D) := by
-    intro g hg
-    rw [Finset.mem_filter] at hg
-    rw [Finset.mem_biUnion]
-    refine ⟨Finset.univ.filter fun i => g i ≠ none, by simpa using hg.2, ?_⟩
-    rw [Fintype.mem_piFinset]
-    intro i
-    by_cases hi : g i = none <;> simp [t, hi]
-  refine (Finset.card_le_card hsub).trans ((Finset.card_biUnion_le).trans ?_)
-  have hD : ∀ D ∈ (Finset.univ.filter fun D : Finset (Fin B) => D.card * ℓ ≤ L),
-      (Fintype.piFinset (t D)).card ≤ 2 ^ L := by
-    intro D hD
-    rw [Finset.mem_filter] at hD
-    rw [Fintype.card_piFinset]
-    have : ∀ i, (t D i).card = if i ∈ D then 2 ^ ℓ else 1 := by
-      intro i
-      by_cases hi : i ∈ D
-      · simp [t, hi, Finset.card_erase_of_mem, Fintype.card_option]
-      · simp [t, hi]
-    simp_rw [this]
-    rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const, ← pow_mul]
-    exact Nat.pow_le_pow_right (by norm_num) (by rw [mul_comm]; exact hD.2)
-  refine (Finset.sum_le_card_nsmul _ _ _ hD).trans ?_
-  rw [smul_eq_mul]
-  refine Nat.mul_le_mul_right _ ?_
-  refine (Finset.card_filter_le _ _).trans ?_
-  rw [Finset.card_univ, Fintype.card_finset, Fintype.card_fin]
 
 /-- The compressor's message: the responder's state, and a replacement for each block it gets wrong. -/
 abbrev Desc (S B ℓ : ℕ) : Type := Bits S × (Fin B → Option (Bits ℓ))
@@ -15553,43 +15135,10 @@ block. -/
 def fits (S B ℓ β : ℕ) : Finset (Desc S B ℓ) :=
   Finset.univ.filter fun x => S + B + (Finset.univ.filter fun i => x.2 i ≠ none).card * ℓ ≤ β
 
-/-- At most `2^β` messages fit: `2^S` states times `2^B·2^(β−S−B)` patches (none if `β < S + B`). -/
-theorem card_fits_le (S B ℓ β : ℕ) : (fits S B ℓ β).card ≤ 2 ^ β := by
-  by_cases hβ : S + B ≤ β
-  · have hsub : fits S B ℓ β ⊆ Finset.univ ×ˢ (Finset.univ.filter fun g : Fin B → Option (Bits ℓ) =>
-        (Finset.univ.filter fun i => g i ≠ none).card * ℓ ≤ β - S - B) := by
-      intro x hx
-      rw [fits, Finset.mem_filter] at hx
-      rw [Finset.mem_product, Finset.mem_filter]
-      exact ⟨Finset.mem_univ _, Finset.mem_univ _, by omega⟩
-    refine (Finset.card_le_card hsub).trans ?_
-    rw [Finset.card_product, Finset.card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin]
-    calc 2 ^ S * _ ≤ 2 ^ S * (2 ^ B * 2 ^ (β - S - B)) := Nat.mul_le_mul_left _ (card_patches_le B ℓ _)
-      _ = 2 ^ β := by rw [← pow_add, ← pow_add]; congr 1; omega
-  · have : fits S B ℓ β = ∅ := by
-      ext x
-      rw [fits, Finset.mem_filter]
-      simp only [Finset.mem_univ, true_and, Finset.notMem_empty, iff_false]
-      omega
-    rw [this, Finset.card_empty]
-    exact Nat.zero_le _
 
 /-- Replace every block where the prediction `P` differs from `C`. -/
 def patch {B ℓ : ℕ} (P C : Fin B → Bits ℓ) : Fin B → Option (Bits ℓ) :=
   fun i => if P i = C i then none else some (C i)
-
-/-- The patched block where there is one, else the prediction: this is `C`. -/
-theorem patch_getD {B ℓ : ℕ} (P C : Fin B → Bits ℓ) (i : Fin B) : (patch P C i).getD (P i) = C i := by
-  by_cases h : P i = C i <;> simp [patch, h]
-
-/-- If the blocks where `P` differs from `C` fit (`S + B + #wrong·ℓ ≤ β`), so does the message `(σ, patch P C)`. -/
-theorem mem_fits_patch {S B ℓ β : ℕ} (σ : Bits S) (P C : Fin B → Bits ℓ) {_ : DecidablePred fun i => ¬ P i = C i}
-    (h : S + B + (Finset.univ.filter fun i => ¬ P i = C i).card * ℓ ≤ β) : (σ, patch P C) ∈ fits S B ℓ β := by
-  rw [fits, Finset.mem_filter]
-  refine ⟨Finset.mem_univ _, ?_⟩
-  convert h using 4
-  ext i
-  by_cases hi : P i = C i <;> simp [patch, hi]
 
 
 theorem pr_le_one {α : Type} [Fintype α] (P : α → Prop) : pr P ≤ 1 := by
@@ -15653,22 +15202,6 @@ theorem pr_and_le {α β : Type} [Fintype α] [Fintype β] [Nonempty α] [Nonemp
     _ ≤ (c₁ * Fintype.card α) * (c₂ * Fintype.card β) := by gcongr
     _ = c₁ * c₂ * (Fintype.card α * Fintype.card β) := by ring
 
-open Classical in
-/-- One block: if the wrong blocks do not fit, a uniform block is right with probability at most `p₀`. -/
-theorem pr_good_le_p₀ (B ℓ β S : ℕ) (hB : 0 < B) (good : Fin B → Prop)
-    (h : ¬ S + B + (Finset.univ.filter fun i => ¬ good i).card * ℓ ≤ β) :
-    pr good ≤ ENNReal.ofReal (p₀ β S B ℓ) := by
-  have hgb := Finset.card_filter_add_card_filter_not (s := Finset.univ) good
-  rw [Finset.card_univ, Fintype.card_fin] at hgb
-  have hr := good_le_p₀ B ℓ β S _ _ hB hgb (by omega)
-  have hB0 : (B : ℝ≥0∞) ≠ 0 := by exact_mod_cast hB.ne'
-  rw [pr_def, Fintype.card_fin, ENNReal.div_le_iff hB0 (ENNReal.natCast_ne_top _)]
-  calc ((Finset.univ.filter good).card : ℝ≥0∞)
-      = ENNReal.ofReal ((Finset.univ.filter good).card : ℝ) := (ENNReal.ofReal_natCast _).symm
-    _ ≤ ENNReal.ofReal (p₀ β S B ℓ * B) := ENNReal.ofReal_le_ofReal hr
-    _ = ENNReal.ofReal (p₀ β S B ℓ) * B := by
-        rw [ENNReal.ofReal_mul' (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
-
 
 /-- Post-process a program's output; the queries are unchanged. -/
 def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
@@ -15679,23 +15212,6 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact ih _
-
-theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact congrArg (· + 1) (ih _)
-
-theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
-  induction p with
-  | ret a => rfl
-  | round qs k ih => exact congrArg (qs.length + ·) (ih _)
-
-theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
-  fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
 
@@ -16241,18 +15757,6 @@ open Pous Pous.Labelling
 open scoped ENNReal
 
 variable {N w : ℕ}
-
-/-- **Union bound** (from `thm1-family`). -/
-theorem pr_exists_le {α ι : Type} [Fintype α] (s : Finset ι) (P : ι → α → Prop) :
-    pr (fun a => ∃ x ∈ s, P x a) ≤ ∑ x ∈ s, pr (P x) := by
-  classical
-  simp only [pr_def, div_eq_mul_inv]
-  rw [← Finset.sum_mul]
-  gcongr
-  have : (Finset.univ.filter fun a => ∃ x ∈ s, P x a) = s.biUnion fun x => Finset.univ.filter (P x) := by
-    ext a; simp
-  rw [this]
-  exact_mod_cast Finset.card_biUnion_le
 
 
 theorem subset_reach (G : TopoDAG N) (P₀ : Finset (Fin N)) : ∀ r, P₀ ⊆ reach G P₀ r
@@ -17415,11 +16919,6 @@ theorem band_meets_64_d12 (hepf : ChainExPostFactoG) : ChainBandMeets64 12 :=
   band_meets_64 hepf 12 (by norm_num)
 
 
-/-- **And its cliff at `D = 13`**: the gap attack costs `512 − 39 = 473` labels, below the `498` allowed. -/
-theorem band_cliff_d12 (c ℓ : ℕ) :
-    ¬ ChainHard (bandDAG 512 12) Finset.univ c ℓ ((512 - 13 - 1 : ℕ) : ℚ) 13 512 :=
-  fun h => band_gap_attack 512 12 13 c ℓ le_rfl (ChainHard.mono h (by norm_num))
-
 end Pous.BandChain
 
 end
@@ -17643,12 +17142,6 @@ theorem resamp_self (π : Equiv.Perm (Bits (r + (r + c)))) (z : Bits (r + (r + c
     resamp π z r' z = Fin.append r' (ovH (π z)) := by
   simp only [resamp, Equiv.Perm.mul_apply, Equiv.swap_apply_left]
 
-@[simp] theorem ovR_resamp_self (π : Equiv.Perm (Bits (r + (r + c)))) (z : Bits (r + (r + c))) (r' : Bits r) :
-    ovR (resamp π z r' z) = r' := by rw [resamp_self, ovR_append]
-
-@[simp] theorem ovH_resamp_self (π : Equiv.Perm (Bits (r + (r + c)))) (z : Bits (r + (r + c))) (r' : Bits r) :
-    ovH (resamp π z r' z) = ovH (π z) := by rw [resamp_self, ovH_append]
-
 
 end PousSpongeChain
 
@@ -17719,8 +17212,6 @@ open scoped ENNReal
 
 /-- The `ChainKnow` holding whose only knowledge is the labels in `F` (priced `|F|`). -/
 def holdingOf {B : ℕ} (F : Finset (Fin B)) : ChainKnow B := ⟨F, ∅, ∅⟩
-
-@[simp] theorem holdingOf_labs {B : ℕ} (F : Finset (Fin B)) : (holdingOf F).labs = F := rfl
 
 
 /-- **Numeric core of the assembly, under the side condition `2·n ≤ 2^ℓ`.** A fresh item costs `2/2^ℓ` rather than
@@ -19170,8 +18661,6 @@ variable {N : ℕ}
 theorem Le.rfl' (K : ChainKnow N) : Le K K :=
   ⟨subset_rfl, subset_rfl, subset_rfl⟩
 
-theorem Le.trans {A B C : ChainKnow N} (h₁ : Le A B) (h₂ : Le B C) : Le A C :=
-  ⟨h₁.1.trans h₂.1, h₁.2.1.trans h₂.2.1, h₁.2.2.trans h₂.2.2⟩
 
 theorem le_union_left (A B : ChainKnow N) : Le A (PousSpongeChain.ChainKnow.union A B) :=
   ⟨Finset.subset_union_left, Finset.subset_union_left, Finset.subset_union_left⟩
@@ -20844,11 +20333,6 @@ noncomputable def pinNextN (R : ChainReplay B ℓ c)
   | 0, a => some a
   | k + 1, a => (pinNextN R cut π k a).bind (R.pinNext cut π)
 
-theorem pinNextN_succ {cut : ℕ} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
-    {k : ℕ} {a e : VAtom B} :
-    R.pinNextN cut π (k + 1) a = some e ↔
-      ∃ y, R.pinNextN cut π k a = some y ∧ R.pinNext cut π y = some e := by
-  simp [pinNextN, Option.bind_eq_some_iff]
 
 theorem pinNextN_shift (R : ChainReplay B ℓ c)
     {cut : ℕ} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
@@ -21554,47 +21038,6 @@ theorem ennreal_ratio_pow_mul_den (M P s : ℕ) (hP : 0 < P) :
           rw [ENNReal.mul_inv (Or.inl hp0) (Or.inl hpt), ENNReal.inv_pow]
           ring
 
-/-- **G3 finite geometric envelope.** The first-crossing sizes cost one extra bit;
-all larger sizes pay their own `M / P` ratio. Instantiate `P = 2^ℓ`; integer strictness
-`M < P` bounds the entire large-size tail without strengthening the branch split. -/
-theorem sum_v6_patterns_le (M P s K : ℕ) (hM : 2 ≤ M) (hMP : M < P) :
-    ((∑ n ∈ Finset.range (s + 2), M ^ n : ℕ) : ℝ≥0∞) /
-          (2 * P ^ s) +
-        ∑ k ∈ Finset.range K, ((M : ℝ≥0∞) / P) ^ (s + 2 + k)
-      ≤ 2 * (((M : ℝ≥0∞) ^ (s + 1)) / P ^ s) := by
-  have hP : 0 < P := lt_of_le_of_lt (by omega : 0 ≤ M) hMP
-  have hsmall :
-      ((∑ n ∈ Finset.range (s + 2), M ^ n : ℕ) : ℝ≥0∞) / (2 * P ^ s)
-        ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := by
-    calc
-      _ ≤ ((2 * M ^ (s + 1) : ℕ) : ℝ≥0∞) / (2 * P ^ s) :=
-        ENNReal.div_le_div_right (by exact_mod_cast geom_sum_le M hM (s + 1)) _
-      _ = _ := by
-        push_cast
-        exact ennreal_two_mul_div_two_mul _ _
-  have htail :
-      ∑ k ∈ Finset.range K, ((M : ℝ≥0∞) / P) ^ (s + 2 + k)
-        ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := by
-    let r : ℝ≥0∞ := (M : ℝ≥0∞) / P
-    calc
-      ∑ k ∈ Finset.range K, r ^ (s + 2 + k)
-          = r ^ (s + 2) * ∑ k ∈ Finset.range K, r ^ k := by
-            rw [Finset.mul_sum]
-            refine Finset.sum_congr rfl fun k _ => ?_
-            rw [← pow_add]
-      _ ≤ r ^ (s + 2) * P :=
-        mul_le_mul' le_rfl (ennreal_geom_ratio_le M P K hMP)
-      _ = r ^ (s + 1) * M := by
-        rw [show s + 2 = (s + 1) + 1 by omega, pow_succ, mul_assoc,
-          ennreal_ratio_mul_den M P hP]
-      _ ≤ r ^ (s + 1) * P := by
-        exact mul_le_mul' le_rfl (by exact_mod_cast hMP.le)
-      _ = ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s :=
-        ennreal_ratio_pow_mul_den M P s hP
-  calc
-    _ ≤ ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s +
-        ((M : ℝ≥0∞) ^ (s + 1)) / P ^ s := add_le_add hsmall htail
-    _ = _ := by ring
 -/
 
 end PousSpongeChain
@@ -27844,16 +27287,6 @@ open Pous Pous.Labelling Pous.Sponge Pous.BandChain
 open scoped ENNReal
 
 
-theorem pr_or_le {α : Type} [Fintype α] (P Q : α → Prop) : pr (fun x => P x ∨ Q x) ≤ pr P + pr Q := by
-  have h := PousThm1Dense.pr_exists_le (Finset.univ : Finset Bool) (fun b x => if b then P x else Q x)
-  rw [Fintype.sum_bool] at h
-  refine le_trans (pr_mono fun x hx => ?_) (le_of_le_of_eq h ?_)
-  · rcases hx with hp | hq
-    · exact ⟨true, Finset.mem_univ _, by simpa using hp⟩
-    · exact ⟨false, Finset.mem_univ _, by simpa using hq⟩
-  · simp only [ite_true, Bool.false_eq_true, ite_false]
-
-
 end PousSpongeChain
 
 end
@@ -28573,9 +28006,6 @@ theorem labelG_seg {ℓ c : ℕ} (f : Bits (ℓ + (ℓ + c)) → Bits (ℓ + (�
     have hd : dom (gIdx s i).val = domS i.val := hdom i
     rw [Pous.BandChain.labelG_eq, Pous.BandChain.labelG_eq (bandDAG B d), habs, hW i, hd]
 
-/-- **`SegFaithful`, proved.** -/
-theorem segFaithful : SegFaithful := fun _ _ _ _ _ f dom Wb s i =>
-  labelG_seg f dom Wb s _ _ (fun _ => rfl) (fun _ => rfl) i
 
 /-- Block `(s, i)` of the store's data is block `i` of segment `s`'s data. -/
 theorem blocks_gIdx {ℓ : ℕ} (W : Bits (N * B * ℓ)) (s : Fin N) (i : Fin B) :
@@ -28584,16 +28014,6 @@ theorem blocks_gIdx {ℓ : ℕ} (W : Bits (N * B * ℓ)) (s : Fin N) (i : Fin B)
   show W ⟨t.val + ℓ * (s.val * B + i.val), _⟩ = W ⟨s.val * (B * ℓ) + (t.val + ℓ * i.val), _⟩
   exact congrArg W (Fin.ext (by ring))
 
-/-- **`SegFaithfulCode`, proved.** -/
-theorem segFaithfulCode : SegFaithfulCode := by
-  intro N B d ℓ _ _ salt W π s i
-  show labelG (bandSegDAG N B d) (fun x => (idealPerm (ℓ + (ℓ + 512))).answer π (.inl x)) (segDom salt B)
-      (Dense.blocks (N * B) ℓ W) (gIdx s i) =
-    labelG (bandDAG B d) (fun x => (idealPerm (ℓ + (ℓ + 512))).answer π (.inl x))
-      (Pous.Sponge.dom (Pous.DenseReCert.tag salt s.val)) (Dense.blocks B ℓ (segData W s)) i
-  refine labelG_seg _ _ _ s _ _ (fun j => ?_) (fun j => blocks_gIdx W s j) i
-  unfold segDom
-  rw [seg_div j.isLt, seg_mod j.isLt]
 
 end Faithful
 
@@ -28924,59 +28344,6 @@ theorem delta_add_lt_one {ε : ℝ≥0∞} (hε : ε ≤ Params.εMax) : ENNReal
         add_le_add le_rfl hε2
     _ < 2⁻¹ + 2⁻¹ := ENNReal.add_lt_add_right (by simp) hδ
     _ = 1 := ENNReal.inv_two_add_inv_two
-
-/-- **`SharedDomainBreaks`, proved.** For zero data, the preprocessor keeps segment 0's `2^28`-bit labels, and the
-responder answers block `v` with the stored label of `v mod 2^9`, with no query. Every audit accepts. -/
-theorem shared_domain_breaks : SharedDomainBreaks := by
-  intro d salt D Q k ε hM
-  obtain ⟨hε, -, -, -, hsec⟩ := hM
-  rw [stateBound_seg_14] at hsec
-  have hLS : 2 ^ 9 * 524288 ≤ 113929658799 := by norm_num
-  let enc0 : (Fin (2 ^ 9) → Bits 524288) → Bits 113929658799 := fun y t =>
-    if h : t.val < 2 ^ 9 * 524288 then codeEquiv (2 ^ 9) 524288 y ⟨t.val, h⟩ else false
-  let dec0 : Bits 113929658799 → Fin (2 ^ 9) → Bits 524288 := fun σ =>
-    (codeEquiv (2 ^ 9) 524288).symm (fun t => σ ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩)
-  have hdec : ∀ y, dec0 (enc0 y) = y := by
-    intro y
-    have : (fun t : Fin (2 ^ 9 * 524288) => enc0 y ⟨t.val, lt_of_lt_of_le t.isLt hLS⟩) =
-        codeEquiv (2 ^ 9) 524288 y := by
-      funext t
-      simp only [enc0, t.isLt, ↓reduceDIte]
-    show (codeEquiv (2 ^ 9) 524288).symm _ = y
-    rw [this, Equiv.symm_apply_apply]
-  let s0 : Fin 448 := ⟨0, by norm_num⟩
-  let sch := chainBandSeg 448 (2 ^ 9) d 524288 512 (sharedDom salt (2 ^ 9))
-  let A₁ : Preprocessor sch 113929658799 := fun _ _ C _ => enc0 fun i => C (gIdx s0 i)
-  let A₂ : SeqResponder sch 113929658799 D Q :=
-    { step := fun _ _ _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)
-      bounded := fun _ _ _ _ _ _ => ⟨Nat.zero_le _, Nat.zero_le _⟩ }
-  have hacc : ∀ x, seqAccepts sch k (fun _ => false) A₁ A₂ x := by
-    intro x
-    let f : Bits (524288 + (524288 + 512)) → Bits (524288 + (524288 + 512)) := fun y =>
-      (idealPerm (524288 + (524288 + 512))).answer x.1 (.inl y)
-    let C := labelG (bandSegDAG 448 (2 ^ 9) d) f (sharedDom salt (2 ^ 9))
-      (Dense.blocks (448 * 2 ^ 9) 524288 (fun _ => false))
-    show seqAnswers ((idealPerm (524288 + (524288 + 512))).answer x.1)
-        (fun _ σ i => OracleAlgorithm.ret (dec0 σ (locOf (N := 448) (B := 2 ^ 9) i), σ)) 0 (List.ofFn x.2.2)
-        (enc0 fun i => C (gIdx s0 i)) = List.ofFn fun j => C (x.2.2 j)
-    refine (seqAnswers_ret_ofFn _ _ _ x.2.2).trans ?_
-    congr 1
-    funext j
-    show dec0 (enc0 fun i => C (gIdx s0 i)) (locOf (x.2.2 j)) = C (x.2.2 j)
-    rw [hdec]
-    show C (gIdx s0 (locOf (x.2.2 j))) = C (x.2.2 j)
-    exact (sharedDom_label (N := 448) (B := 2 ^ 9) (d := d) f salt (gIdx s0 (locOf (x.2.2 j)))).trans
-      ((congrArg _ (locOf_gIdx s0 _)).trans (sharedDom_label (N := 448) (B := 2 ^ 9) (d := d) f salt _).symm)
-  have h2 := hsec (fun _ => false) A₁ A₂
-  rw [pr_eq_one hacc] at h2
-  exact absurd h2 (not_le.2 (delta_add_lt_one hε))
-
-
-/-- **At `N = 1` the union `π` is the one-segment `chainPi`.** -/
-theorem chainPiSeg_one (B ℓ c D Q β : ℕ) : chainPiSeg 1 B ℓ c D Q β = chainPi B ℓ c D Q β := by
-  unfold chainPiSeg
-  simp only [Nat.one_mul]
-  rfl
 
 
 end Pous.BandMulti
@@ -29440,17 +28807,6 @@ instance instSubsingletonCoinsChainDense (B ℓ c : ℕ) [NeZero B] (dom : ℕ �
 /-- The trusted `Pous.Dense.denseScheme` is the dense file's `PousDenseChain.denseScheme`, verbatim. -/
 theorem denseScheme_trusted (B ℓ : ℕ) [NeZero B] : PousDenseChain.denseScheme B ℓ = Pous.Dense.denseScheme B ℓ := rfl
 
-theorem dense_pub_meets_64 : Pous.Pinned.DensePubMeets64 := by
-  have h := meets_seq_add _ 5 Pous.DenseReCert.dense_meets_64
-  rw [denseScheme_trusted] at h
-  exact pubMeets_exact _ (denseScheme_encDec _ _) h
-
-theorem seg_pub_meets_14 : SegPubMeets14 :=
-  pubMeets_exact _ (segScheme_encDec _ _ _) (meets_seq_add _ 5 Pous.DenseReCert.seg_meets_14)
-
-theorem chain_pub_meets_64 (hepf : Pous.Sponge.ChainExPostFacto) : ChainPubMeets64 := fun salt =>
-  pubMeets_exact _ (chainDense_encDec _ _ _ _) (PousSpongeChain.chain_meets_64 hepf salt)
-
 
 /-- A check that accepts everything. -/
 def acceptAll {M : IdealModel} (sch : Scheme M) : SetupCheck sch where
@@ -29491,12 +28847,6 @@ theorem acceptAll_hyp_witness : ENNReal.ofReal (Params.δ : ℝ) + (2⁻¹ : ℝ
         ENNReal.add_lt_add_of_lt_of_le (by simp) hδ hε
     _ = 1 := ENNReal.inv_two_add_inv_two
 
-/-- So the deployed dense scheme with an accept-all check fails the public-encoder game. -/
-theorem acceptAll_fails_dense (k : ℕ) :
-    ¬ PubAuditSecure (Pous.Dense.denseScheme (2 ^ 9) 524288) (acceptAll _) .sequential
-      ((Pous.Dense.denseScheme (2 ^ 9) 524288).stateBound Params.ρ) 5 (2 ^ 20) k (ENNReal.ofReal Params.δ)
-      ((2⁻¹ : ℝ≥0∞) ^ 128) :=
-  acceptAll_not_pubAuditSecure _ _ _ _ _ acceptAll_hyp_witness
 
 end PousPub
 
@@ -29582,9 +28932,6 @@ theorem band_pub_meets_64 (hepf : ChainExPostFactoG) (d : ℕ) (hd : 5 ≤ d) : 
   PousPub.pubMeets_exact _ (chainBand_encDec _ _ _ _ _) (band_meets_64 hepf d hd salt)
 
 
-theorem band_pub_meets_64_d12 (hepf : ChainExPostFactoG) : ChainBandPubMeets64 12 :=
-  band_pub_meets_64 hepf 12 (by norm_num)
-
 end Pous.BandChain
 
 end
@@ -29631,9 +28978,6 @@ def ChainBandPubMeets14Global (d : ℕ) : Prop :=
     PubMeets (Pous.BandMulti.chainBandSeg 448 (2 ^ 9) d 524288 512 (Pous.Sponge.dom salt)) (exactCheck _)
       .sequential 5 (2 ^ 20) 111 ((2⁻¹ : ℝ≥0∞) ^ 128)
 
-
-theorem band_pub_iff_64 (d : ℕ) : Pous.BandChain.ChainBandPubMeets64 d ↔ Pous.BandChain.ChainBandMeets64 d :=
-  forall_congr' fun _ => pubMeets_exact_iff _ (Pous.BandChain.chainBand_encDec _ _ _ _ _)
 
 theorem band_pub_iff_14 (d : ℕ) : ChainBandPubMeets14 d ↔ Pous.BandMulti.ChainBandMeets14 d :=
   forall_congr' fun _ => pubMeets_exact_iff _ (chainBandSeg_encDec _ _ _ _ _ _)
