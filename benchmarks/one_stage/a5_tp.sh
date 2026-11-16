@@ -306,7 +306,7 @@ else
     fi
     I=${e%%:*}; SAMPLING_DESIGN=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $SAMPLING_DESIGN $DEFERRED "${TPL[@]}") \
+    (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $SAMPLING_DESIGN $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then

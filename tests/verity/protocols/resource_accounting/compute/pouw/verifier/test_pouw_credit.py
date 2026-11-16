@@ -33,7 +33,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.gemm import S8_K_LIMIT
 
-PKG = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier") / "lean/check/tests"
+PKG = Path(__file__).resolve().parent / "lean" / "check"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, _dir / f"{_name}.py")
