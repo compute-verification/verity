@@ -59,7 +59,7 @@ run exercised it.
 Pearl+ is PoUW's run verdict over `pearl-c-h100-v1-h3`, Pearl's FP8 (E4M3) proof of useful work. The prover commits
 every pass's operand rows and every tile's checked values. The verifier samples tiles by their credit, with a coin
 drawn after the commitment, replays each sampled tile from its opened rows, and credits the run at the scheme's named
-assumption. The verifier of record is Lean, `PouwCheck.PearlPlus`'s `check`
+assumption. The verifier is Lean, `PouwCheck.PearlPlus`'s `check`
 (`verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Check.lean`, executable `pouw-pearlplus`).
 The Python `benchmarks/pouw/pearl_c_vllm/verify_run.py` computes the same answer beside it, and `verity bench compute`
 prints no number when the two differ or the record holds no Lean verdict.
