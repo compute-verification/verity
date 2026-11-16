@@ -36,7 +36,9 @@ exclude = [
   "benchmarks/pouw/tests/test_lean_headline_dc.py",
   "tests/benchmarks/pouw/tests/test_lean_headline.py",
   "tests/benchmarks/pouw/tests/test_lean_headline_dc.py",
-  "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/fixtures/receipt_folds_r9.py",
+  "tests/benchmarks/pouw/test_lean_headline.py",
+  "tests/benchmarks/pouw/test_lean_headline_dc.py",
+  "tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py",
 ]
 
 [keep]
@@ -64,6 +66,7 @@ patterns = [
   "the proof system's draw_k\\b",
   "(?<![\\w-])drawn(?:_cost)?\\.(?:py|sh)\\b",
   "(?#shared-phrase)\\bnever redraw\\w*",
+  "(?#port-verdict)(?<=[\"'])[\\w-]*draw[\\w-]*(?= (?:accept|reject)\\b)",
   "(?<=\\ \\ \\ \\ record\\[\"windows\"\\]\\[w1\\]\\.update\\(registration=reg\\.hex\\(\\),\\ )draw_opening(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ out\\.update\\()draw(?==)",
   "(?<=\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ )draw_wref(?==)",
@@ -252,7 +255,7 @@ strings = [
 [keep_in]
 "benchmarks/pouw/budget.py" = ["draws"]
 "benchmarks/pouw/period_cost.py" = ["draws"]
-"benchmarks/pouw/tests/test_period_cost.py" = ["draws"]
+"tests/benchmarks/pouw/test_period_cost.py" = ["draws"]
 
 [keep_paths]
 "benchmarks/pouw/h1_prove/drawn.py" = ["drawn"]
@@ -274,45 +277,45 @@ files = ["verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_a
 "drawn: int" = "sample_size: int"
 "self.drawn" = "self.sample_size"
 
-# benchmarks/pouw/tests/test_pearl_c_vllm.py: its quotes of our messages, as the map renames each message
+# tests/benchmarks/pouw/test_pearl_c_vllm.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["benchmarks/pouw/tests/test_pearl_c_vllm.py"]
+files = ["tests/benchmarks/pouw/test_pearl_c_vllm.py"]
 [words_in.words]
 "draw session" = "sample session"
 
-# benchmarks/pouw/tests/test_served_zk.py: its quotes of our messages, as the map renames each message
+# tests/benchmarks/pouw/test_served_zk.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["benchmarks/pouw/tests/test_served_zk.py"]
+files = ["tests/benchmarks/pouw/test_served_zk.py"]
 [words_in.words]
 "after the epoch's draw coin" = "after the epoch's sampling coin"
 
-# verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/tests/test_difftest.py: its quotes of our messages, as the map renames each message
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_difftest.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/tests/test_difftest.py"]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_difftest.py"]
 [words_in.words]
 "draw_epoch_reason" = "sample_epoch_reason"
 
-# verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_plan.py: its quotes of our messages, as the map renames each message
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_plan.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_plan.py"]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_plan.py"]
 [words_in.words]
 "once its draw is sent" = "once its sample is sent"
 
-# verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit.py: its quotes of our messages, as the map renames each message
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit.py"]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py"]
 [words_in.words]
 "the draw coin" = "the sampling coin"
 
-# verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_epoch_coins.py: its quotes of our messages, as the map renames each message
+# tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_epoch_coins.py: its quotes of our messages, as the map renames each message
 [[words_in]]
-files = ["verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_epoch_coins.py"]
+files = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_epoch_coins.py"]
 [words_in.words]
 "draws from its draw coin, not from bare bytes" = "samples from its sampling coin, not from bare bytes"
 
 # PoUW's Python: coin phrases and proof blocks first, then every name
 [[words_in]]
-files = ["verity/protocols/resource_accounting/compute/pouw/*.py", "benchmarks/pouw/*.py", "benchmarks/compute/*.py"]
+files = ["verity/protocols/resource_accounting/compute/pouw/*.py", "benchmarks/pouw/*.py", "benchmarks/compute/*.py", "tests/verity/protocols/resource_accounting/compute/pouw/*.py", "tests/benchmarks/pouw/*.py", "tests/benchmarks/compute/*.py"]
 [words_in.words]
 "coin was drawn" = "coin was flipped"
 "coin is drawn" = "coin is flipped"
@@ -537,181 +540,6 @@ files = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/window
 "`DRAW_FAMILIES`" = "`SAMPLE_FAMILIES`"
 "`draw_epoch_reason`" = "`sample_epoch_reason`"
 
-# adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py"]
-[words_in.words]
-"CPL.DRAW_DOMAIN" = "CPL.SAMPLE_DOMAIN"
-
-# adapters/vllm/tests/pipeline/test_serve_h1.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/pipeline/test_serve_h1.py"]
-[words_in.words]
-"PHC.draw_families" = "PHC.sample_families"
-"PHC.drawn_of" = "PHC.sampled_of"
-"drawn_units" = "sampled_blocks"
-"\"draw_k\"" = "\"sample_k\""
-
-# adapters/vllm/tests/protocols/challenger_host.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/challenger_host.py"]
-[words_in.words]
-"window.draw_challenger" = "window.sample_challenger"
-"Wd.draw_challenger" = "Wd.sample_challenger"
-
-# adapters/vllm/tests/protocols/pouw_h1_gpu.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/pouw_h1_gpu.py"]
-[words_in.words]
-"pouw_h1_challenger.draw_families" = "pouw_h1_challenger.sample_families"
-"pouw_h1_challenger.draw_k" = "pouw_h1_challenger.sample_k"
-"PHC.draw_families" = "PHC.sample_families"
-"draw_directory=" = "sample_directory="
-"PHC.draw_k" = "PHC.sample_k"
-
-# adapters/vllm/tests/protocols/pouw_h1_rehearsal.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/pouw_h1_rehearsal.py"]
-[words_in.words]
-"pouw_h1_challenger.draw_families" = "pouw_h1_challenger.sample_families"
-"pouw_h1_challenger.draw_k" = "pouw_h1_challenger.sample_k"
-"PHC.draw_families" = "PHC.sample_families"
-"PHW.DrawSession" = "PHW.SampleSession"
-"draw_reserved" = "sample_reserved"
-"RQ.draw_root" = "RQ.sample_root"
-"PHC.draw_k" = "PHC.sample_k"
-
-# adapters/vllm/tests/protocols/test_credit_gate.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_credit_gate.py"]
-[words_in.words]
-"draw_directory=" = "sample_directory="
-"CR.drawn_twin" = "CR.sampled_twin"
-"CR.DRAW_ROOT" = "CR.SAMPLE_ROOT"
-"CR.draw_root" = "CR.sample_root"
-"PHC.DRAW_EPS" = "PHC.SAMPLE_EPS"
-"PHC.drawn_of" = "PHC.sampled_of"
-"credit.drawn" = "credit.sampled"
-"PHC.draw_k" = "PHC.sample_k"
-"`DRAW_EPS`" = "`SAMPLE_EPS`"
-"`drawn_of`" = "`sampled_of`"
-"Wd.DRAW" = "Wd.SAMPLE"
-
-# adapters/vllm/tests/protocols/test_pouw_h1.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1.py"]
-[words_in.words]
-"the window's draw session is not trusted" = "the window's sample session is not trusted"
-"PHC.NO_DRAW_SESSION" = "PHC.NO_SAMPLE_SESSION"
-"PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
-"draw_directory=" = "sample_directory="
-"RQ.draw_root" = "RQ.sample_root"
-"Wd.DRAW" = "Wd.SAMPLE"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_absent_parts.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_absent_parts.py"]
-[words_in.words]
-"the window's draw coin is malformed" = "the window's sampling coin is malformed"
-"drawn_of" = "sampled_of"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_commit.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_commit.py"]
-[words_in.words]
-"window.draw_challenger" = "window.sample_challenger"
-"Wd.draw_challenger" = "Wd.sample_challenger"
-"draw_directory=" = "sample_directory="
-"Wd.DRAW" = "Wd.SAMPLE"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_drawn.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_drawn.py"]
-[words_in.words]
-"DR.drawn_calls" = "DR.sampled_calls"
-"DRAWN" = "SAMPLED"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_handoff.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_handoff.py"]
-[words_in.words]
-"draw_directory=" = "sample_directory="
-
-# adapters/vllm/tests/protocols/test_pouw_h1_live.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_live.py"]
-[words_in.words]
-"PHC.draw_k" = "PHC.sample_k"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_ranks.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_ranks.py"]
-[words_in.words]
-"Wd.draw_challenger" = "Wd.sample_challenger"
-"run.draw" = "run.sample"
-"Wd.DRAW" = "Wd.SAMPLE"
-
-# adapters/vllm/tests/protocols/test_pouw_h1_refusals.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_h1_refusals.py"]
-[words_in.words]
-"the window's record names no served trees: drawn rebuilds the values they registered" = "the window's record names no served trees: sampled rebuilds the values they registered"
-"the window's record names no draw root, under which a leaf's partials are committed" = "the window's record names no sample root, under which a leaf's partials are committed"
-"draw session {sid}'s layout is not a draw session's, its draw coin alone" = "sample session {sid}'s layout is not a sample session's, its sampling coin alone"
-"the window's draw session is not one the ledger opens on its draw root" = "the window's sample session is not one the ledger opens on its sample root"
-"the window's draw session is opened once: a retry never" = "the window's sample session is opened once: a retry never"
-"a window hands off before its draw session opens" = "a window hands off before its sample session opens"
-"the window's draw root is not 128 lowercase hex" = "the window's sample root is not 128 lowercase hex"
-"no draw K: give --k, or a serve dir whose" = "no sample K: give --k, or a serve dir whose"
-"the gate's answer is not draw session" = "the gate's answer is not sample session"
-"the window's draw coin is malformed" = "the window's sampling coin is malformed"
-"the window's draw root is malformed" = "the window's sample root is malformed"
-"the gate reserved draw session" = "the gate reserved sample session"
-"the window's draw session" = "the window's sample session"
-"PHD.draw_session_reason" = "PHD.sample_session_reason"
-"opened on the draw root" = "opened on the sample root"
-"`draw_session_reason`" = "`sample_session_reason`"
-"PHD.NO_DRAW_SESSION" = "PHD.NO_SAMPLE_SESSION"
-"PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
-"Wd.draw_challenger" = "Wd.sample_challenger"
-"\"draw_challenger\"" = "\"sample_challenger\""
-"`NO_DRAW_SESSION`" = "`NO_SAMPLE_SESSION`"
-"PHW.reserve_draw" = "PHW.reserve_sample"
-"PHD.draw_reason" = "PHD.sample_reason"
-"PHW.DrawSession" = "PHW.SampleSession"
-"draw_challenger" = "sample_challenger"
-"draw_directory=" = "sample_directory="
-"PHD.draw_files" = "PHD.sample_files"
-"`reserve_draw`" = "`reserve_sample`"
-"s drawn leaves" = "s sampled leaves"
-"RQ.draw_root" = "RQ.sample_root"
-"`draw_files`" = "`sample_files`"
-"resumed.draw" = "resumed.sample"
-"DN.draw_k" = "DN.sample_k"
-"run.draw" = "run.sample"
-"Wd.DRAW" = "Wd.SAMPLE"
-"draw=" = "sample="
-
-# adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py"]
-[words_in.words]
-"Wd.DRAW" = "Wd.SAMPLE"
-
-# adapters/vllm/tests/protocols/test_rt4_h1_challenger.py: our names it uses
-[[words_in]]
-files = ["adapters/vllm/tests/protocols/test_rt4_h1_challenger.py"]
-[words_in.words]
-"the window's draw root is not over its manifest, its last round's receipts and every round's root and coin" = "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin"
-"the draw session closed with no draw coin opened, so the window has no draw of the challenger's" = "the sample session closed with no sampling coin opened, so the window has no sample of the challenger's"
-"the window's draw session is not trusted" = "the window's sample session is not trusted"
-"the window's draw session" = "the window's sample session"
-"Wd.draw_challenger" = "Wd.sample_challenger"
-"Wd.DRAW_FAMILIES" = "Wd.SAMPLE_FAMILIES"
-"draw_directory=" = "sample_directory="
-"RQ.draw_root" = "RQ.sample_root"
-"Wd.DRAW" = "Wd.SAMPLE"
-
 # adapters/vllm/tools/served_run/placement.toml: our names it uses
 [[words_in]]
 files = ["adapters/vllm/tools/served_run/placement.toml"]
@@ -793,25 +621,200 @@ files = ["benchmarks/one_stage/served_verdicts.py"]
 "PHC.draw_k" = "PHC.sample_k"
 "Wd.DRAW" = "Wd.SAMPLE"
 
-# benchmarks/one_stage/tests/test_served_verdicts.py: our names it uses
+# tests/adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py: our names it uses
 [[words_in]]
-files = ["benchmarks/one_stage/tests/test_served_verdicts.py"]
+files = ["tests/adapters/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py"]
+[words_in.words]
+"CPL.DRAW_DOMAIN" = "CPL.SAMPLE_DOMAIN"
+
+# tests/adapters/vllm/tests/pipeline/test_serve_h1.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/pipeline/test_serve_h1.py"]
+[words_in.words]
+"PHC.draw_families" = "PHC.sample_families"
+"PHC.drawn_of" = "PHC.sampled_of"
+"drawn_units" = "sampled_blocks"
+"\"draw_k\"" = "\"sample_k\""
+
+# tests/adapters/vllm/tests/protocols/challenger_host.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/challenger_host.py"]
+[words_in.words]
+"window.draw_challenger" = "window.sample_challenger"
+"Wd.draw_challenger" = "Wd.sample_challenger"
+
+# tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py"]
+[words_in.words]
+"pouw_h1_challenger.draw_families" = "pouw_h1_challenger.sample_families"
+"pouw_h1_challenger.draw_k" = "pouw_h1_challenger.sample_k"
+"PHC.draw_families" = "PHC.sample_families"
+"draw_directory=" = "sample_directory="
+"PHC.draw_k" = "PHC.sample_k"
+
+# tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py"]
+[words_in.words]
+"pouw_h1_challenger.draw_families" = "pouw_h1_challenger.sample_families"
+"pouw_h1_challenger.draw_k" = "pouw_h1_challenger.sample_k"
+"PHC.draw_families" = "PHC.sample_families"
+"PHW.DrawSession" = "PHW.SampleSession"
+"draw_reserved" = "sample_reserved"
+"RQ.draw_root" = "RQ.sample_root"
+"PHC.draw_k" = "PHC.sample_k"
+
+# tests/adapters/vllm/tests/protocols/test_credit_gate.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_credit_gate.py"]
+[words_in.words]
+"draw_directory=" = "sample_directory="
+"CR.drawn_twin" = "CR.sampled_twin"
+"CR.DRAW_ROOT" = "CR.SAMPLE_ROOT"
+"CR.draw_root" = "CR.sample_root"
+"PHC.DRAW_EPS" = "PHC.SAMPLE_EPS"
+"PHC.drawn_of" = "PHC.sampled_of"
+"credit.drawn" = "credit.sampled"
+"PHC.draw_k" = "PHC.sample_k"
+"`DRAW_EPS`" = "`SAMPLE_EPS`"
+"`drawn_of`" = "`sampled_of`"
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1.py"]
+[words_in.words]
+"the window's draw session is not trusted" = "the window's sample session is not trusted"
+"PHC.NO_DRAW_SESSION" = "PHC.NO_SAMPLE_SESSION"
+"PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
+"draw_directory=" = "sample_directory="
+"RQ.draw_root" = "RQ.sample_root"
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_absent_parts.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_absent_parts.py"]
+[words_in.words]
+"the window's draw coin is malformed" = "the window's sampling coin is malformed"
+"drawn_of" = "sampled_of"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_commit.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_commit.py"]
+[words_in.words]
+"window.draw_challenger" = "window.sample_challenger"
+"Wd.draw_challenger" = "Wd.sample_challenger"
+"draw_directory=" = "sample_directory="
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py"]
+[words_in.words]
+"DR.drawn_calls" = "DR.sampled_calls"
+"DRAWN" = "SAMPLED"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_handoff.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_handoff.py"]
+[words_in.words]
+"draw_directory=" = "sample_directory="
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_live.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_live.py"]
+[words_in.words]
+"PHC.draw_k" = "PHC.sample_k"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_ranks.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_ranks.py"]
+[words_in.words]
+"Wd.draw_challenger" = "Wd.sample_challenger"
+"run.draw" = "run.sample"
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/adapters/vllm/tests/protocols/test_pouw_h1_refusals.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_h1_refusals.py"]
+[words_in.words]
+"the window's record names no served trees: drawn rebuilds the values they registered" = "the window's record names no served trees: sampled rebuilds the values they registered"
+"the window's record names no draw root, under which a leaf's partials are committed" = "the window's record names no sample root, under which a leaf's partials are committed"
+"draw session {sid}'s layout is not a draw session's, its draw coin alone" = "sample session {sid}'s layout is not a sample session's, its sampling coin alone"
+"the window's draw session is not one the ledger opens on its draw root" = "the window's sample session is not one the ledger opens on its sample root"
+"the window's draw session is opened once: a retry never" = "the window's sample session is opened once: a retry never"
+"a window hands off before its draw session opens" = "a window hands off before its sample session opens"
+"the window's draw root is not 128 lowercase hex" = "the window's sample root is not 128 lowercase hex"
+"no draw K: give --k, or a serve dir whose" = "no sample K: give --k, or a serve dir whose"
+"the gate's answer is not draw session" = "the gate's answer is not sample session"
+"the window's draw coin is malformed" = "the window's sampling coin is malformed"
+"the window's draw root is malformed" = "the window's sample root is malformed"
+"the gate reserved draw session" = "the gate reserved sample session"
+"the window's draw session" = "the window's sample session"
+"PHD.draw_session_reason" = "PHD.sample_session_reason"
+"opened on the draw root" = "opened on the sample root"
+"`draw_session_reason`" = "`sample_session_reason`"
+"PHD.NO_DRAW_SESSION" = "PHD.NO_SAMPLE_SESSION"
+"PHW.NO_DRAW_SESSION" = "PHW.NO_SAMPLE_SESSION"
+"Wd.draw_challenger" = "Wd.sample_challenger"
+"\"draw_challenger\"" = "\"sample_challenger\""
+"`NO_DRAW_SESSION`" = "`NO_SAMPLE_SESSION`"
+"PHW.reserve_draw" = "PHW.reserve_sample"
+"PHD.draw_reason" = "PHD.sample_reason"
+"PHW.DrawSession" = "PHW.SampleSession"
+"draw_challenger" = "sample_challenger"
+"draw_directory=" = "sample_directory="
+"PHD.draw_files" = "PHD.sample_files"
+"`reserve_draw`" = "`reserve_sample`"
+"s drawn leaves" = "s sampled leaves"
+"RQ.draw_root" = "RQ.sample_root"
+"`draw_files`" = "`sample_files`"
+"resumed.draw" = "resumed.sample"
+"DN.draw_k" = "DN.sample_k"
+"run.draw" = "run.sample"
+"Wd.DRAW" = "Wd.SAMPLE"
+"draw=" = "sample="
+
+# tests/adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py"]
+[words_in.words]
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/adapters/vllm/tests/protocols/test_rt4_h1_challenger.py: our names it uses
+[[words_in]]
+files = ["tests/adapters/vllm/tests/protocols/test_rt4_h1_challenger.py"]
+[words_in.words]
+"the window's draw root is not over its manifest, its last round's receipts and every round's root and coin" = "the window's sample root is not over its manifest, its last round's receipts and every round's root and coin"
+"the draw session closed with no draw coin opened, so the window has no draw of the challenger's" = "the sample session closed with no sampling coin opened, so the window has no sample of the challenger's"
+"the window's draw session is not trusted" = "the window's sample session is not trusted"
+"the window's draw session" = "the window's sample session"
+"Wd.draw_challenger" = "Wd.sample_challenger"
+"Wd.DRAW_FAMILIES" = "Wd.SAMPLE_FAMILIES"
+"draw_directory=" = "sample_directory="
+"RQ.draw_root" = "RQ.sample_root"
+"Wd.DRAW" = "Wd.SAMPLE"
+
+# tests/benchmarks/one_stage/test_served_verdicts.py: our names it uses
+[[words_in]]
+files = ["tests/benchmarks/one_stage/test_served_verdicts.py"]
 [words_in.words]
 "Wd.draw_challenger" = "Wd.sample_challenger"
 "bench_arm.LiveDraw" = "bench_arm.LiveSample"
 "PHC.draw_k" = "PHC.sample_k"
 "Wd.DRAW" = "Wd.SAMPLE"
 
-# verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4.py: our names it uses
+# tests/verity/protocols/experimental/pearl_c4/test_circuit_pc4.py: our names it uses
 [[words_in]]
-files = ["verity/protocols/experimental/pearl_c4/tests/test_circuit_pc4.py"]
+files = ["tests/verity/protocols/experimental/pearl_c4/test_circuit_pc4.py"]
 [words_in.words]
 "plan.DRAW_DOMAIN" = "plan.SAMPLE_DOMAIN"
 "plan.draw" = "plan.sample"
 "p.drawn" = "p.sampled"
 
-# verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py: our names it uses
+# tests/verity/protocols/proofs/flock/prover/test_randomness_spec.py: our names it uses
 [[words_in]]
-files = ["verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py"]
+files = ["tests/verity/protocols/proofs/flock/prover/test_randomness_spec.py"]
 [words_in.words]
 "plan.draw" = "plan.sample"
