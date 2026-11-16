@@ -55,7 +55,7 @@ STEP_TRACE = "verity-vllm/step-trace/v1"
 
 @dataclass(frozen=True)
 class Releases:
-    """A tick-admitted run's certified releases, as the network certifier (or the trace corpus's stand-in for it) gave
+    """A tick-admitted run's certified releases, as the network attester (or the trace corpus's stand-in for it) gave
     them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
     and each request's release number N and bucket a, in the trace's engine order."""
 
@@ -362,12 +362,12 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
-    That is not what design v3's network certifier certifies: behind it the engine still follows the body read, and the network certifier's
+    That is not what design v3's network attester certifies: behind it the engine still follows the body read, and the network attester's
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
     A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
-    release number and bucket from its network certifier, a network certifier trace's network certifier or the corpus's stand-in for it
+    release number and bucket from its network attester, a network attester trace's network attester or the corpus's stand-in for it
     (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())

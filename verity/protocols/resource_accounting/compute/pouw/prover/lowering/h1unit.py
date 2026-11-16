@@ -95,7 +95,7 @@ M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
 PUBLIC = HW.PUBLIC
 PUB_BITS = CC.PUBLIC_ROW_BITS
-#: STAND-INS for what the network certifier and the execution phase's registration give a certified execution phase, which this harness
+#: STAND-INS for what the network attester and the execution phase's registration give a certified execution phase, which this harness
 #: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
 STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
@@ -166,7 +166,7 @@ def stager(definition: Any, name: str, in_rows: Sequence[tuple[str, str, int, Se
 
 
 def stand_in_reveal(coin: bytes) -> bytes:
-    """A STAND-IN for the network certifier's salt for the execution phase, its ``reveal(p)`` (`pouw.salt.revealed`), which this
+    """A STAND-IN for the network attester's salt for the execution phase, its ``reveal(p)`` (`pouw.salt.revealed`), which this
     harness has no certifier to give: SHA-512 of the execution phase's opened salt coin (`pouw.coins`) under this harness's tag.
     Like the certifier's salt it is the auditor's, sampled before the execution phase and opened only after the execution phase's roots are
     recorded; unlike it, no certifier signs it or bounds when it is revealed."""

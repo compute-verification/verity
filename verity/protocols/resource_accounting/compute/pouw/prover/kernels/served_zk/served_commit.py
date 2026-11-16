@@ -81,7 +81,7 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
   (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
 - **A certified execution phase** (`Challenger(certifier=…)`, the class only: the CLI doesn't run one yet) is salted by the network
-  certifier instead (`pouw.salt`): its context names its PoUW execution phase p (`salt.context`), and its pass's salt is
+  attester instead (`pouw.salt`): its context names its PoUW execution phase p (`salt.context`), and its pass's salt is
   `salt.pouw_salt` of p's certifier salt, the execution phase's stream (`stream_id`, which names the certifier's run: its key id,
   run id and ingress link, `certifier_run`) and its prover (`salt.prover_id`), which the prover recorded with the
   certifier, signed, before p's salt was sampled
@@ -173,7 +173,7 @@ CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier'
                       "so its parameters carry no registration_deadline and it replays none")
 #: a certified execution phase's stream as the PoUW salt binds it (`stream_id`)
 STREAM_ID = "verity/pouw/served-zk/stream/v3"
-#: a network certifier's run id, sampled when its run starts
+#: a network attester's run id, sampled when its run starts
 RUN_ID_BYTES = 32
 #: the frame's owner, as Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
@@ -287,7 +287,7 @@ def certified(params: Mapping[str, Any]) -> bool:
 
 
 def certifier_run(certifier: Any) -> dict[str, str]:
-    """The network certifier's run as a certified execution phase's stream names it: its `certifier_run`, (key id, run id, ingress
+    """The network attester's run as a certified execution phase's stream names it: its `certifier_run`, (key id, run id, ingress
     link), the identity the certifier's answers bind (key id and run id as hex). A certifier started again samples
     another run id, and a second link has another name; a certifier without a signing key has no key id, so no run."""
     try:
@@ -355,7 +355,7 @@ def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
 
 @dataclass(frozen=True, slots=True)
 class Deployment:
-    """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
+    """What a certified execution phase's verifier pins of its deployment: the network attester's public key and its run's id,
     the only ones whose answers the challenger takes (the certifier it reads must be for them), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
     coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
@@ -891,13 +891,13 @@ class Challenger:
     `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
     challenger's reads of it unless `clock` is given.
 
-    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier as the
+    With `certifier` the execution phase is certified (module docstring): `certifier` is the network attester as the
     challenger reads it, whose `certifier_run` names the stream (`stream_id`), whose `certifier_key` and `run_id` the
     deployment pins, and whose `committed` and `reveal` are its answers (`salt.committed`, `salt.revealed`); `prover` is its 64-byte
     id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
     coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
-    certifier's key and run id, which `certifier` must be for, and its challenger's key, under which the
+    attester's key and run id, which `certifier` must be for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
     record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,

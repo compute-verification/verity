@@ -1,4 +1,4 @@
-"""The network certifier's part of `verity bench exfiltration` (`verity_bench.exfiltration`), and the requests both parts
+"""The network attester's part of `verity bench exfiltration` (`verity_bench.exfiltration`), and the requests both parts
 count over."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from verity_bench.exfiltration_text import _n, _p
 
 def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
               stop: Any = None) -> dict:
-    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
+    """The network attester's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
     at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's,
     with each execution phase's scan at ``scan_delta``. With None the δ is the one at which the row of the document
     that sums the most execution phases carries `PERIOD_ERROR`: that error over the row's execution phases, which the

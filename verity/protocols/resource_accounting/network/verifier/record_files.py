@@ -1,5 +1,5 @@
 """A run's files as a verifier reads them: a record packed, and a certificate, a certified record and the network
-certifier's public key as JSON."""
+attester's public key as JSON."""
 from __future__ import annotations
 
 import json

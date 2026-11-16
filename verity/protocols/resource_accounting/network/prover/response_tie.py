@@ -1,18 +1,18 @@
-"""The response tie's proof block: one response row of the network certifier's content rows (`content_rows`)
+"""The response tie's proof block: one response row of the network attester's content rows (`content_rows`)
 computed, as the proof block's gates, from the compute side's committed row of the same connection's ids and the
-network certifier's end row of it. Nothing here is in a Spec or proved. The network certifier's tables hold the end
+network attester's end row of it. Nothing here is in a Spec or proved. The network attester's tables hold the end
 row it reads and the response row it returns (`content_rows`' "The tables"); no statement here registers its reads.
 
 **One proof block a connection**, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop
 class, whose rows have a stop word, and `ResponseTieNoStop` in a no-stop class, whose rows have none. Each takes
 every connection its kind of class holds, however the connection ended. It reads ``egress``, the compute side's
 committed row of the connection's O ids, O its class's size; in a stop class ``stop``, the compute
-side's committed stop word of the same connection; and ``end``, the network certifier's end row of it, a certified
+side's committed stop word of the same connection; and ``end``, the network attester's end row of it, a certified
 input. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when every check
 of its form holds and whose other 15 bits are 0, and ``o1``, the response row. The row is gates of the circuit, never
-an input: a statement that commits o1 under the salt of the network certifier's response row and registers it as a
+an input: a statement that commits o1 under the salt of the network attester's response row and registers it as a
 read of that row opens the signed root only when the ids the compute side committed, and their count, are the ids
-the network certifier released, word for word. Every switch is computed from the rows read and none is witness, so
+the network attester released, word for word. Every switch is computed from the rows read and none is witness, so
 the proof block has no free input of its own.
 
 **The rows it reads**, each an array of bits, least significant first:
@@ -22,7 +22,7 @@ the proof block has no free input of its own.
   the stop rule ends the response after, and finish why (1 a stop id, 2 the request's ``max_tokens``, 3 the model's
   length; 0 where the rule doesn't end it within the row's ids).
 - ``end``: `content_rows`' end row, u16 class ‖ u16 at, little-endian: the class is 0 where the connection ended in
-  its `END` and 1 where it ended in a `FAIL`, and `at` is the `DATA` cells the network certifier released before
+  its `END` and 1 where it ended in a `FAIL`, and `at` is the `DATA` cells the network attester released before
   either.
 
 **The response row** it returns is `content_rows`': u32 m ‖ O u32 ids, little-endian, bit 8b + i of the row bit i of
@@ -36,8 +36,8 @@ count where every check holds.
   O; the end row's class is 0 or 1. Then, by the end row's class:
 
   - 0, the connection ended in its `END`: the count is n. `at` is in no check: the row's count is n, and the
-    signed row holds it to the network certifier's.
-  - 1, the network certifier failed the connection after the engine finished it: the count is `at`, and the check
+    signed row holds it to the network attester's.
+  - 1, the network attester failed the connection after the engine finished it: the count is `at`, and the check
     is that `at` is at most n. Soundness needs the check, and the check alone does not give it. The stop word is
     the same whatever the egress row holds past its n-th id, so the ids past n in the committed row are held by
     nothing, and without the check a server could commit ids it chose there, send them, and have the connection
@@ -52,18 +52,18 @@ count where every check holds.
 
 So in either form an end row whose class is neither 0 nor 1 is refused.
 
-**The premise of both forms, which is open.** The block computes the network certifier's row from the compute
+**The premise of both forms, which is open.** The block computes the network attester's row from the compute
 side's committed row, and holds nothing about where the committed ids came from. So either form is sound only where
 the compute audit holds the committed ids below the count to be the Program's outputs, a premise no gate here can
 check. Nothing in the tree holds it today, for either kind of class. In a stop class the stop rule's proof block
 holds the stop word to the rule over the committed ids: it holds none of those ids to the Program. A no-stop
-class's form has, beside that, no committed count: its count is the network certifier's `at`, and the compute side
+class's form has, beside that, no committed count: its count is the network attester's `at`, and the compute side
 commits none.
 
 **Where a check fails** o0 is 0 and the count word of o1 is all ones (`content_rows.NO_COUNT`), a count no response
-row has, since a row's count is at most its O ids. So no row a refused block returns is one the network certifier
+row has, since a row's count is at most its O ids. So no row a refused block returns is one the network attester
 signs, and a refusal needs nothing to hold o0 to `ACCEPT`: a statement that registers o1 as a read of the
-signed row opens its root on no refused input. That rests on the network certifier signing only rows of the form
+signed row opens its root on no refused input. That rests on the network attester signing only rows of the form
 (`trusted-device`) and on the commitment binding its row. The ids of such a row are still what the gates compute
 (`outputs` gives the same): those below `at` where the end row's class has its low bit, and below n otherwise.
 

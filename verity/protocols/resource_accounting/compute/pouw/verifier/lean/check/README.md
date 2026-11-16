@@ -82,7 +82,7 @@ ledger, main, pins, session}`): the salt-only session the auditor's ledger reser
 root (`epochOpenRoot` of its weights' root and its `pass_index`, computed by the check) and ended complete, the session and its commitment taken from the ledger and the session's files, never the manifest
 (`livePassSalt`, `liveSaltCheck`, LIVESALT2); a pass recorded before the execution phase's coins (read only in a replay) carries a
 beacon; either way the manifest's salt is the execution phase's, and
-the execution phase's context names the pass by its SHA-512. A certified execution phase's verifier holds the network certifier's salt for
+the execution phase's context names the pass by its SHA-512. A certified execution phase's verifier holds the network attester's salt for
 the PoUW execution phase its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), the execution phase's stream and prover, and
 the record the certifier made before it sampled that salt (`pouwRecord` of the weights' root, the stream and the prover,
 `salt.pouw_record`), and passes only a pass whose salt is `pouwSalt` of them (`salt.pouw_salt`) over those weights, a v3

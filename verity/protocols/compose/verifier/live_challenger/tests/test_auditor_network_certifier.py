@@ -1,7 +1,7 @@
-"""The gate's network certifier rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
+"""The gate's network attester rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-network certifier through the tunnel into `witness/`, publishes to `out/` only its deployment, its certificates, a
+network attester through the tunnel into `witness/`, publishes to `out/` only its deployment, its certificates, a
 row registration's among them, and each cells' registration as the witness writes it less its wiring and its cost
 (a line the gate's one list of published keys doesn't rule fails the end and publishes no registration), and writes
 its end, a stop of its unit included; `fetch` gives `witness/` to the run's own lane and
@@ -159,7 +159,7 @@ def test_one_network_certifier_session_takes_the_gates_most_requests_at_height_1
 
 
 def test_a_network_certifier_key_signs_five_a_phase_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A network certifier window takes `NETWORK_CERTIFIER_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A network attester window takes `NETWORK_CERTIFIER_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
     of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
     height. 1559 requests at the gate's rate are `network_certifier_windows` 1031 and fit 55 minutes at height 13, which the gate
@@ -218,7 +218,7 @@ ROWS_REGISTRATION = {"format": "verity-network-certifier/connection-rows-registr
                      "certificate": {"key": "0c" * 16, "digest": "9e" * 64, "signature": "e6" * (SIGNED // 2)}}
 #: a line's cost: a registration's rows and their bytes, and two measured times
 COST = {"rows": 600, "row_bytes": 2048, "commit_ms": 41.375, "sign_ms": 7.125}
-#: the network certifier's word that an execution phase has no head, with `connection_rows.no_head`'s keys, and its
+#: the network attester's word that an execution phase has no head, with `connection_rows.no_head`'s keys, and its
 #: line's cost, one measured time
 NO_HEAD = {"format": "verity-network-certifier/connection-rows-no-head-word/v1", "link": LINK, "window": 2,
            "parameters": "31" * 64,
@@ -450,7 +450,7 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     assert rc == 0 and json.loads(st)["end"] == end
 
 
-#: each file a network certifier run publishes to `out/` (`NETWORK_CERTIFIER_PUBLIC`, and `network_certifier_outcome`'s `certificates.jsonl`,
+#: each file a network attester run publishes to `out/` (`NETWORK_CERTIFIER_PUBLIC`, and `network_certifier_outcome`'s `certificates.jsonl`,
 #: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the certifier's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFICATE,
              "cells-certificates.jsonl": NC.CERTIFICATE, "rows-certificates.jsonl": NC.CERTIFICATE,
@@ -458,7 +458,7 @@ PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFIC
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_network_certifier_run_publishes():
-    """Every file a network certifier run publishes is one of the certifier's messages to the verifier, and the verifier's channel
+    """Every file a network attester run publishes is one of the certifier's messages to the verifier, and the verifier's channel
     carries those messages and the out side's record, nothing else."""
     assert set(A.NETWORK_CERTIFIER_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
                                    *A.ROW_REGISTRATIONS.values()} == set(PUBLISHED)
@@ -777,7 +777,7 @@ def test_a_runs_peer_and_the_lane_that_asked_go_to_its_own_lane_and_vy_admin_alo
 
 
 def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes_its_certificate(host):
-    """A line of `rows.jsonl` that holds, in place of a registration, the network certifier's word that its
+    """A line of `rows.jsonl` that holds, in place of a registration, the network attester's word that its
     execution phase has no head stays whole in `witness/`. `out/` holds its certificate in the fields a head's has,
     the link's egress in the word's execution phase: each value is one the word's public record holds, and the
     line's cost and the key the line holds the word under are in neither `out/` nor the end."""
@@ -970,7 +970,7 @@ def test_a_network_certifier_rehearsals_sampling_is_recorded_and_passed_on_every
 def test_a_network_certifier_rehearsals_watermark_is_recorded_and_passed_on_only_when_asked(host, tmp_path):
     """`--watermark` is recorded (``watermark: true``) only when given, and its run is the same rehearsal with
     `rehearse --watermark` added: the traffic, schedule and minutes are the same, since the stream changes nothing
-    the network certifier certifies."""
+    the network attester certifies."""
     rc, out = gate(host, REQUEST + ["--watermark", "--tokens", "64"], started=[])
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
@@ -1462,7 +1462,7 @@ def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
 
 def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_and_tokens(host, tmp_path):
     """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
-    out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
+    out (its 5 egress cells less the trailer), and runs the network attester at the scan's schedule with its 5 egress cells, every
     other flag the class of record's (`test_network_certifier_serve` holds each class's schedule to `scan_zk.py schedule --class`).
     A request without it is the class of record's: its bounds are `NETWORK_CERTIFIER_PROMPT_IDS` and `NETWORK_CERTIFIER_PROMPT_TOKENS`."""
     rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
@@ -1489,7 +1489,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
-    """`test_network_certifier_serve` holds `scan_group_windows` to `network_certifier_serve.group_windows` and the network certifier's schedule."""
+    """`test_network_certifier_serve` holds `scan_group_windows` to `network_certifier_serve.group_windows` and the network attester's schedule."""
     assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
     assert [A.network_certifier_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
     assert A.network_certifier_group_minutes(400, 64, 10) == 46 and A.network_certifier_group_minutes(1, 2) == 8
