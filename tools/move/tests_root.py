@@ -94,16 +94,6 @@ MEMBERS_KEPT = {"tools/check": "ci's rule: a cold `uv run tools/check/*.py` sync
 #: An entry no longer tracked under a `tests/` drops out; a kept module's import of a module beside it that isn't kept stops
 #: `maps`.
 KEEP_FILES = {
-    "verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/replay.py":
-        "the auditor device's verifier host (`poub/attester/live_verifier/host.py`, `REPLAY`) puts its directory on the path "
-        "and imports it, and the device is pinned from `git archive COMMIT verity ...`, which ships no root `tests/`",
-    "verity/protocols/resource_accounting/memory/poub/verifier/lean/tests/ra_cases.py": "`replay.py` imports it",
-    "verity/protocols/resource_accounting/memory/poub/verifier/tests/poub_vectors.py":
-        "`poub/prover/word_codec/kv_bench.py` imports it (`REMOTE_VECTORS`), as `benchmarks/vllm_encoded`'s paged and rekey "
-        "gates do",
-    "verity/protocols/resource_accounting/memory/poub/verifier/tests/poub_fakes.py": "`poub_vectors.py` imports it",
-    "verity/protocols/resource_accounting/memory/poub/verifier/tests/vectors.json":
-        "`poub_vectors.py` reads and writes it beside itself (`PATH`)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit/tests/difftest_vectors.py":
         "the package's lock runs it (`lean-audit.json`'s `generate`, `tests/difftest_vectors.py` from the package)",
 }
