@@ -1,11 +1,21 @@
 # commit_slots: the serve-time commit call, one subtree per sequence slot
 
-The call that commits a serving step's proof-block outputs: every proof block's outputs as `hm96-sha512/row/v2` rows
-under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled proof block opens by
-replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
-trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
-on the SHA-512 engine (`verity/commitments/cuda/sha512_rows/`).
+Each serving step, the developer commits the outputs of every proof block before the step's live coin, and later
+opens the ones an audit samples. This call does the committing: every proof block's outputs as `hm96-sha512/row/v2`
+rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled proof block opens
+by replaying its own request alone. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf,
+the three trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on
+its host twin) on the SHA-512 engine (`verity/commitments/cuda/sha512_rows/`).
 `tests/verity/commitments/fixtures/commit-slots-v1.json` is the interface's fixture.
+
+## Try it
+
+~~~sh
+uv run tools/check/suites.py verity/commitments/cuda/commit_slots
+~~~
+
+It holds the reference to the fixture and the host twin to the reference on the CPU, in under a minute; the tests that
+need a GPU skip. [`DESIGN.md`](DESIGN.md) has what each test covers and what measures the call on a GPU.
 
 ## The call
 
@@ -59,22 +69,3 @@ block's public strings, its root's path in the slot tree and the slot root's pat
 frozen decoder's: every op's per-token output committed, one group a layer, each output cut into one-row proof
 blocks.
 
-## Files
-
-- `slots.py`: the reference, the layouts, `load()`, and `python slots.py fixture` (writes the fixture).
-- `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`).
-
-What measures it is in `benchmarks/torch_gpu/commit_slots/`: `check.py`, the GPU's roots against the reference's;
-`bench.py`, the call's throughput at the H200 example's layout, alone and beside the layer's int8 GEMMs; `step.py`, one
-streamed step at a layout file, timed by phase (`time`), and a layout's compressions a row-slot on the host twin
-(`count`); and `gpu.sh`, these with the tests under one GPU lease (`OUT=DIR bash benchmarks/torch_gpu/commit_slots/gpu.sh`
-from the tree's root; its header has the options).
-
-## Tests
-
-`tests/` is the directory's suite: the reference against the fixture, Flock's salts and an independent tree build;
-openings and their refusals; layouts written and loaded back; the host twin against the reference; the streamed slot
-trees; a step's memory and a row-slot's compressions, counted; planning at scale; and, with a GPU, the device against the
-host twin. Two say why they skip where they can't run: the FAMILIES layout's round trip where its fetched fixture is
-absent (`research data fetch-fixtures tests/verity/commitments/fixtures/layouts`; the suites' runner and `gpu.sh` fetch
-it), and the plan on some SMs where this Python's torch has no driver bindings (`slots_gpu.driver_bindings`).
