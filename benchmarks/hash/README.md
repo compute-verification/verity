@@ -1,26 +1,12 @@
 # benchmarks/hash
 
-Measurements of GPU code for PoUW's served linear, each kernel held bit for bit to its CPU reference or Definition before
-anything is timed. Its commitments' hash is SHA-512 with its whole output (hm96 leaves or keyed leaves in frame-v3-sha512
-trees, "One hash" in AGENTS.md); nothing here changes a committed format, and nothing a verifier runs reads this code.
+This directory measures the GPU code PoUW's served linear runs to commit and fold what it computes. Each kernel is held
+bit for bit to its CPU reference or Definition before anything is timed. Nothing here changes a committed format, and
+nothing a verifier runs reads this code.
 
-| Directory | What it holds |
-|---|---|
-| `dither/` | PoUW's H1 receipts served in compiled vLLM: the one-stream linear (`verity/protocols/experimental/dither/prover/kernels/h1o.cu`) whose noised MMAs serve y, with the peel z = A Bᵀ from the receipted words (H1V3); the A tables (`verity/protocols/experimental/dither/prover/kernels/h1c.cu`); J10-R's per-call-noise proof blocks (`verity/protocols/experimental/dither/prover/kernels/h1u.cu`, `j10r*.py`); each kernel gated against the credit's H1V3 reference (`h1ogate.py`), and the served overhead against stock vLLM int8, paired rep by rep (`sbench.py`, run on a leased GPU by `sbench.sh`) |
+It holds one benchmark, [`dither/`](dither/README.md): PoUW's receipts served in compiled vLLM, timed against stock
+vLLM int8. Its kernels are frozen.
 
-Each script's header says how to run it, from the source tree's root, and on what hardware. They share one layout: a
-run writes its results to `$RESEARCH_RUN_DIR/out` (`OUT` where a header names it) and reads the files it is given, a
-build's libraries or a source archive, from `$RESEARCH_RUN_DIR/inputs` or the directory a header's variable names. GPU
-work runs under a GPU lease (`gpu-lease`, owned by `GPU_LEASE_WHO`).
-
-## Interface
-
-What code outside `benchmarks/hash` loads. Nothing else here is an interface: any other file may change or go without a
-word to another directory. The vLLM integration loads nothing from here.
-
-| File | What is loaded | Loaded by |
-|---|---|---|
-| `dither/pin.sh` | run as a script: the int8 pin in a node's model cache | `benchmarks/harness/setup/int8_pin.sh` |
-
-Tests of `benchmarks/pouw` import `dither/dither_one.py`, `dither_a.py`, `j10r_units.py` and `forms.py` by name, and its
-suite declares them and what they import as inputs. A test's import fixes a file's path, nothing more.
+Each script's header says how to run it, from the source tree's root, and on what hardware. A run writes its results
+to `$RESEARCH_RUN_DIR/out` and reads the files it is given from `$RESEARCH_RUN_DIR/inputs`, and its GPU work runs under
+a GPU lease. [`DESIGN.md`](DESIGN.md) lists the files that code outside this directory loads.
