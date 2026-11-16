@@ -11,7 +11,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "exfiltration/v3"
+SCHEMA = "exfiltration/v4"
 #: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
