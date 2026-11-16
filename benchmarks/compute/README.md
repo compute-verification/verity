@@ -34,7 +34,9 @@ How the work is done, and nothing the verifier reads:
   nothing. Giving up rows that would fail the verifier's per-row rules costs less than having the run rejected.
 - **The sample size, locally.** On your machine you are the verifier too, so you choose t, the number of tiles sampled
   (`served_passes.py verify --draws`, 459 by default). The verifier takes a share ε_s off the credit for what the
-  sample could miss, about ln(1/δ_s)/t: 1/100 at t = 459 and δ_s = 1/100. Doubling t halves ε_s, which raises the
+  sample could miss. Where no sampled tile is over its inert-work bound, ε_s is about ln(1/δ_s)/t: 1/100 at t = 459
+  and δ_s = 1/100. Each sampled tile over its bound enlarges ε_s (`overInertBoundDraws`, below), so the number moves
+  with the sample from one run to the next, on the same kernel and load. Doubling t halves ε_s, which raises the
   number by about half of ε_s's deduction (in the fixture below, from 95.66% to about 96.15%), and doubles the replay.
   In an audit t is the auditor's.
 
@@ -203,8 +205,9 @@ a run id. You need neither.
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
 line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
-run's: it refuses a record directory that already holds a record, and a failed step ends it with exit 1, a sentence
-naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+run's: it refuses a record directory that already holds a record, a refused earlier try's `out/logs` included (remove
+`./compute-run`, or give `RUN_DIR` a new directory, before you run it again), and a failed step ends it with exit 1,
+a sentence naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
