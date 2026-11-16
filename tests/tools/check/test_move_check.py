@@ -2188,7 +2188,7 @@ REBASE = {
     "verity/ml/circuits/pod/90-unit.sh": "echo unit\n",
     "verity/ml/circuits/tests/fixtures/unit.json": "{}\n",
     "verity/ml/circuits/tests/lean/Unit.lean": "/-- Built by `pod/90-unit.sh` on `tests/fixtures/unit.json`.\n" + REST + "-/\ntheorem t : 1 = 1 := rfl\n",
-    "tests/benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
     "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$POUW/../..:$POUW/../../tools/config:$POUW" python -m served\n' + REST.replace("line", "# line"),
     "tools/config/settings.py": "Y = 1\n",
     "tools/other.py": "Z = 1\n",

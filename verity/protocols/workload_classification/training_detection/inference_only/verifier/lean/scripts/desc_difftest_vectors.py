@@ -59,7 +59,7 @@ reference = vectors.reference
 COUNT = 3000
 PER_FIXTURE = 24
 TRANSPOSED = 0.25
-FIXTURES = Path(verity.circuits.__file__).resolve().parent / "tests"
+FIXTURES = Path(verity.circuits.__file__).resolve().parents[2] / "tests" / "verity" / "circuits"
 MALFORMED = vectors.MALFORMED
 
 

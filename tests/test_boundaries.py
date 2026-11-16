@@ -64,6 +64,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
+#: where a directory's tests are, mirrored by path: `X/tests/REST` at `tests/X/REST`
+MIRROR = ROOT / "tests"
 
 
 def _integration_sites() -> frozenset[tuple[str, str]]:
@@ -204,6 +206,18 @@ MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
 
+def _with_tests(paths) -> list[tuple[Path, str]]:
+    """``(file, the path it stands for)`` for each ``.py`` under ``paths`` (root-relative trees or files) and under their
+    mirror in ``tests/``, whose files stand where their tests' directory was (``tests/X/REST`` for ``X/REST``)."""
+    out = []
+    for tree in paths:
+        for base, strip in ((ROOT / tree, ""), (MIRROR / tree, "tests/")):
+            files = [base] if base.is_file() else sorted(base.rglob("*.py")) if base.is_dir() else []
+            out += [(f, f.relative_to(ROOT).as_posix().removeprefix(strip)) for f in files
+                    if not {".lake", "__pycache__"} & set(f.relative_to(ROOT).parts)]
+    return out
+
+
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
     directory (a Lean package builds in its ``.lake``) or a distribution of its own (the listing's ``distribution``), and
@@ -227,6 +241,8 @@ def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)
     """``(module, line, imported)`` for every module ``path`` (or its parsed ``nodes``) names.  Statements and import-call
     strings are ``imported``; a ``"module:attr"`` string is not, since any ``word:word`` constant matches: only the
     forbidden and direction rules apply to it."""
+    if src == SRC and path.is_relative_to(MIRROR / "verity"):          # a test, where its directory's tests are mirrored
+        src = MIRROR / "verity"
     package = [*package, *path.relative_to(src).parts[:-1]]
     out = []
     for node in nodes if nodes is not None else ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
@@ -272,16 +288,14 @@ def test_verity_reads_no_other_distribution_at_run_time() -> None:
     data or names one of its modules for an import call, so ``verity`` alone evaluates its Definitions and no suite of
     it takes another distribution as an input."""
     offenders, listing, held = [], _listing(), set()
-    for path in sorted(SRC.rglob("*.py")):
-        rel = path.relative_to(ROOT).as_posix()
-        if {".lake", "__pycache__"} & set(path.parts):
-            continue
+    for path, rel in _with_tests(["verity"]):
         if _distribution(rel, listing) is not None:
             kept = {p for p in HELD_AS_VERITY if _under(rel, [p])}
             held |= kept
             if not kept:
                 continue
-        offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
+        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}"
+                      for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
     assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
                            "reverse: move the data or code into verity beside what reads it (as `bf16_gemm_check`'s device pins "
                            "sit in its `device_pins/`), or take it as a parameter the caller supplies\n" + "\n".join(offenders))
@@ -355,10 +369,7 @@ def _spot_python_offenders() -> list[str]:
     """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
     tests included."""
     out = []
-    files = {p for tree in SPOT_TREES for p in ([ROOT / tree] if (ROOT / tree).is_file() else (ROOT / tree).rglob("*.py"))}
-    for path in sorted(files):
-        if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
-            continue
+    for path, _ in _with_tests(SPOT_TREES):
         out += [f"{path.relative_to(ROOT)}:{line}: {name}" for line, name in _certifier_imports(path)]
     return out
 
@@ -713,7 +724,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
+    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
     owners: dict[str, set[str]] = {}
@@ -1052,7 +1063,7 @@ def test_a_use_past_a_guard_is_found() -> None:
     src = ("from verity.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
-    assert _is_test("tests/verity/circuits/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
+    assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
 def test_only_its_own_package_names_a_prover_only_module() -> None:
@@ -1064,13 +1075,12 @@ def test_only_its_own_package_names_a_prover_only_module() -> None:
     homes = {name: _below(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
     word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
     offenders = []
-    for path in sorted(SRC.rglob("*.py")):
-        if {".lake", "__pycache__"} & set(path.parts) or not word.search(text := path.read_text(encoding="utf-8")):
+    for path, rel in _with_tests(["verity"]):
+        if not word.search(text := path.read_text(encoding="utf-8")):
             continue
-        rel = path.relative_to(ROOT).as_posix()
         hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
         hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{rel}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
+        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
     assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
                            "one:\n" + "\n".join(offenders))
     missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
@@ -1166,7 +1176,10 @@ def _listing(text: str | None = None) -> Listing:
 
 def _row(path: str, steps: dict[str, int]) -> str:
     """The row entry ``path`` belongs to: itself where the order lists it, else the deepest listed directory above it,
-    ``.`` for the rest."""
+    ``.`` for the rest.  A file at ``tests/X/REST``, where the tests of ``X`` are, is in ``X/REST``'s row unless that is
+    ``.``."""
+    if path.startswith("tests/") and (mirrored := _row(path.removeprefix("tests/"), steps)) != ".":
+        return mirrored
     d = path if path in steps else posixpath.dirname(path)
     while d and d not in steps:
         d = posixpath.dirname(d)
@@ -1177,6 +1190,8 @@ def _below(path: str, steps: dict[str, int]) -> str:
     """Where a file in no place is, as a place's lists name it: the directory one level below its row that holds it, or
     its row for a file directly in it."""
     row = _row(path, steps)
+    if row != "." and not path.startswith(f"{row}/"):
+        path = path.removeprefix("tests/")
     below = posixpath.dirname(path)[0 if row == "." else len(row) + 1:].split("/")[0]
     return row if not below else below if row == "." else f"{row}/{below}"
 
@@ -1528,7 +1543,7 @@ def _hold_places(loads: Iterable[Load], files: Set[str], listing: Listing) -> No
     stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.places.items())
              for kind, now in zip(LISTS, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
     stale += [f"{d}: no Python is at {p}" for d, lists in sorted(listing.places.items()) for p in lists["paths"]
-              if not any(f.endswith(".py") and (f == p or f.startswith(p + "/")) for f in files)]
+              if not any(f.endswith(".py") and (f == p or f.startswith((p + "/", f"tests/{p}/"))) for f in files)]
     assert not stale, (f"lines of `place` (tests/import_order.toml) the tree no longer has; delete them ({REGENERATE} "
                        f"does): {stale}")
 
@@ -1728,7 +1743,7 @@ ORDER_TREE = {
     "verity/circuits/at_load.py": "from verity.runtime import toy\n",
     "verity/circuits/in_function.py": "def f():\n    import verity.runtime.toy\n",
     "verity/circuits/in_string.py": "TOOL = 'verity.runtime.toy:run'\n",
-    "tests/verity/circuits/test_a.py": "import verity.runtime.toy\n",
+    "verity/circuits/tests/test_a.py": "import verity.runtime.toy\n",
     "verity/circuits/at_load.circuit-check.py": "import verity.runtime.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
@@ -1762,14 +1777,14 @@ ORDER_TREE = {
     "verity/protocols/resource_accounting/compute/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
                                                 "def f():\n    from verity.protocols.resource_accounting.compute.pouw.prover import build\n"),
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
-    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_check.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_check.py": "import verity.protocols.resource_accounting.compute.pouw.prover.build\n",
     "verity/protocols/resource_accounting/compute/pouw/verifier/check/interop.py": "import verity.protocols.proofs.flock.prover.stage\n",
     "verity/protocols/resource_accounting/compute/pouw/device/__init__.py": "",
     "verity/protocols/resource_accounting/compute/pouw/device/serve.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
     "verity/protocols/resource_accounting/compute/pouw/device/party.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
     "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py": "",
     "verity/protocols/resource_accounting/compute/pouw/prover/build.py": "from verity.protocols.resource_accounting.compute.pouw.verifier import check\n",
-    "tests/verity/protocols/resource_accounting/compute/pouw/prover/test_build.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
+    "verity/protocols/resource_accounting/compute/pouw/prover/tests/test_build.py": "from verity.protocols.resource_accounting.compute.pouw.device import serve\n",
 }
 
 
@@ -1824,7 +1839,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/commitments/crypto", "verity/commitments", "verity", prover, "examples", "."]
     party = f"{device}/party.py"
     split = places | _places([{"paths": [party]}])
-    assert [_place(f, split) for f in ("tests/verity/circuits/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
+    assert [_place(f, split) for f in ("verity/circuits/tests/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
                                        "verity/commitments/merkle.py", "verity/errors.py", "tools/lazy.py")] == [
         "verity/circuits", verifier, party, device, None, None, None]
     assert [_distribution(f, listing) for f in ("verity/protocols/proofs/flock/prover/stage.py", "verity/protocols/proofs/flock/verifier/interface.py",
@@ -1856,7 +1871,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
     assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
-        "verity/circuits/in_string.py", "tests/verity/circuits/test_a.py"]], marked["verity/runtime"]
+        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/runtime"]
     parted = _place_loads(loads, listing._replace(places=split))
     assert list(parted) == sorted([*found, party]), list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]

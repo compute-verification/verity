@@ -96,7 +96,7 @@ def scan_chunk(a: argparse.Namespace, outdir: Path, lo: int, hi: int) -> dict[st
     (sub / "scan.json").unlink(missing_ok=True)
     argv = [sys.executable, str(Path(__file__).resolve()), "--scan-run", "--scan-m", f"{lo}:{hi}", "--out", str(sub)]
     argv += ["--scratch", a.scratch] if a.scratch else []
-    proc = subprocess.run(argv, capture_output=True, text=True, cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"))
+    proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (sub / "scan.log").write_text(proc.stdout + proc.stderr)
     try:
         doc = json.loads((sub / "scan.json").read_text())

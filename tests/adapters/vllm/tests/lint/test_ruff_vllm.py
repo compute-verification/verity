@@ -42,7 +42,7 @@ class Bookkeeping(UserWarning):
 
 @cache
 def scan() -> tuple[R.Violation, ...]:
-    return test_ruff.findings(CONFIG, ".")
+    return test_ruff.findings(CONFIG, ".", R.TESTS_ARG)
 
 
 def test_no_new_findings() -> None:
