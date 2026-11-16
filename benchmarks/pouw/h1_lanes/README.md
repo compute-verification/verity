@@ -1,8 +1,20 @@
-# h1_lanes
+# H1 leaves proved lane by lane
 
-One H1 leaf proved as its 32 lanes and its combine, one Flock `--zk` statement each, and checked by the Lean verifier
-against the verifier's own files: a leaf at a small K made here, J10-R's leaf, or the proof block a served window's own sample
-selected, beside negatives each refused.
+This directory proves one H1 leaf as its 32 lanes and its combine, one Flock `--zk` statement each, and has the Lean
+verifier check them against the verifier's own files, beside negatives each refused. The leaf is one at a small K made
+here, J10-R's leaf, or the proof block a served execution phase's own sample selected.
+
+## Try it
+
+Check, on a few leaves, that every statement's known rows are the ones the harness builds:
+
+~~~sh
+uv run pytest tests/benchmarks/pouw/test_h1_lanes.py -q
+~~~
+
+It prints `4 passed`.
+
+## Runner
 
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes (`H1L_MEM_GB`, the job's `--mem-gb`).
 
@@ -25,9 +37,4 @@ research run --on MACHINE --pool proofs --project verity --source . --cwd source
 
 `leaf.py` is a step of `job` (its `prepare`, `summarize` and `cost`), and `run.sh` never starts it.
 
-## The Python modules
-
-`leaf.py` holds the leaf's protocol and its negatives, and the verifier's `verity/protocols/resource_accounting/compute/pouw/verifier/leaf_lanes.py`
-names it by its path, while the Lean window's tests and `benchmarks/unit_lowering/` load it, reading the names its
-`__all__` lists; `j10r.py` is the same protocol for a J10-R leaf; `served.py` is the served proof block's extract, prepare and
-summary. Their test is `tests/benchmarks/pouw/test_h1_lanes.py`.
+[`DESIGN.md`](DESIGN.md) says what each Python module is and who reads it.
