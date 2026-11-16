@@ -178,12 +178,12 @@
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
 # of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
 # record's pieces (only the files the record reads of each, Pearl+'s verdict of record's among them), the inference-only
-# verdict, the settings the follow-on composes at (compose.env: the window and its engine steps, the product, COMPOSITE,
+# verdict, policy and limits (IO_POLICY, IO_LIMITS), the settings the follow-on composes at (compose.env: the window and its engine steps, the product, COMPOSITE,
 # ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
 # and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
 # the serve's first registration record and each window's Pearl+ record W and audit's record R, PoUW's period case,
-# SPOT's summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
+# SPOT's summary and docket, and under PEARLPLUS_TIE the weights registration and Pearl+'s φ), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
@@ -196,7 +196,9 @@
 # SERVED_NODE the served node, COMPOSE_HANDOFF set) and then the final record, whose verdict is that composite's Lean
 # answer (`record --off-node --steps --sampled-lean --composite`: composed_on the host it ran on, served_node false, from
 # the hand-off, SPOT's row this host's own run of its Lean verifier on the case's proofs, each other row's answer
-# as the served node wrote it, and each row naming which in its answer_from); its exit is the record's verdict (step 5),
+# as the served node wrote it, and each row naming which in its answer_from), and under PEARLPLUS_TIE the tied serve's
+# Program, registration log, limits and count beside the record (`assemble.py`, its ASSEMBLE line, which leaves the exit
+# as it is); its exit is the record's verdict (step 5),
 # and its $OUT is published as every run's is. PRODUCT=onsite's composite
 # reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
 # refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff [HOST]`, in TREE with D, writes the hand-off
@@ -1546,6 +1548,7 @@ EOF
       deployment-registration.json \
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
       "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json
+    [ -z "$PEARLPLUS_TIE" ] || printf '%s\n' weights_registration.json pearlplus/serve-phi.json
     for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done
@@ -1555,7 +1558,7 @@ for x in open(sys.argv[1]):
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
     [ -z "$blobs" ] || printf '%s\n' "$blobs"
     (cd "$D" && printf '%s\n' pearlplus/w*/registration.json v3c-w*/audit/window/registration.json)
-    for f in pieces compose.env inference-only.json; do
+    for f in pieces compose.env inference-only.json inference-only-policy.json inference-only-limits.json; do
       [ ! -e "$D/private/compose/$f" ] || (cd "$D" && find "private/compose/$f" -type f)
     done
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
@@ -1572,6 +1575,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     done
   done
   [ ! -f "$2" ] || cp "$2" "$COMPOSE_DIR/inference-only.json" || return 1
+  [ ! -f "$IO_POLICY" ] || cp "$IO_POLICY" "$COMPOSE_DIR/inference-only-policy.json" || return 1
+  [ ! -f "$IO_LIMITS" ] || cp "$IO_LIMITS" "$COMPOSE_DIR/inference-only-limits.json" || return 1
   steps=$("$SAY_PY" "$SV" window "$D" --slots 1073741824 --window "$K" 2> "$COMPOSE_DIR/window.err" \
     | "$SAY_PY" -c 'import json, sys; print(",".join(map(str, json.load(sys.stdin)["steps"])))') \
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
@@ -1625,9 +1630,30 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --tree "$(tree_sha)" ${COMPOSE_TREE_ON:+--tree-on "$COMPOSE_TREE_ON"} \
     ${lean[@]+"${lean[@]}"} 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
+  assembled
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$comp" = 0 ] || return 1
   return "$rec"
+}
+assembled() {  # in compose(), under PEARLPLUS_TIE with the policy handed off: the tied serve's Program, registration log,
+  # limits and count in $OUT (`assemble.py`), each file it reads one the hand-off's list names
+  [ -n "$PEARLPLUS_TIE" ] && [ -f "$COMPOSE_DIR/inference-only-policy.json" ] || return 0
+  local t first=() out rc
+  t=$(pearl_dir)
+  cp "$COMPOSE_DIR/inference-only-policy.json" "$OUT/inference-only-policy.json" \
+    && { [ ! -f "$COMPOSE_DIR/inference-only-limits.json" ] || cp "$COMPOSE_DIR/inference-only-limits.json" "$OUT/"; } \
+    || { say "ASSEMBLE refused: the hand-off's policy and limits can't be put in $OUT"; return 0; }
+  [ ! -f "$D/deployment-registration.json" ] || first=(--first "$D/deployment-registration.json")
+  out=$("$TPY" benchmarks/inference_only/assemble.py --from "$OUT" ${first[@]+"${first[@]}"} \
+    --window "$t/registration.json" --registration "$t/tie/window/registration.json" \
+    --circuit "$t/tie/circuit-record.json" --phi "$D/pearlplus/serve-phi.json" --pins "$D/weights_registration.json" 2>&1)
+  rc=$?
+  if [ "$rc" = 0 ]; then
+    say "ASSEMBLE: the tied serve's registered files, limits and count in this record's out/, from the hand-off" \
+        "($(tail -1 <<< "$out" | cut -c1-400))"
+  else
+    say "ASSEMBLE refused (exit $rc): $(tail -1 <<< "$out" | cut -c1-600)"
+  fi
 }
 compose_build() {  # what the compose follow-on runs: the tree's venv, and lake for the cases' and the product's Lean
   if [ -n "${COMPOSE_BUILT:-}" ]; then  # the compose gate's tree, built at its pin: nothing fetched or built here
