@@ -180,6 +180,14 @@ paths = ["artifacts.json"]
 tests = ["tests/test_env.py"]
 paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 
+# the H200 spec's setup, which a test runs as run_point.sh does, hashes Pearl-C's sm_90a sources and sm_120's headers, and
+# env.sh reads every workspace member's pyproject.toml
+[[tool.verity.tests.reads]]
+tests = ["tests/test_bench_served.py"]
+paths = ["pyproject.toml", "*/pyproject.toml",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
+
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
 paths = ["benchmarks/harness/tests", "benchmarks/harness/verity_bench"]
