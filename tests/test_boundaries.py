@@ -183,14 +183,6 @@ TEST_ONLY = {
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
-#: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
-#: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
-PROVER_ONLY = {
-    "trace_cache": ("verity/circuits/ops/boolean/trace_cache.py",
-                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
-                    "entry for a Definition's gates"),
-}
-
 #: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
 #: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
 RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
@@ -1064,27 +1056,6 @@ def test_a_use_past_a_guard_is_found() -> None:
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
     assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
-
-
-def test_only_its_own_package_names_a_prover_only_module() -> None:
-    """No Python file under ``verity/`` (tests and distributions of its own included) names a module of ``PROVER_ONLY``
-    from outside the directory one level below its row of the listing (``_below``: its package, with its tests), and each
-    still exists.  So
-    no verifier and no device names one, and neither does anything they load."""
-    steps = _listing().steps
-    homes = {name: _below(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
-    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
-    offenders = []
-    for path, rel in _with_tests(["verity"]):
-        if not word.search(text := path.read_text(encoding="utf-8")):
-            continue
-        hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
-        hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
-    assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
-                           "one:\n" + "\n".join(offenders))
-    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
-    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

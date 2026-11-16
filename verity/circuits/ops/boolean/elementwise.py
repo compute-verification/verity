@@ -105,7 +105,7 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
     def split() -> list[Traced]:
         if not parts:
-            parts.extend(_split(trace(build, types, ret, key=("/".join(names), version, {})), types, shared))
+            parts.extend(_split(trace(build, types, ret), types, shared))
         return parts
 
     name, t = params[shared]
@@ -138,7 +138,7 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
     def traced(S) -> Traced:
         key = tuple(getattr(S, k) for k in statics)
         if key not in made:
-            made[key] = trace(build(S), *types(S), key=(name, version, dict(zip(statics, key))))
+            made[key] = trace(build(S), *types(S))
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
@@ -166,8 +166,7 @@ def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[s
         if key not in made:
             params, ret = signature(S)
             types = [t for _, t in params]
-            made[key] = _split(trace(build(S), types, ret, key=("/".join(names), version, dict(zip(statics, key)))), types,
-                               shared, by_element)
+            made[key] = _split(trace(build(S), types, ret), types, shared, by_element)
         return made[key]
 
     def own_sig(S):

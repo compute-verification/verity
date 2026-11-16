@@ -22,8 +22,7 @@ and its docstring lists what it registers. The terms and the front doors are [`v
 
 `ops.boolean` holds their Boolean versions: each module the next version of an `ops` module's word Definitions, the same
 function on bits. They are built with `verity.circuits.boolean`'s `forms`, `gather` and `trace` and
-`verity.circuits.silicon`'s `fp`, `fp4` and `tc_step`, and `ops.boolean.trace_cache` lets a prover's or a developer's
-build reuse traced circuits across processes (a verifier never does). `ops.boolean.versions` is the Boolean-versions
+`verity.circuits.silicon`'s `fp`, `fp4` and `tc_step`. `ops.boolean.versions` is the Boolean-versions
 lookup: `boolean_version` finds the one a word Definition has, among `ops.boolean`'s, what is already imported, and every
 catalog registered with it (`catalog_loader`), which it imports none of by name.
 
