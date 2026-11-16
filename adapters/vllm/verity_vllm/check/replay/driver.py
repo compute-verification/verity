@@ -196,7 +196,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
 
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """Build + dlopen every twin library the sample's families need in the PARENT before the fork:
-    the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
+    the children inherit the mapping and never race a first-use JIT build (a sibling would otherwise dlopen the half-written .so -> 'file too
     short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
