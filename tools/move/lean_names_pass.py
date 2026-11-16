@@ -19,6 +19,7 @@ root, in this order, each on the tree the one before left, each part closed by `
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -154,6 +155,19 @@ def _toml_comments(text: str) -> list[tuple[int, int]]:
     return out
 
 
+def _bare_strings(text: str) -> list[tuple[int, int]]:
+    """A Python file's string statements: docstrings, and the ones documenting the assignment above them."""
+    lines = text.split("\n")
+    starts = [0]
+    for line in lines:
+        starts.append(starts[-1] + len(line) + 1)
+
+    def at(row: int, col: int) -> int:
+        return starts[row - 1] + len(lines[row - 1].encode()[:col].decode(errors="replace"))
+    return [(at(n.lineno, n.col_offset), at(n.end_lineno, n.end_col_offset)) for n in ast.walk(ast.parse(text))
+            if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)]
+
+
 def comments(path: str, text: str) -> list[tuple[int, int]]:
     """The comment and docstring spans of ``text`` (file ``path``); a Markdown file is one span."""
     lang = rename.language(path, text)
@@ -162,7 +176,16 @@ def comments(path: str, text: str) -> list[tuple[int, int]]:
     if path.endswith(".toml"):
         return _toml_comments(text)
     lexer = {"python": rename._python, "lean": rename._lean, "shell": rename._shell, "c": rename._c_like}.get(lang)
-    return [] if lexer is None else [(s, e) for s, e, k in sorted(lexer(text)) if k == rename.PROSE]
+    spans = [] if lexer is None else [(s, e) for s, e, k in lexer(text) if k == rename.PROSE]
+    if lang == "python":
+        spans += _bare_strings(text)
+    out: list[tuple[int, int]] = []
+    for s, e in sorted(spans):
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(e, out[-1][1]))
+        else:
+            out.append((s, e))
+    return out
 
 
 def restore(base: str) -> None:
@@ -173,7 +196,7 @@ def restore(base: str) -> None:
     unpaired, restored = [], 0
     for row in rows:
         status, *paths = row.split("\t")
-        if status[0] not in "MR":
+        if status[0] not in "MR" or paths[-1].startswith("tools/move/"):
             continue
         old_path, new_path = paths[0], paths[-1]
         old = subprocess.run(["git", "show", f"{base}:{old_path}"], capture_output=True, text=True, check=True).stdout
