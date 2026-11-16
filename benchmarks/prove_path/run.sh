@@ -31,8 +31,11 @@
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
-#     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
-#     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
+#     serving device's target profile where serve.json records none. The honest partition is PP_PARTITION (default the Llama
+#     one above); the forged one PP_FORGED_PARTITION, by default the honest one's templates and steps with every unit
+#     sampled (prove_path.py forged-partition, kept as $OUT/forged-partition.json), forged at PP_FORGE (default 0:0). One
+#     outside the honest partition's steps is refused before any build, since its commit would find no unit to forge.
+#     PP_ONLY=honest prints a PROVE-PATH line saying "no forged run". The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
@@ -131,6 +134,13 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
+PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
+STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
+if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}${PP_LLAMA:+${PP_SERVE_STANDIN:-}}" ] && [ "${PP_ONLY:-}" != honest ]; then
+  # the served arm's forged partition, derived from the honest one or held to its steps, before any build
+  $PY benchmarks/prove_path/prove_path.py forged-partition --honest ${PP_PARTITION:-$STEP1} --design $SAMPLING_DESIGN \
+    ${PP_FORGED_PARTITION:+--forged $PP_FORGED_PARTITION} > $O/forged-partition.json || exit 8
+fi
 
 (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -170,7 +180,6 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
-PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
@@ -198,8 +207,10 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
          # --window K --row-dir DIR, whose advice and opening are the server's: ADVICE -)
   local name=$1 src=$2 advice=$3 part=$4 ranks=$5; shift 5
-  local forged=; [ $# -gt 0 ] && forged=--forged
-  case "${PP_ONLY:-}:${forged:+forged}" in honest:forged|forged:) return 0;; esac
+  local forged= arm=honest; [ $# -gt 0 ] && forged=--forged arm=forged
+  case "${PP_ONLY:-}:$arm" in honest:forged|forged:honest)
+    echo "PROVE-PATH {\"name\": \"$name\", \"ran\": false, \"why\": \"PP_ONLY=$PP_ONLY: no $arm run\"}"
+    return 0;; esac
   local adv="--advice $advice" op="--opening $W/$name-opening.json"
   case "$src" in *--serve-run*) adv=; op=;; esac
   mkdir -p $O/$name
@@ -262,7 +273,6 @@ if [ -n "${PP_TP:-}" ]; then
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   D=${PP_SERVE_ROWS:-${PP_LLAMA:-}}
   [ -d "$D" ] || { echo "no row dir ${D:-(PP_SERVE_ROWS or PP_LLAMA)}: give the Commit's row dir on this node"; exit 8; }
-  STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json STEP24=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json
   served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
     mkdir -p $O/$1-records
     cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
@@ -270,7 +280,7 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     REC_NAME=$1 REC_RUN=$2 REC_K=$3
     run $1 "$src" - ${PP_PARTITION:-$STEP1} "" || rc=1
-    run $1-forged "$src" - ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
+    run $1-forged "$src" - $O/forged-partition.json "" --forge ${PP_FORGE:-0:0} || rc=1
     REC_RUN=
   }
   if [ -n "${PP_SERVE_RUN:-}" ]; then

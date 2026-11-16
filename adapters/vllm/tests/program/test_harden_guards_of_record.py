@@ -10,12 +10,14 @@ import os
 import re
 
 import pytest
-from verity_vllm.program.frontend.target_profile import (
+from verity_vllm.program.frontend.artifact import (
     ApplicabilityError,
     ArtifactIdentity,
-    TargetProfile,
     check_reuse,
     reuse_mismatches,
+)
+from verity_vllm.program.frontend.target_profile import (
+    TargetProfile,
 )
 
 from tests.program.test_harden_guards import (
