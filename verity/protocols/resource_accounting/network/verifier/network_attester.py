@@ -51,8 +51,7 @@ the server does moves s + D. So the egress cells on a connection, their sizes an
 the number of egress cells, the failure's cell) and the public parameters alone, s of the arrivals and the admission
 rule; the ingress cells are a function of s and the client's bytes.
 
-**The egress form** (`NetworkAttesterParams.egress`). `id`, the default, is the egress record (`PROTOCOL.md`'s "The egress
-record"): the network attester releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
+**The egress form** (`NetworkAttesterParams.egress`). `id`, the default, is the egress record (`io_tie`'s cells): the network attester releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
 `io_tie.data_cell` or `io_tie.end_cell` on the connection's ordinal leaves, and it fails the connection (format) at any
 other cell, refusing and never rewriting. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an
 output and then `io_tie.TRAILER`, so the cut gives one event a `DATA` cell and an `END` holding the trailer; any other
@@ -245,8 +244,12 @@ third, `fails`, has `lanes` slots a bucket and one frame a failed connection, it
 schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed (with lengths rows, none
 that was released).
 
-`PROTOCOL.md`'s "The active network attester" has the leak bound. The module imports only the standard library and
-`verity`.
+**The host** (`trusted-device`). The leak bound (`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) holds only on a
+host that gives the network attester's process cores of its own, so that no co-resident process can make a tick late
+and so choose which execution phases fault, and a raw monotonic clock that nothing the developer runs can step or slew
+by more than `slack`. Neither is checked here.
+
+The module imports only the standard library and `verity`.
 """
 
 from __future__ import annotations
