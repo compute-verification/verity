@@ -301,13 +301,180 @@ private theorem plain_θJ (hpp : ProgramPlain) : Firewall.plain θJ = true := by
 
 /-! ## The canonical-JSON equations the walk rewrites by -/
 
-/-- The component parameters print to ASCII (every character of `printJson paramsJ` is below `0x7f`), the `Printable`
-witness `canon_plain` now takes. Proved by the kernel over the concrete literal, as `ProgramParse.printable_programJ` is
-for the descriptor it contains. -/
-theorem printable_paramsJ : JsonCanon.Printable paramsJ := ProgramParse.printable_of _ (by decide +kernel)
+/-! ### `Printable` (every printed character is ASCII, `< 0x7f`), the witness `canon_plain` now takes
 
-/-- The composite's parameters print to ASCII; the `Printable` witness `canon_plain` takes for `θJ`. -/
-theorem printable_θJ : JsonCanon.Printable θJ := ProgramParse.printable_of _ (by decide +kernel)
+A whole-literal `decide +kernel` (as `ProgramParse.printable_programJ` uses for the descriptor) cannot prove this for
+`paramsJ` or `θJ`: both splice hash-derived hex strings (`hexOf programSha`, the digests, the key and window root), which
+the kernel does not reduce. Instead we compose printability over the literal's structure — `printable_mkObj`,
+`printable_arr`, `printable_hexOf` and the kernel for each concrete leaf — mirroring the `plain_*` proofs above. -/
+
+/-- `Printable j` reads back as a condition on `jsonChars j`, since `printJson` is their `String.ofList`. -/
+private theorem printable_iff_chars {j : Json} :
+    JsonCanon.Printable j ↔ ∀ c ∈ Firewall.jsonChars j, c.toNat < 0x7f := by
+  simp only [JsonCanon.Printable, Firewall.printJson, String.toList_ofList]
+
+/-- A character of an intercalation is the separator's, or one of a joined piece. -/
+private theorem mem_intercalate_rev {α : Type} {sep : List α} {c : α} :
+    ∀ (L : List (List α)), c ∈ sep.intercalate L → c ∈ sep ∨ ∃ x ∈ L, c ∈ x
+  | [], h => by simp [List.intercalate] at h
+  | [x], h => by rw [List.intercalate_singleton] at h; exact Or.inr ⟨x, List.mem_singleton_self x, h⟩
+  | x :: y :: L, h => by
+    rw [List.intercalate_cons_cons] at h
+    rcases List.mem_append.1 h with h1 | h2
+    · rcases List.mem_append.1 h1 with hx | hs
+      · exact Or.inr ⟨x, List.mem_cons_self, hx⟩
+      · exact Or.inl hs
+    · rcases mem_intercalate_rev (y :: L) h2 with hs | ⟨z, hz, hcz⟩
+      · exact Or.inl hs
+      · exact Or.inr ⟨z, List.mem_cons_of_mem _ hz, hcz⟩
+
+/-- An array of printable values prints to ASCII: the brackets and the separating commas are ASCII, and each element's
+text is ASCII by hypothesis. -/
+private theorem printable_arr {arr : Array Json} (h : ∀ e ∈ arr, JsonCanon.Printable e) :
+    JsonCanon.Printable (Json.arr arr) := by
+  obtain ⟨a⟩ := arr
+  rw [printable_iff_chars]
+  intro c hc
+  rw [Firewall.jsonChars] at hc
+  rcases List.mem_cons.1 hc with rfl | hc1
+  · decide
+  rcases List.mem_append.1 hc1 with hmid | hbr
+  · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
+    · rw [List.mem_singleton] at hsep; subst hsep; decide
+    · rw [FirewallJson.jsonCharsList_eq] at hx
+      obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
+      exact (printable_iff_chars.1 (h e (Array.mem_toList_iff.1 he))) c hcx
+  · rw [List.mem_singleton] at hbr; subst hbr; decide
+
+/-- An object whose keys and values print to ASCII prints to ASCII: the braces, quotes, colons and commas are ASCII, and
+each member's key and value text is ASCII by hypothesis. The tree the keys sort into is a permutation of the member list,
+so the per-member hypothesis covers every member of it. -/
+private theorem printable_mkObj {L : List (String × Json)} (hd : L.Pairwise fun a b => a.1 ≠ b.1)
+    (h : ∀ e ∈ L, (∀ c ∈ e.1.toList, c.toNat < 0x7f) ∧ JsonCanon.Printable e.2) :
+    JsonCanon.Printable (Json.mkObj L) := by
+  rw [printable_iff_chars, mkObj_eq, Firewall.jsonChars]
+  intro c hc
+  rcases List.mem_cons.1 hc with rfl | hc1
+  · decide
+  rcases List.mem_append.1 hc1 with hmid | hbr
+  · rcases mem_intercalate_rev _ hmid with hsep | ⟨x, hx, hcx⟩
+    · rw [List.mem_singleton] at hsep; subst hsep; decide
+    · rw [FirewallJson.jsonCharsObj_eq] at hx
+      obtain ⟨e, he, rfl⟩ := List.mem_map.1 hx
+      obtain ⟨e', he', rfl⟩ := List.mem_map.1 ((perm_ofList hd).mem_iff.1 he)
+      rw [FirewallJson.memberChars] at hcx
+      rcases List.mem_append.1 hcx with hkey | hval
+      · rcases List.mem_cons.1 hkey with rfl | hk2
+        · decide
+        rcases List.mem_append.1 hk2 with hkk | hqc
+        · exact (h e' he').1 c hkk
+        · fin_cases hqc <;> decide
+      · exact (printable_iff_chars.1 (h e' he').2) c hval
+
+/-- A digest's hex name prints to ASCII: every hex digit is below `0x7f`, as are the enclosing quotes. -/
+private theorem printable_hexOf (b : ByteArray) : JsonCanon.Printable (.str (hexOf b)) := by
+  rw [printable_iff_chars, Firewall.jsonChars]
+  intro c hc
+  rcases List.mem_cons.1 hc with rfl | hc1
+  · decide
+  rcases List.mem_append.1 hc1 with hmain | hq
+  · rw [Hex.hexOf_toList, List.mem_flatMap] at hmain
+    obtain ⟨x, _, hx⟩ := hmain
+    have hlt : x.toNat < 256 := x.toNat_lt
+    have key : ∀ d < 16, (Hex.hd d).toNat < 0x7f := by decide +kernel
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl
+    · exact key _ (by omega)
+    · exact key _ (Nat.mod_lt _ (by decide))
+  · rw [List.mem_singleton] at hq; subst hq; decide
+
+/-- The partition object prints to ASCII: its format tag and query are concrete literals, its one spliced leaf is the
+program digest (`printable_hexOf`). -/
+private theorem printable_partition : JsonCanon.Printable partitionObj := by
+  unfold partitionObj Spot.Partition.build
+  refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl
+  · refine ⟨by decide, ?_⟩                                          -- format
+    show JsonCanon.Printable (Json.str Flock.HmRow.PARTITION_V1)
+    exact ProgramParse.printable_of _ (by decide +kernel)
+  · refine ⟨by decide, ?_⟩                                          -- program
+    show JsonCanon.Printable (Json.str (hexOf programSha))
+    exact printable_hexOf _
+  · refine ⟨by decide, ?_⟩                                          -- query (build's if)
+    dsimp only
+    split <;> exact ProgramParse.printable_of _ (by decide +kernel)
+
+/-- The component parameters print to ASCII: every character of `printJson paramsJ` is below `0x7f`. The concrete members
+are discharged by the kernel; the hash-spliced ones (the challenger key, the proofs' digests, the program and the window
+root) by `printable_hexOf`, `printable_partition` and `ProgramParse.printable_programJ`. -/
+theorem printable_paramsJ : JsonCanon.Printable paramsJ := by
+  rw [paramsJ]
+  refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide)⟩     -- anchors
+  · -- challenger
+    refine ⟨by decide, ?_⟩
+    refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+    intro e2 he2
+    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
+    rcases he2 with rfl | rfl
+    · -- key
+      refine ⟨by decide, ?_⟩
+      refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+      intro e3 he3
+      simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he3
+      rcases he3 with rfl | rfl | rfl
+      · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩  -- H
+      · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩  -- W
+      · exact ⟨by decide, printable_hexOf _⟩                       -- public
+    · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩    -- label
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- delta
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- form
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- law
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- leaf_layer
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- log
+  · exact ⟨by decide, printable_partition⟩                         -- partition
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- ports
+  · exact ⟨by decide, ProgramParse.printable_programJ⟩             -- program
+  · -- proofs
+    refine ⟨by decide, ?_⟩
+    refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+    intro e2 he2
+    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
+    rcases he2 with rfl | rfl | rfl
+    · exact ⟨by decide, printable_hexOf _⟩                         -- circuit
+    · exact ⟨by decide, printable_hexOf _⟩                         -- public
+    · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩    -- registered
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- query
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- registered
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- scheme
+  · exact ⟨by decide, printable_hexOf _⟩                           -- window_root
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- work_table
+
+/-- The composite's parameters print to ASCII; the `Printable` witness `canon_plain` takes for `θJ`. The one component's
+`id` is a concrete literal and its `params` is `paramsJ`. -/
+theorem printable_θJ : JsonCanon.Printable θJ := by
+  rw [θJ]
+  refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+  intro e he
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl
+  refine ⟨by decide, ?_⟩                                          -- components
+  refine printable_arr ?_
+  intro e2 he2
+  have hmem : e2 = Json.mkObj [("id", .str VStar.Recursive.Sampled.PROTOCOL), ("params", paramsJ)] := by
+    simpa using he2
+  subst hmem
+  refine printable_mkObj (keys_ne (by kernel_rfl')) ?_
+  intro e3 he3
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he3
+  rcases he3 with rfl | rfl
+  · exact ⟨by decide, ProgramParse.printable_of _ (by decide +kernel)⟩      -- id
+  · exact ⟨by decide, printable_paramsJ⟩                           -- params
 
 /-- `canonicalJson θ₀` reads back the composite's parameters. -/
 private theorem canon_θ₀ (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
