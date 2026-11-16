@@ -61,6 +61,8 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_subprotocol.py",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "benchmarks/one_stage/r2_population.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock",
+          # demo_stub's chain (network_e2e's chain.py) loads the encodings' derived rules by file
+          "benchmarks/network_e2e/encodings/derived.py",
           "tests/verity/protocols/resource_accounting/network/verifier/network/fixtures/slot_entry.json",
           "tests/verity/protocols/resource_accounting/network/verifier/network/fixtures/select_entry.json",
           "verity/protocols/proofs/flock/prover/agreement/redigest.py", "verity/protocols/proofs/flock/prover/agreement/transcript_check.py",
