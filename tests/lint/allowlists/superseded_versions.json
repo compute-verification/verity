@@ -226,9 +226,6 @@
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1Combine", "detail": "PouwH1Combine_v1"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1LaneZy", "detail": "PouwH1LaneZy_v1"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1LaneZyChunk", "detail": "PouwH1LaneZyChunk_v1"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1TileZyChunks", "detail": "PouwH1TileZyChunks_v1"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/segment.py", "kind": "superseded", "symbol": "PouwSegCheck", "detail": "PouwSegCheck_v2"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/segment.py", "kind": "superseded", "symbol": "PouwSegCheckDither", "detail": "PouwSegCheckDither_v2"},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/segment.py", "kind": "superseded", "symbol": "PouwWarpCheck", "detail": "PouwWarpCheck_v1"}
+    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py", "kind": "superseded", "symbol": "PouwH1TileZyChunks", "detail": "PouwH1TileZyChunks_v1"}
   ]
 }

@@ -8,18 +8,15 @@ committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `
 `seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`.  Each attack below leaves one
 honest call and alters one thing; the scheme's check refuses it.
 
-The windowed check `PouwSegCheck_v3` (another of the scheme's checks) appears in the meet-in-the-middle case: v2's prefix
-sets are free witness, which a meet-in-the-middle opens (`test_circuit_segment`); v3 recomputes every word, so there is no
-witness to meet, and the forgery fails.
+A meet-in-the-middle, which opened the retired `PouwSegCheck_v2` through the prefix sets it took as witness, has no
+witness to meet here: no port of the scheme's checks carries a prefix word (`test_circuit_segment`).
 
 `ATTACKS` is the machine-readable table (the PR cites it): each row is (name, what the cheater alters, why it is refused).
 """
 from __future__ import annotations
 
 import hashlib
-import random
 
-import numpy as np
 import pytest
 
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import eps1_reference as EPS
@@ -183,111 +180,10 @@ def test_seed_binds_the_call_index_and_the_salt():
     assert a1[8] != a2[8] or a1[5] != a2[5]  # the noise (fold keys / coin bits) differs between the two calls
 
 
-# --- meet-in-the-middle: v2's free witness vs. the scheme's recomputed check --------------------------------------------------
-
-KS, S = 4, 2
-
-
-def _onehot(n, i):
-    return [int(j == i) for j in range(n)]
-
-
-def _leaf(rnd, lo=-128, hi=127):
-    return [[rnd.randint(lo, hi) & 0xFF for _ in range(32)] for _ in range(SG.RL)]
-
-
-def _rsel(pos):
-    return [(1 << pos % 32) if pos // 32 == k else 0 for k in range(SG.RW // 32)]
-
-
-def _honest_v3(rnd, ks, s, fold):
-    a, b = [_leaf(rnd) for _ in range(ks)], [_leaf(rnd) for _ in range(ks)]
-    asel, bsel = _onehot(16, rnd.randrange(16)), _onehot(8, rnd.randrange(8)) + [0] * 8
-    u = [[rnd.getrandbits(8) for _ in range(32)] for _ in range(4)]
-    f = [[[rnd.getrandbits(1) for _ in range(32)] for _ in range(8)] for _ in range(ks)]
-    nw, seed, tile, ctid = ks // s, rnd.getrandbits(32), rnd.randrange(64), rnd.randrange(SG.NCT)
-    st = [SG.fold_keys(fold, seed, tile, ctid, w, nw) for w in range(nw)]
-    ap, bp = [], []
-    for j in range(ks):
-        ar, br = SG.thread_rows(a[j], asel, b[j], bsel)
-        ap.append([[(x + v) & 0xFF for x, v in zip(ar[r], u[r])] for r in range(4)])
-        bp.append([[(x + (1 - 2 * (q & 1))) & 0xFF for x, q in zip(br[c], f[j][c])] for c in range(8)])
-    T = SG.prefixes(ap, bp)
-    pos, rc = rnd.randrange(SG.RW), []
-    for w in range(nw):
-        state = SG.absorb(fold, list(st[w]), T[w * s - 1] if w else [0] * 32)
-        for j in range(w * s, w * s + s):
-            state = SG.absorb(fold, state, T[j])
-        leaf = [rnd.getrandbits(32) for _ in range(SG.RW)]
-        leaf[pos] = SG.fold_final(fold, state)
-        rc.append(leaf)
-    return dict(a=a, asel=asel, u=u, b=b, bsel=bsel, f=f, st=st, rc=rc, rsel=_rsel(pos), pos=pos, T=T, ap=ap, bp=bp)
-
-
-def _rotl_np(x, r):
-    return ((x << np.uint64(r)) | (x >> np.uint64(32 - r))) & np.uint64(M32)
-
-
-def _contrib(y, z, t, w):
-    u = (np.uint64(y) ^ w ^ np.uint64(SG.KK[t])) & np.uint64(M32)
-    y2 = (u * np.uint64(SG.KA[t]) + np.uint64(z)) & np.uint64(M32)
-    return y2 ^ _rotl_np((_rotl_np(u, SG.ROT[t]) + y2) & np.uint64(M32), 16)
-
-
-def _mitm(st, p, target, rng):
-    """LEDGER's opening: solve p's last set's entries 24 and 28 over 2^18 candidates each so duo's fold of p from st ends at
-    ``target`` (`test_circuit_segment._mitm`)."""
-    state = list(st)
-    for ps in p[:-1]:
-        state = SG.fold_absorb("duo", state, ps)
-    y, z = state[:8], state[8:]
-    pre = {}
-    for t in range(8):
-        h = 4 * (t % 2)
-        for e in range(4):
-            if (t, e) in ((6, 0), (7, 0)):
-                pre[h + e] = (y[h + e], z[h + e])
-            d = 0 if 4 * t + e in (24, 28) else p[-1][4 * t + e]
-            u = y[h + e] ^ d ^ SG.KK[t]
-            y[h + e] = (u * SG.KA[t] + z[h + e]) & M32
-            z[h + e] = (SG.rotl(u, SG.ROT[t]) + y[h + e]) & M32
-    rest = 0
-    for c in range(8):
-        if c not in (0, 4):
-            rest ^= y[c] ^ SG.rotl(z[c], 16)
-    w0 = rng.integers(0, 1 << 32, 1 << 18, dtype=np.uint64)
-    w4 = rng.integers(0, 1 << 32, 1 << 18, dtype=np.uint64)
-    _, i0, i4 = np.intersect1d(_contrib(*pre[0], 6, w0), _contrib(*pre[4], 7, w4) ^ np.uint64(rest ^ target),
-                               return_indices=True)
-    assert len(i0), "no meeting point at 2^18 a side"
-    last = list(p[-1])
-    last[24], last[28] = int(w0[i0[0]]), int(w4[i4[0]])
-    return [*p[:-1], last]
-
-
-def test_mitm_opens_v2_but_the_scheme_refuses_it():
-    """A meet-in-the-middle forges a committed window word through `PouwSegCheck_v2`'s free prefix sets; `PouwSegCheck_v3`,
-    on the same committed leaves, coin and receipts, recomputes every word and refuses it (and accepts the honest ones)."""
-    rnd, rng = random.Random(20261018), np.random.default_rng(309)
-    h = _honest_v3(rnd, KS, S, "duo")
-    target = rnd.getrandbits(32)
-    forged = [list(h["rc"][0]), list(h["rc"][1])]
-    forged[1][h["pos"]] = target
-    p0 = [rnd.getrandbits(32) for _ in range(32)]
-    p1 = [SG.seg_dot(p0[q], h["ap"][2][SG.row_slot(q)], h["bp"][2][SG.col_slot(q)]) for q in range(32)]
-    p = _mitm(h["st"][1], [p0, p1, [rnd.getrandbits(32) for _ in range(32)]], target, rng)
-    jsel = _onehot(SG.jsel_bits(S), 0)
-    assert target != h["rc"][1][h["pos"]]
-    assert SG.win_check(h["a"][2], h["asel"], h["u"], h["b"][2], h["bsel"][:8], h["f"][2], p, h["st"][1],
-                        forged[1], _onehot(SG.RW, h["pos"]), jsel, 0) == 1   # v2's free witness opens the word
-    v3 = [h["a"], h["asel"], h["u"], h["b"], h["bsel"], h["f"], h["st"], forged, h["rsel"]]
-    assert SG.seg_check3(*v3) == 0                                          # the scheme's check refuses it
-    assert SG.seg_check3(*v3[:7], h["rc"], h["rsel"]) == 1                  # and accepts the honest receipts
-
-
 # --- the catalog is complete --------------------------------------------------------------------------------------------------
 
 def test_catalog_lists_every_attack_from_the_brief():
-    """Every attack the brief names has a row (the `call_check` ones in `ATTACKS`; the meet-in-the-middle has its own test)."""
+    """Every attack the brief names has a row (the `call_check` ones in `ATTACKS`; the meet-in-the-middle has no witness to
+    meet, `test_circuit_segment.test_call_words_take_no_witness`)."""
     assert set(ATTACKS) == {"skipped-words", "forged-receipt", "swapped-weights", "skipped-filler", "replay",
                             "commit-after-salt", "reused-operand-roots"}
