@@ -47,6 +47,7 @@ assumption; and `catalog.py`'s category id `efficiency-metrics`.
 | `fit.py` | the fit bound: the memory limit when no server block holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `statement.py` | every number that the published statement of `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
+| `run.py` | `statement.py`'s first figure, the slowdown at T1 under the best plausible PoUW design, written as `metrics.toml`'s number (modeled) through the harness's kit; `verity bench nci` |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
 `governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,
@@ -64,7 +65,8 @@ it:
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
 - `artifacts.json` registers `sources/` by this directory's path.
 
-Every command above prints, and none writes a file.
+Every command above prints, and none but `run.py` writes a file: under a research run, or with `OUT` set, it writes its
+number.
 
 ## Rules for adding to it
 

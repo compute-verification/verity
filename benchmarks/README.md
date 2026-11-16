@@ -28,9 +28,11 @@ says. These are the directories that have one:
 | `verity bench inference_only` | the inference-only policy of Llama 3.2 1B as served, and its one number: the least slowdown of training run inside the policy's inference blocks |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
+| `verity bench machine_model` | the RTX PRO 6000's headline ε, `machine-model headline`'s sm_120 row at the data sheet's and the measured reading (a model, not a measurement) |
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network attester's calibration |
+| `verity bench nci` | the slowdown statement's first figure: the remote slowdown at T1 under the best plausible PoUW design (a model, not a measurement) |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a benchmark result, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |

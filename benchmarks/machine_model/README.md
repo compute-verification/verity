@@ -97,6 +97,9 @@ uv run machine-model counts e-l7qs --check           # every ncu observation aga
 uv run machine-model cover [--holes|--check]   # the opcode table
 ~~~
 
+`uv run python benchmarks/machine_model/run.py` (`verity bench machine_model`) prints `headline` under sm_120's ε at
+both readings and writes them as `metrics.toml`'s number, modeled, through the harness's kit.
+
 `--device sm_NN` reads `data/devices/sm_NN/` ("Devices"); `--data DIR` reads any data directory. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
 
