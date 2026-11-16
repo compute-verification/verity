@@ -293,12 +293,27 @@ verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] 
 | `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
 | `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
 | `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
+| `--flock`, `--zk`, `--sampling` | `benchmarks/one_stage/layers.sh`'s layer: its `out/layers.txt`, `out/job.log`, `out/a6/summary.json`, each session's `lean-verify.log` and `gpu-lease-usage.jsonl` beside `out/`; the run's directory gives each layer its own (`flock/`, `zk/`, `sampled/`) | Flock's `prove_total_s` a statement | the plain run's every statement accepted, or the audit accepted and complete with every Lean verdict, every check before the draw and every negative case true |
 
 The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
 more than one honest arm is refused: give the arm's directory. A `--flock` row must state the plain proof, and a `--zk`
 or `--sampling` row the zk proof (the sampling layer is Flock with zero knowledge at the sampling plan): one whose output
 states another proof, or none, prints no number and writes null with why, whichever command wrote it. Each printed row states its proof (`plain`, `zk`, or "not
 stated"), so a plain run's numbers in the sampling row say plain.
+
+A `layers.sh` run (proofs', `benchmarks/one_stage/layers.sh all`) proves stand-in values, never served. Its row's workload
+opens with `stand-in values, never served:` where `layers.txt` says so, then its statements, each with its units and
+template, and the source commit `job.log` states. Its figures are a statement's, not a proof block's: each cell gives
+one figure a statement, `2.78 s a statement of 2,048 units`, and none is divided into a figure a block, since a
+statement's seconds don't grow with its units (a statement of 26 drawn units takes most of one of 2,048). Under the
+three metric ids it writes null, with why. Its proof is `zk` only where every session's Lean `verify` line has `--zk`,
+and `plain` where the summary says `plain` and none has it. Its device is the cards gpu-lease's usage record names for
+each `flock-circuit prove`. Its ε at δ is the audit's `wrong_units`: `at most 895 of 2,560 units wrong except with
+probability 2^-20`. Its `ran with:` line is `layers.txt`'s first line, where that names its coins and parameters in
+these words.
+
+A `prove_path` row's workload names the commit its `machine.txt` states (`run.sh`'s `git rev-parse HEAD`), `arm z at
+commit c352729e2ee (machine.txt's git HEAD)`. It states no branch.
 
 A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
 table. When no row prints a number, the first line is `prove layers: no number: WHY` (each layer's why) and the command
@@ -315,11 +330,12 @@ checks no challenger's signature, so nothing it prints is an audit.
 The table's columns, after the layer and its workload:
 
 - **proof:** `plain`, `zk`, or "not stated", the proof the output says it holds.
-- **device:** what the output states it ran on, else "not stated", never a guess. Recursion's is CPU where its params
+- **device:** what the output states it ran on, else "not stated", never a guess. A `layers.sh` row's is gpu-lease's
+  record (above). Recursion's is CPU where its params
   say `GPU=0` and `OPROVE_GPU=0` (job.sh's CPU prover); a prove_path or a5 row's is read from its timing's `gpus` and
   `device` (a5's `proving_of`), which prove_path's runs leave unset, so theirs is "not stated".
-- **ε at δ:** what the output states. No output states ε: a5's `summary.json` and prove_path's `PROVE-PATH` line hold
-  only `delta`, so the cell is `ε not stated at δ 0.5`. For a number, a5.py's summary and prove_path.py's `PROVE-PATH`
+- **ε at δ:** what the output states. A `layers.sh` audit's `wrong_units` states it (above). a5's `summary.json` and
+  prove_path's `PROVE-PATH` line hold only `delta`, so their cell is `ε not stated at δ 0.5`. For a number, a5.py's summary and prove_path.py's `PROVE-PATH`
   line would have to write the sample's ε.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
   another's: `2.345 s a drawn block (Flock's prove_total_s, the mean over 8)`, `430,501 bytes a drawn block (...)`, and
