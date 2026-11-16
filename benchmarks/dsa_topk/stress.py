@@ -489,7 +489,7 @@ def definition(args) -> None:
     import multiprocessing
 
     _DEF.update(definition_code())
-    pool = multiprocessing.get_context("fork").Pool(max(1, (os.cpu_count() or 2) - 1))
+    pool = multiprocessing.get_context("fork").Pool(len(os.sched_getaffinity(0)))
     import vllm._custom_ops  # noqa: F401
 
     out = Path(args.out)
