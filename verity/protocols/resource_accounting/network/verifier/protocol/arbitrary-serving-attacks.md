@@ -2,7 +2,7 @@ Part of network certification's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbit
 
 ### Attacks
 
-The prices are estimates for one 60 s window at the llama8b-node1 calibration (T = 600, B = 4,096, r = 1,686, and
+The prices are estimates for one 60 s window at the llama8b-NODE calibration (T = 600, B = 4,096, r = 1,686, and
 16 × 8 sync values), under an assumed load of 3,000 output tokens a second. That is 180,000 decode rows, 3,000 engine
 steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 17).
 
