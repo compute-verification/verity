@@ -1,0 +1,11 @@
+{
+ "Flock.RecVStar.registration": "Flock.RecVStar.docket",
+ "InferenceOnlyCheck.Theta.Prov.registration": "InferenceOnlyCheck.Theta.Prov.docket",
+ "NetworkCheck.Period.ExecutionPhase.registrations": "NetworkCheck.Period.ExecutionPhase.dockets",
+ "NetworkCheck.Period.registrationOf": "NetworkCheck.Period.docketOf",
+ "NetworkCheck.TransferBlocks.Case.registration": "NetworkCheck.TransferBlocks.Case.docket",
+ "Spot.Record.Input.registration": "Spot.Record.Input.docket",
+ "Spot.Stream.Entry.registration": "Spot.Stream.Entry.docket",
+ "Spot.Stream.Params.registrationDeadline": "Spot.Stream.Params.docketDeadline",
+ "VStar.Recursive.Own.registration": "VStar.Recursive.Own.docket"
+}
