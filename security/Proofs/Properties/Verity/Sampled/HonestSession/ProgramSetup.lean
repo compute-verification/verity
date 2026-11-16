@@ -78,7 +78,7 @@ open ProgramProof ProgramParse ProgramPop CircuitFileProof SetupReads
 
 /-! ## `checkPartition` -/
 
-theorem checkPartition_of (c : Circuit) (o : Json) (D : String) (nv : String × Nat) (B : ByteArray)
+theorem checkPartition_of (c : Flock.Circuit) (o : Json) (D : String) (nv : String × Nat) (B : ByteArray)
     (hrule : ((c.metaJ.getObjVal? "partition").toOption.getD Json.null).getObjValAs? String "rule" = .ok HmRow.PARTITION_V1)
     (hdig : ((c.metaJ.getObjVal? "partition").toOption.getD Json.null).getObjValAs? String "digest" = .ok D)
     (ho : HmRow.checkPartitionObject o = .ok nv)
@@ -131,7 +131,7 @@ theorem bne_ok_some (x : String) : ((Except.ok x : Except String String).toOptio
 theorem isInput_not16 (s : String) (h : s = "Not16_v1") : Flock.TemplateQuery.isInput s = false :=
   isInputId_not16 s h
 
-fwd_def dU derive_U (c : Circuit) (obj : Json) (bytes : ByteArray) (text s : String)
+fwd_def dU derive_U (c : Flock.Circuit) (obj : Json) (bytes : ByteArray) (text s : String)
     (hq : obj.getObjVal? "query" = .ok query)
     (hprog : obj.getObjValAs? String "program" = .ok (hexOf (Sha512.hash s.toUTF8)))
     (hqt : HmRow.queryTemplate c = some (templateId, false))
@@ -174,7 +174,7 @@ theorem nodes_progB (b : ByteArray) (ix : Std.HashMap String Nat) :
   simp [progB, defRoot, rootBody, defIn16, defUnit, h, List.range_succ]
   rfl
 
-fwd_def lkW links_W (c : Circuit) (pop : Public) (bytes : ByteArray) (b : ByteArray)
+fwd_def lkW links_W (c : Flock.Circuit) (pop : Flock.Public) (bytes : ByteArray) (b : ByteArray)
     (ix : Std.HashMap String Nat) (U : Json) (e : String)
     (hl : c.metaJ.getObjVal? "links" = .error e)
     (hdec : Flock.Program.decode bytes = .ok (progB b ix))
