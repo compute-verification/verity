@@ -49,4 +49,4 @@ them. `h1form.py` hands it this harness's ``H1_TILE`` and ``H1_TMPL`` (`benchmar
 codes and scales from a checkpoint on the CPU; `live.py` is the live proof blocks' CLI over the lowering, which `live.sh` runs
 and `benchmarks/one_stage/` reads, and `h1_lanes/served.py` takes the proof blocks `served.py` samples. `window.py`,
 `recorded.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
-included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.
+included, except underscore names. Their tests are the `test_h1_prove*.py` files under `tests/benchmarks/pouw/`.
