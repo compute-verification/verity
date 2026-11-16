@@ -232,7 +232,7 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     ("tools/research/src/research/vqueue_loop.py", None),
     ("tools/check/drive.toml", None),
     ("verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", None),
-    ("verity/protocols/compose/verifier/lean/pyproject.toml", None),
+    ("tests/verity/protocols/compose/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
     """Over this tree's drive.toml and files: a file kept off the low-risk lane only by an entry of `verdict_plain` (``entry``)
