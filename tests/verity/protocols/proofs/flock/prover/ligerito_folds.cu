@@ -9,7 +9,7 @@
 #include <cuda_runtime.h>
 
 #include "ligerito_f256.cuh"
-#include "../cuda/ligerito_folds.cuh"
+#include "../../../../../../verity/protocols/proofs/flock/prover/cuda/ligerito_folds.cuh"
 
 __host__ __device__ inline uint64_t lc_mix(uint64_t x) {
     x += 0x9e3779b97f4a7c15ull;

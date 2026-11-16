@@ -24,7 +24,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as C, re
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 

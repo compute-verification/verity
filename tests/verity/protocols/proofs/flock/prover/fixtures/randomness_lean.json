@@ -1414,8 +1414,8 @@
   }
  ],
  "inputs": {
-  "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean": "8a556b6d1d5490e0a6ce031a4b7afee90366f4de00ad73f85179293b5befb8fc",
-  "verity/commitments/randomness/tests/vectors.json": "70fd524498edf905cfed705b94f6eb84037ce5f46e15ede6dbb9094c9122b442",
+  "tests/verity/protocols/proofs/flock/prover/lean/RandomnessVectors.lean": "8a556b6d1d5490e0a6ce031a4b7afee90366f4de00ad73f85179293b5befb8fc",
+  "tests/verity/commitments/randomness/vectors.json": "70fd524498edf905cfed705b94f6eb84037ce5f46e15ede6dbb9094c9122b442",
   "verity/commitments/randomness/Randomness.lean": "b94f89b4970d03d8fd7140b0989f4262c13c08c3afa91b7522d9db92a8234cf9",
   "security/Proofs/Flock/Soundness/PlanDraw.lean": "13caf906f43a3a3bc8a6aa31edbd9b647a8f86106c7be672649e48117dec3940",
   "security/Proofs/lake-manifest.json": "e80d12ad7aadbbf15d4bd4539e723ca55840743e458f0a840ea26e703e3570be",
