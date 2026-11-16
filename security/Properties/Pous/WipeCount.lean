@@ -187,4 +187,43 @@ def WipeCountTied : Prop :=
       CountRan sp broken d → NetTiming.Guarantees.SpanCovers → SentWithinCapacity d → MarksOnce d →
         SpanCounted d c s n out.egressMib ∨ broken cs ev
 
+/-! ## The witnesses' instances -/
+
+/-- The network certifier session of the witnesses: 32 zero bytes. -/
+def witnessSession : ByteArray := ⟨Array.replicate 32 0⟩
+
+/-- A mark's certificate of the witnesses, on `eth0-marks`, egress, at execution phase 0, under the key `key`, over
+`digest` with the signature `signature`. -/
+def markCertificate (key digest signature : ByteArray) : NetworkCheck.Check.Certificate :=
+  { keyId := key.extract 0 16, link := NetworkCheck.Span.marksLink "eth0", direction := .egress, window := 0,
+    digest, signature }
+
+/-- The span of the witnesses on `eth0` under the key `key`: both marks at execution phase 0, the start mark over
+`startMessage` and the end mark over `endMessage`, their certificates' bytes `bytes`. -/
+def witnessSpan (key bytes startMessage endMessage : ByteArray) : NetworkCheck.Span.Commitment :=
+  { startMark := ⟨markCertificate key .empty .empty, bytes, .empty, startMessage⟩,
+    endMark := ⟨markCertificate key .empty .empty, bytes, .empty, endMessage⟩, bytes := .empty }
+
+/-- The parameters of the witnesses' span: the link `eth0`, S1's deployed LMS, the key `key`, the witnesses' session
+and the network certifier's default schedule with its digest. -/
+def witnessSpanParams (key : ByteArray) : NetworkCheck.Span.Params :=
+  { link := "eth0", lms := Lms.deployed, key, session := witnessSession,
+    schedule := NetworkCheck.Period.defaultSchedule,
+    scheduleDigest := (NetworkCheck.Period.defaultSchedule.digest).toOption.getD .empty }
+
+/-- The network certifier of the witnesses at the default schedule (`r` = 4, `D` = 10, `T` = 600, 4096 egress cells a
+connection, its capacity a phase the schedule's), its stamp its code's, that sent nothing and made `marks`. -/
+def witnessDevice (key : ByteArray) (marks : List Mark) : MarkDevice Unit :=
+  ⟨key, witnessSession, "eth0", NetworkCheck.Span.capacityBits NetworkCheck.Period.defaultSchedule,
+    ⟨4, 10, fun _ => 0, fun _ => 0⟩, 600, 4096, NetTiming.markPhase 600, marks, fun _ => 0⟩
+
+/-- The two marks of the witnesses' device, both in bucket 0 with the certificate's bytes `bytes`: over `startMessage`
+and over `endMessage`. -/
+def witnessMarks (bytes startMessage endMessage : ByteArray) : List Mark :=
+  [⟨startMessage, 0, bytes⟩, ⟨endMessage, 0, bytes⟩]
+
+/-- The egress the honest counted session gives, in MiB: the default schedule's three phases (the span's one and its
+tail's two) at its capacity, 294,912,000 bits, rounded up. -/
+def WITNESS_EGRESS_MIB : Int := 36
+
 end MemoryChallenger.Properties

@@ -175,44 +175,7 @@ theorem counted_accepts (digest : Nat → ByteArray) (sm : ByteArray) (hsm : sm.
   · unfold WipeProtocol.certify
     split <;> rfl
 
-/-! ## The witnesses' instances -/
-
-/-- The network certifier session of the witnesses: 32 zero bytes. -/
-def witnessSession : ByteArray := ⟨Array.replicate 32 0⟩
-
-/-- A mark's certificate of the witnesses, on `eth0-marks`, egress, at execution phase 0, under the key `key`, over
-`digest` with the signature `signature`. -/
-def markCertificate (key digest signature : ByteArray) : NetworkCheck.Check.Certificate :=
-  { keyId := key.extract 0 16, link := NetworkCheck.Span.marksLink "eth0", direction := .egress, window := 0,
-    digest, signature }
-
-/-- The span of the witnesses on `eth0` under the key `key`: both marks at execution phase 0, the start mark over the
-start message of the measured commitment and the end mark over `endMessage`, their certificates' bytes `bytes`. -/
-def witnessSpan (key bytes endMessage : ByteArray) : NetworkCheck.Span.Commitment :=
-  { startMark := ⟨markCertificate key .empty .empty, bytes, .empty, StreamedWipe.startMessage measuredCommitment⟩,
-    endMark := ⟨markCertificate key .empty .empty, bytes, .empty, endMessage⟩, bytes := .empty }
-
-/-- The parameters of the witnesses' span: the link `eth0`, S1's deployed LMS, the key `key`, the witnesses' session
-and the network certifier's default schedule with its digest. -/
-def witnessSpanParams (key : ByteArray) : NetworkCheck.Span.Params :=
-  { link := "eth0", lms := Lms.deployed, key, session := witnessSession,
-    schedule := NetworkCheck.Period.defaultSchedule,
-    scheduleDigest := (NetworkCheck.Period.defaultSchedule.digest).toOption.getD .empty }
-
-/-- The network certifier of the witnesses at the default schedule (`r` = 4, `D` = 10, `T` = 600, 4096 egress cells a
-connection, its capacity a phase the schedule's), its stamp its code's, that sent nothing and made `marks`. -/
-def witnessDevice (key : ByteArray) (marks : List Mark) : MarkDevice Unit :=
-  ⟨key, witnessSession, "eth0", NetworkCheck.Span.capacityBits NetworkCheck.Period.defaultSchedule,
-    ⟨4, 10, fun _ => 0, fun _ => 0⟩, 600, 4096, NetTiming.markPhase 600, marks, fun _ => 0⟩
-
-/-- The two marks of the witnesses' device, both in bucket 0 with the certificate's bytes `bytes`: over the measured
-commitment's start message and over `endMessage`. -/
-def witnessMarks (bytes endMessage : ByteArray) : List Mark :=
-  [⟨StreamedWipe.startMessage measuredCommitment, 0, bytes⟩, ⟨endMessage, 0, bytes⟩]
-
-/-- The egress the honest counted session gives, in MiB: the default schedule's three phases (the span's one and its
-tail's two) at its capacity, 294,912,000 bits, rounded up. -/
-def WITNESS_EGRESS_MIB : Int := 36
+/-! ## The witnesses -/
 
 theorem witness_units :
     StreamedWipe.egressUnits ((3 * NetworkCheck.Span.capacityBits NetworkCheck.Period.defaultSchedule : ℕ) : Int) ≤
@@ -228,22 +191,21 @@ theorem witness_tail_two : NetworkCheck.Span.tail NetworkCheck.Period.defaultSch
 
 /-- `CountRan` holds at the witnesses' device of its span: a span the count accepts with those marks is of the device's
 two marks, every other span being the break. -/
-theorem countRan_witness (key bytes endMessage : ByteArray) :
-    CountRan (witnessSpanParams key) (fun cs _ => cs ≠ witnessSpan key bytes endMessage)
-      (witnessDevice key (witnessMarks bytes endMessage)) := by
+theorem countRan_witness (key bytes sm em : ByteArray) :
+    CountRan (witnessSpanParams key) (fun cs _ => cs ≠ witnessSpan key bytes sm em)
+      (witnessDevice key (witnessMarks bytes sm em)) := by
   intro cs ev n pr h
-  by_cases hc : cs = witnessSpan key bytes endMessage
+  by_cases hc : cs = witnessSpan key bytes sm em
   · subst hc
     obtain ⟨hsp, hep, htail, hcap, -⟩ := span_accepts h
-    exact .inl ⟨⟨StreamedWipe.startMessage measuredCommitment, 0, bytes⟩, ⟨endMessage, 0, bytes⟩,
-      List.mem_cons_self, List.mem_cons_of_mem _ List.mem_cons_self, rfl, rfl,
-      hsp.trans (by simp [witnessSpan, markCertificate, witnessDevice, NetTiming.markPhase]),
+    exact .inl ⟨⟨sm, 0, bytes⟩, ⟨em, 0, bytes⟩, List.mem_cons_self, List.mem_cons_of_mem _ List.mem_cons_self,
+      rfl, rfl, hsp.trans (by simp [witnessSpan, markCertificate, witnessDevice, NetTiming.markPhase]),
       hep.trans (by simp [witnessSpan, markCertificate, witnessDevice, NetTiming.markPhase]),
       htail.trans witness_tail, hcap⟩
   · exact .inr hc
 
-theorem marksOnce_witness (key bytes endMessage : ByteArray) :
-    MarksOnce (witnessDevice key (witnessMarks bytes endMessage)) := by
+theorem marksOnce_witness (key bytes sm em : ByteArray) :
+    MarksOnce (witnessDevice key (witnessMarks bytes sm em)) := by
   intro a ha b hb _
   simp only [witnessDevice, witnessMarks, List.mem_cons, List.not_mem_nil, or_false] at ha hb
   rcases ha with rfl | rfl <;> rcases hb with rfl | rfl <;> exact ⟨rfl, rfl⟩
@@ -254,38 +216,40 @@ theorem sentWithinCapacity_witness (key : ByteArray) (marks : List Mark) :
 /-- **`WipeCountTied`'s honest lemma**, at S1's deployed LMS and the network certifier's default schedule: for the key
 `honest_keygen` derives, the counted check accepts the measured honest session that names the SHA-512 of the start
 certificate's bytes, beside a count of 36 MiB, and publishes it, below the saturated count; the device that made the
-session's two marks holds the memory challenger's start mark, its stamp is its code's, the tie holds for the span of
-those marks under the default schedule, `CountRan` holds there of that span (every other span being the break, which
-that span's is not), and the device sends within its capacity and marks a message once. -/
+session's two marks, over the commitment's start message `sm` and the session's end message `em`, holds the memory
+challenger's start mark, its stamp is its code's, the tie holds for the span of those marks under the default schedule,
+`CountRan` holds there of that span (every other span being the break, which that span's is not), and the device sends
+within its capacity and marks a message once. -/
 theorem wipeCountTied_honest :
     ∃ (k : Lms.PrivateKey) (seed : ByteArray), Lms.keygen Lms.deployed seed = .ok k ∧
-      ∃ (digest : Nat → ByteArray) (bytes sig endMessage : ByteArray) (out : WipeProtocol.Public)
+      ∃ (digest : Nat → ByteArray) (bytes sig sm em : ByteArray) (out : WipeProtocol.Public)
         (prof : StreamedWipe.Params × Int),
+        sm = StreamedWipe.startMessage measuredCommitment ∧
         WipeProtocol.checkCounted SCHEMES (measuredWipeParams k.publicKey) measuredCommitment
           ⟨some { measuredWipe digest k.publicKey sig with startMark := Sha512.hash bytes },
             some WITNESS_EGRESS_MIB⟩ = .accept out prof ∧
         out.egressMib < StreamedWipe.EGRESS_MAX_UNITS ∧
-        (∃ a ∈ (witnessDevice k.publicKey (witnessMarks bytes endMessage)).marks,
+        (∃ a ∈ (witnessDevice k.publicKey (witnessMarks bytes sm em)).marks,
           a.message = StreamedWipe.startMessage measuredCommitment ∧
             Sha512.hash a.certificate =
               { measuredWipe digest k.publicKey sig with startMark := Sha512.hash bytes }.startMark) ∧
-        SpanTied (witnessSpanParams k.publicKey) (witnessSpan k.publicKey bytes endMessage) measuredCommitment
+        SpanTied (witnessSpanParams k.publicKey) (witnessSpan k.publicKey bytes sm em) measuredCommitment
           ⟨some { measuredWipe digest k.publicKey sig with startMark := Sha512.hash bytes },
             some WITNESS_EGRESS_MIB⟩ ∧
-        NetTiming.DeviceIntact (witnessDevice k.publicKey (witnessMarks bytes endMessage)).stamp
-          (NetTiming.markPhase (witnessDevice k.publicKey (witnessMarks bytes endMessage)).phaseBuckets) ∧
-        CountRan (witnessSpanParams k.publicKey) (fun cs _ => cs ≠ witnessSpan k.publicKey bytes endMessage)
-          (witnessDevice k.publicKey (witnessMarks bytes endMessage)) ∧
-        SentWithinCapacity (witnessDevice k.publicKey (witnessMarks bytes endMessage)) ∧
-        MarksOnce (witnessDevice k.publicKey (witnessMarks bytes endMessage)) := by
+        NetTiming.DeviceIntact (witnessDevice k.publicKey (witnessMarks bytes sm em)).stamp
+          (NetTiming.markPhase (witnessDevice k.publicKey (witnessMarks bytes sm em)).phaseBuckets) ∧
+        CountRan (witnessSpanParams k.publicKey) (fun cs _ => cs ≠ witnessSpan k.publicKey bytes sm em)
+          (witnessDevice k.publicKey (witnessMarks bytes sm em)) ∧
+        SentWithinCapacity (witnessDevice k.publicKey (witnessMarks bytes sm em)) ∧
+        MarksOnce (witnessDevice k.publicKey (witnessMarks bytes sm em)) := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
   let digest : Nat → ByteArray := fun _ => .empty
   let bytes : ByteArray := .empty
   obtain ⟨sig, m, out, prof, hend, hacc, hout⟩ := counted_accepts digest (Sha512.hash bytes)
     (Properties.Certifier.Bytes.hash_size _) (n := WITNESS_EGRESS_MIB) (by decide) (by decide) hk
-  refine ⟨k, _, hkg, digest, bytes, sig, m, out, prof, hacc, by rw [hout]; decide,
-    ⟨_, List.mem_cons_self, rfl, rfl⟩, ?_, fun _ => rfl, countRan_witness _ _ _, sentWithinCapacity_witness _ _,
-    marksOnce_witness _ _ _⟩
+  refine ⟨k, _, hkg, digest, bytes, sig, _, m, out, prof, rfl, hacc, by rw [hout]; decide,
+    ⟨_, List.mem_cons_self, rfl, rfl⟩, ?_, fun _ => rfl, countRan_witness _ _ _ _, sentWithinCapacity_witness _ _,
+    marksOnce_witness _ _ _ _⟩
   obtain ⟨w, hw, hwout⟩ := checkCounted_accepts hacc
   obtain ⟨hwsm, hwem⟩ := named_some rfl hw
   refine ⟨w, hw, hwsm, ?_, ?_⟩
@@ -300,8 +264,8 @@ theorem wipeCountTied_honest :
     exact witness_units
 
 /-- **`WipeCountTied`'s nontrivial lemma**: its conclusion fails at a network certifier that made no mark, for the
-unencoded session, a count of the default schedule and a break that never holds. No mark of
-the device is the span's start mark. -/
+unencoded session, a count of the default schedule and a break that never holds. No mark of the device is the span's
+start mark. -/
 theorem wipeCountTied_nontrivial :
     ¬ (SpanCounted (witnessDevice .empty []) measuredCommitment unencoded
         ⟨0, 0, 2, 3, NetworkCheck.Span.capacityBits NetworkCheck.Period.defaultSchedule⟩ 0 ∨ False) := by
