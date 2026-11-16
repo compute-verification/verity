@@ -51,10 +51,11 @@ class Pod:
         """One candidate pass, its log lines, and each export as (cwd, --repo, HEAD there, its registry, the bucket's hash)."""
         fn = re.search(r"^candidates\(\) \{\n.*?^\}\n", SCRIPT.read_text(), re.M | re.S).group(0)
         fn = fn.replace("/root/.config/verity/r2.env", str(self.tmp / "r2.env"))
-        env = {**os.environ, "PATH": f"{self.tmp / 'bin'}:{os.environ['PATH']}", "REPO": str(self.repo), "W": str(self.tmp / "w"),
+        env = {**os.environ, "STUBS": str(self.tmp / "bin"), "REPO": str(self.repo), "W": str(self.tmp / "w"),
                "DONE": str(self.done), "RECORD": str(self.record), "FAIL": str(self.fail)}
         self.record.unlink(missing_ok=True)
-        out = subprocess.run(["sh", "-c", f"{fn}candidates", str(SCRIPT)], env=env, capture_output=True, text=True, check=True)
+        out = subprocess.run(["sh", "-c", f'PATH="$STUBS:$PATH"\n{fn}candidates', str(SCRIPT)], env=env, capture_output=True,
+                             text=True, check=True)
         runs = [tuple(line.split()) for line in self.record.read_text().splitlines()] if self.record.exists() else []
         return out.stdout.splitlines(), runs
 
