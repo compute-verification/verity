@@ -3,26 +3,41 @@
 It measures how much training a developer could run inside the inference blocks that Llama 3.2 1B's inference-only
 policy lets it serve: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound
 (`benchmarks/slowdown/slowdown/min_cut.py`, whose `HE` names its Lean statement). A number of 1 says the bound shows no
-slowdown. It is a measurement, not an audit, and the command's first lines say so: it runs on whatever machine runs
-it, where an audit runs the verifier and its coins as processes on a machine of their own.
+slowdown. On a served run's record it follows the core benchmarks' interface (`benchmarks/README.md`): a measurement,
+not an audit, with a number only where the record's verifiers accepted the run. Without a record it prices the policy
+a file in this tree states, and says under its first line that it reads no run.
 
 ## The one command
 
 ~~~sh
 uv sync --all-packages --extra torch-cpu
-uv run verity bench inference_only --stated-only --served RUN
+uv run verity bench inference_only --stated-only --from DIR
 ~~~
 
-`RUN` is a served run's directory, or its `out/`, on your disk; nothing else is read, no store, host or key. The
-command runs the policy's record check on the run's files. Its first lines say that the number is a measurement and not
-an audit, name the record read, and say in one line which coins and parameters the record states PoUW's piece was made
-with: the challenger's live session its coins came from (`coins.check.session`, which the piece writes only for live
-coins) and its parameter set (`scheme`), or that the record names none. Then comes the run's
-number, which is the command's number and the JSON's `value`, with its own mark (`measured`, or `partial` under the
-tie), with the run it read (the record's own `run`, else the directory's name), the PoUW verdict it found, the share
-of the blocks' work that no PoUW verdict of record credits, and why the number is 1 where it is: the check refused the
-record, or the record holds no PoUW accept of record. The stated policy's number follows, labelled as not the result.
-The run's `out/` holds `record/verdicts.json`, `inference-only-policy.json`, `inference-only-limits.json`, a
+`DIR` is a served run's record: its directory, or its `out/`, on your disk, read with nothing else, no store, host or
+key; or a run id, fetched first where `research` is installed (`kit.record_dir`). `--served` is its old name, which
+goes. The command runs the policy's record check on the run's files. Its first lines are the interface's:
+
+~~~text
+Inference-only: the least slowdown of training run inside the policy's inference blocks
+ran with: coins local challenger; parameters development (scheme SCHEME)
+a measurement, not an audit
+The served run's record read: DIR/out
+~~~
+
+The second line says which coins and parameters the record states PoUW's piece was made with: `local challenger`
+where it names the challenger's live session its coins came from (`coins.check.session`, which the piece writes only
+for live coins), never the deployed challenger, at `development` parameters with its `scheme`; and `ran with: not
+stated` where it names none, as a record of in-process coins does under the keys it writes today. Either way the
+third line says it is not an audit. Then come the run's number, at its own mark (`partial`, under the tie), with the
+run it read (the record's own `run`, else the directory's name), the PoUW verdict it found and the share of the
+blocks' work that no PoUW verdict of record credits.
+
+There is a number only where the record holds a PoUW accept of record and the check ran and both its rules comply.
+Otherwise the first line is `inference_only: no number: WHY` (the record holds no Program, so the check did not run;
+the check refused the record, naming the rule; no PoUW accept of record, a development accept counting as none; no
+figure), the JSON's `value` is null beside `no_number`, and the command exits 1. The stated policy's number follows the
+record's section, labelled as not the result. The run's `out/` holds `record/verdicts.json`, `inference-only-policy.json`, `inference-only-limits.json`, a
 `block-counts-CLASS.json` for each class it counts (`SLOTS-PROMPT-OUTPUTS`, or `record`), and the files the run
 registered: `registered/program.json`, `registered/circuit.json` and
 `registered/log.jsonl`, the registration log one record a line, its first first and the run's own last. `--program P
@@ -30,7 +45,7 @@ registered: `registered/program.json`, `registered/circuit.json` and
 record holds counts of more than one class, `--served-class CLASS` (`SLOTS,PROMPT,OUTPUTS`, or `record`) names the one
 read; without it the command refuses, naming the classes the record holds and the option. A record
 with no Program can't be checked, since the circuit record and the registration name the Program only by its digest
-and the check reads each template's Definition from its text: the command says so, runs no check, and its number is 1.
+and the check reads each template's Definition from its text: the command says so, runs no check, and gives no number.
 
 The check is Lean, built from this tree with `lake build` the first time it runs, and nothing else is fetched: it
 needs `lake`, which elan (https://github.com/leanprover/elan) installs with the toolchain that
@@ -43,28 +58,37 @@ uv run verity bench inference_only --stated-only --uncredited-share 0.1%   # and
 uv run verity bench inference_only                   # and the class this tree builds, with the Lean count on it
 ~~~
 
-The last form also builds the class this tree can build and runs the Lean count on it (`lake build` of the check's
-executable, then the executable on the class's instance), which is heavy work. Where no `--served` names a record, the
-command reads the run that `served_of_record.toml` names (its `record`, a path relative to the repository's root or
-absolute); with no `record` there, or no file, it reads none.
+Where no `--from` names a record, the command reads the run that `served_of_record.toml` names (its `record`, a path
+relative to the repository's root or absolute); with no `record` there, or no file, it reads none. With none read it
+is outside the interface: the line under its first says `A STATED POLICY PRICED, NOT A MEASUREMENT OF A RUN`, its
+number is the served policy's, marked `modeled`, it prints no `ran with` line, and it exits 0. The last form also
+builds the class this tree can build and runs the Lean count on it (`lake build` of the check's executable, then the
+executable on the class's instance), which is heavy work.
 
-## What you may change, what is fixed, and how a cheat is refused
+## What you may change
 
-- **You may change** the record: any served run's files, its class and policy, its limits and counts, its PoUW
-  verdict. And the options: `--policy FILE`, a stated policy to price; `--model`, `--class` and `--division`, the
-  built class; `--uncredited-share S`, a typed share, whose figures print under a label saying they rest on no PoUW
-  verdict.
-- **Fixed** by this tree, whatever a record says: the check (the policy's Lean record check, `inference-only-record-check`,
-  with its two rules, the rate rule and the count), the bound (`min_cut`) with its premises (H) and (E) at the slowdown
-  calculator's β (`benchmarks/slowdown/data/premises.toml`), the rule that only PoUW's accept of record
-  (`protocols.work.verdict`) credits work, the tie between that verdict and the record the check read, `tied.toml`,
-  and the fleets and periods.
-- **How a cheat is refused.** A record with a weight left unregistered is refused by the count rule, and by the rate
-  rule, and its number is 1. A prover who gives up credit raises the uncredited share `s`, which limits the number to
-  `1 / (s + 1/slowdown)`; one who gives up all of it, or whose PoUW row is a development accept or no accept, has
-  `s = 1` and gets 1. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting
-  other MACs than the class's linears, is refused; so are a verdict tied to another record than the check's, a record
-  holding counts of two classes with no `--served-class`, and a record missing a file, which is named. `tests/test_served_record.py` holds each.
+The record: any served run's files, its class and policy, its limits and counts, its PoUW verdict. And the options:
+`--policy FILE`, a stated policy to price; `--model`, `--class` and `--division`, the built class; `--uncredited-share
+S`, a typed share, whose figures print under a label saying they rest on no PoUW verdict.
+
+## What is fixed
+
+By this tree, whatever a record says: the check (the policy's Lean record check, `inference-only-record-check`, with
+its two rules, the rate rule and the count), the bound (`min_cut`) with its premises (H) and (E) at the slowdown
+calculator's β (`benchmarks/slowdown/data/premises.toml`), the rule that only PoUW's accept of record
+(`protocols.work.verdict`) credits work, the tie between that verdict and the record the check read, `tied.toml`, the
+fleets and periods, and that a number is given only where the record holds a PoUW accept of record and both rules
+comply.
+
+## How a cheating change is refused
+
+A record with a weight left unregistered is refused by the count rule, and by the rate rule, and gives no number. So
+does a record whose PoUW row is a development accept or no accept, and one with no Program, which the check can't
+run on. A prover who gives up credit raises the uncredited share `s`, which limits the number to `1 / (s +
+1/slowdown)`. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting other MACs
+than the class's linears, is refused; so are a verdict tied to another record than the check's, a record holding
+counts of two classes with no `--served-class`, and a record missing a file, which is named. The coins line never
+says the deployed challenger from a record's own word. `tests/test_served_record.py` holds each.
 
 ## What it prints
 
@@ -95,8 +119,9 @@ absolute); with no `record` there, or no file, it reads none.
    `run` (with a record read, the record's value and run; else the research run around the command, `null` outside
    one), then, in name order, `benchmark`, `check`,
    `divisions`, `periods`, `policies` (each with its `c`, `k`, `n` and their `units`), `record` (a served record's,
-   below, `null` without `--served`), `rests_on`, `tied` (the tied section's figures, `null` without a share) and
-   `work_is`. `check` is the Lean count's verdict on the policy the value is
+   below, `null` without one), `rests_on`, `tied` (the tied section's figures, `null` without a share) and
+   `work_is`; with a record read, the kit's `ran_with` and `audit` follow, and `no_number` where there is no number.
+   `check` is the Lean count's verdict on the policy the value is
    of, `refused` or `accepted` by its executable. For a stated policy it is `not run`, which is no verdict: this tree
    has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
    counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
@@ -104,8 +129,8 @@ absolute); with no `record` there, or no file, it reads none.
 6. **The metric**: where the JSON is written, its `value` is also a measurement named
    `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
    a research run, else the place the JSON went), the number `benchmarks/inference_only/metrics.toml` declares. With a
-   record read it is the record's number at the record's own mark, `measured` or `partial` (a record with no figure
-   writes no value, and its reading as why). With none it is the served policy's, marked `modeled`: it is priced from
+   record read it is the record's number at the record's own mark, `partial`, and with no number it is written with
+   no value and the why. With none it is the served policy's, marked `modeled`: it is priced from
    the policy's stated numbers, and no check runs on the served class. Its target is 1,000, its goal's
    (the `goal` `metrics.toml` names: a slowdown of at least 1,000), and its verdict says
    where the value stands against it, `misses` below it and `within target` at or above it: the console's Metrics tab
@@ -167,7 +192,7 @@ and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it wo
 
 ## A served run's record
 
-`--served RUN` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
+`--from DIR` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
 `inference-only-policy.json`, `inference-only-limits.json` and the `block-counts-CLASS.json` of one class, the one
 `--served-class` names where there are several), and the Program, circuit record and registration log it registered
 (`record.REGISTERED` in its `out/`, or `--program`, `--circuit`, `--log`, its own registration last). A file that isn't
@@ -192,7 +217,7 @@ there is named as one the run did not write. Before anything else it prints, und
   them.
 - **The value**, with its reading and mark, which are the command's number and mark, in its headline, the JSON's
   `value` and the metric. The check refusing (either rule; the reading names the rate rule, the count
-  or both), or no PoUW accept of record, gives 1, `measured`.
+  or both), no Program, or no PoUW accept of record, gives no number, and the reading is the why.
   Otherwise one block's value is the smaller of its two limits at `s` under the tie (`tied.priced` on the record's
   class: its `c`, `n` and work, and `k` its policy's own `k_by_kind` but the linears' outputs, with `tied.toml`'s
   `[fresh]`), `partial`, its inputs saying which are the record's and which are premises; and each fleet and period's
