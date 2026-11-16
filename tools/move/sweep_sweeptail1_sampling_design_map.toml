@@ -1,0 +1,94 @@
+# identifiers of sampling_design: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/statement.py", "benchmarks/nci/tests/test_statement.py", "benchmarks/network_traces/chain_record.py", "benchmarks/network_traces/compile_slice_zk.py", "benchmarks/prove_path/served_statics_zk.py", "benchmarks/prove_path/served_tie_zk.py", "verity/protocols/accounting/certifier/prover/egress_zk.py", "verity/protocols/accounting/certifier/prover/network_certifier_zk.py", "verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "verity/protocols/tests/tests/test_profile.py"]
+[words_in.words]
+"law" = "sampling_design"
+
+[[words_in]]
+files = ["benchmarks/network_traces/kind_scan.py", "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_reg_file.py"]
+[words_in.words]
+"\"law" = "\"sampling design"
+
+[[words_in]]
+files = ["benchmarks/one_stage/a5_llama1b_h200.sh"]
+[words_in.words]
+"records_audit.py's law" = "records_audit.py's sampling design"
+"partition law" = "partition sampling design"
+"its law" = "its sampling design"
+"(f\"law" = "(f\"sampling design"
+"k={law" = "k={sampling_design"
+"law =" = "sampling_design ="
+"{law" = "{sampling_design"
+
+[[words_in]]
+files = ["benchmarks/sampling_plan/pyproject.toml"]
+[words_in.words]
+"Stratified law" = "Stratified sampling design"
+
+[[words_in]]
+files = ["benchmarks/spot_proved/pyproject.toml"]
+[words_in.words]
+"rate law" = "rate sampling design"
+
+[[words_in]]
+files = ["tests/test_lean_packages.py"]
+[words_in.words]
+"\"RETIRED_NAMES law" = "\"RETIRED_NAMES sampling design"
+"stratified law" = "stratified sampling design"
+
+[[words_in]]
+files = ["tests/test_lean_vocabulary.py"]
+[words_in.words]
+"Python's laws" = "Python's sampling designs"
+
+[[words_in]]
+files = ["tests/test_provider_names.py"]
+[words_in.words]
+"lambda, laws" = "lambda, sampling designs"
+"(`laws" = "(`sampling designs"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/prover/scan_zk.py"]
+[words_in.words]
+"S.selection_sampling_design(law" = "S.selection_sampling_design(sampling_design"
+"S.selection_sizes(law" = "S.selection_sizes(sampling_design"
+"S.selection_table(law" = "S.selection_table(sampling_design"
+"S.Spec(values, law" = "S.Spec(values, sampling_design"
+"pg.query, law" = "pg.query, sampling_design"
+"law =" = "sampling_design ="
+"law," = "sampling_design,"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py"]
+[words_in.words]
+"blaw" = "b_sampling_design"
+"law" = "sampling_design"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/README.md"]
+[words_in.words]
+"selection_law" = "selection_sampling_design"
+"second_law" = "second_sampling_design"
+"core_law" = "core_sampling_design"
+"work_law" = "work_sampling_design"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = ["'law",
+           "blaw ",
+           "law\")",
+           "law\"]",
+           "law\"}",
+           "{\"law",
+           " \"law\"",
+           " (\"law",
+           "\"law\":",
+           "\"law.k",
+           "\"law.l",
+           "\"law.p",
+           "t(\"law"]

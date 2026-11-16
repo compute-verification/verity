@@ -1,0 +1,14 @@
+# identifiers of proof_block: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py"]
+[words_in.words]
+"proof unit" = "proof block"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

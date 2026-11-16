@@ -1,0 +1,23 @@
+# identifiers of subprotocol: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/network_traces/tests/test_block_certifier.py"]
+[words_in.words]
+"test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_path" = "test_the_block_subprotocol_fits_the_block_records_schema_its_fixture_and_its_runner_path"
+"test_a_period_answer_is_the_block_records_certifier_leg" = "test_a_period_answer_is_the_block_records_certifier_subprotocol"
+"_block_leg" = "_block_subprotocol"
+"leg_schema" = "subprotocol_schema"
+"block_leg" = "block_subprotocol"
+
+[[words_in]]
+files = ["verity/protocols/accounting/certifier/prover/block_certifier.py"]
+[words_in.words]
+"block_leg" = "block_subprotocol"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

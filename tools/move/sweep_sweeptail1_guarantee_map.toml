@@ -1,0 +1,14 @@
+# identifiers of guarantee: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["tools/pous_grader/check.sh"]
+[words_in.words]
+"pinned statement" = "guarantee"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

@@ -1,0 +1,40 @@
+# identifiers of incorrect_proof_block: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/network_e2e/chain.py", "benchmarks/network_e2e/tests/test_chain.py", "benchmarks/prove_path/prove_path.py"]
+[words_in.words]
+"wrong_units_bound" = "incorrect_proof_blocks_bound"
+
+[[words_in]]
+files = ["benchmarks/network_traces/tests/test_chain_record.py"]
+[words_in.words]
+"test_the_faulty_sets_bits_are_the_powers_without_computing_it" = "test_the_incorrect_sets_bits_are_the_powers_without_computing_it"
+
+[[words_in]]
+files = ["benchmarks/one_stage/prove_subprotocol.py"]
+[words_in.words]
+"wrong-unit" = "incorrect-proof-block"
+"wrong_unit" = "incorrect_proof_block"
+
+[[words_in]]
+files = ["security/Proofs/Certifier/README.md"]
+[words_in.words]
+"faulty proof blocks" = "incorrect proof blocks"
+
+[[words_in]]
+files = ["verity/protocols/accounting/pouw/prover/tests/test_pouw_device.py"]
+[words_in.words]
+"test_the_gate_names_the_first_wrong_unit" = "test_the_gate_names_the_first_incorrect_proof_block"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_one_stage.py"]
+[words_in.words]
+"test_profile_counts_wrong_units" = "test_profile_counts_incorrect_proof_blocks"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

@@ -1,0 +1,16 @@
+# prose of verifier: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/compute/README.md"]
+[words_in.words]
+"verifier of record" = "verifier"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

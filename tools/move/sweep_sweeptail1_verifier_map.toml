@@ -1,0 +1,26 @@
+# identifiers of verifier: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/one_stage/pouw_piece.py", "benchmarks/one_stage/replay.py", "benchmarks/one_stage/served_verdicts.py", "verity/protocols/accounting/certifier/prover/n2_tie_zk.py", "verity/protocols/accounting/certifier/prover/n2_zk.py", "verity/protocols/proofs/spot/verifier/one_stage/proofs.py"]
+[words_in.words]
+"verifier of record" = "verifier"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_registered.py"]
+[words_in.words]
+"test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts" = "test_the_opened_roots_come_from_the_verifiers_accepted_verdicts"
+
+[[words_in]]
+files = ["verity/protocols/proofs/spot/verifier/tests/test_service.py"]
+[words_in.words]
+"test_the_outcome_is_pending_until_the_verifier_of_record_ran" = "test_the_outcome_is_pending_until_the_verifier_ran"
+"test_public_outputs_come_from_the_verifier_of_record" = "test_public_outputs_come_from_the_verifier"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = ["verifier of record\"",
+           "verifier of record {"]

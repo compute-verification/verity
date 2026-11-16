@@ -1,0 +1,16 @@
+# prose of sampling_design: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["adapters/vllm/tests/pipeline/served_experts.py", "adapters/vllm/verity_vllm/pipeline/deferred_rows.py", "adapters/vllm/verity_vllm/pipeline/registration_log.py", "benchmarks/one_stage/a5_llama1b_h200.sh"]
+[words_in.words]
+"law" = "sampling design"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

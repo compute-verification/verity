@@ -1,0 +1,16 @@
+# prose of spot: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/one_stage/a7.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_onsite_record.py", "verity/protocols/proofs/spot/verifier/one_stage/hidden_sample.py"]
+[words_in.words]
+"sampled-proofs" = "SPOT"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = ["t, its sampled-proofs"]

@@ -1,0 +1,25 @@
+# identifiers of input_set: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-pure-gpu.rs", "verity/protocols/proofs/flock/prover/live/src/bin/flock-vllm-v1.rs", "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py"]
+[words_in.words]
+"instance set" = "input set"
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-pure.rs"]
+[words_in.words]
+"hello_for_other_instance_set" = "hello_for_other_input_set"
+"instance set" = "input set"
+
+[[words_in]]
+files = ["verity/protocols/proofs/flock/prover/python/verity_flock/backend.py"]
+[words_in.words]
+"instance sets" = "input sets"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

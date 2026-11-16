@@ -1,0 +1,19 @@
+# identifiers of any_rejection_rejects: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["tools/check/check.py", "verity/protocols/compose/verifier/lean/README.md", "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py"]
+[words_in.words]
+"test_a_reference_without_reject_dominance_is_caught" = "test_a_reference_where_a_rejection_does_not_reject_is_caught"
+
+[[words_in]]
+files = ["verity/protocols/compose/verifier/lean/pyproject.toml"]
+[words_in.words]
+"reject dominance" = "any rejection rejects"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []

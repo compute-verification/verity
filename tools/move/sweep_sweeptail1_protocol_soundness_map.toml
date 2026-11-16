@@ -1,0 +1,14 @@
+# identifiers of protocol_soundness: the Glossary term's older words in the files that spell them, outside what held records, other senses and Lean keep.
+
+[words]
+
+[[words_in]]
+files = ["tools/verity/lean/check.py", "tools/verity/lean/tests/test_audit.py"]
+[words_in.words]
+"the one theorem" = "protocol soundness"
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "**/lean-audit.json", "**/*.lock", "uv.lock"]
+
+[keep]
+strings = []
