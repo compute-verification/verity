@@ -93,7 +93,7 @@ def kinds(acts: list) -> list[type]:
     (["tools/cx/y.py"], ["tools/c/**"], False),
     (["a/b/c.py"], ["a/b/**/"], True),
     (["anything/at/all"], ["**"], True),
-    (["v/tests/sub/test_x.py"], ["**/tests/**/test_*.py"], True),         # the shapes graph2's specs use
+    (["v/tests/sub/test_x.py"], ["**/tests/**/test_*.py"], True),         # the shapes the suites' specs use
     (["v/tests/test_x.py"], ["**/tests/**/test_*.py"], True),
     (["v/tests/x_test.py"], ["**/tests/**/test_*.py"], False),
     (["v/ml/flock/flock-a-b684b12.patch"], ["v/ml/flock/flock-*-b684b12.patch"], True),
@@ -394,7 +394,7 @@ def test_a_fail_is_acted_on_once_a_failure_of_its_own_is_known_while_the_rest_st
 
 
 def test_a_lone_members_own_failure_meeting_none_of_its_files_is_rerun_afresh_once_then_ejected():
-    """Built alone again on the same base, its tree would have the same keys, which graph2 answers from its cached fail: so its
+    """Built alone again on the same base, its tree would have the same keys, answered from its cached fail: so its
     failed keys are rerun on the same candidate, which stays, and a failure after the rerun ejects it as a possible flake."""
     t, u = task("t", "elsewhere/"), task("u", "docs/")
     s = snap(cand("c1", MAIN, 5, state=FAIL, failed=(t, u)), cand("c2", "c1", 6), ready=prs(5, 6, 7), depth=3)
@@ -432,7 +432,7 @@ def test_what_a_lone_failure_calls_for_reads_its_candidates_reruns_not_the_histo
 
 @pytest.mark.parametrize("state", [INFRA, LIST_FAILED])
 def test_with_tree_ejects_infra_and_list_failed_are_retried_at_every_reading_rung_from_the_second_and_blame_nobody(state):
-    """With `tree_ejects`, an infra error graph2 saw on one node, or a listing failure, says nothing about the members: the
+    """With `tree_ejects`, an infra error seen on one node, or a listing failure, says nothing about the members: the
     check is enqueued again at every reading, and infra is rung from `rings` enqueues on (2 at most), however often it errs."""
     err = (task("test-file:pkg2/tests/test_reads.py", "pkg2/tests/test_reads.py", "pkg2/mod.py"),) if state == INFRA else ()
     why = "c1's check ended in infra errors: test-file:pkg2/tests/test_reads.py" if state == INFRA else "c1's check failed to list"
@@ -583,7 +583,7 @@ def test_a_pr_set_aside_is_batched_after_every_other_and_alone():
 
 
 def test_with_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_at_once_like_a_fail_on_the_members_meeting_their_inputs():
-    """graph2 saw the test err on two or more nodes (`tree`): the tree breaks the machines, so the members whose files meet its
+    """The test erred on two or more nodes (`tree`): the tree breaks the machines, so the members whose files meet its
     inputs are the suspects, else every member; an infra error beside it that doesn't follow the tree suspects nobody."""
     hang = replace(task("test-file:pkg2/tests/test_hang.py", "pkg2/"), tree=True)
     c = cand("c1", MAIN, 1, 2, 3, state=INFRA, infra=(task("runner", "pkg1/"), hang))
@@ -597,7 +597,7 @@ def test_with_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_at_once
 
 
 def test_without_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_like_any_other_once_they_persist():
-    """graph2 marks `tree` on any error that ran out of attempts on two or more nodes, an outage's too, so by default a `tree`
+    """`tree` marks any error that ran out of attempts on two or more nodes, an outage's too, so by default a `tree`
     error ejects nobody: it is retried, then bisected on every erring task's inputs and rung in the plain infra words, and a
     lone member is set aside behind the rest with its owner rung."""
     hang = replace(task("test-file:pkg2/tests/test_hang.py", "pkg2/"), tree=True)
@@ -678,7 +678,7 @@ def test_a_candidate_failing_only_as_its_base_does_advances_and_its_red_rings_on
 
 
 def test_a_fail_whose_failures_are_all_inherited_waits_while_a_gating_task_still_runs():
-    """graph2 answers an inherited key from its cache, long before the rest of the check ends: a new failure may still come."""
+    """An inherited key is answered from the cache long before the rest of the check ends: a new failure may still come."""
     t = inherited("suite:r", "red/")
     assert decide(snap(cand("c1", MAIN, 1, state=FAIL, failed=(t,), ended=False), ready=prs(1, 2))) == [Build((2,), "c1", 1)]
 
@@ -787,7 +787,7 @@ def test_a_red_main_lands_what_fails_nothing_more_and_its_reds_only_shrink():
 # ---- the records run before a Lean candidate's check ---------------------------------------------------------------------------
 
 def stale(pkg: str = "security", *inputs: str) -> Failed:
-    """graph2's lean-lock fail of ``pkg``: its lock records don't match its tree."""
+    """The check's lean-lock fail of ``pkg``: its lock records don't match its tree."""
     return Failed(f"lean-lock:{pkg}", f"key:lean-lock:{pkg}", frozenset(inputs or (f"{pkg}/",)))
 
 
@@ -953,7 +953,7 @@ def test_left_out_names_what_stops_every_build_of_the_tick():
 
 
 def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_second_lean_batch():
-    """Whatever its verdict says (graph2 knows no check of it), it is never read.  It is off main's chain: nothing is built on
+    """Whatever its verdict says (no check of it is known), it is never read.  It is off main's chain: nothing is built on
     it and it counts toward no depth, so batches of PRs with no Lean change are built on the chain's top up to the depth
     while its records run runs, and no other Lean PR is taken meanwhile.  The candidate below it is decided as ever."""
     c1 = replace(waiting("c1", MAIN, 1), verdict=Verdict(FAIL, (task("t", "security/"),), ended=True))
@@ -1623,7 +1623,7 @@ def test_a_fail_naming_no_failed_task_ejects_and_drops_nobody():
 
 @pytest.mark.parametrize("tree_ejects", [True, False])
 @pytest.mark.parametrize("tree", [True, False])
-def test_an_infra_error_one_pr_causes_ejects_it_only_once_graph2_says_it_follows_the_tree_and_tree_ejects_is_set(tree, tree_ejects):
+def test_an_infra_error_one_pr_causes_ejects_it_only_once_it_follows_the_tree_and_tree_ejects_is_set(tree, tree_ejects):
     """#3's tree makes a test end in errors every time.  Seen on two or more nodes (`tree`), with `tree_ejects`, its batch is
     bisected at once on the erring test's inputs, #3 alone errs again and is ejected, and every other PR lands.  Without
     `tree_ejects` the batch is bisected once the errors persist, every other PR lands, and #3 waits alone, retried, with its
@@ -1673,8 +1673,8 @@ def test_without_tree_ejects_a_pr_whose_check_errs_on_every_node_holds_up_nobody
 
 
 @pytest.mark.parametrize("tree_ejects", [False, True])
-def test_an_outage_graph2_marks_tree_ejects_nobody_unless_tree_ejects_is_set(tree_ejects):
-    """In an outage every check ends in the same infra error, which graph2 marks `tree` since it ran out of attempts on two
+def test_an_outage_marked_tree_ejects_nobody_unless_tree_ejects_is_set(tree_ejects):
+    """In an outage every check ends in the same infra error, marked `tree` since it ran out of attempts on two
     or more nodes.  By default nobody is ejected: the batch is bisected down to lone members, each set aside with its owner
     rung once, then enqueued alone in turn, ringing nobody, and nothing lands.  With `tree_ejects` each lone member is
     ejected for the outage."""
@@ -1696,7 +1696,7 @@ def test_a_candidate_pending_forever_is_retried_once_and_then_rung():
 
 
 def test_a_lone_retest_reruns_its_failed_keys_instead_of_building_the_same_tree_again():
-    """The same tree has the same keys, which graph2 answers from its cached fail: a flake would eject at its first run."""
+    """The same tree has the same keys, answered from the cached fail: a flake would eject at its first run."""
     failed = Failed("test-file:t/test_x.py", "sha512:x", frozenset({"t/test_x.py"}))
     c1 = Candidate("c1", MAIN, (7,), ("h7",), Verdict(FAIL, (failed,)))
     assert decide(Snapshot(MAIN, (pr(7),), (c1,))) == [Rerun("c1", ("sha512:x",))]
@@ -1796,17 +1796,17 @@ def read_records(r: Records, rest: str) -> Read:
 
 
 class World:
-    """The loop's world, scripted by a seed: `main`, the ready marks, the live candidates with graph2's verdicts, and the outcomes
+    """The loop's world, scripted by a seed: `main`, the ready marks, the live candidates with their checks' verdicts, and the outcomes
     the loop recorded.  A bad PR fails every candidate whose tree holds it, on a task whose inputs meet its files (and
     `shared/`'s), or for an interaction nobody's, at a key only such trees give the task, or, in a red world, on a red task's
     test of its own.  An erring PR makes a task end in infra errors on every node (`tree`) in every such tree; it is ejected
     with `tree_ejects` (every other seed), and without it waits alone, its owner rung, while an outage's errors are marked
-    `tree` too, as graph2 marks them.  In a
+    `tree` too, as they are marked.  In a
     red world `main` fails one or two red tasks in every tree without their fix, a good PR, at a key each PR touching their inputs
-    changes (some good PRs touch them, the same tests failing); a red task whose failing tests graph2 doesn't report is
+    changes (some good PRs touch them, the same tests failing); a red task whose failing tests aren't reported is
     inherited at its key alone, and no good PR but its fix touches it.  PRs arrive, push, conflict, are unmarked by their
     owners for a while (a candidate in flight lands them as built) and are held by a reviewer for a while (`Snapshot.pulled`);
-    graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
+    the check answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
     on the way.  Each failure a verdict holds is read from the records a check writes of it (`records`), as ``fetch``
@@ -1839,7 +1839,7 @@ class World:
         self.good = set(numbers) - set(self.bad) - set(self.erring)
         red = rng.random() < 0.3 if red is None else red
         self.fixes = rng.sample(sorted(self.good), min(len(self.good), rng.choice((1, 2)))) if red else []
-        self.detail = [rng.random() < 0.6 for _ in self.fixes]   # graph2 reports the red task's failing tests
+        self.detail = [rng.random() < 0.6 for _ in self.fixes]   # the red task's failing tests are reported
         files = {m: {f"pkg{m}/mod{m}.py"} | ({"shared/x.py"} if rng.random() < 0.3 else set()) for m in numbers}
         self.breaks: dict[int, int] = {}
         for i, fix in enumerate(self.fixes):
@@ -1945,7 +1945,7 @@ class World:
     def word(self, f: Failed) -> frozenset[str] | None:
         """`main`'s word on ``f``'s task, as the run beside its check gives it to a candidate above another: its failing tests,
         none where it passes it; None in the tick `main` moved and the next, before that run has said, and of a red task
-        whose failing tests graph2 doesn't report."""
+        whose failing tests aren't reported."""
         if self.tick <= self.main_since + 1:
             return None
         if f.task.startswith("suite:red"):
@@ -1971,8 +1971,8 @@ class World:
         return frozenset(own | {(f"suite:red{i}", t) for i in range(len(self.fixes)) for t in self.red_tests(i, sha)})
 
     def failures(self, c: Candidate) -> tuple[Failed, ...]:
-        """``c``'s failures: its bad members' and the red tasks', each with its key on ``c``'s base and, where graph2 reports
-        them, its failing tests and the base's."""
+        """``c``'s failures: its bad members' and the red tasks', each with its key on ``c``'s base and, where reported,
+        its failing tests and the base's."""
         out = []
         for m in sorted(self.tree[c.sha] & set(self.bad)):
             if m in self.breaks:
@@ -1993,7 +1993,7 @@ class World:
     def verdict(self, c: Candidate) -> Verdict:
         """Its tree's failures and infra errors as the loop derives the state from them; on a first enqueue, now and then a
         listing or infra error, and on a first run a flake; before the rest of the check ends, now and then only the failures
-        graph2 answers from its cache (at the base's key)."""
+        answered from the cache (at the base's key)."""
         rng = self.rng
         if self.outage.get(c.sha) == INFRA:
             return Verdict(INFRA, (), (Failed("node", f"node@{c.sha}", frozenset({"tools/runner.py"}), tree=not self.tree_ejects),))
