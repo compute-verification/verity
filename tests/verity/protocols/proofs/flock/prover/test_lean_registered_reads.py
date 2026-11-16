@@ -1,4 +1,4 @@
-"""Registered reads (`Flock.HmRow`, `verity/protocols/proofs/spot/verifier/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (`Flock.HmRow`, `verity/protocols/proofs/spot/verifier/DESIGN.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
