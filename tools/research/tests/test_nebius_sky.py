@@ -1436,20 +1436,20 @@ def test_a_clean_up_pass_runs_mains_copy_and_never_a_snapshot_a_run_shipped(tmp_
         assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
 
 
-def test_the_collector_takes_unpreserved_runs_on_node_2_and_cpu_1_to_15_alone(tmp_path):
+def test_the_collector_takes_unpreserved_runs_on_node_2_and_cpu_1_to_16_alone(tmp_path):
     """`--unpreserved-runs` deletes a run's only copy, so the unit passes it only where a tracked drop-in says so, which
-    deploy.toml installs on vy-nebius-2 and vy-nebius-cpu-1 to cpu-15, each with the unit and the code it runs, and on no other
+    deploy.toml installs on vy-nebius-2 and vy-nebius-cpu-1 to cpu-16, each with the unit and the code it runs, and on no other
     machine: no other entry installs it or writes its path, and no other file of the nodes' sets the switch."""
     import shlex
     import subprocess
     import tomllib
     conf = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
     dropin = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
-    takers = ["vy-nebius-2"] + [f"vy-nebius-cpu-{i}" for i in range(1, 16)]
+    takers = ["vy-nebius-2"] + [f"vy-nebius-cpu-{i}" for i in range(1, 17)]
     doc = tomllib.loads((SKY.parent / "deploy.toml").read_text())
     entries = doc["file"] + doc["tree"]
     got = [(f["path"], f["nodes"]) for f in entries if f.get("src") == conf or f["path"] == dropin]
-    assert got == [(dropin, takers)], "the drop-in, once, on vy-nebius-2 and cpu-1 to cpu-15 and on no other machine"
+    assert got == [(dropin, takers)], "the drop-in, once, on vy-nebius-2 and cpu-1 to cpu-16 and on no other machine"
     assert not set(takers) - set(doc["nodes"]), f"{sorted(set(takers) - set(doc['nodes']))} have no [nodes] table"
     for needed in ("/etc/systemd/system/vy-retention-gc.service", "/etc/systemd/system/vy-retention-gc.timer", "/usr/local/lib/vy-monitoring/clean-up"):
         on = {n for f in entries if f["path"] == needed for n in f["nodes"]}

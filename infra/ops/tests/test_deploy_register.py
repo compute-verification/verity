@@ -915,7 +915,8 @@ def test_the_manifests_address_files_are_made_from_the_register_and_each_reads_a
     assert {1, 2, 10} <= set(cpus) and [ln[0] for ln in lines] == ["vy-nebius-2", *(f"vy-nebius-cpu-{i}" for i in cpus)] == names
     assert all(ln[-1] == f"research@{reg.live[ln[0]]['host']}" and "/home/research/.ssh/vy-cluster" in ln for ln in lines)
     shared = {n for n, node in deploy.load().items() for e in node.entries if e.src and e.src.endswith("/peers")}
-    assert {f"vy-nebius-cpu-{i}" for i in range(1, 18)} | {"vy-nebius-2"} <= shared
+    assert shared == {f"vy-nebius-cpu-{i}" for i in range(1, 18)} | {"vy-nebius-2"}, \
+        "the list goes on the shared nodes it names and no other: a roll stops at a node whose machine the register lacks"
     assert {e.accept for e in entries.values() if e.src.endswith("/peers")} == {"/home/research/.ssh/vy-cluster.pub"}
 
     challenger, names = text["tools/research/src/research/pods/nebius/peers-challenger"]
