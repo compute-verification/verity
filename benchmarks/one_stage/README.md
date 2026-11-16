@@ -26,6 +26,14 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
   workload's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
   of a request, and no file of the workload's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
+  Its work directory is made once on the node by `(cd adapters/vllm && WORK=DIR bash verity_vllm/ops/pod_bootstrap.sh --cases
+  LLAMA32_1B_INT8)`, and the script then runs with the same `WORK` (default `/workspace`). The bootstrap makes all the script reads
+  under `WORK`: vLLM's environment (`venv312`), the int8 checkpoint (`hf`) and the sm_90 taps (`cp`: the guarded FA3 build and the
+  norm tap). Before any build, the script refuses each one it doesn't find, naming that command. Under `gpu-lease` it leases one card
+  (`A5_CARD=N` names it, else any free one) for its Match capture and its Commit's engine only, and no cores: its builds, replay and
+  audit run on the cores the job is given (`nproc`). With no `gpu-lease` it takes card `A5_CARD` (default 0) directly. The row dir,
+  the window and the audit's private files are under `WORK/a5-llama1b/RUN` (`A5_ROOT`). They are removed at exit, success or
+  failure, unless `A5_KEEP=1`. M0's Flock build (`A5_FLOCK_WORK`, default `WORK/a5-llama1b/flock-work`) is kept for the next run.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
