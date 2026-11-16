@@ -638,8 +638,8 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
-          f"verifier's node one card of {kind}; its records go to {held}/out, which `verity bench memory --from {held}` "
-          "reads back", file=sys.stderr)
+          f"verifier's node one card of {kind}; its records go to the directory on the next line, which `verity bench "
+          f"memory --from` reads back\n  {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
         if (why := refusal(Path(held) / "out" / "verifier.json")) is not None:

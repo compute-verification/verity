@@ -21,18 +21,3 @@ packages = [
 
 [tool.uv.sources]
 verity = { workspace = true }
-
-[tool.verity.tests]
-# the translator reads the served kernels' Definitions from the vLLM adapter, which depends on this package, so they are
-# inputs rather than a dependency; loading them reads the package's `__init__.py`
-inputs = [
-    "adapters/vllm/verity_vllm/__init__.py",
-    "adapters/vllm/verity_vllm/definitions",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q -p no:cacheprovider"
-markers = [
-    "slow: takes over about 5 s; deselect with -m 'not slow'",
-]
