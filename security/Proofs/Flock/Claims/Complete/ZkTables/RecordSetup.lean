@@ -42,12 +42,20 @@ theorem insOf_ins {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some 
       rfl
 
 theorem Raw.ins_tags {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    ∃ t, Tags.byName? w.statement = some t ∧ s.read.I.tags = t ∧ (w.zk = true → t.plainLeaves = false) := by
+    ∃ t, Tags.byName? w.statement = some t ∧ s.read.I.tags = t := by
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl, by assumption⟩) |
-    (cases h; exact ⟨_, by assumption, rfl, fun hz => by simpa [hz] using ‹¬ (_ && _) = true›⟩) | (exfalso; contradiction)
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl⟩) | (exfalso; contradiction)
+
+open FlockSoundness.Refine in
+/-- A masked statement's tags have no plain leaves (`Raw.ins` refuses them). -/
+theorem Raw.ins_plain {w : Raw} {s : Ins} {t : Tags} (h : w.ins = .ok s) (hb : Tags.byName? w.statement = some t)
+    (hz : w.zk = true) : t.plainLeaves = false := by
+  by_contra hn
+  have hp : t.plainLeaves = true := by simpa using hn
+  unfold Raw.ins at h
+  simp [hb, hz, hp, throw_bind'] at h
 
 open FlockSoundness.Refine in
 /-- A masked setup's statement has the hm96 rows (`Ins.setup` refuses any other). -/
@@ -130,10 +138,10 @@ theorem setup_facts {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   have e2 : s.read.tags.merkleLeaf = s.read.I.tags.merkleLeaf := by
     simp [Readable.Read.tags, ZkExec.zkTags, Zk.tags, hzk]
   obtain ⟨w, hw, hwz, hwi⟩ := insOf_ins hi
-  obtain ⟨t, hbn, hIt, hpl⟩ := Raw.ins_tags hwi
+  obtain ⟨t, hbn, hIt⟩ := Raw.ins_tags hwi
   have hl : s.read.tags.merkleLeaf = "hm96-sha512/v1" := by
     rw [e2, hIt]
-    exact byName_hm96 hbn (hpl hwz) (by rw [← hIt, ← e1]; exact hm96)
+    exact byName_hm96 hbn (Raw.ins_plain hwi hbn hwz) (by rw [← hIt, ← e1]; exact hm96)
   have hco : s.read.coins = .tree (Zk.coinSpec (s.read.I.tags.tableNames s.read.I.count)) := by
     simp [Readable.Read.coins, ZkExec.zkCoins, hzk]
   have hshape := Claims.Bridge.Custody.setup_shapeOk hset hzk
