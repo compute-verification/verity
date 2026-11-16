@@ -63,7 +63,7 @@ BODY_BYTES = 1 << 26
 COMPLETIONS = b"POST /v1/completions HTTP/1.1"
 BLANK = b"\r\n\r\n"
 #: an id request's ``why`` where its connection ended before the server's stream of it did
-GONE = "the network certifier's side ended before the server's stream"
+GONE = "the network attester's side ended before the server's stream"
 
 
 class Broken(Exception):
