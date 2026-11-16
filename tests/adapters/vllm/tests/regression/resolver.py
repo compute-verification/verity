@@ -46,7 +46,9 @@ from verity_vllm.config import workload_file
 from . import store_io
 
 HERE = Path(__file__).resolve().parent
-VLLM_ROOT = HERE.parents[1]  # adapters/vllm
+VLLM_ROOT = HERE.parents[4] / "adapters" / "vllm"  # adapters/vllm
+#: tests/adapters/vllm, where `tests` (this suite's package) imports from
+TESTS_ROOT = HERE.parents[1]
 FIXTURES = HERE / "fixtures.toml"
 FILES = HERE / "files.toml"
 EXPECTED_DIR = HERE / "expected"
@@ -61,7 +63,7 @@ ORACLES = ("expected", "frozen")
 RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
 REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that recompute from a row's Programs (`REBUILD = True`: a manifest rebuild, step_segmentation's decode; CPU minutes to half an hour a row)
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
-REGISTRY = HERE.parents[3] / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
+REGISTRY = HERE.parents[4] / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
 
 
 def store_required() -> bool:

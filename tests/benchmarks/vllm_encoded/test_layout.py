@@ -7,10 +7,10 @@ import pytest
 import torch
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "vllm_encoded"))
 import layout
 
-_spec = importlib.util.spec_from_file_location("wc_codec", HERE.parents[1] / "word_codec" / "codec.py")
+_spec = importlib.util.spec_from_file_location("wc_codec", HERE.parents[2] / "benchmarks" / "word_codec" / "codec.py")
 codec = sys.modules["wc_codec"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(codec)
 
@@ -94,7 +94,7 @@ def test_decoded_reference_words():
         assert codec.decode_word(y, 1000 + i, key) == p[i]
 
 
-_wspec = importlib.util.spec_from_file_location("wc_wide", HERE.parents[1] / "word_codec" / "wide.py")
+_wspec = importlib.util.spec_from_file_location("wc_wide", HERE.parents[2] / "benchmarks" / "word_codec" / "wide.py")
 wide = sys.modules["wc_wide"] = importlib.util.module_from_spec(_wspec)
 _wspec.loader.exec_module(wide)
 
@@ -140,7 +140,7 @@ def test_wide_limb_index_reads_the_store(bits):
         assert layout.wide_word(store, i, f.limbs) == lanes[32 * q + lane][wi]
 
 
-_tspec = importlib.util.spec_from_file_location("ct_wide", HERE.parents[1] / "codec_tensor" / "wide.py")
+_tspec = importlib.util.spec_from_file_location("ct_wide", HERE.parents[2] / "benchmarks" / "codec_tensor" / "wide.py")
 ct = sys.modules["ct_wide"] = importlib.util.module_from_spec(_tspec)
 _tspec.loader.exec_module(ct)
 

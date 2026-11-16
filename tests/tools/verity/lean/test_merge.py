@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_merge", HERE.parent / "merge.py")
+spec = importlib.util.spec_from_file_location("lean_merge", HERE.parents[3] / "tools" / "verity" / "lean" / "merge.py")
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 A = M.A
@@ -598,7 +598,7 @@ def test_git_merges_two_branches_that_add_guarantees_and_takes_theirs_where_both
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
     rec = repo / "pkg" / "lean-audit.json"
     rec.parent.mkdir()
@@ -945,8 +945,8 @@ def test_an_old_branch_merging_main_merges_by_origin_main_s_driver_and_its_own_c
     repo, cut = tmp_path / "repo", "    held(base, ours, theirs, out, candidate)\n"
     (lean := repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("check.py", "settings.py"):
-        shutil.copy(HERE.parent / f, lean / f)
-    driver = (HERE.parent / "merge.py").read_text()
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, lean / f)
+    driver = (HERE.parents[3] / "tools" / "verity" / "lean" / "merge.py").read_text()
     assert (old := driver.replace(cut, cut + '    out["reads"] = dict(list(out["reads"].items())[:1])\n')) != driver
     (lean / "merge.py").write_text(old)
     (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
@@ -1156,7 +1156,7 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("merge.py", "check.py", "headers.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"*.lean merge={M.LEAN}\n")
     g = repo / "G.lean"
     git(repo, "init", "-q", "-b", "main")
@@ -1366,7 +1366,7 @@ def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
     pp = repo / "pyproject.toml"
     tail = '"verity/protocols/resource_accounting/memory/pous/prover/circuit.py"]'
@@ -1390,7 +1390,7 @@ def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"lakefile.toml merge={M.LAKEFILE}\n")
     lf = repo / "lakefile.toml"
     anchor = 'path = "../../pouw/window"\n'
@@ -1760,7 +1760,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     git(repo, "init", "-q", "-b", "main")
@@ -1795,7 +1795,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     inline = {SEC: 1422}
@@ -1824,7 +1824,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     assert caps.read_text() == packages({SEC: 354}, inline, above="b2")
 
 
-_uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent / "unread.py")
+_uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parents[3] / "tools" / "verity" / "lean" / "unread.py")
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
@@ -1941,7 +1941,7 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     repo = tmp_path / "repo"
     (repo / M.DIR).mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
-        shutil.copy(HERE.parent / f, repo / M.DIR / f)
+        shutil.copy(HERE.parents[3] / "tools" / "verity" / "lean" / f, repo / M.DIR / f)
     (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.LIMITS}\n")
     caps = repo / UNREAD
     git(repo, "init", "-q", "-b", "main")

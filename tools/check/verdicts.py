@@ -68,7 +68,7 @@ def roots() -> dict[str, Path]:
     """The caches, where `check.py` (`cache_dir()`) and `suites.py` (`CACHE`) keep them; `tests/test_verdicts.py` pins the two."""
     S, home = SETTINGS, Path.home()
     return {"check": Path(S.CHECK_CACHE or home / ".cache" / "verity-check"),
-            "tests": Path(S.VERITY_TEST_CACHE or Path(S.XDG_CACHE_HOME or home / ".cache") / "tests" / "verity")}
+            "tests": Path(S.VERITY_TEST_CACHE or Path(S.XDG_CACHE_HOME or home / ".cache") / "verity" / "tests")}
 
 
 def entries() -> dict[str, Path]:

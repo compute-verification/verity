@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_audit", HERE.parent / "check.py")
+spec = importlib.util.spec_from_file_location("lean_audit", HERE.parents[3] / "tools" / "verity" / "lean" / "check.py")
 A = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(A)
 
@@ -1743,7 +1743,7 @@ def test_facts_names_a_module_without_listing_every_module():
     """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
     guarantee's reads reach, it takes nearly all of `security`'s audit."""
     for tool in ("Facts.lean", "Upstream.lean"):
-        assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
+        assert "moduleNames[" not in (HERE.parents[3] / "tools" / "verity" / "lean" / tool).read_text(), \
             f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
 
 
@@ -1984,7 +1984,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     judge = {"_finish", "judge", "inline_failures", "renamed_current", "audit.judged", "facts_config"}
     names = {"proved": {"guarantees", "shape", "witnesses"}, "listed_premises": {"assumptions", "domain", "open"}}
     funcs: dict[str, ast.FunctionDef] = {}
-    module = ast.parse((HERE.parent / "check.py").read_text())
+    module = ast.parse((HERE.parents[3] / "tools" / "verity" / "lean" / "check.py").read_text())
     for top in module.body:
         for n in ast.walk(top):
             if isinstance(n, ast.FunctionDef):
@@ -2136,7 +2136,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
     # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
     # `upstream.py`'s own command line, and check.py calls neither
     siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
-    naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parent / f"{s}.py").read_text()).body
+    naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parents[3] / "tools" / "verity" / "lean" / f"{s}.py").read_text()).body
               if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
                      for n in ast.walk(top))}
     assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
@@ -6593,7 +6593,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     monkeypatch.delenv("LEAN_NUM_THREADS", raising=False)
     cpu = min(os.sched_getaffinity(0))
     code = (f"import importlib.util, os\nos.sched_setaffinity(0, {{{cpu}}})\n"
-            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parent / 'check.py')!r})\n"
+            f"spec = importlib.util.spec_from_file_location('lean_audit', {str(HERE.parents[3] / "tools" / "verity" / "lean" / "check.py")!r})\n"
             "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "1"
@@ -7199,7 +7199,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     import random
     if not A.sandboxed():
         pytest.skip("no sandbox here, so nothing is recompiled")
-    spec = importlib.util.spec_from_file_location("lean_audit_for_sampled", HERE.parent / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_sampled", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
@@ -7325,7 +7325,7 @@ def test_a_bound_build_gives_a_module_the_same_bytes_wherever_its_tree_is(tmp_pa
     where a build at the tree's own path is equal only as an object graph."""
     if not A.sandboxed():
         pytest.skip("no sandbox here, so no build is bound")
-    spec = importlib.util.spec_from_file_location("lean_audit_for_bound", HERE.parent / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_bound", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
@@ -7458,7 +7458,7 @@ def test_a_dependent_staged_on_a_cold_cache_rewrites_no_file_its_dependency_s_au
     nothing in `d`'s build, Lake finds `D` up to date and compiles `P` alone, and each sealed file is the file the seal
     hashed: its inode, its time and its bytes. What the two builds compiled is then stored, each module once, and a
     second tree compiles neither."""
-    spec = importlib.util.spec_from_file_location("lean_audit_for_sealed", HERE.parent / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_sealed", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
@@ -7521,7 +7521,7 @@ def test_a_dependent_that_fetches_more_than_its_dependency_stores_both_on_a_cold
     left is `D`'s entry under `p` as well and `P`, which loads it, is stored above it. When `D`'s key under `p` named
     `z` too, `d`'s own compile of it was no compile of that key, nothing stood under it, and every tree compiled `P`
     again. A second tree compiles neither package's modules."""
-    spec = importlib.util.spec_from_file_location("lean_audit_for_fetched", HERE.parent / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_fetched", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
@@ -7605,7 +7605,7 @@ def test_a_required_package_moved_is_compiled_by_no_build(tmp_path, monkeypatch)
     `p`'s `require` and the `dir` of its manifest's entry rewritten and nothing else changed. A key reads neither, and
     neither does Lake's own input hash of a module, under which the staged outputs are restored: the second tree's
     builds compile no module."""
-    spec = importlib.util.spec_from_file_location("lean_audit_for_moved", HERE.parent / "lean_audit.py")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_moved", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_audit.py")
     LA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LA)
     mk = A.sibling("module_keys")
@@ -9648,7 +9648,7 @@ def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path)
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
     script = f"""import importlib.util, sys
 from pathlib import Path
-spec = importlib.util.spec_from_file_location("lean_audit", {str(HERE.parent / "check.py")!r})
+spec = importlib.util.spec_from_file_location("lean_audit", {str(HERE.parents[3] / "tools" / "verity" / "lean" / "check.py")!r})
 A = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(A)
 tmp = Path({str(tmp_path)!r})
@@ -9700,7 +9700,7 @@ def test_a_build_s_peak_adds_up_the_jobs_it_runs_side_by_side(tmp_path):
     A.peaked(rep, "replay", heavy, R.REPLAY_ARKLIB_GIB + 1, said.append)
     assert set(rep) == {"peak_gib"} and rep["peak_gib"]["replay"] == R.REPLAY_ARKLIB_GIB + 1
     (w,) = said
-    line = next(i for i, s in enumerate((HERE.parent / "reserve.json").read_text().splitlines(), 1)
+    line = next(i for i, s in enumerate((HERE.parents[3] / "tools" / "verity" / "lean" / "reserve.json").read_text().splitlines(), 1)
                 if s.strip().startswith('"REPLAY_ARKLIB_GIB":'))
     assert w.startswith(f"warning: {heavy}: replay: its peak"), w
     assert f"raise REPLAY_ARKLIB_GIB at tools/verity/lean/reserve.json:{line}," in w, w
@@ -9959,7 +9959,7 @@ def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatc
     monkeypatch.setattr(A, "DEV_CACHE", True)
     env = A.lake_env()
     assert "LEAN_CACHE" not in env and "LAKE_ARTIFACT_CACHE" not in env
-    spec = importlib.util.spec_from_file_location("lean_changed_under_test", HERE.parent / "lean_changed.py")
+    spec = importlib.util.spec_from_file_location("lean_changed_under_test", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_changed.py")
     LC = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(LC)
     assert A.DEV_KIND == LC.FAST_KIND
