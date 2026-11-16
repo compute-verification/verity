@@ -194,7 +194,7 @@ def _prim(name: str):
 
 
 def row_scalars(temp: int) -> list[int]:
-    """``[temp, rcp, skip, noisy]`` by the IR primitives (``TemperatureScale``'s and ``GumbelSelectF32``'s row values)."""
+    """``[temp, rcp, skip, noisy]`` by the primitive circuits (``TemperatureScale``'s and ``GumbelSelectF32``'s row values)."""
     eq = _prim("F32Eq").evaluate
     rcp = _prim("DivFullRcp").evaluate(temp)
     return [temp & 0xFFFFFFFF, rcp, eq(temp, 0) | eq(temp, ONE_F32), 1 - eq(temp, 0)]
