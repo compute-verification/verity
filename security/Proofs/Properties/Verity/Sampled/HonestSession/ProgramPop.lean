@@ -142,16 +142,25 @@ theorem templatesOf_q (n : String) (v : Nat) (P : Json) (hn : n = "Q_template_in
     (hP : P = Json.mkObj [("template", .str templateId)]) :
     Flock.TemplateQuery.templatesOf n v P = some (pure #[templateId]) := by
   subst hn hv hP
-  have hk : Flock.TemplateQuery.Desc.parseWith.match_19 (fun _ => Array String) (Json.mkObj [("template", .str templateId)])
-      (fun kvs => (kvs.toArray.map (·.1)).qsort (· < ·)) (fun _ => #[]) = #["template"] := by
-    show (Array.map (fun p : String × Json => p.1) #[("template", _)]).qsort (· < ·) = _
-    have hm : Array.map (fun p : String × Json => p.1) #[("template", Json.str templateId)] = #["template"] := by
-      simp only [List.map_toArray, List.map_cons, List.map_nil]
-    rw [hm]
-    exact qsort_sorted _ (by decide)
   unfold Flock.TemplateQuery.templatesOf
-  rw [hk]
-  rfl
+  dsimp only
+  split
+  · split
+    · rename_i kvs heq
+      have hk : ((Array.map (fun x => x.fst) kvs.toArray).qsort fun x1 x2 => decide (x1 < x2)) = #["template"] := by
+        unfold Json.mkObj at heq
+        injection heq with h
+        subst h
+        show (Array.map (fun p : String × Json => p.1) #[("template", Json.str templateId)]).qsort (· < ·) = _
+        have hm : Array.map (fun p : String × Json => p.1) #[("template", Json.str templateId)] = #["template"] := by
+          simp only [List.map_toArray, List.map_cons, List.map_nil]
+        rw [hm]
+        exact qsort_sorted _ (by decide)
+      rw [hk]
+      rfl
+    · rename_i hx
+      exact (hx _ rfl).elim
+  · rename_i h; exact absurd rfl h
 
 theorem hex_field (h : String) (hh : Flock.HmRow.isSha512Hex h = true) :
     Flock.HmRow.isSha512Hex (((Json.mkObj [("format", Flock.HmRow.PARTITION_V1), ("program", h), ("query", query)]).getObjValAs?
