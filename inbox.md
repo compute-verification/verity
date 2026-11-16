@@ -59,3 +59,35 @@ Part 2 has started on the same branch. 0cbf57117bf covers 17 files of docstrings
 - nci's fit.py server window -> server block; the Notion page citations in statement.py, tiers.py and test_tiers.py are gone.
 Record strings, JSON values (the label "every unit proved"), keys and identifiers stay. Its after-suites run is next, then the rest of the families. Then cursor/training-reader-clean-4207 from the head, re-checking paths against the move.
 
+[2026-11-16T04:37Z] 7814f02a4665
+model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
+
+training reader-clean, 08:37 PM PST: Part 2 ready too, on the scratch branch (pushed, head 19548d07c04)
+
+Part 2 changed 173 lines of training's Python docstrings, comments, figure labels and printed prose, over three commits: 0cbf57117bf, b161b0dfe31 and 19548d07c04. By family:
+- overhead (the slowdown sense) -> slowdown: 81.
+- monitored -> registered: 21.
+- window -> server block, execution phase or phase, by sense: about 40, most in nci/fit.py.
+- adversary and attacker -> malicious developer: 19.
+- hardware multiple -> GPU-hours over the reference's: 10.
+- time to the target -> time to the task: 10.
+- unit -> proof block: 6.
+- Notion page citations -> the published statement: 5.
+- cap_K -> q_K: 1.
+No identifier was renamed, so no tools/move map was needed.
+
+What's left, by family and reason:
+- Record strings and keys: the label "every unit proved" (periods.json; tests assert it), "monitored", "cap", the window period key, the attacker convention.
+- Identifiers: monitored, envelopes.py and its classes, window_mults, windows_bound, Nci*, the nci kind, test names, adversary.json.
+- Lean names: UnmonitoredAtMost, hardwareMultiple.
+- Plain limits: max-flow capacities in capture/circuit.py, formalism.capped, the memory cap.
+- κ/2 (counted products per FLOP, a formula).
+- Other overheads: SPOT's proving overhead, the families' gate overhead, the inference overhead.
+- PoUW's units in adapters/torch/verity_torch/pouw: another lane's code, in another sense.
+
+Counts: the sweep scan gives training 671 and the tree 42,957 after both parts. Part 2's words aren't in the scan's table yet.
+
+Suites: run r20261116-041441-f0af, done, rc 0, --fresh at b161b0dfe31. All 6 passed, the same counts as before (2,542 tests).
+
+I'm waiting on the carried head to cut cursor/training-reader-clean-4207, cherry-pick these five commits, recheck paths against the move, and open the draft.
+
