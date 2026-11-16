@@ -31,8 +31,8 @@ nothing it builds, which its audit's first lines say.
 
 The change is read against BASE: `--base`, else where COMMIT left `main` (`MAIN`), and with `--whole` the history's first
 commit, from which every package is reached. The audit needs the memory `tools/verity/lean/check.py` refuses below
-(`SPEC_FLOOR_GIB` where the change reaches security/Proofs), so `--mem-gb` has no default: it is what the machine's steward
-books for one. The tree is checked out in a worktree of its own, shipped, and the worktree removed: `research run --on`
+(`reserve.floor`: an ArkLib replay's whole figure where the change reaches security/Proofs; `check.py --ask` prints the
+ask), so `--mem-gb` has no default: it is what the machine's steward books for one. The tree is checked out in a worktree of its own, shipped, and the worktree removed: `research run --on`
 returns once the run is launched, and this prints the run to check back on. The run takes the bundles the launcher signs
 URLs for (`lean_audit.url_file`, sent as `URLS`) before it builds, so it compiles only what neither MACHINE's caches nor
 those bundles hold. A bundle holds what its run compiled, not the modules below every change, so a machine whose caches
