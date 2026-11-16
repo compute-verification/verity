@@ -18,11 +18,11 @@ from typing import Any
 
 import pytest
 import torch
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-from verity.protocols.proofs.spot.device.challenger import CoinError
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
 
 from tests.pipeline import predicted
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
@@ -178,7 +178,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     None."""
     import stat
 
-    from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
@@ -215,7 +215,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
 def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_draw(tmp_path, monkeypatch):
     """A served call's file the writer couldn't write is its window's failure: the release waits for the window's files,
     its outcome carries the error and its draw-gated release is refused by name; the next window is written whole."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 
     from verity_vllm.pipeline import serve_release as SL
 
@@ -259,7 +259,7 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
     import importlib.util
     from pathlib import Path
 
-    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 
     path = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "pouw" / "test_pouw_h1_receipts.py"
     spec = importlib.util.spec_from_file_location("test_pouw_h1_receipts", path)
@@ -314,8 +314,8 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     import hashlib
 
     from verity.circuits.codec import program_digest
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
@@ -557,7 +557,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
     serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
     its sampling session, reserved withheld beside it) is the one reserved at startup."""
-    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity_torch.pouw.h1 import tables_device as TD
 
     from verity_vllm.protocols.pouw import h1_hooks as PHK
@@ -687,7 +687,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     at the engine step its step maps to, under the names the Commit acquired them by), byte-equal to what was committed,
     and drops every other value: the other calls' rows and the step's input ids. In process the sample is at the proof
     system's K on the window's calls_root; on a gate session at its period-open's K on its open root."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     from tests.commit.test_device_pool import committed
     from tests.pipeline.test_serve_release import _Waits

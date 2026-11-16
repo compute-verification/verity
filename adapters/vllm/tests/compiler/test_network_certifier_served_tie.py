@@ -24,13 +24,13 @@ from verity.commitments.rowleaf import (
     row_leaf,
     sha512_row_v2_digest,
 )
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_tie as ST
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 

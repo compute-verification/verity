@@ -619,10 +619,10 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.poub.binder import Binder, Every
-        from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
+        from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
-            from verity.protocols.accounting.poub.verifier.audit import NoiseTiles
+            from verity.protocols.resource_accounting.memory.poub.verifier.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}

@@ -79,8 +79,8 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
-from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 
 from verity_vllm.compiler import replay_chain as RC
 

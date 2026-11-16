@@ -57,9 +57,9 @@ def entropy(label: str) -> Callable[[int], bytes]:
 
 
 def coins(steps: int) -> tuple[Any, Any]:
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity.protocols.proofs.spot.device.challenger import LiveRecord
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+    from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
     return Challenger(0, entropy("salt")), LiveRecord(Wd.live_challenger(0, steps, entropy("rounds")), Wd.ROUND)
 
 
@@ -141,8 +141,8 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     """One window at TP N with ``served`` and the Commit on every rank (`pouw_h1_ranks.install`), ``edit`` (a `NEGATIVES`
     kind) on rank ``--edit-tp`` when given, held to core's ROOTS1 steps (`pouw_h1_gpu.core_tie`) once released. Its
     Program is declared at its first call and kept in ``program`` for the next window."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     from tests.protocols import pouw_h1_gpu as GPU
     from verity_vllm.protocols.pouw import h1_ranks as PHR
@@ -195,8 +195,8 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
 
 def serve(a: argparse.Namespace) -> dict[str, Any]:
     import torch
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-    from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 
     from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
     from tests.protocols.pouw_h1_gpu import (
@@ -313,7 +313,7 @@ def macs(shapes: list[list[int]]) -> int:
 
 def compare(one: Path, other: Path) -> dict[str, Any]:
     """`one` (one GPU) and `other` (TP N × PP M) held to each other: tokens, calls, layouts and, at one TP, commitments."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import CALLS_FILE
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import CALLS_FILE
     a, b = (json.loads((d / SUMMARY).read_text()) for d in (one, other))
     ca, cb = (json.loads((d / CALLS_FILE).read_text()) for d in (one, other))
     tps = [a.get("tp", 1), b.get("tp", 1)]

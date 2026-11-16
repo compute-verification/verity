@@ -11,8 +11,8 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the lead's device words need a GPU", allow_module_level=True)
 
-from verity.protocols.accounting.pouw.prover.serving import lead as PL  # noqa: E402
-from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as PL  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import rows as L  # noqa: E402
 from verity_torch.pouw.lead import rows_device as LD  # noqa: E402
 
 from tests.protocols import test_pouw_lead as T  # noqa: E402

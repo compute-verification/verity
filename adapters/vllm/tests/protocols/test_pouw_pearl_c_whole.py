@@ -15,10 +15,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.verifier.serving import DEFERRED_A, SERIAL
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import DEFERRED_A, SERIAL
 from verity_torch.pouw.pearl_c import graphs as PG
 from verity_torch.pouw.pearl_c import lanes_device as L
 from verity_torch.pouw.pearl_c import passes as PP

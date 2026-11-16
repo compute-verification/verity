@@ -7,8 +7,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.accounting.pouw.prover.circuit import plan as CPL
-from verity.protocols.accounting.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan as CPL
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 
 from tests.check import test_pouw_ncp_v2_end_to_end as E2E
 from verity_vllm.check.replay import pouw_circuit as RC

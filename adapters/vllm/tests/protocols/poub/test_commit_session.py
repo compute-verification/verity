@@ -3,7 +3,7 @@ arguments and targets it serves and refuses, the store binder it installs before
 and its audit run in lockstep with the Commit's instrumented run (`lockstep`: each pass's engine step the run's next
 step), over a CPU store and PoUB's verifier on a thread.  PoUB's serving loop under it, and the helpers these tests share
 with its tests (`PassClock`, `verifying`, `store`, `engine`, `TickingBackend`), are PoUB's prover's
-(`verity/protocols/accounting/poub/tests/test_remote_session.py`)."""
+(`verity/protocols/resource_accounting/memory/poub/tests/test_remote_session.py`)."""
 from __future__ import annotations
 
 import json
@@ -18,14 +18,14 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.poub.prover.node_store import serving
-from verity.protocols.accounting.poub.prover.node_store.registry import (
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
     ArrayBacking,
     NodeMemory,
 )
-from verity.protocols.accounting.poub.tests.test_memory_map import BLOCK
-from verity.protocols.accounting.poub.tests.test_registry import CODEC, RECEIPT
-from verity.protocols.accounting.poub.tests.test_remote_session import (
+from verity.protocols.resource_accounting.memory.poub.tests.test_memory_map import BLOCK
+from verity.protocols.resource_accounting.memory.poub.tests.test_registry import CODEC, RECEIPT
+from verity.protocols.resource_accounting.memory.poub.tests.test_remote_session import (
     P512,
     PassClock,
     TickingBackend,
@@ -34,8 +34,8 @@ from verity.protocols.accounting.poub.tests.test_remote_session import (
     store,
     verifying,
 )
-from verity.protocols.accounting.poub.verifier import audit, coins, memory_map
-from verity.protocols.accounting.poub.verifier.session import verifier, wire
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, memory_map
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier, wire
 
 from verity_vllm.protocols.poub import remote
 
@@ -400,7 +400,7 @@ import os
 from pathlib import Path
 
 from tests.protocols.poub import test_commit_session as C
-from verity.protocols.accounting.poub.tests import test_remote_session as T
+from verity.protocols.resource_accounting.memory.poub.tests import test_remote_session as T
 
 
 def deliberate(*a, **kw):

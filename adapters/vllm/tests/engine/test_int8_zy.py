@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
-from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
 from verity_torch.pouw import credit_gate_device as CGD
 
 from verity_vllm.engine import int8_exact as E
@@ -94,7 +94,7 @@ def test_each_records_z_is_the_compiled_units_z_in_its_cells_order():
     """Record u's z words are `pouw_h1.Call.z(Y, u)`: the compiled Program's unit u, its cells in its tile's pair order, so
     a leaf of the record is the unit's z as H1's statement reads it.  The only test that holds the layout to the compiled
     Program rather than to the module doc; about 30 s, compiling the smallest H1 call (K = 64, two by two units)."""
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     m, rows, n, k = 40, 64, 64, 64
     xq, sa, w, sw = _args(m, k, n, seed=11)
     zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)[1]

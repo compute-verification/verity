@@ -11,7 +11,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.accounting.certifier.prover import window_charge as WC
+from verity.protocols.resource_accounting.network.prover import window_charge as WC
 
 from tests.compiler.test_network_certifier_compile_slice import BOOK
 from tests.compiler.test_network_certifier_compile_slice_w212 import CARRY, OWN, _load

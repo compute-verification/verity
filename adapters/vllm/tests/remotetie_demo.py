@@ -38,8 +38,8 @@ Run from the tree's root: PYTHONPATH=. python3 adapters/vllm/tests/remotetie_dem
 """
 import hashlib
 
-from verity.protocols.accounting.pouw.verifier import credit as C
-from verity.protocols.accounting.pouw.verifier import weights as W
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

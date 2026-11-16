@@ -124,7 +124,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -136,25 +136,25 @@ from verity.protocols.accounting.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.accounting.pouw.verifier import verifier as PV
-from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
-from verity.protocols.accounting.pouw.verifier.credit import passes_distinct
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c import K_MIN, TILE
-from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
-from verity.protocols.proofs.spot.device.challenger import LiveCommitment
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
+from verity.protocols.resource_accounting.compute.pouw.verifier.credit import passes_distinct
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import K_MIN, TILE
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
+from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier

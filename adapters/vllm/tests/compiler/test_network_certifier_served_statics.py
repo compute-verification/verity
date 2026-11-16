@@ -20,7 +20,7 @@ from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_statics as SS
 from verity_vllm.compiler import served_tie as ST
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 
 
 def _book() -> dict:

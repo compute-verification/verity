@@ -128,7 +128,7 @@ from verity.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
 from verity.commitments.gates.frame_v3 import _refs
 from verity.commitments.pool_row import PoolRow
-from verity.protocols.accounting.certifier.verifier.head_check import (
+from verity.protocols.resource_accounting.network.verifier.head_check import (
     _coll,
     _Consts,
     ands,

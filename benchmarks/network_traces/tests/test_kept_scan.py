@@ -31,11 +31,11 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-from verity.protocols.accounting.certifier.verifier import network_certifier as W
-from verity.protocols.accounting.certifier.verifier.id_form import id_request
-from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
-from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_STATE
+from verity.protocols.resource_accounting.network.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
@@ -64,7 +64,7 @@ def network_traces() -> Iterator[None]:
 with network_traces():
     import certifier_piece as CP
     from benchmarks.network_traces import network_certifier_chain as WCH
-    from verity.protocols.accounting.certifier.device import network_certifier_serve as WS
+    from verity.protocols.resource_accounting.network.attester import network_certifier_serve as WS
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
@@ -72,7 +72,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
     return PP.kept_scan(serve_dir, cls, users, kept_ingress=CP.kept_ingress)
 
 
-_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
+_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/resource_accounting/network/verifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 
@@ -164,10 +164,10 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
     execution phase's rows are refused by name."""
     from verity_vllm.program.predict import window_circuit as WC, window_rows as WRS
-    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as H1R
 
     monkeypatch.setattr(H1R, "MODE", "numpy")
-    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run = "ab" * 64
     value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)

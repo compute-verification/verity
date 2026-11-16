@@ -18,11 +18,11 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.proofs.spot.device.challenger import LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveRecord
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine.hooks import Hooks

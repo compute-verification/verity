@@ -11,8 +11,8 @@ import itertools
 import random
 
 import pytest
-from verity.protocols.accounting.certifier.verifier import advice as V
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_advice import (
+from verity.protocols.resource_accounting.network.verifier import advice as V
+from verity.protocols.resource_accounting.network.verifier.tests.test_network_certifier_advice import (
     FIXTURE,
     RANDOM,
     packed,

@@ -31,7 +31,7 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
 NODE=${NODE:-vy-dc-h200-2}
-REG=verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json
+REG=verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json
 KSTAGE=${KSTAGE:-/workspace/research/runs/r20261026-073433-59f7}
 BUILD=${BUILD:-/workspace/research/runs/r20261025-233631-4164/out}
 LIB_SHA256=${LIB_SHA256:-6f9789ca44f23592a5c0d1239b10fd81b395f6d94b30bf5246987e225d847353}
@@ -43,7 +43,7 @@ MODE=${MODE:-both}
 WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WINDOW_S:-1} DEADLINE_S=${DEADLINE_S:-1}
 SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
-VERIFIER=${VERIFIER:-$PY -m verity.protocols.accounting.poub.verifier.p2_parties --registration $REG --stdio}
+VERIFIER=${VERIFIER:-$PY -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties --registration $REG --stdio}
 CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
 PARTY=${PARTY:-} PARTY_HOST=${PARTY_HOST:-}
 S=$(mktemp -d)
@@ -61,7 +61,7 @@ if [ -f "$LIB_TAR" ]; then
 elif [ -f "$BUILD/MANIFEST.sha256" ]; then
   cp -r "$BUILD/." "$S/lib/"; LIB_FROM=$BUILD
 else
-  bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
+  bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
 fi
 (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
   && [ "$(tail -n +2 "$S/lib/source.txt" | sha256sum | cut -c1-64)" = "$LIB_SOURCES_SHA256" ] \
@@ -71,7 +71,7 @@ cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/
 so=$(sha256sum < "$S/lib/lib/libp2v1.so" | cut -c1-64)
 echo "lib from $LIB_FROM: libp2v1.so $so (kernels' build's: $([ "$so" = "$LIB_SO_SHA256" ] && echo same || echo other)); layout $LAYOUT" \
   > "$O/inputs.txt"
-"$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py registration --store "$ENC" --node "$NODE" --layout "$LAYOUT" --out "$O/registration.json" \
+"$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py registration --store "$ENC" --node "$NODE" --layout "$LAYOUT" --out "$O/registration.json" \
   > "$O/registration.log" 2>&1 \
   && "$PY" - "$REG" "$O/registration.json" <<'EOF'
 import json, sys
@@ -81,9 +81,9 @@ sys.exit(0 if a == b else f"the store's registration {b['digest'][:16]}, plan {b
 EOF
 step registration $?
 "$PY" "$D/bandwidth_toy.py" "$S/toy" > "$O/toy.log" 2>&1 \
-  && "$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
+  && "$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
-    --verifier "$PY -m verity.protocols.accounting.poub.verifier.p2_parties --registration $S/toy/registration.json --stdio \
+    --verifier "$PY -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties --registration $S/toy/registration.json --stdio \
       --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1
 step toy $?
@@ -123,14 +123,14 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   if [ "$MODE" != cheat ]; then
     to=(--verifier "$VERIFIER"); [ -n "$CONNECT" ] && to=(--connect "$CONNECT")
     [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
-    "$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES" \
+    "$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES" \
       --out "$O/honest" --expect accept > "$O/honest.log" 2> "$O/honest.err"
     step honest $?; tail -n 1 "$O/honest.log" >> "$O/verdicts.txt"
   fi
   if [ "$MODE" != honest ]; then
     to=(--verifier "$VERIFIER"); [ -n "$CHEAT_CONNECT" ] && to=(--connect "$CHEAT_CONNECT")
     [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
-    "$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
+    "$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
       --skip-layer "$SKIP_LAYER" --out "$O/cheat" --expect reject > "$O/cheat.log" 2> "$O/cheat.err"
     step cheat $?; tail -n 1 "$O/cheat.log" >> "$O/verdicts.txt"
   fi

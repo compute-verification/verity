@@ -1,5 +1,5 @@
 """One CUDA device's copy of a row-table kernel library with its side streams (`DeviceLibrary`), over the host build of
-`verity.protocols.accounting.pouw.prover.serving.row_table_kernels`: H1's device tables, registered rows and receipts
+`verity.protocols.resource_accounting.compute.pouw.prover.serving.row_table_kernels`: H1's device tables, registered rows and receipts
 build on it, and so does the vLLM adapter's Commit (its ``commit.row_tables_device``)."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.prover.serving.row_table_kernels import device_lib, hm_tables, leaf_prefixes
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.row_table_kernels import device_lib, hm_tables, leaf_prefixes
 
 __all__ = ["DeviceLibrary", "side_stream"]
 

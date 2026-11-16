@@ -18,7 +18,7 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.commitments import rowleaf as RL
 from verity.commitments.gates import rowleaf as RG
-from verity.protocols.accounting.certifier.verifier.head_check import ands
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 
 from verity_vllm.compiler import cache_step_v3 as V3S
 from verity_vllm.compiler import compile_slice as CS

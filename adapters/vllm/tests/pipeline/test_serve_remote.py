@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.accounting.poub.prover.node_store import serving
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm import llm as L

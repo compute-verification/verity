@@ -17,10 +17,10 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from verity.protocols.accounting.certifier.verifier import id_form as IDF
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import release as REL
-from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.network.verifier import id_form as IDF
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR

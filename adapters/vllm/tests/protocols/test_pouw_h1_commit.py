@@ -26,15 +26,15 @@ else:
 
 from torch import nn
 from verity.circuits.codec import canonical_json
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import weights as Wt
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

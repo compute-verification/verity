@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 from verity.commitments import hm96
-from verity.protocols.accounting.certifier.verifier import arith_encode as AE
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 
 from tests.compiler.test_network_certifier_compile_slice import BOOK

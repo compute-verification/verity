@@ -17,7 +17,7 @@ from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_statics as SS
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 ROWS = 1 << CS.FLAGS.index("rows")
 RUN_ROOT = bytes(range(64))
 

@@ -26,13 +26,13 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
-from verity.protocols.accounting.pouw.prover.serving.h1 import kept as KP
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import kept as KP
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.protocols import challenger_host as CH
@@ -278,7 +278,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(opened, socket_dir)
     holder = HO.Holder(socket_dir / "stream.sock")
     opened.callback(holder.take)
     child = ("import socket, sys\nfrom types import SimpleNamespace as N\n"
-             "from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO\n"
+             "from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO\n"
              "s = socket.socket(fileno=int(sys.argv[1]))\n"
              "HO.send_stream(N(_wire=N(sock=s)), sys.argv[2])\n")
     subprocess.run([sys.executable, "-c", child, str(here.fileno()), str(holder.path)], check=True,

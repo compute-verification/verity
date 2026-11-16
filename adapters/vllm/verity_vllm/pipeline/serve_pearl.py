@@ -40,7 +40,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover import serving as PS
+from verity.protocols.resource_accounting.compute.pouw.prover import serving as PS
 
 from verity_vllm import messages as M
 

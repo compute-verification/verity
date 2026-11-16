@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.circuits import boolean as BL
-from verity.protocols.accounting.certifier.verifier.head_check import ands
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 
 from verity_vllm.compiler import cache_step_v3 as V3S
 from verity_vllm.compiler import compile_slice as CS

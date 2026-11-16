@@ -115,7 +115,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.accounting.certifier.verifier.head_check import (
+from verity.protocols.resource_accounting.network.verifier.head_check import (
     _coll,
     _Consts,
     ands,

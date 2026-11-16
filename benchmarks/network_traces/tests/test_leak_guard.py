@@ -22,9 +22,9 @@ from pathlib import Path
 import pytest
 
 from benchmarks.network_traces import leak_guard as LG
-from verity.protocols.accounting.certifier.device import runner_parts as rp
-from verity.protocols.accounting.certifier.prover.tests.test_released_keys import GOOD, LIST, _declared, _put as _put_json
-from verity.protocols.accounting.certifier.prover import released_keys as RK
+from verity.protocols.resource_accounting.network.attester import runner_parts as rp
+from verity.protocols.resource_accounting.network.prover.tests.test_released_keys import GOOD, LIST, _declared, _put as _put_json
+from verity.protocols.resource_accounting.network.prover import released_keys as RK
 from benchmarks.network_traces.tests.gate_runs import (
     CERTIFIED, DEPLOYMENT, GATE, INDENTED, LINES, SALTS, _gate, _put, _sig_piece, _tar)
 
@@ -315,7 +315,7 @@ def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_pa
     key's end and ten zeros, and the guard holds it though nothing of the witness is in it. The verifier's
     registered-reads files are written without spaces (`network_certifier_rows.reads_text`), and the same reads are then no piece
     of the witness. The counts as the witness writes them are a find wherever they are written."""
-    from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+    from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
 
     g = _gate(tmp_path / "G" / "g1")
     line = json.dumps({"salt_c": "ab" * 24, "head": {"window": 0, "counts": [0] * 16, "root": "ef" * 64}})

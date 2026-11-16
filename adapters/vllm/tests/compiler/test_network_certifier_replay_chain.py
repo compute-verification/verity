@@ -10,7 +10,7 @@ import random
 
 import pytest
 from verity.circuits.boolean.forms import Circuit
-from verity.protocols.accounting.certifier.verifier.head_check import ands
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.compiler import replay_chain as RC

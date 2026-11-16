@@ -76,44 +76,44 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
-import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
-import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
-import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
-import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
-import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
-import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
-import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
-import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
-import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
-import verity.protocols.accounting.pouw.prover.serving.h1.sample as PHD
-import verity.protocols.accounting.pouw.prover.serving.h1.sampled as DN
-import verity.protocols.accounting.pouw.prover.serving.h1.sampled_rows as DR
-import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
-import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
-import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
-import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
-import verity.protocols.accounting.pouw.prover.serving.h1.words as W
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.answers as AN
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger as PHC
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit as CT
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.handoff as HO
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.kept as KP
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.live as LV
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.model_key as MK
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.prover as PV
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.registered as NR
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests as RQ
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled as DN
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled_rows as DR
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served as SV
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served_files as SF
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static as ST
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window as PHW
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words as W
 import verity_torch.pouw.h1.receipts as RC
 import verity_torch.pouw.h1.registered_device as RGD
 import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
 from verity.circuits.refs import Affine, Strided
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     commit_rows,
     salt_of,
     weights_root,
 )
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -2512,9 +2512,9 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
-    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
+    monkeypatch.setattr("verity.protocols.resource_accounting.compute.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     assert TBD.nvcc() == RGD.nvcc() == "/a/toolchain/nvcc"
-    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: None)
+    monkeypatch.setattr("verity.protocols.resource_accounting.compute.pouw.prover.serving.device.nvcc", lambda: None)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
@@ -2540,7 +2540,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
         assert RGD.zy_available.__wrapped__() is False
-    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
+    monkeypatch.setattr("verity.protocols.resource_accounting.compute.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
         assert RGD.zy_available.__wrapped__() is False
     assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2
