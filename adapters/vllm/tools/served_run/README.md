@@ -30,7 +30,7 @@ session, the committed trace is outside the sampling relation with probability a
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
-meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
+meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
 (`benchmarks/prove_path/e2e_chains/README.md`).
@@ -44,7 +44,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
-2. greedy requests from network certification's traffic generator (`serve_load.py --varied`), closed into one execution phase;
+2. greedy requests from network attestation's traffic generator (`serve_load.py --varied`), closed into one execution phase;
 3. SPOT on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
@@ -125,7 +125,7 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
 2. `CARD=N CORES=A-B END=UTC run.sh [--tie]` (`window`, the default): `window.sh`, which runs `served_verdicts.sh` on
    that card under its own lease and packs the compose hand-off into the run's `out/handoff/`; 75 with nothing run when
    the card is in use or `END` leaves under an hour (or under `LEASE_MIN`, a short window's length in minutes, which
-   also caps its lease). The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
+   also bounds its lease). The gate gives coins only to a commit on `main`'s first-parent line, so from a branch not yet
    landed `run.sh` refuses: land it first, or take development coins with `--development`. It refuses a commit that
    changed the taps' sources since `TAPS_AT`.
 3. `HANDOFF=DIR run.sh compose`, DIR holding the window run's `out/handoff/`: `compose.sh`, the window's record composed
