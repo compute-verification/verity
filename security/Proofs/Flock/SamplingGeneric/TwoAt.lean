@@ -42,7 +42,8 @@ the second stage's bytes read off those coins (`bytesStage`) by a byte map `b₂
 * `ksTwo_stage`, `sessionsTwo_stage`: `ksTwo_atOrder` and `sessionsTwo_atOrder` at a stage order.
 
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
-states `ksTwo_stage`, with the sessions' runs both ways (`SessionRuns`, which gives `SessionRunsTo`). Its witnesses:
+states `ksTwo_stage`, with the sessions' runs, each unit's acceptance implying its session's (`SessionRunsTo`).
+Its witnesses:
 
 * `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
   none, opens no session and reads no bytes, its second stage one round;
@@ -367,7 +368,7 @@ theorem _root_.Flock.SecurityProofs.SampledKSTwo_honest :
         (replayTwo (toyCode.atOrder (orderOf toyStage)) (fun _ => none) (fun _ => 0)
           (bytesFirst toyCode (fun _ => 0) (orderOf toyStage) toyBytes)) (fun _ => 0) ∧
       (toyCode.atOrder (orderOf toyStage)).InteriorFixed FlockDeploy.sha512 (fun _ _ _ => []) ∧
-      SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation
+      SessionRunsTo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation
         (codeTwoStage toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyBytes (fun _ => 1) toyStage
           toyStageBytes)) ∧
       SessionsIn (codeTwoStage toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyBytes (fun _ => 1) toyStage

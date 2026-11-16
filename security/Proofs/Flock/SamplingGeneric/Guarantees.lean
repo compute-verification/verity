@@ -83,7 +83,8 @@ the second stage reading the coins of `R x` rounds: on the challenger's bytes un
 (`CallsUniform` on the first stage's coin, `StageUniform` on the second stage's coins, `UniformRandomBytes`), and the
 code's facts (the registration is the statement's two-stage design, the verifier refuses outside the two-stage scope,
 an accepted run's replay sample has at most `cap` proof blocks, the interior roots don't read the second stage's
-coins, each checked unit's session runs Flock on its rounds within its numbers and opens the unit's proof block on its
+coins, each checked unit's session runs Flock on its rounds, the run's acceptance implying the session's
+(`SessionRunsTo`), within its numbers and opens the unit's proof block on its
 replay block), `CompiledTwo.KS` holds at Flock's masked record over the readable relation and SHA-512, its outer wait's
 count the statement's footprint bits and its inner wait's `cap`: `KSLinOn` at the two-stage relation, the extractor's
 errors and the binding finder `Bext`. -/
@@ -101,7 +102,7 @@ def SampledKSTwo : Prop :=
       (SamplingDeploy.replayTwo (c.atOrder (SamplingDeploy.orderOf s)) reg L₁
         (SamplingDeploy.bytesFirst c L₁ (SamplingDeploy.orderOf s) b₁)) cap →
     (c.atOrder (SamplingDeploy.orderOf s)).InteriorFixed FlockDeploy.sha512 iroots →
-    Sampling.SessionRuns FlockDeploy.sha512
+    Sampling.SessionRunsTo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (SamplingDeploy.codeTwoStage c reg L₁ L₂ b₁ R s b₂)) →
     SamplingDeploy.SessionsIn (SamplingDeploy.codeTwoStage c reg L₁ L₂ b₁ R s b₂) →
     SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
@@ -145,7 +146,7 @@ end Flock.Guarantees
 
 theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
   fun c reg two L₁ L₂ R s b₁ b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns hnum hopens =>
-    SamplingDeploy.ksTwo_stage c reg two L₁ L₂ b₁ R s b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns.to hnum hopens
+    SamplingDeploy.ksTwo_stage c reg two L₁ L₂ b₁ R s b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns hnum hopens
 
 theorem Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo :=
   fun h hB hA => SpotFlock.ksTwo_connected h hB hA
