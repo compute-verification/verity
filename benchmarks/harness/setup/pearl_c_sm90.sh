@@ -2,6 +2,11 @@
 # source tree with verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh (nvcc, then its SASS gates) and exporting
 # PEARLC_KERNEL and PEARLC_CUBIN, which the Pearl-C arm (benchmarks/pouw/pearl_c_vllm/bench_arm.py) loads. The cubin,
 # ptxas's report, the gates' JSON, toolchain.txt and the sources' and cubin's sha256 go to $RESEARCH_RUN_DIR/out/setup.
+# Pearl-C served as vLLM serves it, not under the window serve's batch invariance
+unset VLLM_BATCH_INVARIANT
+# sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise: a whole capture forking each call's A tree and A
+# scales races on it (BF16_RACE in benchmarks/pouw/pearl_c_vllm/e2e.py)
+export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 PC_OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup/pearl_c_sm90
 mkdir -p "$(dirname "$PC_OUT")"
 CUDA=${CUDA_HOME:-/usr/local/cuda-13.0} bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh "$PC_OUT" \
