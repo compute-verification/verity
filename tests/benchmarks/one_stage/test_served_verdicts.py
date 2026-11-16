@@ -1273,7 +1273,7 @@ def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_pat
      "remote/composite.json is a development check, which claims no record: composed on the served node"),
     ({"remote": ("verity/remote/v0", "accept"), "remote-v1": ("verity/remote/v1", "accept")}, "accept", "pending", 2,
      "2 composites of the remote check"),
-    ({"onsite": ("verity/onsite/v0", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
+    ({"onsite": ("verity/onsite/v1", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
     ({"remote": ("verity/remote/v0", "accept")}, "reject", "reject", 1, "verity/remote/v0's Lean check"),
     ({"remote": ("verity/remote/v0", "reject")}, None, "reject", 1, "verity/remote/v0's Lean check"),
     ({"remote-v1": ("verity/remote/v1", "accept", {"window": REG.digest({**WINDOW_RECORD, "window": 2})})}, "accept",

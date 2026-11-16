@@ -1,7 +1,7 @@
 """The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
 configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each demo's subprotocols and the
 configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
-on a machine (`live`). Pearl+ has no piece yet, so `verity run` refuses remote by name (``no-party``).
+on a machine (`live`).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
 
@@ -20,7 +20,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's.
+  composed verdict is the period's. PoUW's row there is Pearl+'s verdict under ``pearl-plus`` (the runner's
+  ``POUW=pearlplus``), H1's under ``pouw``.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
@@ -74,15 +75,17 @@ NOT_YET = "memory-accounting/onsite-memory-verdicts"
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
-ONSITE = "verity/onsite/v0"
+ONSITE = "verity/onsite/v1"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
-#: served_verdicts.py's record reads each piece's answer by its runner name
+#: served_verdicts.py's record reads each piece's answer by its runner name, and the subprotocol each row is, by its
+#: configuration's name: PoUW's row (``work``) is Pearl+'s verdict or H1's, as the configuration lists
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
+ROWS = {**{v: k for k, v in RECORD_NAMES.items()}, "pearl-plus": "work"}
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -155,7 +158,9 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
+    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
+                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
+              needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
@@ -173,8 +178,8 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
                    "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
-#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
-ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
+#: onsite's subprotocols, the seven `Core.Composites.composites` holds for it, PoUW's Pearl+'s run verdict
+ONSITE_COMPONENTS = ("sampled-proofs", "pearl-plus", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
 #: each demo's subprotocols, the file `demos/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
 #: sets (`verity.config.UNACCEPTED`) and remote's
@@ -210,7 +215,7 @@ HEADERS = {
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
-        "and the auditor's on its own machine. `verity run` refuses it by name until each party has its piece."),
+        "and the auditor's on its own machine."),
 }
 HEADER = HEADERS["onsite_full"]
 
@@ -386,6 +391,13 @@ def _pouw(cfg, params, bound):
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
 
 
+def _pearl_plus(cfg, params, bound):
+    """Pearl+ as PoUW's piece, the window served under it (``PEARLPLUS_TIE``), its salt coins live sessions on the
+    challenger's gate under its key."""
+    return {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": bound["gate"],
+            "PEARLC_CHALLENGER_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+
+
 #: the wipe (`streamed_wipe`'s parties), before the card's engine loads: its challenger reads the raw monotonic clock its
 #: header names
 WIPE = Session(("verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger:PROTOCOL",
@@ -452,6 +464,15 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "the gate's; served_verdicts.py pouw checks them against the gate's session under its key",
                        reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pouw),
         VERIFIER: Piece("pouw", VERIFIER, CHECK, "PoUW's row"),
+    },
+    "pearl-plus": {
+        CHALLENGER: Piece("pearl-plus", CHALLENGER, GATE, "the gate: each Pearl+ epoch's salt coin from a session of "
+                          "its own, in the lane's Pearl-C period"),
+        WORKERS: Piece("pearl-plus", WORKERS, SERVED_WINDOW, "the window served under Pearl+ (POUW=pearlplus, "
+                       "PEARLPLUS_TIE=1), its salt coins the gate's, and Pearl+'s verdict over its passes; "
+                       "served_verdicts.py record holds that verdict to the gate's sessions under its key",
+                       reaches=CHALLENGER, binds=("gate", "peer", "key-sha512"), hooks=_pearl_plus),
+        VERIFIER: Piece("pearl-plus", VERIFIER, CHECK, "PoUW's row, Pearl+'s verdict"),
     },
     "inference-only": {
         VERIFIER: Piece("inference-only", VERIFIER, CHECK, "the inference-only policy's row: no served window produces "
@@ -644,9 +665,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     line = next((json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("RECORD ")), None)
     if line is None:
         raise Refused("record", (p.stderr or p.stdout).strip()[-800:] or "served_verdicts.py record wrote no RECORD")
-    names = {v: k for k, v in RECORD_NAMES.items()}
     rows = json.loads((state / "record" / "onsite" / "verdicts.json").read_text())["protocols"]
-    components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
+    components = {c: rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
     verdict = VERDICTS.get(line["composed"], "undecided")
     return {"block": k, "components": components, "product": K.composite(cfg["protocols"], MANIFESTS),

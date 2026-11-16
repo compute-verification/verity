@@ -37,7 +37,7 @@ T = sys.modules["served_table"]
 KEY = "0" * 128
 #: every binding the pieces read, on documentation addresses (RFC 5737)
 BINDINGS = {
-    "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
+    "challenger": {"pearl-plus": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"address": "192.0.2.1:7000"}, "wipe": {"address": "192.0.2.1:7001"}},
     "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
     "network-certifier": {"certifier": {"gate": "user@gate-1"}},
@@ -50,12 +50,14 @@ VARIABLES = {
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1",
-    "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
+    "DEVELOPMENT": "1", "H1_KEY_SHA512": KEY, "LOAD": "varied", "PEARLC_CHALLENGER_GATE": "gate-command",
+    "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus",
     "PRECISION": "verity_int8", "REPO": "verity-int8/Llama-3.2-1B-INT8",
     "REV": "15b0976d400d796ee589e7737d03a919526bf800", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
+KEYS = ["challenger.pearl-plus.gate", "challenger.pearl-plus.peer", "challenger.pearl-plus.key-sha512",
+        "memory-challenger.pous.address",
         "bandwidth-verifier.bandwidth.address", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
@@ -213,15 +215,17 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert rc == 0, err
     cfg = R.load(CONFIG, REG)
     assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
-    assert len(got["channel"]) == len(cfg["channel"]) == 13
-    assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 21, "unbound": []}]
+    assert len(got["channel"]) == len(cfg["channel"]) == 12
+    assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 12, "entries": 21, "unbound": []}]
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD", "BANDWIDTH_CMD"} & set(hooks)
     assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
             if "SERVE_ARGS" in e["hooks"]} == {"certifier": T.ID_FORM}
-    assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
+    assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
+        "gate-command", "peer-1", KEY)
+    assert (hooks["POUW"], hooks["PEARLPLUS_TIE"]) == ("pearlplus", "1") and "H1_GATE" not in hooks
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
     assert hooks["DEVELOPMENT"] == "1"
 
@@ -272,7 +276,7 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
-    assert [e["component"] for e in got["plan"][0]["entries"]] == [T.SERVED_WINDOW, "sampled-proofs", "pouw",
+    assert [e["component"] for e in got["plan"][0]["entries"]] == [T.SERVED_WINDOW, "sampled-proofs", "pearl-plus",
                                                                    "certifier"]
 
 
@@ -296,7 +300,7 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
-    assert len(gates) == 3
+    assert len(gates) == 4
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)
@@ -504,7 +508,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PEARLPLUS_TIE|PEARLC_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -523,7 +527,8 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
-    assert {"SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) \
+    assert {"SERVE_ARGS", "POUW", "PEARLC_CHALLENGER_GATE", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
+            "CERTIFIER_PERIOD_CMD"} <= set(hooks) \
         and "CERTIFIER_CMD" not in hooks
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "192.0.2.1" not in json.dumps(json.loads((state / "run.json").read_text()))

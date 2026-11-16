@@ -22,7 +22,7 @@ from pathlib import Path
 
 METRIC = "vllm/onsite-demo-minutes"
 #: the goal's seven checks, by the names a ``VERDICT`` line's ``components`` give them (served_table's ONSITE_COMPONENTS)
-CHECKS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
+CHECKS = ("sampled-proofs", "pearl-plus", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 HERE = Path(__file__).resolve().parent
 
 

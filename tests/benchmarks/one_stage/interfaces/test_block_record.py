@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 NAMES = ("block-record-r2-period0", "block-record-r1-window10", "block-record-b71a-w30")
-ONSITE = {"protocol": "verity/onsite/v0", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
+ONSITE = {"protocol": "verity/onsite/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
 
 
 def _load(name: str) -> dict:

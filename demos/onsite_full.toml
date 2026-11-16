@@ -3,7 +3,7 @@
 # FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.
 # `verity run THIS --dry-run` resolves it all.
 format = "verity/config/v0"
-protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
+protocols = ["sampled-proofs", "pearl-plus", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
 
 [workload]
 name = "served-window"
@@ -95,13 +95,7 @@ messages = ["Firewall"]
 [[channel]]
 from = "workers"
 to = "verifier"
-messages = ["Registration", "H1Record"]
-after = ["H1Coins"]
-
-[[channel]]
-from = "challenger"
-to = "workers"
-messages = ["H1Coins"]
+messages = ["Registration"]
 
 [[channel]]
 from = "memory-challenger"
