@@ -27,11 +27,11 @@ it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), 
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
 **One premise at the form's accept.** `joinedOfDistribution` takes `JoinsAt`, a structure whose fields are the pieces'
-remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the
-period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfDistribution` at
-COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
-accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
-its proof (`CoinMapAgree.lean`).
+remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of
+the period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfDistribution`
+at COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a
+witness of it at an accepted play is one term of that structure. The sampling design is a hypothesis here only so that
+this module does not import its proof (`CoinMapAgree.lean`).
 
 **What `joinedOfDistribution` discharges** from the fields:
 
@@ -96,7 +96,8 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 * **Round 2's check is the one the join reads** (`sampledNone`): no accepted play's run has a statement of only its
   part's sampled proof blocks, so the run's `SecondStage.checkAny` is `SecondStage.check` (`checkAny_eq_check`). The
-  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfDistribution` makes of it.
+  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfDistribution` makes
+  of it.
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
 play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
@@ -307,11 +308,12 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   as a hypothesis until the join's pieces read `checkAny`'s own pass (`checkAny_ok`). -/
   sampledNone : SampledNoneAt C
 
-/-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's acceptance,
-`JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
-at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
-map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
-plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
+/-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's
+acceptance, `JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the
+cut's terms at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from
+the coin map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case
+kept on the plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such
+collision. -/
 theorem joinedOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
