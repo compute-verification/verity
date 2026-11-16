@@ -404,9 +404,10 @@ tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its
 printer's flag. Each from the tree's root:
 
 1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 64 GB of host memory available and 25 GB
-   of disk free under `WORK`: the commands of `benchmarks/one_stage/README.md`'s section "The three benchmarks of the proof-layers table", as written there. They
-   are the vLLM adapter's one bootstrap (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, which makes the vLLM
-   environment, the int8 checkpoint and the sm_90 taps under `WORK`), three partition files, and three runs of
+   of disk free under `WORK`: the commands of `benchmarks/one_stage/README.md`'s section "The three benchmarks of the
+   proof-layers table", as written there. They are the vLLM adapter's one bootstrap
+   (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`, which makes the vLLM environment, the int8 checkpoint and the
+   sm_90 taps under `WORK`), three partition files, and three runs of
    `benchmarks/one_stage/a5_llama1b_h200.sh`. Give their three `OUT` directories to `--flock`, `--zk` and `--sampling`.
 2. **The recursion layer**, on 32 CPU cores with 128 GB (`run.py`'s memory behind the ZK server), about an hour at
    K = 2048 with N = 2:
