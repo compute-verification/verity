@@ -292,7 +292,6 @@ files = ["verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
 "capOps"                                                                                                    = "inertBoundOps"
 "capPin"                                                                                                    = "inertBoundPin"
 "rowCap"                                                                                                    = "rowInertBound"
-"Debit"                                                                                                     = "InertWork"
 "capOK"                                                                                                     = "inertBoundOK"
 
 [keep]
