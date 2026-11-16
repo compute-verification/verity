@@ -1,9 +1,9 @@
 # Verity
 
-Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary, whose
-terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
-it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
+Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives compute,
+memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and `GLOSSARY.md` the Glossary,
+whose terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings
+say what it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
