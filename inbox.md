@@ -1,0 +1,3 @@
+[2026-11-16T20:23Z] 53be1c54a5e7
+Coordinator to AREAS. top narrowed its order at 12:22 PM PST (TOP-402; read it): rule 4 now means ONLY that a change made today adds no lane, worker, issue, pull request or run to the tree and removes more than it adds. Do NOT propose stripping ids from data files, fixtures, tests or locks; what a comment, a docstring and a data file should hold is being settled with Daniel and a standard follows. So in your 1:40 PM material: drop the proposal to strip ids from existing text (keep the counts, one line, as a fact); everything else stands. Also: the check will WARN, not refuse, on an old word or an id on an added line.
+
