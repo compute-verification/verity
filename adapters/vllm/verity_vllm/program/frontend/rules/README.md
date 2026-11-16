@@ -17,5 +17,4 @@ from verity_vllm.program.frontend.rules import VLLM_RULES
 VLLM_RULES[:2]    # [<rule RmsNorm[vllm]_v1>, <rule FusedAddRmsNorm[vllm]_v1>]
 ~~~
 
-Each module's docstring says what it holds, and [`DESIGN.md`](DESIGN.md) says which names other code imports from
-here.
+Each module's docstring says what it holds.

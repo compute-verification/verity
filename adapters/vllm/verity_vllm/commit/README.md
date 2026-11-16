@@ -6,4 +6,4 @@ Commit afterwards: the challenge's samples and the opened values.
 
 Values reach the committer from the engine through the adapter's acquisition, `acquire`, and its
 [sources](../acquire/sources/README.md). The package's
-docstring lists its modules, and [`DESIGN.md`](DESIGN.md) says what each part provides and what loads it.
+docstring lists its modules.

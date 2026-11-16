@@ -15,5 +15,4 @@ from verity_torch.frontend.rules import TORCH_RULES
 TORCH_RULES[:3]    # [<rule StaticIndex_v2>, <rule IdentityView_v1>, <rule Reshape_v1>]
 ~~~
 
-`base`'s docstring says what a rule must do, and each other module's says what it holds. [`DESIGN.md`](DESIGN.md)
-says which names other code imports from here.
+`base`'s docstring says what a rule must do, and each other module's says what it holds.

@@ -33,4 +33,3 @@ what it registers.
 `ops.boolean` holds their Boolean versions, the same functions on bits. The terms are
 [`verity.circuits`](../README.md)'s, and the tests, with the hardware captures the semantics are replayed against
 ([`fixtures/`](../../../tests/verity/circuits/ops/fixtures/README.md)), are in `tests/verity/circuits/ops/`.
-[`DESIGN.md`](DESIGN.md) says what sits beside each module and what loads this package.

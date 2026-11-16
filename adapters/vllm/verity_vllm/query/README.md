@@ -8,5 +8,4 @@ its [correspondence](../correspondence/README.md), and no table of names.
 Its answer is the required-value manifest, bound to what the runtime commits, with the check that a Commit used it.
 The package also gives
 a derived Program as a call graph (`program_view`), which the benchmarks read. The package's docstring lists its
-modules, `required`'s says what is required and where it lives, and [`DESIGN.md`](DESIGN.md) says what each part
-provides and what loads it.
+modules, `required`'s says what is required and where it lives.

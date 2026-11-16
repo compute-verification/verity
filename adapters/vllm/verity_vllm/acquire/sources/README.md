@@ -6,4 +6,4 @@ There are sources for FlashAttention's hidden values, for MoE, for compiled kern
 partials.
 
 Each module's docstring says which values its source holds and where it takes them, and `taps` attaches the sources
-a Commit's manifest names. [`DESIGN.md`](DESIGN.md) lists the names other packages import from here.
+a Commit's manifest names.

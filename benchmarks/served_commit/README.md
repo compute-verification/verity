@@ -34,5 +34,3 @@ This runs one served spec's sweep in one process, its arms interleaved, and writ
   alone and beside a busy stream; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node;
   `granularity.py` lists, from a Build's request Programs, the Call boundaries a per-block or per-layer proof block would
   keep, with their bytes and hashing time (estimates; no scheme).
-
-[`DESIGN.md`](DESIGN.md) says what each arm and script is, and what loads this directory.

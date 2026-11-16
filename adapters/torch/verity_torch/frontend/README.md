@@ -26,5 +26,4 @@ is refused, because its control flow depends on a value.
 
 The rules on ATen ops are in [`rules/`](rules/README.md), and the vLLM adapter adds the rules for vLLM's own ops
 ([`verity_vllm.program.frontend`](../../../vllm/verity_vllm/program/frontend/README.md)). `derive`'s docstring says how
-a derivation works, and each other module's says what it holds. [`DESIGN.md`](DESIGN.md) lists the names other
-packages import from here.
+a derivation works, and each other module's says what it holds.

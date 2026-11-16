@@ -29,5 +29,4 @@ rep.program.annotations["derive"]["rules_applied"][:3]      # ['ArgmaxTokenSelec
 
 `GreedyServe` is an ordinary serving loop: a prompt's prefill, then greedy decode steps. Its derived Program is
 recognised as the registered family `Serve_v1`, and the rules applied include vLLM's own, such as the fused add and
-RMSNorm. Each module's docstring says what it holds, and [`DESIGN.md`](DESIGN.md) lists the names other packages
-import from here.
+RMSNorm. Each module's docstring says what it holds.
