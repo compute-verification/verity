@@ -1,4 +1,4 @@
-# Network certifier Lean package (`network-timing`)
+# Network attester Lean package (`network-timing`)
 
 Definitions, guarantees and proofs for the bucketed certifier's timing channel: how much a covert sender inside a
 spatial unit X can carry across its boundary ∂X through **when** frames leave, once the declared Program fixes their
@@ -216,7 +216,7 @@ Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`),
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/protocols/accounting/certifier/device/program/lean/
+# the difftest is the certifier program's: see its package, ../../../verity/protocols/resource_accounting/network/attester/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/Certifier/`,
@@ -296,7 +296,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 ## The records
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 6 statements of `Guarantees.lean`, the sampled audit's charge
-(`../../Definitions/Certifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
+(`../../Definitions/Certifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network attester
 (`Guarantees/MonitoringPeriod.lean`) with its bound with checked inputs (`Guarantees/MonitoringPeriodChecked.lean`), the monitoring period's
 incorrect proof blocks
 (`../../Definitions/Certifier/Guarantees/Pooled.lean`), the leak over a monitoring period
@@ -306,7 +306,7 @@ incorrect proof blocks
 last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`). All 18 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
-possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
+possible incorrect set; the period's also over the network attester's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and no Lean states that an accepted run of the check is
 a run the first 6 count. Two are the
 ingress theorems (`PROTOCOL.md`'s "Capacity"):
@@ -342,13 +342,13 @@ The other 16 are the rest of the Capacity table's bounds:
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. `Compiled.KS` is an open premise in
   the lock, and `SampledAuditAccepted` is proved.
-- **The leak through the network certifier over a monitoring period** (`MonitoringPeriod.lean`): `MonitoringPeriodLeakAccepted` composes
-  the leak bound at the network certifier's rows with the read-back of its record, so the bound's content term comes
+- **The leak through the network attester over a monitoring period** (`MonitoringPeriod.lean`): `MonitoringPeriodLeakAccepted` composes
+  the leak bound at the network attester's rows with the read-back of its record, so the bound's content term comes
   from the audits: over a monitoring period's windows, each registered as a
-  statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
+  statement, where the network attester registers its observations at the transfer gates (`CertifierRegisters`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`ExecutionPhaseGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, and each
-  window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
+  window's audit fails the leak relation at the network attester's rows (`RLeakCertifier`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. The period's operator is fixed before the period and the secrets, a function of the
   observations: window `i`'s operator reads only the windows before `i`, closed by then (`runsBefore`), and its own
   window only through the observations before each step. What it reads the count already charged to the earlier
@@ -356,14 +356,14 @@ The other 16 are the rest of the Capacity table's bounds:
   pool); `PooledLeakAccepted` takes the same operator, and at operators that read no earlier window each is the
   statement with one operator a window (`monitoringPeriodLeak_fixed`, `pooledLeak_fixed`).
   Every proof block outside the incorrect set is correct, so the extracted trace opens every
-  transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
-  `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
-  gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
+  transfer gate there, at the network attester's value unless the two openings collide (`B_tap`, under
+  `CommitmentScheme.Binds`); filled in with the network attester's values, it carries its records, and the incorrect proof blocks'
+  gates are the advice the count already charges, so the count is unchanged. The network attester is one device on
   the server's uplink, and it shapes what it forwards rather than only observing it (`Definitions/Certifier/Tap.lean`):
   one run of its code (`recordingCode`, under one `trusted-device`) gives the cells the client receives and the observations
   the audits read, its record of those cells, so on every schedule its record format holds (`RecordFormat.fits`) the
   cells read back from the observations (`certifier_cells_read`, a lemma, not a premise). The format the Python network
-  certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
+  attester writes, a row a bucket of frames naming their connections (`RowsFormat`,
   `Definitions/Certifier/RecordRows.lean`), is one (`RowsFormat.recordFormat`), on the schedules whose cells fall
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
@@ -381,18 +381,18 @@ The other 16 are the rest of the Capacity table's bounds:
   `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sampling design and each window's error are hypotheses, which A3 and
   `Compiled.KS` discharge where the bound is applied to the sampled verifier.
-- **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
+- **The leak through the network attester over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
   the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the incorrect set `W_i` of the
   witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional miss bound
   `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `1 − q` the design's per-window miss probability
   (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
-  `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
+  `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network attester's record. From them every window accepts
   outside the monitoring period's good event (`PooledGood`: the incorrect sets hold under `Fmax ≥ ln(1/δ)/q` units and
   every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each sample the secrets
   meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
   incorrect proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
-  proof block's output limit. The network certifier is one device, as in the period's bound: on every schedule its
+  proof block's output limit. The network attester is one device, as in the period's bound: on every schedule its
   record format holds, the cells the client receives read back from its record (`certifier_cells_read`), so its one named
   assumption is `trusted-device`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
@@ -422,11 +422,11 @@ The other 16 are the rest of the Capacity table's bounds:
   `MonitoringPeriodLeakChecked` is `MonitoringPeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
   windows'; without it the count fails (`MonitoringPeriodCheckedExclusion.lean`). Its check is held to the run at the
-  network certifier's rows (`certifierRun`): held to the trace's run the statement is false
+  network attester's rows (`certifierRun`): held to the trace's run the statement is false
   (`MonitoringPeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
   registered inputs. `MonitoringPeriodLeakAccepted` is its instance at no checked input.
 - **The period's bound with each failure charged as it happens** (`MonitoringPeriodFails.lean`): where the operator's moves
-  and the registered values may follow the network certifier's fail cells, the secrets whose run fails exactly `j`
+  and the registered values may follow the network attester's fail cells, the secrets whose run fails exactly `j`
   connections, each below its cap, number at most `failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count
   (`MonitoringPeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern
   (`MonitoringPeriodLeakFailsAtMost`); and under weights on the number of failures that sum to at most one (`KraftWeights`),
@@ -435,7 +435,7 @@ The other 16 are the rest of the Capacity table's bounds:
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the certifier program (`verity/protocols/accounting/certifier/device/program/lean/`, Lean core only, `NetworkCertifier`), and
+to the certifier program (`verity/protocols/resource_accounting/network/attester/program/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
@@ -483,8 +483,8 @@ three axioms, but they have no record in `lean-audit.json`, so no citation may c
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
 that added them, and the review of the content versions is on the one stacked on it. Every
-statement, lemma and witness here is proved. The reference implementation, `verity/protocols/accounting/certifier`
-(`verity.protocols.accounting.certifier.verifier`), mirrors statements and lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
+statement, lemma and witness here is proved. The reference implementation, `verity/protocols/resource_accounting/network`
+(`verity.protocols.resource_accounting.network.verifier`), mirrors statements and lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks
 

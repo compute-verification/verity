@@ -670,7 +670,7 @@ def on_schedule(record: dict, schedule: dict) -> None:
 
 class TreeSource(Protocol):
     """Where the challenger's live-coin part takes a session's coin tree from: the challenger's device (``--tree-from``,
-    `verity.protocols.proofs.spot.device.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` samples a tree of spec
+    `verity.protocols.proofs.spot.verifier.challenger.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` samples a tree of spec
     ``spec`` (its JSON) under ``nonce`` (None: the source samples it) and returns its nonce, root and key; ``tree_open`` opens
     the first ``n`` coins of round ``rnd`` of stream ``stream`` of the tree under ``root``, once given ``after`` (64 bytes:
     what the round answers), and returns the coins and their opening words. Each stream's rounds open in order, each once.
@@ -733,7 +733,7 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
     session to the log the same way, after what that server answers. It mirrors `Spot.Challenger.innerTreesReason`,
     the verifier, which the recursive audit reads (this package's `tests/test_challenger_audit.py`
     holds the two together)."""
-    from verity.protocols.proofs.spot.device import challenger as C
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 
     trees, used = C.coin_trees_of(log), []
     for name, tree, public in sessions:
@@ -749,7 +749,7 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
 
 
 def _tree_held(trees: dict, tree: dict, public: dict) -> str | None:
-    from verity.protocols.proofs.spot.device import challenger as C
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 
     root = tree.get("root") if isinstance(tree, dict) else None
     t = trees.get(root) if type(root) is str else None
@@ -1588,7 +1588,7 @@ def tree_source(ap, a) -> TreeSource | None:
     if a.tree_secret_file and not a.tree_from:
         ap.error("--tree-secret-file is --tree-from's")
     if a.tree_from:
-        from verity.protocols.proofs.spot.device import remote
+        from verity.protocols.proofs.spot.verifier.challenger import remote
         secret = bytes.fromhex(Path(a.tree_secret_file).read_text().strip()) if a.tree_secret_file else None
         return remote.RemoteChallenger.connect(a.tree_from, secret)
     return OsTree() if a.tree_test_os else None

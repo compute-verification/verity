@@ -13,16 +13,16 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
-    `spot` and `recursion` on it and `spot_flock` on those, what the other protocols call to prove; `accounting/` holds
-    `pouw`, `pous`, `poub` and `certifier` (compute, memory and network) and `registration` (the registration log,
-    checked once, before any challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on
-    accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is an eleventh
+    `spot` and `recursion` on it and `spot_flock` on those, what the other protocols call to prove; `resource_accounting/`
+    holds `compute/pouw`, `memory/pous`, `memory/poub` and `network` (compute, memory and network), and `registration/` (the
+    registration log, checked once, before any challenge; its Lean is still in `interface/`) sits beside the layers;
+    `workload_classification/` holds `training_detection/inference_only`, on resource accounting. Both layers use the proofs, and the proofs use neither. On top of the audits, `compose/` is an eleventh
     protocol. Its `verifier/` holds its Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an
-    auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/`
-    holds the auditor device's challenger service. Target, not yet: `experimental/NAME/` for a whole directory
+    auditor with no devices at the datacenter runs, and `onsite/` what an auditor with devices there runs. Its
+    `verifier/live_challenger/` holds the auditor device's challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
-    its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
-    auditor's device (the network certifier, the memory challenger, the challenger).
+    its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `attester/` is the
+    auditor's device (the network attester, the memory challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
@@ -32,7 +32,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/attester/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -49,7 +49,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
-    `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
+    `verity/protocols/compose/verifier/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
@@ -78,7 +78,7 @@ change opens. A file loads only what its own row of the listing or an earlier ro
 the ties the listing names by file (`against`, which only shrinks). No file under a `verifier/` loads one under a
 `prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
 Python imports only its own place and the places its `loads` lists: to allow an import, write it, run the generator
-and say why in the pull request. A place under a `verifier/` or a `device/`, or one the listing marks `trusted` (the
+and say why in the pull request. A place under a `verifier/`, an `attester/` or a `device/`, or one the listing marks `trusted` (the
 wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
 the verifiers' side, trusted code; the rest is the provers' side and the Python that mirrors the Lean for speed. Until
 its protocol's verifier is Lean, a trusted place loads and reaches only the places the listing froze for it, and from
@@ -134,7 +134,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
   commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
   the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
-  exfiltration. The demonstration adds the network certifier as a separate layer: it stamps each request's release order
+  exfiltration. The demonstration adds the network attester as a separate layer: it stamps each request's release order
   and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
   SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
   and proof; the two compose only above both.
@@ -178,10 +178,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
-- **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
+- **Auditor-trusted devices.** The network attesters and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
   control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-device`.
-  Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
+  Nothing the developer runs or hosts is trusted. "Network attester" is its one name, never "network certifier", "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute

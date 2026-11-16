@@ -29,7 +29,7 @@ from typing import Any
 
 import torch
 
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
 from verity_torch.pouw.h1 import registered_device as D
 from verity_torch.pouw.h1 import tables_device as TD
 

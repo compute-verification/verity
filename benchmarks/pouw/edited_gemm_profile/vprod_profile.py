@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "edited_gemm")))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "edited_gemm")))
 from eps_profile import SCALE, by_class, first, raw_metrics, sass_counts
 
 ARMS = ("vedit", "vsum", "vpair", "vfold", "vfold_x")

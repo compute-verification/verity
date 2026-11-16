@@ -18,10 +18,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.runtime.stream import Side
 
-SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"
+SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "tests" / "wipe_side.py"
 
 
 def main(argv: list[str]) -> int:

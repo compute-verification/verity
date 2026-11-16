@@ -6,7 +6,7 @@ instead of spreading over every core the checks share (two unslotted checks on t
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB [book=GB]] [peaks=N] [scope=1]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB [book=GB | share=GB]] [peaks=N] [scope=1]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
@@ -47,6 +47,22 @@ reservation bounds nothing and the machine's own limits act, and where OOM kills
 `oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't a whole number of GB
 from 1 to its mem= starts no check, and the wait and `--status` say so with the fix. A slot.py from before the key, which a
 check of an older tree runs, reads the line as its mem= alone and reserves that.
+
+A line with share=GB beside its mem= (`c2 0-95 only=trains mem=300 share=150`) is a share of a slot: one of the two or three
+lines that stand where one slot of mem= stood, on its cores or on a part of them. It takes only a train check's run that names
+an ask (RUN_MEM_ENV) of no more than its mem=, a part that fitted the whole slot (`takes`), and it waits for and reserves
+share GB whatever that run asks (`booked`): CMD still gets mem= as SLOT_MEM_ENV and gets share as BOOK_ENV, so check.py
+grants its steps no more than the share between them, and the check plans inside what the ledger holds for it. A run that
+asks more than mem=, or names no ask (a whole check), is the heavy kind: it takes only a line without share=, a whole slot,
+and on a machine that lists none for it the waiter exits NOT_STARTED at once. With scope=1 on the line the check's
+scope gets its share as MemoryHigh (`scoped`), a soft limit: past it the kernel takes the scope's page cache back and
+slows its processes, and kills nothing; without scope=1 nothing limits a share's memory but the machine's own limits, and a
+check past its share counts as over its reservation from there. A waiter with others ahead of it
+still takes a share when none of them could (`passing`): each is heavy, and the memory free holds their asks beside its
+share, so a heavy part waiting for its whole slot keeps the line's order for that slot and the memory it waits for, and
+holds no share idle. A line whose share= isn't a whole number of GB from 1 to its mem=, or that has book= beside it or no
+only=trains, starts no check, and the wait and `--status` say so with the fix. A slot.py from before the key reads the line
+as a whole slot of its mem=, which waits for and reserves what its run asks.
 
 A slot with peaks=N (`r0 8-19 mem=15 peaks=8`) counts what live lane runs reserve and haven't reached as many runs together
 reach it (`reserved_gb`): the N largest whole, room for N of them to reach their reservations at the same moment, and each
@@ -120,7 +136,9 @@ before it only, each time its reason to wait changes, so its log says whom it wa
 when it took the slot, the last `why` it waited for when it waited, the GiB the slot reserves for it, `reserves_gib` (0 for
 none), and the scope its check runs in on a `scope=1` slot, `scope`) or left (why), so `research status` shows a run
 whose check waits here as `waiting`, not running, what a run waited behind outlasts its wait, and the run's record can say
-what it asked of its slot and where its check ran (research.memmark).
+what it asked of its slot and where its check ran (research.memmark). A check in its scope adds what the scope used to the
+held record (`used`: its busiest minute's cores and `anon` at its highest; spans.py's `ScopeWatch`), since this
+process execs into the check and the scope is gone when the check ends.
 
 A machine keeps one copy of this file of its own, NODE_COPY, which `research deploy install` places from `main`. A run that
 names a pool (`research run --pool`) takes its slot by that copy where the machine has one, so the waiters of a pool's line
@@ -216,7 +234,7 @@ def parse(text: str) -> list[dict]:
         opts = dict(x.split("=", 1) for x in f[2:])
         slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
                       "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None,
-                      "scope": opts.get("scope") == "1", **_book(f[0], opts), **_peaks(f[0], opts)})
+                      "scope": opts.get("scope") == "1", **_book(f[0], opts), **_peaks(f[0], opts), **_share(f[0], opts)})
     return slots
 
 
@@ -244,6 +262,33 @@ def _peaks(name: str, opts: dict[str, str]) -> dict:
     return {"refused": f"its line has peaks={peaks}, which isn't a whole number from 1, so no check starts in it: peaks= is how "
                        f"many of the live lane runs' unreached reservations the slot counts whole, so give it such a number "
                        f"or take peaks= off slot {name} in {SLOTS}"}
+
+
+def _share(name: str, opts: dict[str, str]) -> dict:
+    """A slots line's share= as `parse` keeps it: nothing without the key, `share` (GiB, as mem=) where it is a whole number
+    from 1 to the line's mem= on an only=trains line without book=, else `refused`, why the slot starts no check, with the
+    fix (as `_book`: a mistyped line stops its own slot only)."""
+    if (share := opts.get("share")) is None:
+        return {}
+    mem = opts.get("mem")
+    fix = f"slot {name} in {SLOTS}"
+    if not (re.fullmatch(r"[1-9]\d{0,5}", share) and mem is not None and int(share) <= int(mem)):
+        return {"refused": f"its line has share={share}, which isn't a whole number of GB from 1 to its mem= ("
+                           f"{'it has none' if mem is None else mem}), so no check starts in it: share= is how much of a slot "
+                           f"of mem= the line reserves, so lower it, raise mem= or take share= off {fix}"}
+    if "book" in opts or opts.get("only") != "trains":
+        what = "book= beside it" if "book" in opts else "no only=trains"
+        return {"refused": f"its line has share={share} and {what}, so no check starts in it: a share of a slot reserves its "
+                           f"share= for a train check's shard and nothing else, so "
+                           + ("take book= off" if "book" in opts else "put only=trains on") + f" {fix}, or take share= off it"}
+    return {"share": int(share)}
+
+
+def takes(slot: dict) -> bool:
+    """Whether ``slot`` takes this waiter's run: any run on a line without share=; on a share of a slot, only one that names an
+    ask (RUN_MEM_ENV) of no more than the line's mem=, a part that fitted the whole slot. One that asks more, or names no
+    ask, is the heavy kind, which keeps a whole slot."""
+    return not slot.get("share") or 0 < gib(asked_gb()) <= slot["mem"]
 
 
 def lane_peaks(slots: list[dict]) -> dict:
@@ -294,17 +339,19 @@ def session_limit(dropins: Path | None = None) -> str | None:
     return None if limit in (None, "infinity") else limit
 
 
-def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
+def scoped(cmd: list[str], slot: str, run_id: str, high: int | None = None) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
     per-check peak, and summed RSS counts shared pages over and over). On a node that
     limits each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
-    a scoped check (exit 75)."""
+    a scoped check (exit 75). HIGH GiB (a share's scope: what it reserves) is the scope's MemoryHigh, a soft limit: past it
+    the kernel takes the scope's page cache back and slows its processes, and kills nothing, so a shard in a share keeps
+    its cache out of the memory the slot's other share reserved."""
     unit = f"check-{slot}-{run_id}"
     limit = session_limit()
-    props = [f"--property=MemoryMax={limit}"] if limit else []
+    props = [*([f"--property=MemoryMax={limit}"] if limit else []), *([f"--property=MemoryHigh={high}G"] if high else [])]
     return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 
@@ -463,7 +510,10 @@ class Poll:
 
 def booked(slot: dict) -> int | None:
     """The GiB `slot` waits for and reserves: its mem=, or on a line with book= the larger of book and what the run asks
-    (RUN_MEM_ENV, which `asking` raised mem= to: a run never reserves less than it asks)."""
+    (RUN_MEM_ENV, which `asking` raised mem= to: a run never reserves less than it asks); on a share of a slot, its share=,
+    whatever the run it takes asks (`takes`)."""
+    if slot.get("share"):
+        return slot["share"]
     if not slot.get("book"):
         return slot.get("mem")
     gb = asked_gb()
@@ -618,10 +668,11 @@ def gib(gb: float) -> int:
 
 
 def asking(slots: list[dict]) -> list[dict]:
-    """``slots`` with each mem= raised to what the run asks (RUN_MEM_ENV, GB), in GiB as mem= is; unchanged without it."""
+    """``slots`` with each mem= raised to what the run asks (RUN_MEM_ENV, GB), in GiB as mem= is; unchanged without it, and
+    a share of a slot keeps its mem=, the most a run it takes asks (`takes`)."""
     gb = asked_gb()
     want = gib(gb) if gb > 0 else 0
-    return [{**s, "mem": max(s.get("mem") or 0, want)} if want else s for s in slots]
+    return [{**s, "mem": max(s.get("mem") or 0, want)} if want and not s.get("share") else s for s in slots]
 
 
 def take(slots: list[dict], lock_dir: Path, now: datetime, priority: bool = False,
@@ -786,8 +837,13 @@ def holds(slot: dict, min_mem: int | None) -> bool:
 
 
 def held_why(slot: dict, priority: bool, min_mem: int | None) -> str:
-    """Why an unblocked ``slot`` isn't this waiter's now: for train checks only, under its ``min_mem``, or busy."""
-    return "for train checks" if slot["trains"] and not priority else "busy" if holds(slot, min_mem) else f"under {min_mem} GB"
+    """Why an unblocked ``slot`` isn't this waiter's now: for train checks only, under its ``min_mem``, a share of a slot
+    that doesn't take its run (`takes`), or busy."""
+    if slot["trains"] and not priority:
+        return "for train checks"
+    if not holds(slot, min_mem):
+        return f"under {min_mem} GB"
+    return "busy" if takes(slot) else f"a share of a slot, for a run that asks at most {slot['mem']} GB"
 
 
 def run_timeout(run_dir: str) -> float | None:
@@ -919,7 +975,7 @@ def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Pat
     poll = poll or Poll()
     return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
              "mem": s.get("mem"), **({"book": s["book"]} if s.get("book") else {}),
-             **({"peaks": s["peaks"]} if s.get("peaks") else {}),
+             **({"peaks": s["peaks"]} if s.get("peaks") else {}), **({"share": s["share"]} if s.get("share") else {}),
              "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
              "blocked": blocked(s, now, poll=poll), "upcoming": upcoming(s, now)} for s in slots]
 
@@ -931,7 +987,8 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     out = []
     for s in slot_docs(slots, lock_dir, now, proc, poll):
         out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "")
-                   + (f"  mem {s['mem']} GB" + (f" (reserves {s['book']})" if s.get("book") else "") if s["mem"] else "")
+                   + (f"  mem {s['mem']} GB" + (f" (reserves {s['book']})" if s.get("book") else "")
+                      + (f" (a share of it: reserves {s['share']})" if s.get("share") else "") if s["mem"] else "")
                    + (f"  peaks {s['peaks']}" if s.get("peaks") else "")
                    + f"  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
@@ -1104,6 +1161,35 @@ def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None,
         finally:
             os.close(fd)
     return n
+
+
+def asks_ahead(ticket: Path, now: datetime) -> list[float]:
+    """The GiB each live waiter that came before ``ticket``'s asks, as its ticket says (0: it names none), oldest first."""
+    asks = [w.get("mem_gb") for w in waiting(ticket.parent, now, before=ticket.name)]
+    return [gb * 1e9 / 2 ** 30 if isinstance(gb, (int, float)) and gb > 0 else 0.0 for gb in asks]
+
+
+def passing(ticket: Path, slots: list[dict], mine: list[dict], poll: Poll, now: datetime, priority: bool = False) -> list[dict]:
+    """The lines of ``mine`` (the ones this waiter's run may take) that it may take with other waiters ahead of it: none but
+    shares of a slot (share=), and those only while no waiter ahead could take one (each asks more than the largest share
+    line's mem=, or names no ask: the heavy kind, `takes`) and the memory free holds, beside the share, what the waiters
+    ahead wait for: each one's ask, and for one that names none the most a whole line of ``slots`` books. So a heavy part
+    that waits for its whole slot holds no share idle, and no run that passes it takes the slot or the memory it waits for."""
+    shares = [s for s in mine if s.get("share")]
+    if not shares:
+        return []
+    most = max(s["mem"] for s in shares)
+    asks = asks_ahead(ticket, now)
+    if any(0 < a <= most for a in asks):
+        return []
+    whole = max((booked(s) or 0 for s in slots if not s.get("share")), default=0)
+    kept = sum(int(-(-a // 1)) if a else whole for a in asks)
+    out = []
+    for s in shares:
+        free = poll.memory_gb() - poll.reserved_gb(priority or bool(s.get("trains")))
+        if free - s["share"] >= kept:
+            out.append(s)
+    return out
 
 
 def passed_gb(ticket: str, lock_dir: Path, proc: Path = Path("/proc")) -> float:
@@ -1311,6 +1397,13 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               f"with a train slot (only=trains, mem={min_mem} or more: `check.py --slots` lists them); exit {NOT_STARTED}",
               file=sys.stderr, flush=True)
         return NOT_STARTED
+    if not any(takes(s) for s in slots if (priority or not s["trains"]) and holds(s, min_mem)):
+        have = ", ".join(f"{s['name']} ({s['mem']} GB, share {s['share']})" for s in slots if s.get("share"))
+        asks = f"asks {gib(gb)} GB" if (gb := asked_gb()) else "names no ask"
+        print(f"slot: not started: every slot of {SLOTS} this check could take is a share of a slot ({have}), which takes a "
+              f"run that asks at most its mem=, and this one {asks}. Run it on a machine with a whole slot (a line without "
+              f"share=: `check.py --slots` lists them); exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     if after and (rc := hold_off(pair, after, asker(by, pair), research_run_dir(), now, sleep)) is not None:
         return rc
     me = asker(by, pair)
@@ -1341,8 +1434,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         poll = Poll()                                               # this try's reading of the machine's memory, and no other's
         n = ahead(ticket, free_gb=lambda: poll.memory_gb() - poll.reserved_gb(**lane_peaks(slots)),
                   passed=lambda name: passed_gb(name, SLOTS.parent))
-        got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
-                                  priority, poll)
+        mine = [s for s in slots if (priority or not s["trains"]) and holds(s, min_mem) and takes(s)]
+        got = take(passing(ticket, slots, mine, poll, now(), priority) if n else mine, SLOTS.parent, now(), priority, poll)
         if got and run_max is not None and (short := short_of(run_max, run_dir, mono)):
             os.close(got[1])                                        # before a twin claim, which its twins would take as started
             return gone(short)
@@ -1398,10 +1491,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if slot.get("scope") and (why := scope_refusal()):
         print(f"slot: scope=1 but systemd-run --user doesn't run here ({why}); running unscoped", file=sys.stderr, flush=True)
     elif slot.get("scope"):
-        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()))
+        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()), slot.get("share"))
         env[SCOPE_ENV] = unit
-        record_slot(run_dir, {**held, "scope": f"{unit}.scope"})
-        print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)
+        record_slot(run_dir, {**held, "scope": f"{unit}.scope", **({"high_gib": slot["share"]} if slot.get("share") else {})})
+        print(f"slot: check in its own scope {unit}.scope" + (f", its page cache taken back past {slot['share']} GiB"
+                                                               if slot.get("share") else ""), file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 
 
