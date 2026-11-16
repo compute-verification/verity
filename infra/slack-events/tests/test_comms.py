@@ -7,12 +7,14 @@ from conftest import BOT, COORD, T0, add_route, rs
 from slack_events import comms, consumer
 from test_app import callback, client, post_event
 
+RELAY = "https://relay.example/api/comms-relay"
+
 
 def test_only_comms_router_doorbells_go_to_the_platform(world, monkeypatch, tmp_path):
     d = world.deps
     inbox, source, event_ts = world.boxes["circuits"], f"{int(T0)-3}.000001", f"{int(T0)}.000001"
     add_route(tmp_path / "notes" / rs.ROUTES_DIR, "comms", inbox)
-    d.env.update(COMMS_RELAY_INBOX=f"{COORD}/{inbox}", COMMS_RELAY_CANARY_THREAD=source,
+    d.env.update(COMMS_RELAY_INBOX=f"{COORD}/{inbox}", COMMS_RELAY_URL=RELAY, COMMS_RELAY_CANARY_THREAD=source,
                  COMMS_RELAY_UNTIL=datetime.fromtimestamp(T0 + 80000, timezone.utc).isoformat())
     raw = callback()
     ev = raw["event"]
@@ -26,7 +28,8 @@ def test_only_comms_router_doorbells_go_to_the_platform(world, monkeypatch, tmp_
     data = d.queue.sent[-1][1]
     assert data["kind"] == "comms-relay"
     sent = []
-    def exchange(body):
+    def exchange(url, body):
+        assert url == RELAY
         sent.append(body)
         return {"status": "answer", "reply": "Checked."} if len(sent) == 2 else {"status": "pending" if len(sent) == 1 else "check_receipt"}
     monkeypatch.setattr(comms, "exchange", exchange)
@@ -56,7 +59,7 @@ def platform_delivery(world, tmp_path):
     route_file = tmp_path / "notes" / rs.ROUTES_DIR / "comms.json"
     add_route(route_file.parent, "comms", inbox)
     route_file.write_text(json.dumps({**json.loads(route_file.read_text()), "holder": comms.SEAT}))
-    world.deps.env.update(COMMS_RELAY_INBOX=f"{COORD}/{inbox}",
+    world.deps.env.update(COMMS_RELAY_INBOX=f"{COORD}/{inbox}", COMMS_RELAY_URL=RELAY,
                           COMMS_RELAY_UNTIL=datetime.fromtimestamp(T0 + 3000, timezone.utc).isoformat())
     ev = dict(type="message", channel=COORD, thread_ts=inbox, ts=f"{int(T0)}.000001",
               username="router", bot_id=BOT, text=f"from infra, thread {int(T0)-5}.000001: please check")
@@ -69,7 +72,7 @@ def test_unsupported_source_with_platform_holder_rings_top_without_sharing_conte
                                                                                   monkeypatch, text):
     data, route_file = platform_delivery
     data["event"]["text"] = text
-    monkeypatch.setattr(comms, "exchange", lambda _: pytest.fail("unsupported source forwarded"))
+    monkeypatch.setattr(comms, "exchange", lambda *_: pytest.fail("unsupported source forwarded"))
     assert comms.candidate(world.deps, data["event"])
     assert consumer.consume(world.deps, data, 1) == "dead-lettered"
     assert consumer.consume(world.deps, data, 2) == "dead-lettered"
@@ -82,7 +85,7 @@ def test_unsupported_source_with_platform_holder_rings_top_without_sharing_conte
 def test_pending_polls_do_not_exhaust_retries_for_a_transient_failure(world, platform_delivery, monkeypatch):
     data, _ = platform_delivery
     results = iter([{"status": "pending"}, TimeoutError(), {"status": "answer", "reply": "recovered"}])
-    def exchange(_):
+    def exchange(*_):
         current = next(results)
         if isinstance(current, Exception):
             raise current
@@ -97,7 +100,7 @@ def test_pending_polls_do_not_exhaust_retries_for_a_transient_failure(world, pla
 def test_route_failure_after_many_polls_retries_until_deadline(world, platform_delivery, monkeypatch):
     data, route_file = platform_delivery
     route_file.unlink()
-    monkeypatch.setattr(comms, "exchange", lambda _: pytest.fail("unverified route"))
+    monkeypatch.setattr(comms, "exchange", lambda *_: pytest.fail("unverified route"))
     with pytest.raises(consumer.Retry):
         consumer.consume(world.deps, data, 28)
     world.clock.t += comms.MAX_WAIT_S + 1
@@ -107,11 +110,14 @@ def test_route_failure_after_many_polls_retries_until_deadline(world, platform_d
 
 def test_window_or_missing_configuration_cannot_forward(world, platform_delivery, monkeypatch):
     data, _ = platform_delivery
-    monkeypatch.setattr(comms, "exchange", lambda _: pytest.fail("closed relay"))
-    for key in ("COMMS_RELAY_INBOX", "COMMS_RELAY_UNTIL"):
+    monkeypatch.setattr(comms, "exchange", lambda *_: pytest.fail("closed relay"))
+    for key in ("COMMS_RELAY_INBOX", "COMMS_RELAY_UNTIL", "COMMS_RELAY_URL"):
         with monkeypatch.context() as m:
             m.delitem(world.deps.env, key)
             assert not comms.candidate(world.deps, data["event"])
+    with monkeypatch.context() as m:
+        m.setitem(world.deps.env, "COMMS_RELAY_URL", "http://relay.example/api/comms-relay")
+        assert not comms.candidate(world.deps, data["event"])
     world.clock.t += 3001
     assert not comms.candidate(world.deps, data["event"])
     assert consumer.consume(world.deps, data, 5) == "dead-lettered"
@@ -120,7 +126,7 @@ def test_window_or_missing_configuration_cannot_forward(world, platform_delivery
 
 def test_holder_changes_while_answer_is_in_flight(world, platform_delivery, monkeypatch):
     data, route_file = platform_delivery
-    def exchange(_):
+    def exchange(*_):
         add_route(route_file.parent, "comms", data["event"]["thread_ts"])
         return {"status": "answer", "reply": "from former holder"}
     monkeypatch.setattr(comms, "exchange", exchange)

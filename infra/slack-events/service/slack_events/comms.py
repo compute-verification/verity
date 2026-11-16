@@ -9,7 +9,7 @@ from typing import Any
 
 from .deps import Deps, vercel_oidc
 
-PLATFORM = "https://platform-agents.vercel.app/api/comms-relay"
+ENDPOINT = "COMMS_RELAY_URL"                                     # the platform's relay route: the project's variable holds it
 SEAT = "808f8ee2-e60b-42e8-a960-9c7a8329cdfa"
 RECEIPT = "verity_comms_relay_reply"
 MAX_WAIT_S = 30 * 60
@@ -26,6 +26,8 @@ class Unsupported(Exception):
 
 def candidate(d: Deps, ev: dict) -> bool:
     inbox = d.env.get("COMMS_RELAY_INBOX")
+    if not (d.env.get(ENDPOINT) or "").startswith("https://"):
+        return False
     if not inbox or ev.get("type") != "message" or ev.get("subtype") not in (None, "bot_message"):
         return False
     if inbox != f"{ev.get('channel')}/{ev.get('thread_ts')}" or ev.get("ts") == ev.get("thread_ts"):
@@ -43,12 +45,12 @@ def candidate(d: Deps, ev: dict) -> bool:
     return d.rs.is_doorbell(ev, d.registry) and bool(d.rs.DOORBELL_RE.match(text) or LINEAR_RING.match(text))
 
 
-def exchange(data: dict) -> dict:
+def exchange(url: str, data: dict) -> dict:
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args: Any) -> None:
             return None
 
-    req = urllib.request.Request(PLATFORM, data=json.dumps(data).encode(), headers={
+    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers={
         "Authorization": "Bearer " + vercel_oidc(), "Content-Type": "application/json"})
     with urllib.request.build_opener(NoRedirect()).open(req, timeout=10) as response:
         return json.load(response)
@@ -71,7 +73,7 @@ def forward(d: Deps, ev: dict) -> str:
                     and "[comms relay test]" in ev["text"][bell.end():])
         if not reserved:
             return "comms: Cursor holds inbox"
-    answer = exchange({"channel": ev["channel"], "inbox": ev["thread_ts"], "ts": ev["ts"], "text": ev["text"]})
+    answer = exchange(d.env[ENDPOINT], {"channel": ev["channel"], "inbox": ev["thread_ts"], "ts": ev["ts"], "text": ev["text"]})
     status = answer.get("status")
     if status == "pending":
         raise Pending()
