@@ -54,3 +54,15 @@ count = { value = 2.061e6, unit = "location", source = "benchmarks/census/advers
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
+
+[work.v4-step]
+flops = { value = 2.84e19, unit = "FLOP", source = "ruled: one optimizer step (about 4 H100-hours)", status = "ruled" }
+
+[work.v4-pretrain]
+flops = { value = 9.7e24, unit = "FLOP", source = "ruled: the pretraining run (33T tokens)", status = "ruled" }
+
+[exfil.sparseloco-1000]
+bits = { value = 1.36e14, unit = "bit", source = "ruled: 1,000 SparseLoCo syncs (17 TB)", status = "ruled" }
+
+[exfil.rl-rollouts]
+bits = { value = 1.68e8, unit = "bit", source = "ruled: 100M tokens of R1-style rollouts (21 MB at 17 bits a token, about 10x compressed)", status = "ruled" }
