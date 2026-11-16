@@ -18,7 +18,7 @@ import pytest
 
 from verity.commitments import coin_tree as CT
 from verity.commitments.identity import canonical_json_text
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K
 
 from test_challenger import entropy

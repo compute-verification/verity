@@ -48,7 +48,7 @@
 # Lean both accept and run.py prints the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
-AUDITOR=verity/protocols/compose/device/live_challenger/auditor.py
+AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}

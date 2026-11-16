@@ -49,7 +49,7 @@ and the check reads each template's Definition from its text: the command says s
 
 The check is Lean, built from this tree with `lake build` the first time it runs, and nothing else is fetched: it
 needs `lake`, which elan (https://github.com/leanprover/elan) installs with the toolchain that
-`verity/protocols/policy/inference_only/verifier/lean/lean-toolchain` names. Without `lake` the command says so in one
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lean-toolchain` names. Without `lake` the command says so in one
 line and exits before any work.
 
 ~~~sh
