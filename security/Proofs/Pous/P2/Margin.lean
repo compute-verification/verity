@@ -413,6 +413,20 @@ theorem not_slack_b19 (lam m kr : ℕ) (hS : m * 16448 ≤ 8169621180 + lam * 2 
   · have : ((m1p (2 ^ 19) 16448 p b).B : ℝ) = 2 ^ 19 := by norm_num [m1p]
     rw [this]; exact hbig
 
+/-- **`λ = 64`: raw storage (498,733 blocks, fraction 0.95126) breaks every `k ≤ 92`.** -/
+theorem raw_b19_64 (p b D Q k : ℕ) (hk : k ≤ 92) (ε : ℝ≥0∞) :
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 64 D Q k ε :=
+  not_slack_b19 64 498733 92 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
+
+/-- **`λ = 128`: raw storage (500,773 blocks, fraction 0.95515) breaks every `k ≤ 100`.** -/
+theorem raw_b19_128 (p b D Q k : ℕ) (hk : k ≤ 100) (ε : ℝ≥0∞) :
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 128 D Q k ε :=
+  not_slack_b19 128 500773 100 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
+
+/-- **`λ = 256`: raw storage (504,854 blocks, fraction 0.96293) breaks every `k ≤ 121`.** -/
+theorem raw_b19_256 (p b D Q k : ℕ) (hk : k ≤ 121) (ε : ℝ≥0∞) :
+    ¬ MeetsWithSlack (m1p (2 ^ 19) 16448 p b) .sequential 256 D Q k ε :=
+  not_slack_b19 256 504854 121 (by norm_num) (by norm_num) (by norm_num) p b D Q k hk ε
 
 /-! ### The families at `ε = 2^-128` -/
 
