@@ -784,9 +784,6 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
 
 
 def test_the_cost_is_split_by_layer_each_arm_over_the_arm_it_adds_one_change_to():
-    """On a sessions load the report splits the cost by layer (`LAYERS`), each the benchmark's own cost of an arm over
-    the one below it with its interval over lifetimes: with no seeded stock served, the seeds, the step trace and ids
-    are one layer, and the top-k's refinement is a layer of its own where the bisecting pass was served beside it."""
     rates = {"prod": [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], "prod-trace": [[1.99, 1.99], [2.0, 2.0], [1.98, 1.98]],
              "prod-record-bisect": [[1.8, 1.8], [1.81, 1.81], [1.79, 1.79]],
              "prod-record": [[1.9, 1.9], [1.91, 1.91], [1.89, 1.89]]}
@@ -905,8 +902,6 @@ def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, ...], rows_at: int 
 
 
 def test_the_top_k_counters_keep_the_rows_bisected_and_refined_where_the_processes_counted_them(tmp_path: Path):
-    """A process whose top-k counted the rows it bisected and refined after a wrong fast selection has them summed and
-    said; a record kept before they were counted holds neither, and the line says nothing of them."""
     old, new = tmp_path / "old", tmp_path / "new"
     topk_log(old, 1, 100, (40, 2))
     assert P.topk_counters([old]) == {"processes": 1, "calls": 100, "rows_long": 40, "rows_tied": 2, "rows_at": 100}

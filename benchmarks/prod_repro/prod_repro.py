@@ -796,8 +796,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
 
 
-#: the layers of prod-record's cost over prod, each an arm over the arm it adds one change to (`serve_tax.ARMS`); a
-#: layer whose arm is left out where the job served the two finer ones it is the sum of (its fourth)
+#: (arm, the arm it adds one change to, the change, the arm between them): a layer is left out where the job served the
+#: arm between, whose two layers sum to it
 LAYERS = (("prod-seeded", "prod", "the seeds sent", None),
           ("prod-trace", "prod-seeded", "the step trace and ids", None),
           ("prod-trace", "prod", "the seeds sent, the step trace and ids", "prod-seeded"),
@@ -807,9 +807,8 @@ LAYERS = (("prod-seeded", "prod", "the seeds sent", None),
 
 
 def layers(by: dict[str, dict], load: str, target: float) -> dict:
-    """The cost by layer (`LAYERS`), on a sessions load: for each layer whose two arms served it, the benchmark's own
-    cost of the one over the other (`serve_tax.session_cost`), a fraction of the lower arm's serving time, with its
-    interval over the lifetime pairs (``pairs``) or why the benchmark refuses the pair (``why``)."""
+    """Each served layer's `serve_tax.session_cost`, a fraction of the lower arm's serving time, or why it refuses the
+    pair (``why``)."""
     if not getattr(S.LOADS.get(load), "sessions", False):
         return not_measured(f"load {load} is not a sessions load, whose cost alone has an interval over lifetimes")
     each = []
@@ -1427,8 +1426,7 @@ def _noise(n: dict | None, stock: str) -> str:
 
 
 def _layers(ly: dict | None) -> list[str]:
-    """The cost by layer (`layers`), or why it can't be read; nothing where no layer was served or the load has none,
-    or for a report kept before it was."""
+    """Empty for a report kept before `layers` was, or where no layer was served."""
     if ly is None or not ly["measured"] and not ly.get("unread"):
         return []
     if not ly["measured"]:

@@ -482,8 +482,7 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
 
 
 def concentrated_case(seed: int, rows: int, cols: int, k: int, dist: str):
-    """Rows whose keys crowd the k-th one, as where the pin's cooperative_topk misses: ``shift`` (32 plus a normal),
-    ``steps`` (32 plus a multiple of 1/64: ties at the k-th key in the k-th key's window)."""
+    """``shift``: 32 plus a normal; ``steps``: 32 plus a multiple of 1/64, so ties at the k-th key."""
     rng = random.Random(seed)
     data = [[32.0 + (rng.gauss(0, 1) if dist == "shift" else rng.randrange(12) / 64) for _ in range(cols)]
             for _ in range(rows)]
@@ -534,9 +533,8 @@ def overflowed(torch, x, lo, n, k, rng):
 
 
 def paths(torch, x, lo, n, k, first):
-    """The rows a split pass bisects and refines from a fast selection ``first``: of the rows of more than ``k`` keys
-    whose candidate (the selection's smallest key) is not the k-th key, those whose k-th key's top 13 bits are the
-    candidate's or a neighbour's are refined, the rest bisected."""
+    """(bisected, refined): a failed row is refined where its k-th key's 13-bit prefix is the candidate's or a
+    neighbour's."""
     bisected = refined = 0
     for r in range(x.shape[0]):
         m = int(n[r])
@@ -556,12 +554,6 @@ def paths(torch, x, lo, n, k, first):
 
 @pytest.mark.parametrize("dist", ["randn", "int", "edge", "shift", "steps"])
 def test_refined_pass_is_the_present_one_bit_for_bit(monkeypatch, dist):
-    """The split pass with its refinement (`Canon` ``refine``) writes what the present one (every failed row
-    bisected) writes, bit for bit and the reference both, from a right selection with its ties broken at random, a
-    near miss, the pin's overflow, a wrong one and garbage, on random logits, logits crowded at the k-th key (where
-    the pin overflows) and ties there. The same rows fail their candidate under both; the
-    refinement takes exactly those whose k-th key is in the candidate's window (`paths`), and its tables are zeros
-    after every call."""
     torch = interpreted(monkeypatch)
     rng = random.Random(7)
     k, rows, cols = 16, 8, 160
