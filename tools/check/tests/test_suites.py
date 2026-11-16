@@ -2583,6 +2583,57 @@ def test_a_suite_whose_key_is_its_bases_is_lent_and_one_the_change_touches_runs(
         assert p.returncode == 2 and "--lend-from takes none of --fresh, --quick and --changed" in p.stderr, p.stderr
 
 
+def _allow(root: Path, *entries: tuple[str, str]) -> str:
+    """Commit a policy.toml whose allowances name (test id, expiry) ``entries`` of suite `a`; the commit."""
+    allow = "".join(f'\n[[allow]]\nid = "suite a::{t}"\nowner = "ci"\nexpires = "{e}"\nreason = "its fix is landing"\n'
+                    for t, e in entries)
+    (root / "tools" / "check" / "policy.toml").write_text('schema = "policy/v0"\noff_gate = []\n' + allow)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "policy")
+    return _git(root, "rev-parse", "HEAD")
+
+
+def test_a_suite_red_only_on_allowed_tests_passes_and_is_reused_until_the_allowance_lapses(tmp_path):
+    """`--allowances COMMIT`, through the runner and its guard: a test an unexpired allowance of COMMIT's policy names runs as a
+    non-strict expected failure, so its suite passes, keeps a pass and is reused; a test that passes while an allowance still
+    names it fails nothing. Once the allowance has lapsed the key is another and the suite fails on that test, and a failure no
+    allowance names fails it whatever the others say. Without the flag every failure is the suite's, as before."""
+    root, out = tmp_path / "tree", tmp_path / "out.json"
+    red, ok = "tests/test_it.py::test_red", "tests/test_it.py::test_ok"
+    _env_workspace(root, {"a": "def test_ok():\n    pass\n\n\ndef test_red():\n    assert False\n"})
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"), (ok, "2999-01-01T00:00:00Z"))
+
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout + p.stderr
+    assert f"a: 2 tests an unexpired allowance at {live[:12]} names run as expected failures: {ok}, {red}" in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert (row["status"], row["failed_tests"]) == ("passed", [])
+    assert list((tmp_path / "cache").glob(f"{row['key']}.json")), "the pass is kept"
+    p = _run_suite(root, tmp_path, "--allowances", live)
+    assert p.returncode == 0 and "cached  a" in p.stdout, "a later check reuses it: " + p.stdout
+
+    lapsed = _allow(root, (red, "2000-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", lapsed, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout and "cached  a" not in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert (row["failed_tests"], row["beyond_tests"]) == ([red], False)
+
+    (root / "a" / "tests" / "test_it.py").write_text("def test_new():\n    assert False\n\n\ndef test_red():\n    assert False\n")
+    live = _allow(root, (red, "2999-01-01T00:00:00Z"))
+    p = _run_suite(root, tmp_path, "--allowances", live, "--json", str(out))
+    assert p.returncode == 1 and "failed  a" in p.stdout, p.stdout
+    [row] = json.loads(out.read_text())
+    assert row["failed_tests"] == ["tests/test_it.py::test_new"], row
+
+    p = _run_suite(root, tmp_path, "--allowances", "no-such-ref", "--json", str(out))
+    assert p.returncode == 1 and "--allowances no-such-ref: no-such-ref isn't a commit here" in p.stdout, p.stdout
+    for flag in (["--quick"], ["--changed", live]):
+        p = _run_suite(root, tmp_path, "--allowances", live, *flag)
+        assert p.returncode == 2 and "--allowances takes neither --quick nor --changed" in p.stderr, p.stderr
+
+
 def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tmp_path, monkeypatch):
     """`lent_by` on what a key holds beside its inputs: a fixture the registry names another artifact for since the base, or a
     Lake build output whose package changed since, is another key, and a build output no Lake package builds is keyed by what

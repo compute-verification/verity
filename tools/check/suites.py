@@ -9,6 +9,8 @@
     uv run tools/check/suites.py --fresh             run even where a pass is cached
     uv run tools/check/suites.py --lend-from COMMIT  leave out each suite with no pass here whose key in COMMIT's tree
                                                             is its key here: the check of COMMIT answers for it (`lent_by`)
+    uv run tools/check/suites.py --allowances COMMIT run the tests an unexpired allowance at COMMIT names as expected
+                                                            failures (`allowed_red`)
     uv run tools/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
     uv run tools/check/suites.py vllm --files 1/8    part 1 of 8 of a suite's test files (also `vllm:1/8`, `vllm:1,3/8`)
@@ -164,7 +166,12 @@ Each suite's verdict is its real one: a failed test fails its suite here whereve
 is drive's policy (`research.policy`, tools/check/policy.toml's allowances), judged where drive and the quick tier read
 the reports; each failed row says whether it failed for anything besides its failed tests (`beyond_tests`: a read outside its
 inputs, an unguarded worker, a timeout, a signal, a nondeterministic test, no guard report), which an allowance of tests alone
-never covers.
+never covers. One exception, `--allowances COMMIT` (a recorded check passes its base, where drive reads the allowances, so
+no commit's own allowance covers its own failure): each test an unexpired `suite NAME::TEST` allowance at COMMIT names runs as
+a non-strict expected failure (`allowed_red`), so a suite that fails only on such tests passes and keeps a pass, which later
+checks reuse rather than run it again. The tests it names are among the suite's pytest arguments, so every key holds them: once
+the allowance lapses or is dropped the key is another, the test runs again and its failure fails the suite. A failure beyond
+them, or of another test, fails as before.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`, stretched
 for a suite that declares the `timeout_workers` it was measured on and gets fewer (`bound`): a suite still running then has its
@@ -224,6 +231,21 @@ def _layout():
 
 
 LAYOUT = _layout()
+
+
+def _policy():
+    """The landing policy's reader (`research.policy`, stdlib only), from the tree as `_layout` takes the layout rule."""
+    path = ROOT / "tools" / "research" / "src" / "research" / "policy.py"
+    if not path.is_file():
+        from research import policy
+        return policy
+    spec = importlib.util.spec_from_file_location("suites_policy", path)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = m                                  # its dataclasses resolve their module by name
+    spec.loader.exec_module(m)
+    return m
+
+
 GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
@@ -291,6 +313,8 @@ UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 #: the guard's (`verity_suite_guard`): the tests of each test file the option names carry the mark, which `whole_args` keeps
 WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
+#: the guard's: each test the option names runs as a non-strict expected failure (`allowed_red`, `--allowances`)
+ALLOWED_OPT = "--verity-allowed-red"
 REGISTRY = "artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
 #: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
@@ -1292,6 +1316,22 @@ def whole_args(suite: Suite, whole: list[str], extra: list[str]) -> list[str]:
     the guard marks `WHOLE_MARK` as those of the files `WHOLE_OPT` names."""
     base = "" if suite.path == "." else suite.path + "/"
     return ["-m", f"not slow or {WHOLE_MARK}", *(f"{WHOLE_OPT}={m.removeprefix(base)}" for m in whole), *extra]
+
+
+def allowed_red(commit: str, now: float) -> tuple[dict[str, list[str]], str]:
+    """{suite name: the node ids of its tests that an allowance of `tools/check/policy.toml` at ``commit`` names (`suite
+    NAME::TEST`) and that hasn't expired at ``now``} (`--allowances`), and, when ``commit``'s policy can't be read, why there
+    are none. A `suite NAME` allowance, which also covers what fails beyond its tests, names no test: its failures stay
+    failures here, for the judge to cover."""
+    pol = _policy().at(ROOT, commit)
+    if isinstance(pol, str):
+        return {}, pol
+    out: dict[str, list[str]] = {}
+    for a in pol.allow:
+        name, sep, test = a.id.removeprefix("suite ").partition("::")
+        if a.id.startswith("suite ") and sep and a.live(now):
+            out.setdefault(name, []).append(test)
+    return {n: sorted(ts) for n, ts in out.items()}, ""
 
 
 def own_sets(whole: list[str] | None, quick: list[str], full: list[str]):
@@ -2597,6 +2637,11 @@ def main(argv: list[str] | None = None) -> int:
                     "its key here (`lent_by`), reported as `lent`: the check of COMMIT answers for it. Only for a check whose "
                     "verdict counts once COMMIT's own has (the verified queue's check of a candidate built on the candidate "
                     "COMMIT, which lands after it and is dropped with it)")
+    ap.add_argument("--allowances", metavar="COMMIT", help="run each test that an unexpired `suite NAME::TEST` allowance of "
+                    "tools/check/policy.toml at COMMIT names as a non-strict expected failure (`allowed_red`; check passes its "
+                    "base, where the verified queue reads the allowances), so its suite passes, and keeps a pass, while the "
+                    "allowance stands; the tests it names are among the suite's pytest arguments, so a lapsed allowance is "
+                    "another key, which runs the test again and fails on it")
     ap.add_argument("--synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--timeouts", action="store_true",
                     help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "
@@ -2641,6 +2686,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.lend_from and (a.fresh or a.quick or a.changed):
         ap.error("--lend-from takes none of --fresh, --quick and --changed: it leaves out what a whole check of COMMIT runs under "
                  "the same key, and reuses its verdict")
+    if a.allowances and (a.quick or a.changed):
+        ap.error("--allowances takes neither --quick nor --changed: it is for a check's whole run of each suite")
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
@@ -2691,6 +2738,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"suites: {s.name}: {len(ms)} test modules the change reaches run whole, slow tests included: "
               + ", ".join(ms[:6]) + (f" and {len(ms) - 6} more" if len(ms) > 6 else ""))
     args_of = {s: whole_args(s, whole[s], extra) if s in whole else args for s in chosen}
+    if a.allowances:
+        red, why = allowed_red(a.allowances, time.time())
+        if why:
+            print(f"suites: --allowances {a.allowances}: {why}, so no test runs as an expected failure")
+        for s in chosen:
+            if tests := red.get(s.name):
+                args_of[s] = [*args_of[s], *(f"{ALLOWED_OPT}={t}" for t in tests)]
+                print(f"suites: {s.name}: {len(tests)} tests an unexpired allowance at {a.allowances[:12]} names run as expected "
+                      f"failures: {', '.join(tests)}")
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
     logs.mkdir(parents=True, exist_ok=True)

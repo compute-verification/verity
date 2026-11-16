@@ -18,7 +18,9 @@ that failed is failed, whoever is fixing it. What gates and what may stay red is
 its own failure. An allowance there (`[[allow]]`: an id, its
 owner, when it expires in UTC, and why) covers one suite, one test or one circuit-check failure: the verified queue takes
 such a failure as not red (no suspect, no ejection, no hold on `main`) until it expires. The quick tier applies `main`'s
-allowances the same way.
+allowances the same way. A recorded check runs each test a `suite NAME::TEST` allowance at its base names as a non-strict
+expected failure (`suites.py --allowances`), so a suite red only on allowed tests passes and keeps a pass the next checks
+reuse; the allowed tests are in its key, so the day the allowance lapses the suite runs again and fails.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
