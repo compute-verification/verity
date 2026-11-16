@@ -118,7 +118,7 @@ what they read of it (the suite's tests read more of a module than its list). Fr
 `verity/protocols/resource_accounting/compute/pouw/verifier/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s `xin_keys`,
 `xin13_receipts` and `tile_receipts` (the suite runs that check too), `tests/adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
 as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/machine_model/data/` are
-written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU; the job scripts do
+written from `eps_profile.py OUT --toml`. The Python here touches no GPU; the job scripts do
 the rest. What measures these kernels rather than judging them is in `benchmarks/pouw/edited_gemm_profile/`:
 `eps_profile.py` and `vprod_profile.py` (a run's `ncu` sections as executed instructions by class, against the ACCEL
 model), `flash_ref.py` (plain attention's time, `fattn.cu`'s baseline) and `fattnrun.sh`, the job that times `fattn.cu`
