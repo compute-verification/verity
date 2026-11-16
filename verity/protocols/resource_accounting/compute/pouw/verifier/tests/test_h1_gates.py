@@ -33,7 +33,7 @@ from verity.circuits.program import Program, input_id
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
-ROWS = Path(__file__).resolve().parents[7] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[7] / "security" / "Proofs" / "ResourceAccounting" / "Gates" / "Rows.lean"
 #: the lanes' Boolean segment dots, s8-family steps in property/v1's table (`PouwSegDot0` is `PouwSegDot` from 0)
 LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")
 #: the tile's versions on this tree: v1, the one-stream v3, the gated v4 and J10-R's v5 and v6 (v1's and v3's

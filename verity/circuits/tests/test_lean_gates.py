@@ -24,7 +24,7 @@ from verity.circuits.program import Program, input_id
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple as TupleT, Value
 
-ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "ResourceAccounting" / "Gates" / "Rows.lean"
 S8T, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
 #: the s8 family's word steps, s8·s8 and u8·s8
 DOT = {False: prims.BlackwellS8ImmaDot32, True: prims.BlackwellU8S8ImmaDot32}

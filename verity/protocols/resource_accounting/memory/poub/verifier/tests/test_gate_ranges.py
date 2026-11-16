@@ -30,8 +30,8 @@ import pytest
 from verity.circuits.ops.scalar import F32Fmaxf, F32Fminf
 
 ROOT = Path(__file__).resolve().parents[7]
-LEAN_GATES = ROOT / "security" / "Proofs" / "Accounting" / "Gates.lean"
-LEAN_RANGES = ROOT / "security" / "Definitions" / "Accounting" / "Gates" / "Ranges.lean"
+LEAN_GATES = ROOT / "security" / "Proofs" / "ResourceAccounting" / "Gates.lean"
+LEAN_RANGES = ROOT / "security" / "Definitions" / "ResourceAccounting" / "Gates" / "Ranges.lean"
 LUT_FIXTURE = Path(__file__).parent / "fixtures" / "exp2_lut127.json"
 #: `tail_pieces.EXP2_LUT127_SHA256`: the sha256 of the table's 256 little-endian u32 words
 EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"

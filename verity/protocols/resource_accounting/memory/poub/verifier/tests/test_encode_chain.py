@@ -39,7 +39,7 @@ from pathlib import Path
 
 from verity.protocols.resource_accounting.memory.poub.verifier import codec
 
-LEAN_GATES = Path(__file__).resolve().parents[7] / "security" / "Proofs" / "Accounting" / "Gates.lean"
+LEAN_GATES = Path(__file__).resolve().parents[7] / "security" / "Proofs" / "ResourceAccounting" / "Gates.lean"
 ROW = re.compile(r"\((\d+), (\d+), \[(\d+(?:, \d+)*)\], (\d+), (\d+), (\d+), (\d+), (\d+)\)")
 
 F = codec.P1024

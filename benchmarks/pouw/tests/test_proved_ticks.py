@@ -73,7 +73,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
             P.placed(wrong, grid)
 
 
-ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "ResourceAccounting" / "Gates" / "Rows.lean"
 
 
 def h1_rows() -> dict[tuple[int, int, int], int]:

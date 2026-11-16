@@ -717,13 +717,13 @@ def test_a_branch_regenerated_on_an_older_tree_keeps_the_inline_texts_next_still
     merged onto `next` at ab4de4a2d2 (ours).  The branch's tree prints two of `LiveCoinsDrawn`'s five premises, so its
     `--update` dropped the other three, renamed `Coins` texts that `next`'s tree still prints; premise by premise the merge
     applied the drop, and the merged lock failed `next`'s Lean check on all three.  `next` in turn re-keyed one of
-    `ComputeOfPouw`'s texts under `ResourceAccounting.OpClass.oracle`, dropping the `ResourceAccounting.Op.oracle` one the branch has as the
+    `ComputeOfPouw`'s texts under `Accounting.OpClass.oracle`, dropping the `Accounting.Op.oracle` one the branch has as the
     base had it.  Every side lists both guarantees with one record, and `reads` holds the two `Guarantees` definitions their
     signatures name: `next` restated both (each definition has another hash), and the branch neither.  So the three
     `LiveCoinsDrawn` premises stay, each named on stderr, and the old `Op.oracle` text goes: the branch states
     `ComputeOfPouw` as the base does, so the merged tree prints it as `next`'s, where the text no longer offends."""
     sides = json.loads((FIXTURES / "inline-live-coins-onto-next.json").read_text())
-    live, pouw = "ResourceAccounting.SecurityProofs.Remote.LiveCoinsDrawn", "ResourceAccounting.SecurityProofs.ComputeOfPouw"
+    live, pouw = "Accounting.SecurityProofs.Remote.LiveCoinsDrawn", "Accounting.SecurityProofs.ComputeOfPouw"
     assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"]
     defs = {n: {d: h for g in sides[n]["reads"].values() for d, h in g["definitions"].items()} for n in sides}
     assert len(defs["base"]) == 2 and defs["theirs"] == defs["base"]
@@ -734,7 +734,7 @@ def test_a_branch_regenerated_on_an_older_tree_keeps_the_inline_texts_next_still
             pouw: [p for p in inline["base"][pouw] if p not in inline["ours"][pouw]]}
     assert len(gone[live]) == 3 and all("Draw.Coins" in p or "Draw.DrawCoins" in p for p in gone[live])
     assert [p for p in inline["ours"][pouw] if p not in inline["base"][pouw]] == [
-        p.replace("ResourceAccounting.Op.oracle", "ResourceAccounting.OpClass.oracle") for p in gone[pouw]]
+        p.replace("Accounting.Op.oracle", "Accounting.OpClass.oracle") for p in gone[pouw]]
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
@@ -808,7 +808,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
     the old one (the lock run) and one that has both as the base had them, keeps the new one alone too.  Where the side
     that has both restated the guarantee and the other didn't (a branch whose `--update` ran on a tree before the rename,
     which prints the old text only), the new text stays: the merged statement prints it."""
-    g, d = "ResourceAccounting.SecurityProofs.TileUnpredictableOfNCPU", "ResourceAccounting.Guarantees.TileUnpredictableOfNCPU"
+    g, d = "Accounting.SecurityProofs.TileUnpredictableOfNCPU", "Accounting.Guarantees.TileUnpredictableOfNCPU"
     rec = {"owner": "@memory-accounting", "signature": [f"{g} : {d}"], "assumptions": [], "type_hash": "a" * 64}
     old, new = (f"∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul {b} 3)" for b in "γg")
     why = "a bound that is no plain range, inline when the rule came"
@@ -980,7 +980,7 @@ def test_an_old_branch_merging_main_merges_by_origin_main_s_driver_and_its_own_c
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
-    """Each side added imports to `Definitions.ResourceAccounting`'s layer and a clause to its `why`."""
+    """Each side added imports to `Definitions.Accounting`'s layer and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
                        "E": {"imports": ["E"], "except": [], "why": "e"}}}
     ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
@@ -1099,7 +1099,7 @@ def test_a_branch_from_before_the_port_merges_as_its_codemod_rerun_would(tmp_pat
 
 
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
-    """`security/Definitions/ResourceAccounting.lean` as git gave it to the driver in a merge where one side retired a module and the
+    """`security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
