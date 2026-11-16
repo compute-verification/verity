@@ -5,8 +5,6 @@ replay index addresses each row at its plane, and the MoE source binds the same 
 that reads another pair's quant is named, never read."""
 from __future__ import annotations
 
-from verity_vllm.program.compact import expanded_file_args
-
 import copy
 import re
 
@@ -18,6 +16,7 @@ import torch.nn as nn
 from tests.program import test_sigmoid_moe_fp8_derive as S
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
