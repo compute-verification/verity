@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta
+public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -58,7 +59,11 @@ import all Init.WF
 
 
 /-!
-# HmRow.delta at the statement's circuit is `EX` (kernel)
+# Δ at the fixed nets' circuit, read by the kernel
+
+`HmRow.deltaL` at the statement's circuit `cF` is the list `EX` reversed (`deltaL_cF`), so `HmRow.delta`'s array is `EX`
+(`dA_cF`, as `Concrete.Trace.dA_cW`). Stated at the closed circuit, so the kernel shares what the loops recompute: at the
+circuit's layouts and hashes as variables it recomputes each column once per pair.
 -/
 
 @[expose] public section
@@ -72,15 +77,11 @@ set_option maxHeartbeats 0 -- the kernel evaluates the parsed circuit's Δ
 
 namespace SpotFlock.InstanceStmt.TraceDaA
 
-variable (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
-  (hello : ByteArray → Nat → String)
+theorem deltaL_cF : (HmRow.deltaL cF 246784).1 = EX.reverse := by kernel_rfl'
 
-theorem deltaL_cO :
-    (HmRow.deltaL (cO ls lh H C A B A' B' s1) 246784).1 = EX.reverse := by kernel_rfl'
-
-theorem dA_cO : (dA (cO ls lh H C A B A' B' s1) 246784).toList = EX := by
-  have h := congrArg Prod.fst (FlockDeploy.Concrete.deltaL_eq (cO ls lh H C A B A' B' s1) 246784)
-  rw [deltaL_cO] at h
+theorem dA_cF : (dA cF 246784).toList = EX := by
+  have h := congrArg Prod.fst (FlockDeploy.Concrete.deltaL_eq cF 246784)
+  rw [deltaL_cF] at h
   simp only [FlockDeploy.Concrete.Φ, FlockDeploy.Concrete.φ, List.reverse_inj] at h
   exact h
 

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts
+public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDaA
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDaB
@@ -60,29 +61,34 @@ import all Init.WF
 
 
 /-!
-# The statement's Δ is `EX ++ OX`
+# The table's Δ is `EX ++ OX`
+
+At the fixed nets the statement's Δ is `HmOut.delta`'s: `HmRow.delta`'s (`EX`, `TraceDaA.dA_cF`), then the output rows'
+pairs (`OX`, `TraceDaB.outPairs_cF`) and no pinned output's (`TraceFacts.pinPairs_cO`): `da_stF`.
 -/
 
 @[expose] public section
 
 open Flock FlockSoundness
-open FlockDeploy.Concrete (dA)
 open SpotFlock.InstanceStmt.TraceDelta (EX OX)
 
 set_option maxRecDepth 200000
-set_option maxHeartbeats 0 -- the kernel evaluates the parsed circuit's Δ
 
 namespace SpotFlock.InstanceStmt.TraceDa
 
-variable (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
-  (hello : ByteArray → Nat → String)
+/-- The statement's one table at the fixed nets. -/
+noncomputable abbrev stF (r : Run) : Stmt :=
+  stX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X (s3X (hexOf classHash))
+    (s4X r (hexOf circuitHash) (hexOf classHash)) (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX
 
 /-- **The statement's Δ is `EX ++ OX`.** -/
-theorem da_stX : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da.toList = EX ++ OX := by
-  have hda : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da =
-      oA (cO ls lh H C A B A' B' s1) (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).pin := rfl
-  rw [hda, TraceFacts.pin_stX, oA_eq, Array.toList_append, Array.toList_append, TraceDaA.dA_cO,
-    TraceDaB.outPairs_cO, TraceFacts.pinPairs_cO]
+theorem da_stF (r : Run) : (stF r).da.toList = EX ++ OX := by
+  have hda : (stF r).da = oA cF (stF r).pin := rfl
+  have hpin := TraceFacts.pin_stX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
+    (s3X (hexOf classHash)) (s4X r (hexOf circuitHash) (hexOf classHash))
+    (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX
+  rw [hda, hpin, oA_eq, Array.toList_append, Array.toList_append, TraceDaA.dA_cF, TraceDaB.outPairs_cF,
+    TraceFacts.pinPairs_cO]
   simp
 
 end SpotFlock.InstanceStmt.TraceDa

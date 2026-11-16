@@ -76,6 +76,7 @@ open Flock Flock.ZkServer RecDeploy.VStarNets FlockSoundness FlockSoundness.Disc
 open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 open FlockDeploy.Concrete (shaB hmB)
 open SpotFlock.InstanceStmt.TraceHolds (Facts)
+open SpotFlock.InstanceStmt.TraceDa (stF da_stF)
 open SpotFlock.InstanceStmt.TraceRegions (RegionFacts bcP commitString_zero_I commitString_zero_O)
 
 set_option maxHeartbeats 200000000
@@ -90,7 +91,8 @@ section facts
 variable (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
   (hello : ByteArray → Nat → String)
 
-theorem facts_stX : Facts (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello) := by
+theorem facts_stX (hda : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).da.toList = TraceDelta.EX ++ TraceDelta.OX) :
+    Facts (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello) := by
   have hc := TraceFacts.c_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello
   have hnets := TraceFacts.nets_cO ls lh H C A B A' B' s1
   have hiw := TraceFacts.inWords_cO ls lh H C A B A' B' s1
@@ -98,8 +100,7 @@ theorem facts_stX : Facts (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello) := by
   have hsha := TraceFacts.shaRange_cO ls lh H C A B A' B' s1
   have hhm := TraceFacts.hmRange_cO ls lh H C A B A' B' s1
   have hpin := TraceFacts.pin_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello
-  refine ⟨?_, hpin, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, TraceDa.da_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello,
-    ?_⟩
+  refine ⟨?_, hpin, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hda, ?_⟩
   · rw [hc]; exact TraceFacts.kLog_cO ls lh H C A B A' B' s1
   · rw [hc]; exact TraceFacts.tmpl_cO ls lh H C A B A' B' s1
   · rw [hc]; exact TraceFacts.unit_cO ls lh H C A B A' B' s1
@@ -113,81 +114,72 @@ theorem facts_stX : Facts (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello) := by
   · rw [hc, hpin]; exact TraceFacts.constPairs_cO ls lh H C A B A' B' s1
   · rw [hc]; exact TraceFacts.ranges_cO ls lh H C A B A' B' s1
 
-theorem ports_cO : (cO ls lh H C A B A' B' s1).ports.size = 2 := by kernel_rfl'
-theorem words0_cO : (cO ls lh H C A B A' B' s1).ports[0]!.words = 64 := by kernel_rfl'
-theorem words1_cO : (cO ls lh H C A B A' B' s1).ports[1]!.words = 1 := by kernel_rfl'
-theorem perVu0_cO : (cO ls lh H C A B A' B' s1).perVu.getD (cO ls lh H C A B A' B' s1).hmNet 0 = 2 := by kernel_rfl'
-theorem perVu1_cO : (cO ls lh H C A B A' B' s1).perVu.getD (cO ls lh H C A B A' B' s1).hmNet 1 = 2 := by kernel_rfl'
-
-theorem rm_cO : ∀ p < 2, Hidden.Any.rowMsg (cO ls lh H C A B A' B' s1).ports[p]!
-      (List.replicate (2 * (cO ls lh H C A B A' B' s1).ports[p]!.words) 0) =
-    (HmRow.rowPrefixV2 (16 * (cO ls lh H C A B A' B' s1).ports[p]!.words)).data.toList ++
-      List.replicate (2 * (cO ls lh H C A B A' B' s1).ports[p]!.words) 0 := by
-  intro p hp
-  interval_cases p <;> kernel_rfl'
-
-theorem commit_cO : ∀ p < 2, Binding.commitString
-    ((HmRow.rowPrefixV2 (16 * (cO ls lh H C A B A' B' s1).ports[p]!.words)).data.toList ++
-      List.replicate (2 * (cO ls lh H C A B A' B' s1).ports[p]!.words) 0) (List.replicate 192 0) =
-    (bcP p).data.toList := by
-  intro p hp
-  interval_cases p
-  · rw [words0_cO ls lh H C A B A' B' s1]
-    exact commitString_zero_I
-  · rw [words1_cO ls lh H C A B A' B' s1]
-    exact commitString_zero_O
-
-theorem msgOK_cO : ∀ p < 2, ∀ j < 2 * (cO ls lh H C A B A' B' s1).ports[p]!.words, ∀ t < 8,
-    (524800 ≤ Typed.msgCol (cO ls lh H C A B A' B' s1) 0 p j t ∧
-        Typed.msgCol (cO ls lh H C A B A' B' s1) 0 p j t < 528896) ∨
-      (262704 ≤ Typed.msgCol (cO ls lh H C A B A' B' s1) 0 p j t ∧
-        Typed.msgCol (cO ls lh H C A B A' B' s1) 0 p j t < 262720) := by
-  decide +kernel
-
-theorem saltOK_cO : ∀ p < 2, ∀ j < 192, ∀ t < 8,
-    (1536 ≤ Discharge.Hm.saltCol (cO ls lh H C A B A' B' s1) 0 p j t ∧
-        Discharge.Hm.saltCol (cO ls lh H C A B A' B' s1) 0 p j t < 4096) ∨
-      (263680 ≤ Discharge.Hm.saltCol (cO ls lh H C A B A' B' s1) 0 p j t ∧
-        Discharge.Hm.saltCol (cO ls lh H C A B A' B' s1) 0 p j t < 266240) := by
-  decide +kernel
-
-theorem n_stX : (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).pub.n = 1 := by kernel_rfl'
-
-theorem dig_stX : ∀ p < 2, (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).pub.digest 0 p 2 = bcP p := by
-  intro p hp
-  interval_cases p <;> kernel_rfl'
-
-theorem dummy_cO : ∀ p < 2, (cO ls lh H C A B A' B' s1).dummyDigests.getD p ByteArray.empty = bcP p := by
-  intro p hp
-  interval_cases p <;> kernel_rfl'
-
-theorem regionFacts_stX : RegionFacts (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).c
-    (stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).pub := by
-  have hc := TraceFacts.c_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello
-  rw [hc]
-  exact
-    { kLog := TraceFacts.kLog_cO ls lh H C A B A' B' s1
-      g := (TraceFacts.g_cO ls lh H C A B A' B' s1).1
-      upv := (TraceFacts.g_cO ls lh H C A B A' B' s1).2
-      nports := ports_cO ls lh H C A B A' B' s1
-      perVu0 := perVu0_cO ls lh H C A B A' B' s1
-      perVu1 := perVu1_cO ls lh H C A B A' B' s1
-      rm := rm_cO ls lh H C A B A' B' s1
-      commit := commit_cO ls lh H C A B A' B' s1
-      msgOK := msgOK_cO ls lh H C A B A' B' s1
-      saltOK := saltOK_cO ls lh H C A B A' B' s1
-      n := n_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello
-      dig := dig_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello
-      dummy := dummy_cO ls lh H C A B A' B' s1 }
-
 end facts
 
-/-! ## The statement at the fixed nets -/
+/-! ## What the regions read, at the fixed nets' circuit -/
 
-/-- The statement's one table at the fixed nets. -/
-noncomputable abbrev stF (r : Run) : Stmt :=
-  stX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X (s3X (hexOf classHash))
-    (s4X r (hexOf circuitHash) (hexOf classHash)) (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX
+theorem ports_cF : cF.ports.size = 2 := by kernel_rfl'
+theorem words0_cF : cF.ports[0]!.words = 64 := by kernel_rfl'
+theorem words1_cF : cF.ports[1]!.words = 1 := by kernel_rfl'
+theorem perVu0_cF : cF.perVu.getD cF.hmNet 0 = 2 := by kernel_rfl'
+theorem perVu1_cF : cF.perVu.getD cF.hmNet 1 = 2 := by kernel_rfl'
+
+theorem rm_cF : ∀ p < 2, Hidden.Any.rowMsg cF.ports[p]! (List.replicate (2 * cF.ports[p]!.words) 0) =
+    (HmRow.rowPrefixV2 (16 * cF.ports[p]!.words)).data.toList ++ List.replicate (2 * cF.ports[p]!.words) 0 := by
+  intro p hp
+  interval_cases p <;> kernel_rfl'
+
+theorem commit_cF : ∀ p < 2, Binding.commitString
+    ((HmRow.rowPrefixV2 (16 * cF.ports[p]!.words)).data.toList ++ List.replicate (2 * cF.ports[p]!.words) 0)
+    (List.replicate 192 0) = (bcP p).data.toList := by
+  intro p hp
+  interval_cases p
+  · rw [words0_cF]
+    exact commitString_zero_I
+  · rw [words1_cF]
+    exact commitString_zero_O
+
+theorem msgOK_cF : ∀ p < 2, ∀ j < 2 * cF.ports[p]!.words, ∀ t < 8,
+    (524800 ≤ Typed.msgCol cF 0 p j t ∧ Typed.msgCol cF 0 p j t < 528896) ∨
+      (262704 ≤ Typed.msgCol cF 0 p j t ∧ Typed.msgCol cF 0 p j t < 262720) := by
+  decide +kernel
+
+theorem saltOK_cF : ∀ p < 2, ∀ j < 192, ∀ t < 8,
+    (1536 ≤ Discharge.Hm.saltCol cF 0 p j t ∧ Discharge.Hm.saltCol cF 0 p j t < 4096) ∨
+      (263680 ≤ Discharge.Hm.saltCol cF 0 p j t ∧ Discharge.Hm.saltCol cF 0 p j t < 266240) := by
+  decide +kernel
+
+theorem dummy_cF : ∀ p < 2, cF.dummyDigests.getD p ByteArray.empty = bcP p := by
+  intro p hp
+  interval_cases p <;> kernel_rfl'
+
+theorem n_stF (r : Run) : (stF r).pub.n = 1 := by kernel_rfl'
+
+theorem dig_stF (r : Run) : ∀ p < 2, (stF r).pub.digest 0 p 2 = bcP p := by
+  intro p hp
+  interval_cases p <;> kernel_rfl'
+
+theorem regionFacts_stF (r : Run) : RegionFacts (stF r).c (stF r).pub := by
+  have hc : (stF r).c = cF := TraceFacts.c_stX r _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  rw [hc]
+  exact
+    { kLog := TraceFacts.kLog_cO _ _ _ _ _ _ _ _ _
+      g := (TraceFacts.g_cO _ _ _ _ _ _ _ _ _).1
+      upv := (TraceFacts.g_cO _ _ _ _ _ _ _ _ _).2
+      nports := ports_cF
+      perVu0 := perVu0_cF
+      perVu1 := perVu1_cF
+      rm := rm_cF
+      commit := commit_cF
+      msgOK := msgOK_cF
+      saltOK := saltOK_cF
+      n := n_stF r
+      dig := dig_stF r
+      dummy := dummy_cF }
+
+
+
+/-! ## The statement at the fixed nets -/
 
 /-- The statement, parsed: its inputs' readable fields and its one table. -/
 noncomputable def pF (r : Run) : _root_.Flock.Readable.Parsed :=
@@ -245,7 +237,7 @@ theorem rel_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
     Hm.RowRanges.ofL (st := Hidden.flatTwin (stF r)) ((Hidden.setupHidden_specCC hd).flatLayout ht)
       ((Hidden.setupHidden_specCC hd).unitFacts ht).parse ((Hidden.setupHidden_specCC hd).unitFacts ht).check
   have hS := TraceRegions.satisfies_regions_x hd ht hrf hpin0 hn L R
-    (facts_stX r _ _ _ _ _ _ _ _ _ _ _ _ _ _) (regionFacts_stX r _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+    (facts_stX r _ _ _ _ _ _ _ _ _ _ _ _ _ _ (da_stF r)) (regionFacts_stF r)
   refine ⟨_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation (pF r), ?_, ?_⟩
   · change (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) (x r)).map
       (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = _

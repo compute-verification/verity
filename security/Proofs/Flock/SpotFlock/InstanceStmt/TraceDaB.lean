@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceFacts
 public import Proofs.Flock.SpotFlock.InstanceStmt.TraceDelta
+public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -58,23 +59,19 @@ import all Init.WF
 
 
 /-!
-# the output rows' pairs are `OX` (kernel)
+# The output rows' pairs at the fixed nets' circuit, read by the kernel
 -/
 
 @[expose] public section
 
 open Flock FlockSoundness
-open FlockDeploy.Concrete (dA)
 open SpotFlock.InstanceStmt.TraceDelta (EX OX)
 
 set_option maxRecDepth 200000
-set_option maxHeartbeats 0 -- the kernel evaluates the parsed circuit's Δ
+set_option maxHeartbeats 0 -- the kernel evaluates the parsed circuit's output rows' pairs
 
 namespace SpotFlock.InstanceStmt.TraceDaB
 
-variable (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s5 s6 : String)
-  (hello : ByteArray → Nat → String)
-
-theorem outPairs_cO : (SpotFlock.InstanceStmt.outPairs (cO ls lh H C A B A' B' s1)).toList = OX := by kernel_rfl'
+theorem outPairs_cF : (SpotFlock.InstanceStmt.outPairs cF).toList = OX := by kernel_rfl'
 
 end SpotFlock.InstanceStmt.TraceDaB
