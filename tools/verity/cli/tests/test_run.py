@@ -17,9 +17,9 @@ import pytest
 
 from verity import config as K
 from verity.protocol import Channel, Role
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
-from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
@@ -76,7 +76,7 @@ def channel(cfg, source, to):
     return next(c for c in cfg["channel"] if (c["from"], c["to"]) == (source, to))
 
 
-#: a pin the toy's onsite configuration accepts: the network certifier's key for the certifier's sessions
+#: a pin the toy's onsite configuration accepts: the network attester's key for the certifier's sessions
 PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
 
 
@@ -189,7 +189,7 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash with neither the network certifier's bound on a response's tokens nor its lengths
+#: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
 UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
                     "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
@@ -209,7 +209,7 @@ def test_a_bounded_certifier_configuration_round_trips():
     cfg = K.check(K.parse(K.render(bounded(4))), REG.components, REG.workloads)
     table = cfg["params"]["verity/certifier/v0"]
     assert table["max_tokens_cap"] == 4
-    assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
+    assert NetworkAttesterParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
     assert K.check(cfg, REG.components, REG.workloads) == cfg
     assert K.digest(cfg) != UNBOUNDED_ONSITE
 
@@ -226,7 +226,7 @@ def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_sch
         cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
         table = cfg["params"]["verity/certifier/v0"]
         assert table["lengths"] == form and "max_tokens_cap" not in table
-        assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert NetworkAttesterParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
         assert K.check(cfg, REG.components, REG.workloads) == cfg
         digests.add(K.digest(cfg))
     assert len(digests) == 3
@@ -405,11 +405,11 @@ class StandIn(D.Machine):
 
 
 def registry(verdicts: dict | None = None, certifier_rc: int = 0) -> R.Registry:
-    def network_certifier(cfg, state, local):
+    def network_attester(cfg, state, local):
         write(state / "blocks" / "certifier-session" / "relay.json", {"periods": len(periods(state))})
         return certifier_rc
 
-    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_certifier}}
+    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_attester}}
     return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
                       functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 

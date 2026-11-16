@@ -8,7 +8,7 @@ public import Definitions.Compose.JointPeriod
 
 In the causal game (`Verity.play`) the device flips its coins as the prover drives it, round by round: each frame the
 prover sends picks what the device samples next, after every coin before it. A subprotocol's guarantee is stated over coins
-flipped up front: `Accounting.PeriodRun.Sound` bounds, at every value of the other coins, the probability over the audit's
+flipped up front: `ResourceAccounting.PeriodRun.Sound` bounds, at every value of the other coins, the probability over the audit's
 own coins. This module states the coupling between the two and the bounds it carries.
 
 * **The coins flipped up front** (`UpFrontAll fs D`): every coin of the coin commitment's families `fs` (`UpFront fs`),
@@ -30,7 +30,7 @@ own coins. This module states the coupling between the two and the bounds it car
   claim fails is at most `a`'s error at the strategy. It gives `a`'s target at `acc` in the play (`CoinsCouple`), and so
   `Vocab.ComponentBound` at `acc = ComponentAccepts`.
 * **From a period guarantee** (`TargetOfPeriods`): for the subprotocol that decides `Audit` `b`, a run of the coins model
-  (`Accounting.PeriodRun`) whose coins are in bijection with the coins flipped up front (`Vocab.PeriodCoupling`), whose
+  (`ResourceAccounting.PeriodRun`) whose coins are in bijection with the coins flipped up front (`Vocab.PeriodCoupling`), whose
   verdict `acc` refines and whose claim refines `b`'s in the play, meeting `PeriodRun.Sound` within the published `δ`,
   with the rest of the event (a log out of place, the coupling's break) bounded by the forger's and the finder's terms
   (`Vocab.PeriodCoupling.BreakBound`; together `Vocab.PeriodsCouple`), gives `b`'s target at `acc` in the play. At
@@ -52,7 +52,7 @@ prover choosing them can't break it, so its bound stays at its component (`Vocab
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 open scoped ENNReal
 
 /-- **The coin commitment's coins, flipped up front**: for each of the families `fs`, in order, each of its coins, 512
@@ -242,7 +242,7 @@ def PeriodCoupling.BreakBound {acc : Exchange → Prop} {k : Verity.Registration
 
 /-- **The plays at `b`'s subprotocol couple to period runs**: at every `θ`, `F`, `c`, strategy and resolution of the
 coin trees' coins there is a period run coupled to the play (`PeriodCoupling`) that meets `b`'s per-period guarantee
-(`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is bounded
+(`ResourceAccounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is bounded
 by the forger's and the finder's terms where the finder meets `FinderCR` (`PeriodCoupling.BreakBound`). -/
 def PeriodsCouple (acc : Exchange → Prop) (k : Verity.Registration.Composite) (b : Audit) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (ρ : TreeCoins),
@@ -284,7 +284,7 @@ def CoinsCouple : Prop :=
 /-- **A subprotocol's target in the play from a period guarantee of the coins model.** On any device, for any names
 `V`, any verdict `acc`, composite `k` and `Audit` `b`: if at every `θ`, `F`, `c`, strategy and resolution of the coin
 trees' coins there is a period run coupled to the play (`Vocab.PeriodCoupling`) that meets `b`'s per-period guarantee
-(`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is
+(`ResourceAccounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is
 bounded by the forger's and the finder's terms where the finder meets `FinderCR` (`BreakBound`; `Vocab.PeriodsCouple`),
 then `b`'s subprotocol
 meets its target at `acc` in the play. At `acc = ComponentAccepts V.pins k (.ofAudit b)` it is

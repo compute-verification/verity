@@ -1,6 +1,6 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
-PoUB's prover's `serving.StoreBackend` (`verity.protocols.accounting.poub.prover.node_store.serving`) proves that store to a
+PoUB's prover's `serving.StoreBackend` (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
@@ -51,7 +51,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "adapters" / "vllm")]
 
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 64, "num_hidden_layers": 2, "vocab_size": 256,
@@ -263,8 +263,8 @@ def engine(work: Path):
 def provers():
     """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
     GPU's (the adapter's `Binder` is imported where the engine is built)."""
-    from verity.protocols.accounting.poub.prover.node_store import serving
-    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
+    from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+    from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
     return serving, NodeMemory
 
 
@@ -291,7 +291,7 @@ def backend_class(serving):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    from verity.protocols.accounting.poub.verifier.session import verifier
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
     import sheets
 
@@ -305,7 +305,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         out["error"] = e
         raise
     finally:
@@ -337,10 +337,22 @@ def read_json(path: Path) -> dict | None:
     return doc if isinstance(doc, dict) else None
 
 
+def node_record(doc: dict) -> dict:
+    """A whole-node prover's record (`node.py`'s prover.json, a session a plan word) as one session's: accepted only
+    when it has sessions and each was, else the first one that wasn't, or the error it ended on."""
+    sessions = doc["sessions"]
+    out = {k: doc[k] for k in ("error",) if doc.get(k)}
+    if (bad := next((s for s in sessions if s.get("accepted") is not True), None)) is not None:
+        return {**out, "accepted": False, "failure": bad.get("failure")}
+    return {**out, "accepted": True} if sessions and not out else out
+
+
 def verdict_main(a: argparse.Namespace) -> int:
     record = read_json(a.record) if a.record else None
     if record is not None and isinstance(record.get("prover"), dict) and "accepted" not in record:
         record = record["prover"]
+    if record is not None and isinstance(record.get("sessions"), list) and "accepted" not in record:
+        record = node_record(record)
     both = a.verifier_rc is not None
     rc, line = verdict(a.prover_rc, (read_json(a.out / "verifier.json") or {}) if both else None, record,
                        a.window_ms, a.verifier_rc or 0)

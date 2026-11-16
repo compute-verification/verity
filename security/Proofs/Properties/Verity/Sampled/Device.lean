@@ -1218,7 +1218,7 @@ theorem printsLog (fs : ByteArray → Families) (o : Exchange) :
 
 /-- **`Binds` at v2's read, at the deployed device's history** (`Binding.binds_of_prints`), at a vocabulary whose
 pins designate the deployment's sessions for the challenger. -/
-theorem binds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem binds {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (k : Verity.Registration.Composite) (fs : ByteArray → Families) (θ : ByteArray)
     (hW : V.pins.sessions .challenger = P.sessions) : Binding.Binds V k Binding.readsV2 (P.dev fs) θ :=
   Binding.binds_of_prints V k (P.dev fs) θ fun o _ => by
@@ -1232,7 +1232,7 @@ end Deployment
 challenger, an accepted play whose log v2 read isn't the device's is at most as likely as the read finder's collision
 plus the forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log on
 those sessions (`Deployment.binds`). -/
-theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem logged_le_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hW : V.pins.sessions .challenger = P.sessions) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤

@@ -857,7 +857,7 @@ theorem prefix_flatten {a b : List (List Bool)} (h : a <+: b) : a.flatten <+: b.
   obtain ⟨t, rfl⟩ := h
   exact ⟨t.flatten, by rw [List.flatten_append]⟩
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The record's sample is the session's sample file at the sample**, wherever the play's coins of the sample's family
 agree with the sample's coins (`CoinsAgree`): in a play at the parameters `θ` of a session v2 sets up and tied to v2's

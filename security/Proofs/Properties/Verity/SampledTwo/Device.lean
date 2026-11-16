@@ -627,7 +627,7 @@ theorem signs_le (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List 
 
 end Deployment
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The two-session history at the deployment's setups.** -/
 noncomputable abbrev devOf (P : Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) :

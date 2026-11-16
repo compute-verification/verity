@@ -1,0 +1,296 @@
+{
+ "format": 2,
+ "roots": ["NetworkCheck"],
+ "exempt": {
+  "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
+  "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's execution phase verdict of record (execution phase, NetworkCheck.TransferBlocks.transferBlocksFn) and of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn), audited under NetworkCheck",
+  "NetworkCheck.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Span.protocol, audited under NetworkCheck",
+  "NetworkCheck.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.RowsAudit.protocol, audited under NetworkCheck"
+ },
+ "runs": {
+  "NetworkCheck.DifftestMain": {
+   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/protocols/resource_accounting/network/verifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
+   "data": {
+    "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",
+    "difftest/python.jsonl": "40d5effc5ee16c70a096a1f477a1a62f546b5c7fc47144bf1a1be7d8998411a2"
+   },
+   "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  }
+ },
+ "meaning": ["NetworkCheck", "NetworkAttester", "Base"],
+ "layers": {
+  "NetworkCheck.Certificate": {
+   "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
+   "except": [],
+   "why": "the encodings are code: Lean core, C-Flock's hashes, bytes and canonical JSON, and core's tagged SHA-512 only, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Check": {
+   "imports": ["NetworkCheck.Certificate", "NetworkAttester.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
+   "except": [],
+   "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Period": {
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.Clocks",
+    "CoreProtocol.Profile",
+    "Flock.Program",
+    "Flock.Public",
+    "Flock.WindowRecord",
+    "InferenceOnlyCheck.Desc",
+    "InferenceOnlyCheck.DefinitionDigest",
+    "NetworkCheck.ScanOk",
+    "NetworkCheck.Period.ConnectionRows",
+    "NetworkCheck.Period.Start",
+    "NetworkCheck.Period.Decode",
+    "Spot.Record"
+   ],
+   "except": [],
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), SPOT's record (the sample a registration states, `Spot.Record.profileSample`, and one-stage's bound of it, which an answer is held to), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, the inference-only check's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to; no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Records": {
+   "imports": ["NetworkCheck.Check", "Difftest"],
+   "except": [],
+   "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.TransferBlocks": {
+   "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
+   "except": [],
+   "why": "N2's execution phase verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Clocks": {
+   "imports": ["NetworkCheck.Check"],
+   "except": [],
+   "why": "the period's decoders are code: v4's certificate and its encodings, no Mathlib, nothing of Security and nothing of the inference-only policy's check"
+  },
+  "NetworkCheck.Period.Decode": {
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.Clocks",
+    "CoreProtocol.Profile",
+    "Flock.Program",
+    "Flock.Public",
+    "Flock.WindowRecord",
+    "InferenceOnlyCheck.Desc",
+    "InferenceOnlyCheck.DefinitionDigest",
+    "NetworkCheck.ScanOk",
+    "NetworkCheck.Period.ConnectionRows",
+    "NetworkCheck.Period.Start"
+   ],
+   "except": [],
+   "why": "the period check's structures and their decoding are code: what the period's check reads, the same imports as its layer's but the check itself, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.ScanOk": {
+   "imports": ["Flock.RegKnown", "Identity.Domains", "Identity.Tagged"],
+   "except": [],
+   "why": "the scan's ok-bit constants are code: C-Flock's rows at known content and their frame root (the ok rows under the public salts), and core's domain registry and tagged SHA-512 (the salts' tag and the frame domain), no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Span": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Registered", "Identity.Domains"],
+   "except": [],
+   "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.RowsAudit": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Records", "NetworkAttester.Rows"],
+   "except": [],
+   "why": "the audit of the active network certifier's run over its certified records is code: the period's schedule and its digest, the records' encoding and the certificate check, and the certifier program's rows audit, no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {
+  "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetworkCheck.RecordsBytes.evidenceOf_toEvidence (j : Lean.Json) :",
+    "  Eq (NetworkCheck.Check.evidenceOf j)",
+    "    (Except.instMonad.map NetworkCheck.Records.ByteEvidence.toEvidence (NetworkCheck.Records.evidenceOf j))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d7bf8ddfba8b0ea4d7cf8032d17af12ffd5866408dad0686344a41de65319ff6"
+  },
+  "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq (g : NetworkCheck.Check.Grid) (W : Nat)",
+    "  (l : NetworkCheck.Records.ByteLink) (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGridsOfBytes g W l) w.val)",
+    "    (Option.some (NetworkCheck.Check.expectedGrid g W l.toLink w.val))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "092871ea38ce03e4ffd45e0d031320be0fea5add9d8241fbea215d8ec39efa35"
+  },
+  "NetworkCheck.RecordsBytes.unhex_eq": {
+   "owner": "@network-accounting",
+   "signature": ["NetworkCheck.RecordsBytes.unhex_eq (s : String) : Eq (NetworkCheck.Records.unhex s) (Flock.unhex s)"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "47004c441f361d7380e6a9c49d91ceb2bc2b4739ca315db785465a279eeeb248"
+  },
+  "NetworkCheck.RecordsGrid.expectedGrids_eq": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.LinkOpening)",
+    "  (w : Fin W) :",
+    "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
+    "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "dbcc147c8dbdc7ca9944cc5dbab8f57d8f093fae2c773f4f64b4449524a75458"
+  }
+ },
+ "shape": {
+  "premises": [],
+  "properties": {
+   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
+    "function": "NetworkCheck.Records.evidenceOf",
+    "outcome": "none"
+   },
+   "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
+    "function": "NetworkCheck.Records.expectedGridsOfBytes",
+    "outcome": "none"
+   },
+   "NetworkCheck.RecordsBytes.unhex_eq": {
+    "function": "NetworkCheck.Records.unhex",
+    "outcome": "none"
+   },
+   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
+    "function": "NetworkCheck.Records.expectedGrids",
+    "outcome": "none"
+   }
+  }
+ },
+ "reads": {
+  "Base.Bytes": {
+   "digest": "eac9ae1a7ef63f519e5b78ddeef06e91a00cd7c1d46f8f3c28c9476d8ad332cf",
+   "definitions": {
+    "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
+    "Flock.unhex": "8bd6065ce900e4d8fc7e4d2a2c53501ed1e58aa583d9f77c275fa70e9e300f8a"
+   }
+  },
+  "Base.Canon": {
+   "digest": "42ff3c69beb2a0b5638e6dde39c656c79bbf13cfab1f090513868d52b2bec928",
+   "definitions": {
+    "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
+    "Flock.J.asArr": "8c8fe69a75431b26078e305bdad40a3b268662295d9220586464d390d136c81e",
+    "Flock.J.asNat": "49b227feff28956c302a2052b79f700f29c909592cc1608bb096b432f5830089",
+    "Flock.J.asStr": "313977466d5e7304826be7ecbdd33553eb995855321e50f66a2c24dafce41fae",
+    "Flock.J.get": "83264da7cfd473882e5cd6482d8674aa9f59c256d3389bc2ff70c0e5713ebccc"
+   }
+  },
+  "NetworkAttester.Grid": {
+   "digest": "38b7f1aabe0ac3084011b76e77983def9ab9329c3d3e6e96908f27e2ffba31e0",
+   "definitions": {
+    "NetworkAttester.Grid": "d269d47dd7c19885bc3c06e9fdaa8b984bba0a9ce1cd96af0e5e4548bb387519",
+    "NetworkAttester.Row": "941a54f0d25f50c26203633450788aa176c9ddc3cbfe0bee8a2d1e5fccb53fca",
+    "NetworkAttester.fifoGrid": "c07fa82afafebd4536dd4cd5aa62040c2f405ab8b614d830a7f53402c59b9b07",
+    "NetworkAttester.fill": "cc7aa96eacea2d3347530af45c574c220e16d753499e7a9478fe23c7c07952ab",
+    "NetworkAttester.offset": "f80a17fe56b8f9c16d4eff68ac46352acaad112088f346d6c34b6b92e33c1a04",
+    "NetworkAttester.queue": "496b34ed8580e31181f88f8223213495daf718accd6b472cddaa6b3c65699ef7",
+    "NetworkAttester.released": "53db5be8e67f0340d87be1bd91b08cc60be6f8ca316eb83e7b0b56c2cd709ceb"
+   }
+  },
+  "NetworkAttester.Schedule": {
+   "digest": "596790a424e9a5af38130870af46d1bf04dfba1cff14c2fe2eef41b6de4a935e",
+   "definitions": {
+    "NetworkAttester.ClockSync": "fae25cd885e1fbc52819b8ea2ed0db5fd3dc8059d0b8cc68fa226d5e35a0d99f",
+    "NetworkAttester.ClockSync.delta": "5de40fba12132bb9e48b1d8d238fb59a81b93c5a20e2227b3a0701d1c115a649",
+    "NetworkAttester.ClockSync.rho": "04e4c544e8400d2c4af66d8ea3f968a2db35674742d3fe344fbd2240ba693ff0",
+    "NetworkAttester.LogicalFrame": "9fd8cec076776773af04214d579cf98aed624ab3a8b60a451268e03ccfca192e",
+    "NetworkAttester.LogicalFrame.anchor": "05c4e3a59bb6b23800b4cfc220081d11df6a0d712f2a2d7dc69e6b416277217e",
+    "NetworkAttester.LogicalFrame.index": "55e1b4715ed4cd7fc8a136f2caa3ea9aa6f5db0005ca441243b0f2e6f107b7c1",
+    "NetworkAttester.LogicalFrame.payload": "f367492cea77a974b7d2f84487a7db4a3e3c0c062a0427d26108e06e39719033",
+    "NetworkAttester.eligible": "4bc7a450a037b6502a05ae14efd326deb078bb8454828e286daeaf69da5a71e1",
+    "NetworkAttester.enqueued": "9bbdc0d7b43b9e99e07429e4ad8f462e2b046074a53c7c1359cec64557aeba44",
+    "NetworkAttester.expectedRow": "8aac2be84d6c9f742406b2c6d5f83aa54f3358cd865f9f6a76c8ba49ad0b8ff2",
+    "NetworkAttester.handingBuckets": "8bc7fa203c5ff39a1d048140988f418f1e7e7902bbf1afc6274b5401669a5b56",
+    "NetworkAttester.handingFrom": "de1efd2cc331b663c6f01b61bd6f40ee53a3f4a4009d5699e0f2ffb2cecd76e1",
+    "NetworkAttester.payloads": "b368994673089a9e92724be8cc48d871327fbba41f7a95ad083a10c975424a2b"
+   }
+  },
+  "NetworkCheck.Certificate": {
+   "digest": "6051277316af97831cc0cab11afdb2aca45f8d28afc142ada3db6c4dc052e137",
+   "definitions": {
+    "NetworkCheck.Params": "bfdf4cf8ed1764be3aed3b01ee66c0a48b01bb79cff171baf53fcb5a840322ae",
+    "NetworkCheck.Params.allocation": "1474079561c3cfa50494ce3561c2ba6a49e46e140a4ecf0ac30f936485f972bf",
+    "NetworkCheck.Params.buckets": "1139cd7109acd90f05e1a270fde46f369d6ee3d4b09be892123182d11d09bccd"
+   }
+  },
+  "NetworkCheck.Check": {
+   "digest": "3ce960550e91e665e397b69fd450c048b7c86d5dae61855f45cca7e56ce7578f",
+   "definitions": {
+    "NetworkCheck.Check.Evidence": "937370e1fe49513919cbb912fea6932f2051c9cbda009f84d79adbc95515470d",
+    "NetworkCheck.Check.Grid": "dda3c8c0a91166be337f73036e47a1f3321211ac26bb5c6d6e67cf10aea5a1ca",
+    "NetworkCheck.Check.LinkOpening": "fb755477ec03631af720020c35037a2ada46dcc0f03bb7b253b37c48c97238f6",
+    "NetworkCheck.Check.LinkOpening.frames": "72a5cbb9015f58691058f78953a7268600e0457b47062a219d760015a5bc90b0",
+    "NetworkCheck.Check.LinkOpening.syncs": "7a3cbe822e9e2ac8b4ddf0fe80502249b856d49c9fbfdd3e13515cb879fd5e72",
+    "NetworkCheck.Check.bitsOfBytes": "5ef530d0b8f0ff850f0bdac70d3d72aedbfa6d35ba0338f613a3c516b3c12382",
+    "NetworkCheck.Check.byteOfBits": "0da821922a7f14cd263aca7acd1c90895213d2b2567ac72da473bcfbb7a323bf",
+    "NetworkCheck.Check.bytesOfBits": "55c3111e9ce28105d625953261c07fd8e2b21b79a71ea813a860956b1981c526",
+    "NetworkCheck.Check.bytesOfBitsList": "0b76a9a879012d7db7db4df394c03084e076edba96d9ddc56f63e736fcc7f05d",
+    "NetworkCheck.Check.evidenceOf": "0e0b22922e1c85af6ed9aaed810b3282db95f9d446bc22db960003a28d2660f8",
+    "NetworkCheck.Check.expectedGrid": "b61a29eaf46766b4fd118576cbb0de993b45d2c7c20807d78ae98ee384952c46",
+    "NetworkCheck.Check.frameOf": "4520b1a4b13a412aaec8f7716df1e15d7f0effa680e9f0be59ad1ff1d8b705ce",
+    "NetworkCheck.Check.noSync": "198cf0458c4ab318fdce5c7200ef68b418022638322f10dee98ce4837b4ccf1d",
+    "NetworkCheck.Check.ratOf": "034fc4127890627944f38ccb6808b44389c9eb72692048987dcfb9370c9f9ee1",
+    "NetworkCheck.Check.syncOf": "5caff09e57652e914d669e0fb6b87bde227bb850bcd79ef7e44368b5479b9dd2"
+   }
+  },
+  "NetworkCheck.Records": {
+   "digest": "3248f481f1f92a93a7ba3a7282ca7d2e7df07e9c3e29787dab4a27ffc6d5afed",
+   "definitions": {
+    "NetworkCheck.Records.ByteEvidence": "aa580ff61f821fabe5e248a95383f2dd41c8feb9df229aa23b945432e9a56338",
+    "NetworkCheck.Records.ByteEvidence.links": "b73e6b3cbefa0c40337c3be09433789a9542fdfc99d418eb20158be63520c062",
+    "NetworkCheck.Records.ByteEvidence.toEvidence": "4913433b85a9f4e7180f9d357e7ecad9280e7a708dcfadcef961c6b2ed94a994",
+    "NetworkCheck.Records.ByteFrame": "f78ce13a64161db4abd2680336b8088354b99024932510355ee7a83f382c693e",
+    "NetworkCheck.Records.ByteFrame.anchor": "bfbe4c09eb2620591f42cf330b1beb8cbcf4582964b17152e40ade92d0ea2919",
+    "NetworkCheck.Records.ByteFrame.index": "2da144a7fd970eaaf37349f3972b0d7152774f0853db1792dddabced1277fd4b",
+    "NetworkCheck.Records.ByteFrame.payload": "07e639105bf250f71a5bacd12e02cd1f8e7ac99515cd4923b6b583ff9d774ee1",
+    "NetworkCheck.Records.ByteFrame.timing": "4341ade4fe8938769c81435af5128bf79c42e35c34d0f2b3fc391075da4eaa67",
+    "NetworkCheck.Records.ByteFrame.toLogical": "88a7a4b44d740333b98efb99dbc1a095a483910cd37d948b1f467379704012e0",
+    "NetworkCheck.Records.ByteLink": "dba855f25707846aa921b27281c87708f804ede5f677f8bdf0c06d879ebba448",
+    "NetworkCheck.Records.ByteLink.frames": "97dc2bc73b3e41a3f99224f8a229b54937de685581c7a6ee9166ca1da8ff05c9",
+    "NetworkCheck.Records.ByteLink.syncs": "67dce6282daba25116588a2c58671d7c1efa9e52784a2440da3f11b77e536da4",
+    "NetworkCheck.Records.ByteLink.toLink": "3d7dcab099cfcb61a6be48db4f7cf240955bdd147d8b105bae13c11e7c0ac856",
+    "NetworkCheck.Records.RawGrid": "e83f00f4eacd8a1ff0d0d7d44838f9fe1601e5c2cec5e9b5fc9ea6e4d7114ca4",
+    "NetworkCheck.Records.byteFrameOf": "7a1928693bd3cc73e58e48028ba5f6bd9fc15d988c49e01962b8988512cb877a",
+    "NetworkCheck.Records.enqueueCounts": "f93ce2c8694803daf1a089d881b7969bd87bac809122a2afe373fa0096ee4b66",
+    "NetworkCheck.Records.evidenceOf": "a5e816b091af367ca25ff7338f1f2359f18d3b454e7312fa6430381446a0d06a",
+    "NetworkCheck.Records.expectedGrids": "8007708028a64c8fb478e7c905de042e9a0fb1304d9b687ac9e31c66702163bf",
+    "NetworkCheck.Records.expectedGridsOfBytes": "c3ad13fd3d954e131f3274b4769a985fc82b07d9fd0a773b10a8923873b7c212",
+    "NetworkCheck.Records.handingRev": "2a1ac4f865499783a2d6241580b7e91ef326645a3a8d85f486f43553db51a60d",
+    "NetworkCheck.Records.releases": "a3c6f119eb0e7d4edea05cc8d0db5d820ab6df3ea35e018823f2024f174c0449",
+    "NetworkCheck.Records.rows": "0399e73d61bda659ee858f9d928dffc254999a7c5c55677f10c16882b3281774",
+    "NetworkCheck.Records.unhex": "6208d9f35c6b6ca3e1030618e0a9ca1f54ba5265a849233f8c711761470530cd",
+    "NetworkCheck.Records.unhexChars": "bd4810568d86512391ffc713d7df42a780aee490ea410ae1642f676c094aa1fb"
+   }
+  }
+ },
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}

@@ -61,7 +61,7 @@ namespace Verity.Sampled
 
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The file finders -/
 
@@ -247,7 +247,7 @@ table files are the registered files (`registered`). A deployed instance fills `
 `coins` and `sessionOf` at its construction, by `rfl` or a lemma, as the honest instance does; no theorem takes any of
 them as a hypothesis of its own: `couplingTarget_at` reads the signer's and the coins' from these fields, `opensAt` the
 place's, `registeredFiles` the registered files' and `sessionRegistered` the session's. -/
-structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
+structure Instance (d : ResourceAccounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
@@ -769,7 +769,7 @@ theorem pouwSound_of_base (k : Verity.Registration.Composite) (h : I.base.PouwSo
 published δ is (`deltaOf_none`). -/
 theorem error_sampled_of_none {θ : ByteArray} (h : I.session θ = none) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) : (I.vocab K).error .sampled θ F c σ = ⊤ := by
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   split_ifs
   · exact top_unique (le_add_right (le_add_right (le_of_eq (I.deltaOf_none h _).symm)))
   · rfl
@@ -1047,7 +1047,7 @@ noncomputable def inst (δ : ℝ≥0∞) (b : SessionBound) : Instance Verity.Id
 /-- At `base ⊤` every subprotocol's error is `⊤`. -/
 theorem error_top (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((base ⊤).game θ F c)) : (base ⊤).error a θ F c σ = ⊤ := by
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   split_ifs <;> simp [base, Verity.Idle.vocab]
 
 /-- At `base ⊤` every subprotocol meets its target at every composite. -/

@@ -236,8 +236,8 @@ open scoped ENNReal
 open Bandwidth.AuditRO
 
 /-- **PoUB's per-pass lemma, the bandwidth audit v0 in the random-oracle model**
-(`Accounting.Guarantees.Remote.AuditRO`). -/
-theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.Remote.AuditRO := by
+(`ResourceAccounting.Guarantees.Remote.AuditRO`). -/
+theorem _root_.ResourceAccounting.SecurityProofs.Remote.AuditRO : ResourceAccounting.Guarantees.Remote.AuditRO := by
   classical
   intro N b h S c G q s k lam A
   have hsplit : ∀ x : Store N b × Oracle N b h × (Fin s → Fin N),

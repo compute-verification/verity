@@ -146,13 +146,13 @@ theorem forall₂_ofV2 : ∀ l : List Release, List.Forall₂ Read.Of (l.map Rea
 
 /-- **`Vocab.Logged` at `.sampled` where the play has no party beside SPOT's challenger**: each log the check read is
 the play's. -/
-theorem logged_sampled_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem logged_sampled_iff {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     {o : Exchange} (h : V.devices o.params = []) :
     V.Logged .sampled o ↔ ∀ log ∈ V.coinsRead .sampled o.sent, log = o.log := by
   simp [Vocab.Logged, AuditorPins.reads, Vocab.logAt, h, spotLog]
 
 /-- **`Vocab.Logged` is `Logged` at reads that show every coin**, where the play has no party beside SPOT's challenger. -/
-theorem vocab_logged_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem vocab_logged_iff {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     {o : Exchange} (h : V.devices o.params = []) :
     V.Logged .sampled o ↔ Logged (fun s => (V.coinsRead .sampled s).map (·.map Read.ofRelease)) o := by
   rw [logged_sampled_iff V h]
@@ -166,7 +166,7 @@ theorem vocab_logged_iff {ι : Type} {d : Accounting.Device ι} {α : Type} [Fin
 /-- **`Vocab.Logged` at v2's read gives `Logged readsV2`**: where the vocabulary's log at `.sampled` is v2's
 (`Deployed.coinsRead`) and the play has no party beside SPOT's challenger, a run whose whole log the check read is
 the device's has the log v2 read the device's. -/
-theorem logged_v2_of_vocab {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+theorem logged_v2_of_vocab {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     (hV : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s) {o : Exchange} (hD : V.devices o.params = [])
     (h : V.Logged .sampled o) : Logged readsV2 o := by
   intro log hlog
@@ -717,7 +717,7 @@ noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Claims.
         some (a.data.toList, b.data.toList) else none
     | _, _ => none
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The read finder at a strategy**, at the pinned tables' registered files `T` and the device's history at each
 play `dev`: on a uniform tape of the play, the

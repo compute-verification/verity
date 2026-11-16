@@ -8,7 +8,7 @@ and its agreement with upstream's Rust verifier are in `verity/protocols/proofs/
 It fetches nothing. It requires, by path, the three base packages every Lean package of the tree loads:
 `verity/circuits/base` (`Base`: bytes, SHA-512, canonical JSON and the JSON parser), `circuits` (`Circuits`: the
 program format, its decoder, the partition and annotations) and `commitments` (`Commitments`: frame-v3 and the sampling
-of units). Their declarations keep the namespace `Flock`. A module that moved there keeps its old name here as a
+of proof blocks). Their declarations keep the namespace `Flock`. A module that moved there keeps its old name here as a
 re-export, one `public import` and nothing else (`Flock/Bytes.lean` re-exports `Base.Bytes`), until every importer names
 the base module. A job that builds this package outside the checkout copies it with those three
 (`verity/protocols/proofs/flock/prover/pod/lake_closure.py`).

@@ -19,7 +19,7 @@ precomputed words. Which of two bounds applies decides the answer:
 
 So the word-level numbers are floors on each channel's exposure, not upper bounds. The channel classes:
 
-  - NETWORK-H: a NIC. The inter-node network certifiers sign its ingress, so it is in H, counted in bytes.
+  - NETWORK-H: a NIC. The inter-node network attesters sign its ingress, so it is in H, counted in bytes.
   - PCIE-UNSIGNED: PCIe. It is in `Device.lean`'s `ι` ("PCIe from NVMe"), but no certifier observes it.
   - UNCOUNTED-NVLINK: intra-node NVLink/NVSwitch, neither in `ι` nor observed. `PouwLocalOff` holds only at H = 0, is
     conditional on the open conjecture A3 (`PouwFloorOff`), and credits "the node ... not which of its GPUs did".

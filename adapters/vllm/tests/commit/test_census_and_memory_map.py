@@ -1,4 +1,4 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity.protocols.accounting.poub.prover.node_store.memory_map.Lines`) held to
+"""`requirement.from_census` and memory-map/v1's builder (`verity.protocols.resource_accounting.memory.poub.prover.node_store.memory_map.Lines`) held to
 `core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
 agreeing with Lean on each.
 
@@ -47,11 +47,21 @@ import verity_difftest as D
 from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
 from verity.circuits.program import REGISTRATION, Program, is_input
-from verity.protocols.accounting.poub.prover.node_store.interface import PageLayout
-from verity.protocols.accounting.poub.prover.node_store.memory_map import Lines
-from verity.protocols.accounting.poub.prover.node_store.registry import _page_blocks
-from verity.protocols.accounting.poub.verifier import codec
-from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
+    PageLayout,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.memory_map import (
+    Lines,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+    _page_blocks,
+)
+from verity.protocols.resource_accounting.memory.poub.verifier import codec
+from verity.protocols.resource_accounting.memory.poub.verifier.memory_map import (
+    Header,
+    Replay,
+    Step,
+)
 
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import build_program

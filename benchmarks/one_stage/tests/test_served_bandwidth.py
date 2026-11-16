@@ -28,8 +28,8 @@ import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-from verity.protocols.accounting.poub.verifier import ledger, p2, p2_parties  # noqa: E402
-from verity.protocols.accounting.pous.device import memory_challenger as mc  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2, p2_parties  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -46,14 +46,14 @@ def _serve_dir(path: Path) -> Path:
 #: a stand-in for `poub-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
 CASE_EXE = f"""#!{sys.executable}
 import json, sys
-from verity.protocols.accounting.poub.verifier import p2_case
+from verity.protocols.resource_accounting.memory.poub.verifier import p2_case
 assert sys.argv[1:] == ["serve"]
 for line in sys.stdin:
     print(json.dumps({{"commitment": p2_case.digest(json.loads(line)).hex(), "reason": "stand-in",
                       "verdict": "undecided"}}))
 """
 
-SIGNER = ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py"
+SIGNER = ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/tests/pous_test_signer.py"
 
 #: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
 #: (`pous_test_signer.AtLeaf`) handed to `main` in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
@@ -62,7 +62,7 @@ sys.path.insert(0, {str(ROOT)!r})
 spec = importlib.util.spec_from_file_location("pous_test_signer", {str(SIGNER)!r})
 ts = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ts)
-from verity.protocols.accounting.poub.verifier import p2_parties
+from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
 sys.exit(p2_parties.main(sys.argv[1:], device_key=lambda _directory: ts.AtLeaf(b"served-bandwidth-test/memory-challenger")))
 """
 

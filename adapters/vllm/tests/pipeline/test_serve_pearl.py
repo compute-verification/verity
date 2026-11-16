@@ -23,17 +23,17 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from verity.protocols.accounting.pouw.verifier import verifier
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     Workload,
     activation_binding,
     commit_rows,
     weights_root,
 )
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
@@ -43,12 +43,12 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity_torch.pouw.pearl_c import run_device as PPDR
-from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 from verity_torch.pouw.pearl_c import passes as PP
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 
 CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
@@ -314,7 +314,7 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     assert "not Pearl+'s to give" in refused(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
     assert "are not Pearl+'s (pouw)" in refused(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))
     after = cli.parse("serve-openai", [*base, *arm, "--release-after", SPL.DRAWER], environ={})
-    assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's draw")
+    assert SPL.refusal(after).startswith(f"--release-after {SPL.DRAWER} waits for PoUW H1's sample")
     assert SPL.refusal(cli.parse("serve-openai", base, environ={})) is None
 
 

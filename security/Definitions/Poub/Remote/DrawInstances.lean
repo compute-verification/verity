@@ -6,7 +6,7 @@ public import Definitions.Poub.Remote.Sample
 /-!
 # PoUB's sample: the instances its witnesses are stated at
 
-The witnesses of the five sampled guarantees (`Accounting.SecurityProofs.Remote.PooledSample`, `LiveCoinsSampled`,
+The witnesses of the five sampled guarantees (`ResourceAccounting.SecurityProofs.Remote.PooledSample`, `LiveCoinsSampled`,
 `HeldSampled`, `HeldOverTimeSampled`, `HeldOverTimeLinksSampled`; `Proofs/Poub/RemoteHeld/DrawMeets.lean`) are
 stated at these instances.
 
@@ -22,9 +22,9 @@ stated at these instances.
 
 @[expose] public section
 
-namespace Accounting.Remote.Instances
+namespace ResourceAccounting.Remote.Instances
 
-open Finset Accounting.Remote.Held Accounting.Remote.Sample
+open Finset ResourceAccounting.Remote.Held ResourceAccounting.Remote.Sample
 
 /-! ## A node that uses every route -/
 
@@ -126,4 +126,4 @@ def toyPace : Pace (SampleCoins 1 1 Unit) where
 /-- The toy's coin stream, all zero. -/
 abbrev toyStream : Fin 1 → Pous.Bits 1 → Blocks 1 := fun _ _ _ _ => false
 
-end Accounting.Remote.Instances
+end ResourceAccounting.Remote.Instances

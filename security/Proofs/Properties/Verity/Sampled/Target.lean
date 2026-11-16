@@ -74,7 +74,7 @@ value all of whose bits are `b`, as `Vocab.Opens` reads a constant. -/
 def ConstsOpen (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ g b, r.consts g = some b → ∀ v : BitVec (r.circuit.w g), (∀ i : Fin (r.circuit.w g), v.getLsbD i.val = b) → op g v
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 namespace Live
 
@@ -133,7 +133,7 @@ most the session's error at `t` calls, where the session's per-finder premises h
 theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles.one A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
-    (hF : A.FinderCR τ t) (hI : ¬ Accounting.IntegrityHolds r.parts op tr A.ε) :
+    (hF : A.FinderCR τ t) (hI : ¬ ResourceAccounting.IntegrityHolds r.parts op tr A.ε) :
     Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) A.game τ ≤ A.sessionDelta t := by
   classical
   subst hr
@@ -146,11 +146,11 @@ theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles
     have h := (Finset.mem_filter.1 hv).1
     rwa [Flock.Bridge.blocks_length_partOf A.P hns] at h
   have hcard : A.ε * A.n < (Fs.card : ℝ) := by
-    have h1 : (Accounting.unbound A.fileRead.parts op (A.traceAt w)).card ≤ Fs.card := by
+    have h1 : (ResourceAccounting.unbound A.fileRead.parts op (A.traceAt w)).card ≤ Fs.card := by
       rw [← Finset.card_image_of_injective _ Fin.val_injective]
       exact Finset.card_le_card (A.unbound_subset_faulty_part op hop hc w)
     have h2 : A.ε * (A.fileRead.units : ℝ) <
-        ((Accounting.unbound A.fileRead.parts op (A.traceAt w)).card : ℝ) := not_le.mp hI
+        ((ResourceAccounting.unbound A.fileRead.parts op (A.traceAt w)).card : ℝ) := not_le.mp hI
     calc A.ε * A.n = A.ε * (A.fileRead.units : ℝ) := by rw [A.units_eq]
       _ < _ := h2
       _ ≤ (Fs.card : ℝ) := by exact_mod_cast h1
@@ -196,14 +196,14 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
   by_cases hP : ∃ p, ParamsAt θ p
   swap
   · exact recursiveForm_refused V k θ hP F c σ
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   simp only [AuditorPins.reads, List.length_singleton, Nat.cast_one, one_mul]
   split_ifs with hE
   swap
   · exact le_top
   obtain ⟨hfs, hpr, hFC, hUf⟩ := hE
-  by_cases hI : Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
+  by_cases hI : ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
   · calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ
           ≤ Verity.Game.prob (fun _ => False) (V.game θ F c) σ :=
             Verity.Game.prob_mono (fun o ho => ho.2 hI) _ σ

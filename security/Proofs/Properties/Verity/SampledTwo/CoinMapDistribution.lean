@@ -763,7 +763,7 @@ theorem distribution_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strate
 
 /-! ## The first clause -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The coin map is uniform up to the hiding term at the period's game.** -/
 theorem distribution_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c))

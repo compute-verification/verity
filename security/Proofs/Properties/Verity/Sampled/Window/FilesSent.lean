@@ -29,7 +29,7 @@ namespace Verity.Sampled
 
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 open Classical in
 /-- **The first of the files `B` whose SHA-512 is `h`**, as v2 looks a file up by its digest (`Verity.namedFile`

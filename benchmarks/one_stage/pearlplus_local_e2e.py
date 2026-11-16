@@ -1,4 +1,4 @@
-"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/device/live_challenger/auditor.py`)
+"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/verifier/live_challenger/auditor.py`)
 on a scratch auditor device: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier's (``spot-verifier``, built first).
 
@@ -60,7 +60,7 @@ WAIT_S = 300
 
 def _auditor():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -180,6 +180,41 @@ def _alive_pid(pid: int) -> bool:
     return stat.exists() and stat.read_text().rsplit(")", 1)[1].split()[0] != "Z"
 
 
+def init(root: Path) -> dict:
+    """The scratch auditor host under `root`, with its key, peers, pin and coin ports: the gate command, the pin and the
+    key's SHA-512, the coins' Lean verifier (``spot-verifier``) built first."""
+    from verity.commitments.crypto import lms
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
+    t = time.monotonic()
+    print(f"[coins] {V.executable()} built in {time.monotonic() - t:.0f} s: each challenger's coins are its", flush=True)
+    A = _auditor()
+    host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
+    (root / "var" / "sessions").mkdir(parents=True, exist_ok=True)
+    (root / "peers").write_text(f"{HOST} research@127.0.0.1\n{PEER} research@127.0.0.1\n")
+    ports = _free_ports()
+    (root / "coin-ports").write_text(f"{PEER} {ports.start}-{ports.stop - 1}\n")
+    head = subprocess.run(["git", "-C", str(TREE), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    pin = head if len(head) == 40 else "e2" * 20
+    (root / "pin").write_text(pin + "\n")
+    host.pins.write_text(A.pin_line(pin, pin, A.utc(datetime.now(UTC))) + "\n")
+    key_sha512 = A.key_signer(host, lms.Params(64, *PARAMS), workers=1)[2]
+    gate_cmd = shlex.join([sys.executable, str(Path(__file__).resolve()), "gate", "--root", str(root)])
+    return {"gate": gate_cmd, "peer": PEER, "lane": LANE, "pin": pin, "key_sha512": key_sha512, "params": list(PARAMS),
+            "ports": [ports.start, ports.stop - 1]}
+
+
+def stop(root: Path, out: Path) -> None:
+    """The challengers `root`'s host started stopped, and its logs, ledger, pins, public key and sessions' public files
+    copied into `out`."""
+    _stop(root)
+    _logs(root, out)
+    A = _auditor()
+    host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
+    (out / "auditor" / "pins.jsonl").write_bytes(host.pins.read_bytes())
+    (out / "auditor" / "public").write_bytes((host.key / "public").read_bytes())
+
+
 def run(out: Path, lean: str | None = None) -> int:
     root = Path(tempfile.mkdtemp(prefix="pp-auditor-"))
     try:
@@ -190,37 +225,24 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.protocols.accounting.pouw.verifier import salt as PS
+    from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
     sys.path[:0] = [str(HERE), str(TREE / "benchmarks" / "pouw" / "tests")]
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
-
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
-    t = time.monotonic()
-    print(f"[coins] {V.executable()} built in {time.monotonic() - t:.0f} s: each challenger's coins are its", flush=True)
     A = _auditor()
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
-    (root / "var" / "sessions").mkdir(parents=True)
-    (root / "peers").write_text(f"{HOST} research@127.0.0.1\n{PEER} research@127.0.0.1\n")
-    ports = _free_ports()
-    (root / "coin-ports").write_text(f"{PEER} {ports.start}-{ports.stop - 1}\n")
-    head = subprocess.run(["git", "-C", str(TREE), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-    pin = head if len(head) == 40 else "e2" * 20
-    (root / "pin").write_text(pin + "\n")
-    host.pins.write_text(A.pin_line(pin, pin, A.utc(datetime.now(UTC))) + "\n")
+    held = init(root)
+    pin, key_sha512, gate_cmd = held["pin"], held["key_sha512"], held["gate"]
     (main := out / "main.txt").write_text(pin + "\n")
-    from verity.commitments.crypto import lms
-    key_sha512 = A.key_signer(host, lms.Params(64, *PARAMS), workers=1)[2]
-    gate_cmd = shlex.join([sys.executable, str(Path(__file__).resolve()), "gate", "--root", str(root)])
     piece, log = out / "pieces" / "pouw", []
     piece.mkdir(parents=True)
-    report: dict = {"gate": "verity/protocols/compose/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
+    report: dict = {"gate": "verity/protocols/compose/verifier/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "spot": "registration.json chained after W, a records-audit summary tied to W "
@@ -297,7 +319,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
-            pkg = TREE / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
+            pkg = TREE / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
             b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
             log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
             exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
@@ -336,7 +358,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.protocols.proofs.spot.device.challenger import CoinError
+    from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)
@@ -384,11 +406,23 @@ def main(argv: list[str] | None = None) -> int:
     sv = sub.add_parser("serve")
     sv.add_argument("--root", type=Path, required=True)
     sv.add_argument("session")
+    it = sub.add_parser("init", help="the scratch auditor host under ROOT (a new directory); its gate command, pin and key "
+                        "printed as JSON")
+    it.add_argument("--root", type=Path, required=True)
+    st = sub.add_parser("stop", help="ROOT's challengers stopped, its public files copied into OUT/auditor")
+    st.add_argument("--root", type=Path, required=True)
+    st.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     if a.verb == "gate":
         return gate(a.root, a.words)
     if a.verb == "serve":
         return serve(a.root, a.session)
+    if a.verb == "init":
+        print(json.dumps(init(a.root)), flush=True)
+        return 0
+    if a.verb == "stop":
+        stop(a.root, a.out)
+        return 0
     return run(a.out, a.lean)
 
 

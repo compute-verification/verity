@@ -33,7 +33,7 @@ open Verity.Game
 open Properties.Challenger (Draws)
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digests the commitment binds -/
 

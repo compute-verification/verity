@@ -27,7 +27,7 @@ the strings it hashes rules out.
 open NetworkCheck hiding Params
 open NetworkCheck.Check
 open Flock
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 
 set_option maxRecDepth 20000
 

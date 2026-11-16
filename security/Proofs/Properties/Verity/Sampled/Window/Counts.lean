@@ -42,7 +42,7 @@ open FlockSoundness.Refine (roundOf)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## A stop's frame, on any tape through it -/
 

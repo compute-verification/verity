@@ -18,19 +18,19 @@ Each statement of `security/Definitions/Pous/Accounting/Guarantees/Memory.lean`,
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Memory
+namespace ResourceAccounting.SecurityProofs.Memory
 
-theorem Counting : Accounting.Guarantees.Memory.Counting := Accounting.MemoryProofs.counting
-theorem Adds : Accounting.Guarantees.Memory.Adds := Accounting.MemoryProofs.adds
-theorem AddsOn : Accounting.Guarantees.Memory.AddsOn := Accounting.MemoryProofs.addsOn
-theorem AddsP2Ring : Accounting.Guarantees.Memory.AddsP2Ring := Accounting.MemoryProofs.addsP2Ring
-theorem AddsIsolated : Accounting.Guarantees.Memory.AddsIsolated := Accounting.MemoryProofs.addsIsolated
-theorem AddsOnIsolated : Accounting.Guarantees.Memory.AddsOnIsolated := Accounting.MemoryProofs.addsOnIsolated
-theorem AddsP2RingIsolated : Accounting.Guarantees.Memory.AddsP2RingIsolated :=
-  Accounting.MemoryProofs.addsP2RingIsolated
-theorem CountingAdvice : Accounting.Guarantees.Memory.CountingAdvice := Accounting.MemoryProofs.countingAdvice
-theorem AddsAdvice : Accounting.Guarantees.Memory.AddsAdvice := Accounting.MemoryProofs.addsAdvice
-theorem AddsAdviceOn : Accounting.Guarantees.Memory.AddsAdviceOn := Accounting.MemoryProofs.addsAdviceOn
-theorem AddsAdviceP2Ring : Accounting.Guarantees.Memory.AddsAdviceP2Ring := Accounting.MemoryProofs.addsAdviceP2Ring
+theorem Counting : ResourceAccounting.Guarantees.Memory.Counting := ResourceAccounting.MemoryProofs.counting
+theorem Adds : ResourceAccounting.Guarantees.Memory.Adds := ResourceAccounting.MemoryProofs.adds
+theorem AddsOn : ResourceAccounting.Guarantees.Memory.AddsOn := ResourceAccounting.MemoryProofs.addsOn
+theorem AddsP2Ring : ResourceAccounting.Guarantees.Memory.AddsP2Ring := ResourceAccounting.MemoryProofs.addsP2Ring
+theorem AddsIsolated : ResourceAccounting.Guarantees.Memory.AddsIsolated := ResourceAccounting.MemoryProofs.addsIsolated
+theorem AddsOnIsolated : ResourceAccounting.Guarantees.Memory.AddsOnIsolated := ResourceAccounting.MemoryProofs.addsOnIsolated
+theorem AddsP2RingIsolated : ResourceAccounting.Guarantees.Memory.AddsP2RingIsolated :=
+  ResourceAccounting.MemoryProofs.addsP2RingIsolated
+theorem CountingAdvice : ResourceAccounting.Guarantees.Memory.CountingAdvice := ResourceAccounting.MemoryProofs.countingAdvice
+theorem AddsAdvice : ResourceAccounting.Guarantees.Memory.AddsAdvice := ResourceAccounting.MemoryProofs.addsAdvice
+theorem AddsAdviceOn : ResourceAccounting.Guarantees.Memory.AddsAdviceOn := ResourceAccounting.MemoryProofs.addsAdviceOn
+theorem AddsAdviceP2Ring : ResourceAccounting.Guarantees.Memory.AddsAdviceP2Ring := ResourceAccounting.MemoryProofs.addsAdviceP2Ring
 
-end Accounting.SecurityProofs.Memory
+end ResourceAccounting.SecurityProofs.Memory

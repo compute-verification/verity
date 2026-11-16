@@ -56,7 +56,7 @@ from pathlib import Path
 import numpy as np
 
 from verity.circuits.codec import canonical_json, encode_program
-from verity.protocols.accounting.pouw.prover.lowering.live import (check_openings, claimed, files, form, live_stager,
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering.live import (check_openings, claimed, files, form, live_stager,
                                                                    piece_opening, piece_rows, program_of, stage, verifier_pub)
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
