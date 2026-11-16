@@ -351,7 +351,7 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         return
     assert rc == 0, said
     if "verify" in steps and not any(s.startswith("volunteer ") or s == "volunteer" for s in steps):
-        assert f"POUW volunteer: not run: Pearl+'s verdict credits a drawn row over its debit cap nothing (over-cap rule " \
+        assert f"POUW volunteer: not run: Pearl+'s verdict credits a drawn row over its inert work cap nothing (over-cap rule " \
                f"{needed.split()[1]})" in said
     if needed == "yes reject" and volunteer is None:
         rc, said, got = run(PEARLPLUS_OVER_CAP="reject")

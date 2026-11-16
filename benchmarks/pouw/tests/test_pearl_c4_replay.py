@@ -132,7 +132,7 @@ def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_
     digest = W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [W.UnitRecord(unit, 20, K)])
     credited["draw"]["value"] = R.sample_beacon(bytes.fromhex(serial["transcript"]["root"]), digest).value.hex()
     rep = R.verify(credited, scheme=s)
-    assert not rep["accepted"] and rep["reason"].startswith("A row 5 is credited but its own debit passes R1's bound")
+    assert not rep["accepted"] and rep["reason"].startswith("A row 5 is credited but its own inert work passes R1's bound")
 
 
 def test_replay_refuses_a_b_tilde_keyed_by_another_salt(tmp_path):

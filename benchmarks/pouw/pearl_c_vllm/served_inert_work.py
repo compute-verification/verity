@@ -617,7 +617,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
     path = out_dir / "inputs.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     ok = all(r["openings_failed"] == 0 for r in rows)
-    run_result.write(path, ok, "pearl-c served debit, per input: every measured tile's openings and checked values hold",
+    run_result.write(path, ok, "pearl-c served inert work, per input: every measured tile's openings and checked values hold",
                      f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
                      f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
                      [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
@@ -712,7 +712,7 @@ def main(argv: list[str] | None = None) -> int:
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")
     ok = all(x["measured"] > 0 and x["openings_failed"] == 0 for x in passes)
-    run_result.write(path, ok, "pearl-c served debit: every sampled tile's openings and checked values hold",
+    run_result.write(path, ok, "pearl-c served inert work: every sampled tile's openings and checked values hold",
                      "; ".join(f"{x['label']} {x['run']} {x['scheme']}: {x['over']['1/1000']} of {x['measured']} tiles over 1/1000, "
                                f"worst share {x['share_max']}" for x in passes),
                      [m for x in passes for m in ((f"{x['label']}.measured", x["measured"], "count"),

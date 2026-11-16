@@ -357,7 +357,7 @@ def _over_the_cap_by_its_mends(name: str, case: dict) -> None:
     assert case["rules"], case
     assert case["equal"] == case["words"], case
     assert case["debit"] - case["mends"] <= case["cap"] < case["debit"], (
-        f"{name} at {case['shape']}: the tile's debit is {case['debit']:.0f}, {case['mends']} of it mends, against a cap of "
+        f"{name} at {case['shape']}: the tile's inert work is {case['debit']:.0f}, {case['mends']} of it mends, against a cap of "
         f"{case['cap']:.0f}")
     assert case["fires"], case
 
@@ -573,7 +573,7 @@ def _over_the_cap(name: str, case: dict) -> None:
     """The tile is over its cap by its mends alone."""
     assert case["rules"], case
     assert case["cap"] < case["mends"] <= case["debit"], (
-        f"{name} at {case['shape']}: the tile's debit is {case['debit']:.0f}, {case['mends']} of it mends, against a cap of "
+        f"{name} at {case['shape']}: the tile's inert work is {case['debit']:.0f}, {case['mends']} of it mends, against a cap of "
         f"{case['cap']:.0f}")
 
 

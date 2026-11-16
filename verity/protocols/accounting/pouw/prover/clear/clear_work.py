@@ -283,7 +283,7 @@ def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
         if (kind == "credited" and not ok) or (kind == "excluded" and ok and r1(side, index, False)):
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
         if kind == "credited" and r1(side, index, True):
-            return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
+            return f"{side} row {index} is credited but its own inert work passes R1's bound (ρ·its cell credit)"
     return None
 
 
@@ -604,7 +604,7 @@ def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
     import numpy as np
 
     if hasattr(scheme, "tile_inert_bound"):
-        raise ValueError(f"{scheme.name} brings its own debit, not one additive over a tile's words")
+        raise ValueError(f"{scheme.name} brings its own inert work, not one additive over a tile's words")
     au = D.inert_work_units(1, 0, scheme.prices, scheme.device, zeros=0)
     fa = D.inert_work_units(0, 0, scheme.prices, scheme.device, zeros=1)
     scale = lcm(au.denominator, fa.denominator)

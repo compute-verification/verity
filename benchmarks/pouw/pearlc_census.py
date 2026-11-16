@@ -733,7 +733,7 @@ def main() -> None:
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--debit", action="store_true",
-                    help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
+                    help="replay each word's inert work (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--cross-words", type=int, default=0,
                     help="with --debit: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--transfer-words", type=int, default=0,

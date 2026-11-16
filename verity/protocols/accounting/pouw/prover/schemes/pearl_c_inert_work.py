@@ -65,7 +65,7 @@ ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `inertWorkOf`: 32 MACs and 
 
 def _promoted(device: Device) -> int:
     if device.g is None:
-        raise NotImplementedError(f"{device.name}: Skip's debit is stated for promotion groups; no rule without promotion")
+        raise NotImplementedError(f"{device.name}: Skip's inert work is stated for promotion groups; no rule without promotion")
     return device.g
 
 

@@ -1193,7 +1193,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
     assert CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops) == \
         "the replayed debit 320 exceeds the cap 224 (ρ·the credited cells' credit)"
     assert CW.check_opened(s, declare(voluntary_a=va)[0], tile, rows_a[:16], rows_b, ops) == \
-        "A row 15 is credited but its own debit passes R1's bound (ρ·its cell credit)"
+        "A row 15 is credited but its own inert work passes R1's bound (ρ·its cell credit)"
     assert CW.check_records(epoch, splits, declare(voluntary_a={3: [7, 15]})) == \
         "matmul 3: more voluntary rows than V-EX allows (⌈m/64⌉ = 1 of A, ⌈n/64⌉ = 1 of B)"
 

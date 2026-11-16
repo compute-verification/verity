@@ -20,7 +20,7 @@
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
 # (VOLUNTEER=1) glm53_passes.py volunteer gives up prefill's and decode's rows over inert-work bound in their records on this
 # machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
-# debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
+# debit.py's check of the ship's inert work/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
 # every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), by default exactly while the
 # verdict glm53_passes.py verify takes rejects a pass on a sampled row over its inert-work bound (`served_passes.py volunteer-needed
 # --verdict pass`, asked before anything runs: VOLUNTEER defaults to 1 then, and any other than 1 or device is refused,
@@ -62,7 +62,7 @@ case ${NEEDED%% *} in
 esac
 echo "volunteer-needed: $NEEDED; VOLUNTEER=$VOLUNTEER" > "$O/volunteer-needed.txt"
 if [ "${NEEDED%% *}" = yes ] && [ "$VOLUNTEER" != 1 ] && [ "$VOLUNTEER" != device ]; then
-  echo "volunteer refused rc 2: the verdict rejects a pass on a drawn row over its debit cap (over-cap rule" \
+  echo "volunteer refused rc 2: the verdict rejects a pass on a drawn row over its inert work cap (over-cap rule" \
     "${NEEDED#* }), so the give-up before its coin can't be skipped (VOLUNTEER=$VOLUNTEER)" | tee -a "$O/rc.txt"
   exit 2
 fi

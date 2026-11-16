@@ -359,7 +359,7 @@ def _word_body(B, S_, a, b, cert):
 
 Pc8CapWordDef = CompositeDefinition(
     "Pc8CapWord", 1, ("K", "DEV"), _word_sig, _word_body,
-    doc="A word's chain C̃ (`pc8`'s), its debit (A) flags per atom (`pearl_c_inert_work.word_flags`), its later promotions into "
+    doc="A word's chain C̃ (`pc8`'s), its inert work (A) flags per atom (`pearl_c_inert_work.word_flags`), its later promotions into "
         "a +0 total (rev1's `laterZeroPromos`), and good: Freeze's certificates of the later promotions' intervals pass "
         "and every value is finite.", conformance="protocol-defined")
 
