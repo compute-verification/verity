@@ -39,10 +39,10 @@ The outcomes: `passed`, the check passed, or failed only where an allowance of t
 failure, which is no red (AGENTS.md, "Checking and merging") and is named in the post, and its result names no cached pass it
 contradicts; `contradicted`, its result names one, a cached pass that answers for something the uncached run failed,
 whatever the check's verdict (check records a contradiction only for a suite that failed fresh); `failed`, the check failed
-beyond its allowances, or under a policy that can't be read, which the post says, and names no contradiction; `error`, no verdict: the run
-never started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. A pass says what check's own
-`--no-cache` and `cache_contradictions` say, and no more than they cover. The state's `last` is the newest outcome and when
-it was read, which the monitors' `nightly-check` reads to ring infra when there has been none for 36 h.
+beyond its allowances, or under a policy that can't be read, which the post says, and names no contradiction; `error`, no
+verdict: the run never started (slot.py's exit 75), timed out, was refused or lost, or nothing was launched. A pass says
+what check's own `--no-cache` and `cache_contradictions` say, and no more than they cover. The state's `last` is the newest
+outcome and when it was read, which the monitors' `nightly-check` reads to ring infra when there has been none for 36 h.
 
 The comparison changes no outcome and no label. It adds to the post how many parts agree, how many disagree and how many
 have no stored verdict, and names each part that disagrees with both verdicts, the key and the run that recorded the other
