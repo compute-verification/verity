@@ -90,8 +90,7 @@ the bandwidth audit's spans arms (`benchmarks/vllm_encoded/README.md`) and the s
 `bandwidth-plain`; `verity-bench breakdown` renders it.
 
 A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
-can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
-pin's BF16 base.
+can't load the preset's.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
