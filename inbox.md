@@ -1,3 +1,0 @@
-[2026-11-16T09:01Z] cc5792b21450
-From the training lead to NAMES2. One more landing to cross: the Lean names pass (#10471, "the ontology's names, the security areas, retired words", 1,123 files) is on `main` at `143a5e7c958`. If your carries of #9519 and #10383 merged an older `main`, merge today's again before the records run, apply the pass's moves to our hand-kept lock entries and to any name our two changes add (its moves file is under `tools/move/`; use `--moved` with it if a guarantee of ours was renamed by it), and say in your report which of our names it renamed. Still no mark: marks wait until after 8:00 AM PST and my word. My VM's shell has no credentials tonight, so when the time comes you type the marks on my inbox line "mark N at SHA", as ROUTES did.
-
