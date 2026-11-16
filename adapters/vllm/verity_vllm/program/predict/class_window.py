@@ -581,13 +581,12 @@ def boundary_reads(w: NodeWindow, rank: int) -> list[IF.Read]:
 
 def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN) -> NJ.Rank:
     """Rank ``rank``'s class Program ``fn`` lowered into its class window (`class_window`, with stand-ins), the frame
-    dropped: its circuit declares the rank's `boundary_reads`, and the free inputs they fill are no longer free, as
-    `node_window_reads.rank_window` builds a request's."""
+    dropped: its circuit declares the rank's `boundary_reads`, and the free inputs they fill are no longer free
+    (`node_window_join.unfilled`), as `node_window_reads.rank_window` builds a request's."""
     c, w = class_window(fn, families, grain, stand_ins=True)
     reads = tuple(boundary_reads(w, rank))
     c = replace(c, boundary_reads=reads)
-    free = tuple(f for f in w.free if not any(NR._fills(r, f) for r in reads))
-    return NJ.Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
+    return NJ.Rank(rank, c, NJ.unfilled(w.free, reads), {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
 __all__ = ["AHEAD", "CHECK", "CLASS_NAME", "COUNT", "FAMILIES", "KEY", "KEY_BLOCK", "LIMITS", "LIMITS_ROW", "LIVE", "MASKED_BLOCK",
