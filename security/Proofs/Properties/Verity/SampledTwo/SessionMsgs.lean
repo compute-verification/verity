@@ -340,7 +340,7 @@ theorem stmtAtCase_of_stmtsMsg {k : Case} {m : Msg} (hm : stmtsMsg k = some m)
 theorem filesAt_of_stmt {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x)
     {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     (hf : formOf k = some (p, e)) : ∃ fs, filesAt e t = some fs := by
-  obtain ⟨p', e', m, fs, record, circuit, pub, hf', -, hs, -⟩ := stmtAtCase_some h
+  obtain ⟨p', e', m, fs, record, circuit, pub, tables, hf', -, hs, -⟩ := stmtAtCase_some h
   rw [hf] at hf'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf')
   exact ⟨fs, hs⟩
