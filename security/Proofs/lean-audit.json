@@ -272,8 +272,12 @@
    "digest": "cc364d70f02ee1cb0b3462252626e5799eb35bb056fb7b5cff2277b444603ea6"
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.Params": {
-   "why": "plstr, a local macro that closes Firewall.plain j = true for a literal Json j (this module's plainness lemmas) by a single simp over Firewall.plain, plainList and plainStr with the def-named strings unfolded so their literals reduce. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "09650a6115af1782b491013c830daeb4a3cf157966668923bf4db66f8729e426"
+   "why": "plstr, a local macro that closes Firewall.plain j = true for a literal Json j (this module's plainness lemmas) by a single simp over Firewall.plain, plainList and plainStr with the def-named strings unfolded so their literals reduce; and nfix, a macro that closes jnorm j = j for a shallow literal Json j (norm_query, norm_law and the module's other norm facts) by first over rfl, refine of norm_arr_fix and norm_mkObj_fix (with kernel_rfl' for the keys' order) with simp only, repeat' apply And.intro and itself. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "5ffbf7992d4642f583ca07d9489864a28d529da9f5f00b9ad08604f2357e7f94"
+  },
+  "Proofs.Properties.Verity.Sampled.HonestSession.PortsFacts": {
+   "why": "kernel_rfl', a local copy of Fwd's tactic of that name (an elab): it closes a = b by assigning Eq.refl a to the goal, leaving the kernel to check a ≡ b, in the module's equations on the parameters' ports and rest. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "9ac0f6e4ddbf745d7bc8e24e2d86890b7cbd0d0043a2a4cd758854dd8a31176a"
   },
   "Proofs.Properties.Verity.Sampled.HonestSession.SetupReads": {
    "why": "lawMatch%, a term elaborator that names Stmt.setupHidden's auxiliary match on an (Except _ Draw.Law × _) for law_match: it reads Stmt.setupHidden's body's constants (getConstInfo, getMatcherInfo?), the matchers' discriminant types (forallTelescopeReducing, whnfR), and returns that matcher's constant or throws an error naming the matches it saw. It runs only inside the elaborator and does no IO, and the kernel replays every proof that uses it.",
