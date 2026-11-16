@@ -90,7 +90,11 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/certifier_term/run.py",
           "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
-          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py", "benchmarks/network_traces"]
+          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py", "benchmarks/network_traces",
+          # record.py writes its metric through the harness kit's writer, whose settings are verity_config's
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_attester_zk
 # and test_egress_zk run on their staged members.

@@ -31,7 +31,9 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`.
+- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`;
+- through the harness kit's writer (`record_metric`), `METRIC`: under a research run in the run's `result.json`, else in
+  `--out`'s.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
 the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
@@ -94,6 +96,9 @@ FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, MAX_COTENANT_BUSY, TAIL_MS = 1000
 FREEZE_REST_MS = 5000.0  # a longer stall drops the rest of its chunk (`convert` in the module docstring)
 CPU_RULES, FREEZE_SCOPES = ("cotenants", "total"), ("window", "chunk")
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
+#: the one number a run records: the p99.9 of the time between a request's consecutive streamed chunks over the kept
+#: windows (`summary.json`'s ``inter_chunk_ms``), the spread the network attester's release schedule must absorb
+METRIC = "network-accounting/streamed-gap-p99.9"
 
 clock = time.monotonic
 
@@ -656,7 +661,7 @@ def run(args: argparse.Namespace) -> int:
     ended["evicted"] = ended["stopped_ms"] is not None
     meta["ended"] = ended
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str))
-    convert(out)
+    record_metric(out, convert(out), meta)
     return 143 if ended["evicted"] else 0
 
 
@@ -820,6 +825,19 @@ def convert(out: Path, **rules) -> dict:
     (out / "trace.json").write_text(json.dumps(trace_doc(configs), separators=(",", ":")))
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     return summary
+
+
+def record_metric(out: Path, summary: dict, meta: dict) -> dict:
+    """`METRIC` of `summary`, in ms, written with the model and the traced card as the measurement's fields and printed
+    as one line; with no value where no kept window holds a request's two chunks."""
+    from verity_bench import kit
+
+    gap = (summary.get("inter_chunk_ms") or {}).get("p99.9")
+    why = None if gap is not None else summary.get("error") or "no kept window holds two chunks of one request"
+    m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured",
+                                    extra={"model": meta["model"], "card": meta["gpu"]["name"]})
+    print(f"{METRIC}: {gap} ms" if gap is not None else f"{METRIC}: no number: {why}", flush=True)
+    return m
 
 
 def merge(paths: Sequence[Path]) -> dict:
