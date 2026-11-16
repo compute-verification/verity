@@ -5052,7 +5052,6 @@
         "benchmarks/recursion_e2e/pyproject.toml": "tests/benchmarks/recursion_e2e/pyproject.toml",
         "benchmarks/recursion_figures/pyproject.toml": "tests/benchmarks/recursion_figures/pyproject.toml",
         "benchmarks/remote_session/pyproject.toml": "tests/benchmarks/remote_session/pyproject.toml",
-        "benchmarks/replay_determinism/pyproject.toml": "tests/benchmarks/replay_determinism/pyproject.toml",
         "benchmarks/replay_ladder/pyproject.toml": "tests/benchmarks/replay_ladder/pyproject.toml",
         "benchmarks/route_capture/pyproject.toml": "tests/benchmarks/route_capture/pyproject.toml",
         "benchmarks/sampling_plan/pyproject.toml": "tests/benchmarks/sampling_plan/pyproject.toml",
