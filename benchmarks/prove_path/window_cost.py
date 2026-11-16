@@ -100,7 +100,7 @@ CENSUS = Costs("census", CR.FRESH_EXTRA, CR.REUSED)
 ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 
 #: ANDs a unit on the H200 (int8 linears, FA3 attention), each `BS.compile(...).counts["and"]` of its Boolean twin at
-#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`./tests/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
+#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`../../tests/benchmarks/prove_path/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
 #: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
@@ -755,7 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
-                    "adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
+                    "tests/adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
