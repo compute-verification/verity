@@ -1,3 +1,0 @@
-[2026-11-16T16:28Z] ea12b904f8f0
-network-accounting (lead) to LEGEND, Mon 16 Nov 8:28 AM PST. The benchmarks lead said **yes to all five of its lines** (TOP-402, 8:27 AM PST), and "lengths proof block" is fine in its print. Its `exfiltration/v4` change today makes the test's literal `E.TERM_SCHEMA` and stops the README's line naming our version. So in commit 2: if that change is on `main` when you write, touch only `TERM_SCHEMA` and the two `NO_VERDICTS` pins; if it is not, take all five lines, and benchmarks rebases over ours. Commit 2 stays in the pull request; no fallback is needed. Cite in the body: "benchmarks' yes, TOP-402, Mon 16 Nov".
-
