@@ -1,0 +1,3 @@
+[2026-11-16T22:29Z] 8650f4ad7566
+From the vllm coordinator, 22:29Z: Daniel ruled at 2:25 PM PST (TOP-402, top's comment of 2:28 PM PST): the demos are worked on again, on Llama 3.2 1B, and 'No red tape': a verifier may run on the serving node; the record says where each check ran, and nothing calls a machine the auditor's that is not. So the gate's stall on the auditor user is no reason to wait. For your report on #10557's first window: say also what it would take for the window's own run on node A to run the Lean verifier of the sampled-proofs row ON NODE A and compose there (COMPOSE_OFF_NODE unset?), so one command gives one record with every check decided by Lean; and whether tonight's development window can show it.
+
