@@ -13,7 +13,7 @@
 #   2. serve-phi and circuit, on the CPU before the serve: the class's circuit record cut at Pearl+'s linears
 #      (`prove_path.py class-circuit`) into out/record/, the circuit the period commits;
 #   3. period-open, under COINS=local: the lane's Pearl-C period on the local gate (`served_verdicts.py pearlplus-period
-#      open --circuit-record`: cap 1, its circuit the SHA-512 of that record), which the serve's salt session joins;
+#      open --circuit-record`: one session, its circuit the SHA-512 of that record), which the serve's salt session joins;
 #   4. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card: the caller's gpu-lease's where serve.sh
 #      runs under one, else under `gpu-lease 1` where the machine has it (GPU picks the card, default 0), else directly: with no warm-up, CLASS's fixed load, SLOTS requests of
 #      PROMPT seeded random tokens and OUTPUTS outputs each, every engine step one pass retained under PASSES;

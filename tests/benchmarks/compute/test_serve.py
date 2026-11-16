@@ -149,7 +149,7 @@ def steps() -> list[str]:
 
 
 def test_the_circuit_record_and_the_period_come_before_the_serve_and_its_close_before_the_sample():
-    """PoUW's row of record holds the serve's salt session to a Pearl-C period of the lane's own that committed the
+    """PoUW's verdict of record holds the serve's salt session to a Pearl-C period of the lane's own that committed the
     circuit record, and the sample to the lane's first reserve after that period closed: so the circuit record is built
     before the period opens, the period opens before the serve, and it closes after the serve's passes are retained and
     before python-verify takes the sample."""
