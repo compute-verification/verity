@@ -114,7 +114,7 @@ Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is c
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
 `ObligationWide320` is stated at uniform indices. The 320-read certificate (`p2.wide320_certificate`, and
-`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `2^-127` for the memory challenger's SHA-512 indices, assuming
+`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `2^-127` for the memory attester's SHA-512 indices, assuming
 `ε_prf ≤ 2^-127` under `prf/sha-512`: `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model
 fixes.
 

@@ -7,7 +7,7 @@ route, which no inference block constrains) and its `delta`, split into the coin
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
+  (registered capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -84,7 +84,7 @@ class Context:
 
     @property
     def capacity(self) -> float:
-        """The monitored fleet's gates over the monitoring period at capacity."""
+        """The registered fleet's gates over the monitoring period at capacity."""
         return self.fleet.count * self.location.phi * self.period.seconds
 
 
@@ -149,7 +149,7 @@ SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck",
 
 @dataclass(frozen=True)
 class Detection:
-    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every unit is proved
+    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every proof block is proved
     (`q = 1`, `χ = θ = 0`). Each field is `tiers.py`'s parameter of the same name (`proof_share` is its `share`)."""
 
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
@@ -209,8 +209,8 @@ class Detection:
         return out
 
     def tail(self) -> float:
-        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every unit is proved."""
+        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's incorrect proof blocks escape
+        past `K` (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every proof block is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()
@@ -312,7 +312,7 @@ class Certifier:
     """A network attester on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkCertifierParams` of
+    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkAttesterParams` of
     `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
@@ -366,7 +366,7 @@ class Certifier:
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
-    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
+    CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "ResourceAccounting.Covered", "ResourceAccounting.TrustedUnits")
     INTAKE = ("draft:declared-ingress",)
     DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 
@@ -502,7 +502,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Slowdown.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -562,7 +562,7 @@ class Onsite(Remote):
     gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
-    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
+    BOUND = ("ResourceAccounting.Guarantees.ServingBlocks.ServingBlockBound",)
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
@@ -571,12 +571,12 @@ class Onsite(Remote):
     form: str = "certified"
 
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
-    LINKS = ("Accounting.Guarantees.Actual.ServerBlocks", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-             "Accounting.Placed.Memory", "Accounting.Placed.Links")
+    LINKS = ("ResourceAccounting.Guarantees.Actual.ServerBlocks", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+             "ResourceAccounting.Placed.Memory", "ResourceAccounting.Placed.Links")
     #: `ServerBlocksAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
     #: bounds information where `ServerBlocksAt` reads width at line rate: the information form is a draft
-    SERVING = ("Accounting.Guarantees.Actual.ServerBlocksAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
-               "Accounting.Placed.Links", "draft:windows-information-form")
+    SERVING = ("ResourceAccounting.Guarantees.Actual.ServerBlocksAt", "ResourceAccounting.Placed.Causal", "ResourceAccounting.Placed.ComputeRate",
+               "ResourceAccounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
                                    + Certifier.DECLARED))
 
@@ -615,7 +615,7 @@ class Onsite(Remote):
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
         serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites() + self.BOUND, budget.inputs)
-        # The uncertified block may take the whole server block's input: generous to the adversary, since the
+        # The uncertified block may take the whole server block's input: generous to the malicious developer, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},

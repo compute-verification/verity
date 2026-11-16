@@ -2,8 +2,8 @@
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
 with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
-the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/check/
-tasks.py`, tasks/v1) is the coarse graph `check` runs today.
+the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks`
+(`tools/check/tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
 verity graph [--json [--packed]] [--family F ...] [--root DIR]
@@ -117,8 +117,8 @@ Sorting is by code point (Python's string order, which is UTF-8's byte order). `
 `priority` stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its
 readers' keys unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as
 {read task: its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
-unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python tests/test_contract.py
---write` rewrites it from the cases in that file, which is a change to the contract.
+unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python
+tools/verity/graph/tests/test_contract.py --write` rewrites it from the cases in that file, which is a change to the contract.
 
 ## Running one task
 

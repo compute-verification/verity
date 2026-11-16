@@ -9,9 +9,9 @@ Program and sampling design, and the leaves, seeds and anchors a call's rows are
 `verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`, and Pearl-C's device record. `serving/` is what runs
 beside a served model, one directory a scheme (its README): a workload's adapter reaches it through `run_matmul` and
 `observe_matmul` and the other names `serving` exports, and through no deeper module. `lowering/` is H1's lowering, staged
-by Flock's `class_statement.UnitStager`: the H1 tile unit's statement and the execution phase's commitments it is opened
+by Flock's `class_statement.UnitStager`: the H1 tile proof block's statement and the execution phase's commitments it is opened
 against (`h1unit.py`, its tile and statement form passed in), the stagers the sampled prover is handed (`stagers.py`), and
-the live units' statements with the verifier's own files of them (`live.py`); the vLLM adapter's `pouw_h1_circuits`
+the live proof blocks' statements with the verifier's own files of them (`live.py`); the vLLM adapter's `pouw_h1_circuits`
 commits its circuit files, and `benchmarks/pouw/h1_prove/` drives it. A caller imports a module by its own
 name and takes the names its `__all__` lists: `schemes.get(name)` returns a configured scheme, and
 `circuit.traced_as(scheme, m, k, n)` its traced circuit. Target, not yet: every name another file reads is in its

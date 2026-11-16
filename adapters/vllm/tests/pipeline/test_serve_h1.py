@@ -124,7 +124,7 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     srv.src.uninstall()
 
 
-def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no_draw(tmp_path, monkeypatch):
+def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no_sample(tmp_path, monkeypatch):
     """Async scheduling's last call before the stop only returns the last outputs, so the Commit window it opens holds no
     step. On in-process coins that window's release pads none of its S steps and samples nothing (`serve_h1.UNSERVED`); it
     still goes through ``closer`` behind the windows before it, so the outcomes, and the window lines that wait for
@@ -178,7 +178,9 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     None."""
     import stat
 
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        prover as PV,
+    )
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
@@ -212,7 +214,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     plain.drain()
 
 
-def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_draw(tmp_path, monkeypatch):
+def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_sample(tmp_path, monkeypatch):
     """A served call's file the writer couldn't write is its window's failure: the release waits for the window's files,
     its outcome carries the error and its draw-gated release is refused by name; the next window is written whole."""
     from verity_vllm.pipeline import serve_release as SL
@@ -634,7 +636,7 @@ def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_p
     def failing(run: Any, client: Any) -> None:
         finish(run, client)
         if str(run.transcript_dir).endswith("w0"):
-            raise RuntimeError("the draw's record was not written")
+            raise RuntimeError("the sample's record was not written")
     monkeypatch.setattr(pouw, "finish_window", failing)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
     pending = []
@@ -644,7 +646,7 @@ def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_p
         pending.append(arm.close(w))
     closer.run()
     outs = [f.result() for f in pending]
-    assert outs[0]["error"] == "close: RuntimeError: the draw's record was not written" and outs[0]["tied"]
+    assert outs[0]["error"] == "close: RuntimeError: the sample's record was not written" and outs[0]["tied"]
     assert "error" not in outs[1] and outs[1]["tied"]
     assert [o["window"] for o in arm.outcomes] == [0, 1] and arm.summary()["releasing"] == 0
     srv.src.uninstall()
@@ -677,7 +679,7 @@ def _own_leaves(values: list[tuple[str, bytes]], chunk: int) -> list[tuple[str, 
 
 
 @pytest.mark.parametrize("coins", ["in-process", "gate"])
-def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_reads_after_its_coin(tmp_path, monkeypatch,
+def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_reads_after_its_coin(tmp_path, monkeypatch,
                                                                                                     coins):
     """``--retain device --seal --release-after pouw``: a window served on the server's Commit, its values held on the
     device (here a CPU pool) as the Commit acquired them, waits on the sealer's thread until its H1 release, off the loop,
@@ -725,7 +727,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     sealer = threading.Thread(target=seal)
     sealer.start()
     draws._cv.entered.acquire()
-    assert not released and dev.device_pool.held > 0 and not pending.done(), "no release before the window's draw coin"
+    assert not released and dev.device_pool.held > 0 and not pending.done(), "no release before the window's sampling coin"
     assert not (tmp_path / "h1" / "w0" / PH.CALLS_FILE).exists()
     closer.run()
     sealer.join()
@@ -759,12 +761,12 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
             assert bytes(dev.open_range(s, i, i + 1).value) == host[s][i * dev.chunk:(i + 1) * dev.chunk]
     drawn = {(s, n) for s, n, _lo, _hi in want}
     others = [(s, n, 0, len(raw)) for (s, n), raw in values.items() if (s, n) not in drawn]
-    assert any(n.endswith("/0") for _s, n, _lo, _hi in others), "some call's rows were not drawn"
-    assert len(draws.refused(0, others, dev)) == len(others), "every value no drawn block opens is dropped"
+    assert any(n.endswith("/0") for _s, n, _lo, _hi in others), "some call's rows were not sampled"
+    assert len(draws.refused(0, others, dev)) == len(others), "every value no sampled proof block opens is dropped"
     srv.src.uninstall()
 
 
-def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch):
+def test_a_window_with_no_sample_refuses_its_release_by_name(tmp_path, monkeypatch):
     """Under ``--release-after pouw`` a window's seal never waits on a sample that isn't coming: a window whose H1 never
     opened, and a gate window whose session joined no period (so no period-open committed its K), each refuse their
     release by name, and the outcome says why."""
@@ -787,8 +789,8 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     srv.src.uninstall()
 
 
-def test_a_gate_window_that_commits_no_session_root_refuses_its_draw_by_name():
-    """A gate window's draw is taken on its gate session's open root: a run that commits no session, or one with no
+def test_a_gate_window_that_commits_no_session_root_refuses_its_sample_by_name():
+    """A gate window's sample is taken on its gate session's open root: a run that commits no session, or one with no
     root, is refused by name before any stream reaches `drawn_units`."""
     arm = SimpleNamespace(sessions=object(), _period_k={"p1": 4})
     held = {"session": "s/7", "period": "p1"}
@@ -961,7 +963,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     for less in (sealed[1:], sealed[:1]):
         assert "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover" \
             in h1_refused(*h1, *less, *tie)
-    assert f"--release-after {SH.DRAWER} holds the seal until that coin's draw" in h1_refused(*h1, *device, *sealed[1:], *tie)
+    assert f"--release-after {SH.DRAWER} holds the seal until that coin's flip" in h1_refused(*h1, *device, *sealed[1:], *tie)
 
 
 def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_columns_of_each_linear_at_each_step():

@@ -27,7 +27,7 @@ inputs = ["benchmarks/pouw/harness", "verity/protocols/resource_accounting/compu
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c/sha512.cuh", "verity/commitments/cuda/sha512.cuh",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/__init__.py",
-          "verity/protocols/resource_accounting/__init__.py", "verity/circuits/kernels/__init__.py",
+          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/circuits/kernels/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

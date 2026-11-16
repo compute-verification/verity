@@ -6,16 +6,16 @@ public import Mathlib.Data.Fin.VecNotation
 meta import Definitions.Certifier.RecordRows
 
 /-!
-# The network certifier's rows read back its lanes
+# The network attester's rows read back its lanes
 
 `Definitions.Certifier.RecordRows`. On a schedule that fits the rows format, the lanes read back from the record
-of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
+of the cells the network attester's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
 `RecordFormat` (`RowsFormat.recordFormat`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
 bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
 (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
 
-The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
+The `#guard`s hold the rows format to the Python network attester's egress records (the test harness of
 `verity/protocols/accounting/certifier/verifier/tests/test_network_certifier.py`, `params`: B = 64, r = 2, D = 3, two lanes,
 T = 24): three connections on two lanes, the third admitted when the second's END frees its lane (`fxQueue`, the
 traffic of `test_network_certifier_rows.py`); a byte late at its cell (`fxLate`); and a server past
@@ -194,7 +194,7 @@ theorem read_record [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S
       ((length_bucketFrames _ _ _ _).trans_le (hs.2 _))]
   rw [this, lanesOfRows_bucketFrames hnd hall s a c]
 
-/-- **The rows format is a record format of the network certifier**: on the schedules that fit it, its record of the
+/-- **The rows format is a record format of the network attester**: on the schedules that fit it, its record of the
 cells the code sends reads back to them. -/
 def recordFormat [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n : ℕ) :
     RecordFormat κ Cell (Fin n → List (Obs L K S)) where
@@ -205,7 +205,7 @@ def recordFormat [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n 
 
 end RowsFormat
 
-/-! ### The Python network certifier's egress records -/
+/-! ### The Python network attester's egress records -/
 
 section Fixtures
 
@@ -260,7 +260,7 @@ def fxQueueRows : List (List (ℕ × String × String)) := [
 
 #guard fixtureAgrees fxQueueSched fxQueueArr fxQueueRows
 
-/-- `fxLate`: 1 connections; the Python network certifier's egress record, buckets 0 … 5 (every later bucket empty). -/
+/-- `fxLate`: 1 connections; the Python network attester's egress record, buckets 0 … 5 (every later bucket empty). -/
 def fxLateSched : CertifierSchedule (Fin 1) :=
   { r := 2, D := 3, adm := ![1], cells := ![4] }
 
@@ -279,7 +279,7 @@ def fxLateRows : List (List (ℕ × String × String)) := [
 
 #guard fixtureAgrees fxLateSched fxLateArr fxLateRows
 
-/-- `fxLimit`: 1 connections; the Python network certifier's egress record, buckets 0 … 8 (every later bucket empty). -/
+/-- `fxLimit`: 1 connections; the Python network attester's egress record, buckets 0 … 8 (every later bucket empty). -/
 def fxLimitSched : CertifierSchedule (Fin 1) :=
   { r := 2, D := 3, adm := ![0], cells := ![12] }
 

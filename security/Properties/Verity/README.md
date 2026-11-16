@@ -11,7 +11,7 @@ subprotocol's own proof discharges it. This page says where it is, what it reads
 **Imports.** These modules import what the `Properties.Verity` entry of `layers` lists
 (`security/Properties/lean-audit.json`): the composites' compiled code, the definitions and the composition's
 properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) import them, and so do two readers of
-`Sha512.lean`: `security/Proofs/Accounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
+`Sha512.lean`: `security/Proofs/ResourceAccounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
 
 ## The theorem
 
@@ -35,10 +35,10 @@ by name, which are the target of every subprotocol its list names, `SoundnessOf`
 policy's claim is on the case as sent, of which its target is proved (`Vocab.inferenceOnlySound`); these are what that
 leaves unsaid of the committed files, each stated and not proved:
 
-- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed units are held to. On an
-  accepted play, at most a `2ε` share of the committed units are unbound or read a row that is not the row the wiring
+- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed proof blocks are held to. On an
+  accepted play, at most a `2ε` share of the committed proof blocks are unbound or read a row that is not the row the wiring
   gives them, but for twice SPOT's error.
-- `GateARow`: every unit of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
+- `GateARow`: every proof block of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
   block, counts the gates PoUW's claim counts.
 
 No clause of the conclusion reads either: the conclusion's clause for the policy is still on the case as sent.
@@ -73,7 +73,7 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
-| the network attester | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
+| the network attester | `NetworkAttesterSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
 | the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | yes |
 
 ## How to read it
@@ -90,7 +90,7 @@ In this order:
    positions, the coin families, the fixed extractor, each subprotocol's fixed collision finders and LMS forger, the gates
    computed, the world, and the published certificates, `δ`s, `ε_forge` and losses.
 4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (SPOT's on the extractor's
-   transcript, the five period claims as `Accounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
+   trace, the five period claims as `ResourceAccounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
    case in the play's messages (`PolicyCase`), the Program its check judges and no field of `Vocab`, the wipe's as
    `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a` accepting its own case inside the composite's acceptance;
    `Vocab.error` is `δ + ε_forge + loss` where the finders and forger meet their premises, `⊤` elsewhere.
@@ -106,7 +106,7 @@ In this order:
 ## Where each target is discharged
 
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network attester): a target is the
-  per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
+  per-period guarantee `ResourceAccounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Compose/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
   a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
@@ -137,7 +137,7 @@ of assumption enter beside them, by their lock names:
   over `2^256` (`Vocab.crBound`, `Vocab.finder_calls`), and where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
   `ecr/sha-512` gives at their own budgets (`Vocab.finderCR`), and a second file with a registered digest enters the
   same way (`Vocab.fileFinder`, `Vocab.publicFinder`).
-- **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,
+- **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512-n64`,
   `security/Definitions/Hash/Assumptions.lean`; `security/Properties/lean-audit.json`). It is asked only of each
   subprotocol's fixed forger at the compiled LMS verifier (`Verity.lmsVerify`, `Vocab.Unforgeable`) and adds
   `ε_forge(t, Q)` to the error. A log a subprotocol's check reads that isn't the device's whole log is such a forgery,

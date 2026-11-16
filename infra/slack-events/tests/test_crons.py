@@ -13,7 +13,9 @@ from conftest import BOT, CHAT, DANIEL, LUKE, TEAM
 from slack_events import crons
 from slack_events.consumer import NO_MODEL, consume, post_line
 from slack_events.crons import DAILY_HEAD, ESCALATE_S, ESCALATED, ESCALATION, LANE_QUIET, REMIND_S, REMINDER, SETTLE_S
-from slack_events.deps import CANARY_DONE, CANARY_SENT, DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, STALL_RUNG, TOPIC
+from conftest import T0
+from slack_events.deps import (CANARY_DONE, CANARY_SENT, DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, SLACK_HEARD,
+                               STALL_RUNG, TOPIC)
 
 
 def private(ts: str, reminder: str | None = None, waited: str = "under a minute") -> str:
@@ -169,7 +171,7 @@ def test_reconciliation_enqueues_a_missed_post_once_and_the_consumer_routes_it(w
     assert world.deps.cache.get(OLDEST) == {"ts": missed["ts"], "at": world.clock()}
     assert crons.reconcile(world.deps)["queued"] == 2                      # sent again, and the queue keeps the first
     sent = world.deps.queue.on(TOPIC)
-    assert [p["event_id"] for p in sent] == [f"reconcile:{CHAT}:{missed['ts']}", f"reconcile:{TEAM}:{asked['ts']}"]
+    assert [p["event_id"] for p in sent] == [f"message:{CHAT}:{missed['ts']}", f"message:{TEAM}:{asked['ts']}"]
     assert young["ts"] not in {p["event"]["ts"] for p in sent}
     for p in sent:
         consume(world.deps, p, 1)
@@ -288,3 +290,97 @@ def test_the_hourly_canary_proves_the_consumer_on_a_quiet_day_and_its_loss_rings
     world.clock.t += crons.STALL_S
     assert crons.watchdog(world.deps)["stalled"] is True and len(rung()) == 1
     assert world.rung("top") == []                                                          # a canary rings no lane
+
+
+def codex(world, ch: str, text: str, **kw) -> dict:
+    """A post through Verity's bot under an `external_posters` name: no `research msg` sender delivered it."""
+    return world.slack.add(ch, text=text, username="Codex", bot_id=BOT, subtype="bot_message", **kw)
+
+
+def owner_inbox(world):
+    """STALL_TO's inbox, opened now: its ts, and what has been posted in it."""
+    from conftest import COORD, add_route
+    rs = world.deps.rs
+    box = world.slack.add(COORD, text=f"{rs.INBOX_HEAD}comms. pointers", username="comms", bot_id=BOT)
+    add_route(Path(rs.notes_root()) / rs.ROUTES_DIR, "comms", box["ts"])
+    return box["ts"], lambda: [m["text"] for m in world.slack.thread(COORD, box["ts"]) if m["ts"] != box["ts"]]
+
+
+def test_reconciliation_enqueues_a_missed_external_post_in_the_front_door_a_chat_and_an_ask_channel_once(world):
+    """The service alone delivers a post under an `external_posters` name, so a missed event is caught only here.  A
+    person's post in the front door is its sender's to deliver, and an external post naming no one rings no one."""
+    from conftest import COORD
+    top = codex(world, COORD, "@circuits the TP8 sweep is up")
+    root = world.slack.add(COORD, text="kernels: the sweep plan", username="kernels", bot_id=BOT)
+    reply = codex(world, COORD, "@kernels done", thread_ts=root["ts"])
+    chat = codex(world, CHAT, "@circuits Luke asked for the receipt format")
+    asked = codex(world, TEAM, "@kernels which tile?")
+    world.slack.add(COORD, text="@circuits a person's post in the front door", user=DANIEL)
+    codex(world, COORD, "naming no one")
+    world.clock.t += SETTLE_S + 1
+    assert crons.reconcile(world.deps)["queued"] == 4
+    assert crons.reconcile(world.deps)["queued"] == 4                      # sent again, and the queue keeps the first
+    sent = world.deps.queue.on(TOPIC)
+    assert sorted(p["event_id"] for p in sent) == sorted(
+        f"message:{ch}:{m['ts']}" for ch, m in ((COORD, top), (COORD, reply), (CHAT, chat), (TEAM, asked)))
+    assert all(consume(world.deps, p, 1) == "rule" for p in sent)
+    assert sorted(t.split(":")[0] for t in world.rung("circuits")) == [f"from codex, #chat-luke thread {chat['ts']}",
+                                                                       f"from codex, thread {top['ts']}"]
+    assert len(world.rung("kernels")) == 2 and world.rung("top") == []
+    world.deps.queue.sent.clear()
+    assert crons.reconcile(world.deps)["queued"] == 0                      # rung: the doorbells are the record
+
+
+def test_an_external_post_is_enqueued_while_an_inbox_it_names_lacks_its_doorbell_and_inbox_threads_are_not_read(world):
+    """The record of an external post is a doorbell in each inbox it rings, not in any one; `deliver` then rings only the
+    missing ones.  A post in an inbox thread routes nowhere, and reconciliation doesn't read those threads."""
+    from conftest import COORD
+    rs = world.deps.rs
+    box, owner = owner_inbox(world)
+    codex(world, COORD, "@circuits in an inbox thread", thread_ts=box)
+    both = codex(world, TEAM, "@circuits @kernels which tile?")
+    rs.deliver(world.deps.slack, crons.chats(world.deps)[0], rs.Routes(), TEAM, both, now=world.clock(), names=["circuits"])
+    world.clock.t += SETTLE_S + 1
+    calls = len(world.slack.calls)
+    assert crons.reconcile(world.deps)["queued"] == 1
+    assert not [p for m, p in world.slack.calls[calls:]                    # doorbells() reads it, without metadata; threads() never
+                if m == "conversations.replies" and p["ts"] == box and p.get("include_all_metadata") == "true"]
+    [p] = world.deps.queue.on(TOPIC)
+    assert p["event_id"] == f"message:{TEAM}:{both['ts']}" and consume(world.deps, p, 1) == "rule"
+    assert len(world.rung("circuits")) == len(world.rung("kernels")) == 1 and owner() == ["@circuits in an inbox thread"]
+
+
+def test_slacks_silence_rings_comms_hourly_once_a_message_is_30_min_newer_than_its_last_signed_request(world):
+    """Slack switched event delivery off for over a day and said nothing; nothing was enqueued, so `stall` stayed quiet.
+    Any message in a channel the bot is in is an event Slack owes the service, and reconciliation reads those channels
+    already, so the check adds no Slack call."""
+    from conftest import COORD
+    _, rung = owner_inbox(world)
+    assert crons.reconcile(world.deps)["silent"] is False                  # unknown: counted from this run, rings nothing
+    assert world.deps.cache.get(SLACK_HEARD) == world.clock()
+    world.clock.t += crons.SILENT_S - 1
+    world.slack.add(COORD, text="@circuits status?", username="kernels", bot_id=BOT)
+    calls = len(world.slack.calls)
+    assert crons.reconcile(world.deps)["silent"] is False                  # within the bound
+    quiet = [m for m, _ in world.slack.calls[calls:]]
+    world.clock.t += 2
+    world.slack.add(CHAT, text="anyone?", user=LUKE)
+    calls = len(world.slack.calls)
+    assert crons.reconcile(world.deps)["silent"] is True
+    assert [m for m, _ in world.slack.calls[calls:]] == quiet + ["chat.postMessage"]     # its ring is its one Slack call
+    [line] = rung()
+    assert line.startswith(crons.SILENT_HEAD) and f"its last signed request at {crons.at(T0)}" in line
+    world.clock.t += 600                                                   # rung within the hour: once
+    assert crons.reconcile(world.deps)["silent"] is False and len(rung()) == 1
+    world.clock.t += crons.STALL_EVERY_S
+    world.slack.add(TEAM, text="still there?", user=DANIEL)
+    assert crons.reconcile(world.deps)["silent"] is True and len(rung()) == 2
+    world.clock.t += crons.STALL_EVERY_S
+    world.slack.add(COORD, text="@circuits back", username="kernels", bot_id=BOT)
+    world.deps.cache.set(SLACK_HEARD, world.clock())                       # and Slack calls for it again
+    assert crons.reconcile(world.deps)["silent"] is False and len(rung()) == 2
+    world.deps.cache.clear()                                               # evicted: unknown rings nothing
+    world.clock.t += crons.SILENT_S * 4
+    world.slack.add(COORD, text="@circuits later", username="kernels", bot_id=BOT)
+    assert crons.reconcile(world.deps)["silent"] is False and len(rung()) == 2
+    assert world.rung("top") == []
