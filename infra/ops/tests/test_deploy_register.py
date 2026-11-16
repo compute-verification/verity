@@ -261,9 +261,8 @@ def test_the_machines_a_file_names_are_whole_words_of_its_lines_comments_apart()
                                                              [2, hashlib.sha256(b"vy-old y").hexdigest(), ["vy-old"]]]
 
 
-def test_a_released_machine_leaves_a_pattern_and_is_refused_by_name_and_a_stopped_one_keeps_its_line(fleet):
+def test_a_released_machine_leaves_a_pattern_and_is_refused_by_name(fleet):
     reg = fleet["reg"]
-    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"], unreachable_since="2026-01-01T00:00:00Z")      # stopped: still its address
     got = deploy.register()
     assert got.gone == {"vy-n-1"} and "vy-cpu-2" in got.live
     assert deploy.fill(PEERS, got, "src/peers")[0] == LIST
@@ -271,6 +270,89 @@ def test_a_released_machine_leaves_a_pattern_and_is_refused_by_name_and_a_stoppe
         deploy.fill("{{vy-n-1}} research@{{vy-n-1:host}}\n", got, "src/x")
     machine(reg, "vy-cpu-2", None)                          # released: the pattern passes it by, and its line goes
     assert "vy-cpu-2" not in deploy.fill(PEERS, deploy.register(), "src/peers")[0]
+
+
+T0 = 1_794_508_500.0               # 2026-11-12T18:35:00Z, the tests' own clock
+WITHOUT_2 = LIST.replace("vy-cpu-2 -i /k research@192.0.2.12\n", "")
+
+
+def _stamp(t: float) -> str:
+    import datetime as dt
+
+    return f"{dt.datetime.fromtimestamp(t, dt.UTC):%Y-%m-%dT%H:%M:%SZ}"
+
+
+def test_a_machine_the_register_marks_out_of_placement_leaves_a_pattern_and_one_marked_for_less_than_the_guard_stays(fleet):
+    """`stopped_since`, a person's word, counts at once. The sampler's `unreachable_since` counts only once it is
+    UNREACHABLE_OUT_MIN old, so a machine that misses a few samples keeps its line; clearing either mark puts the line back."""
+    from research.pods import registry
+
+    reg, guard = fleet["reg"], registry.UNREACHABLE_OUT_MIN * 60
+    assert guard == 3600
+
+    def text(now: float = T0) -> tuple[str, dict]:
+        got, passed = deploy.register(now=now), {}
+        return deploy.fill(PEERS, got, "src/peers", passed)[0], passed
+
+    old, new = _stamp(T0 - guard), _stamp(T0 - guard + 1)
+    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"], unreachable_since=old)
+    assert text() == (WITHOUT_2, {"vy-cpu-2": f"no answer since {old}"})
+    assert deploy.register(now=T0).says("vy-cpu-2") == f"no answer since {old}" and "vy-cpu-2" in deploy.register(now=T0).live
+    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"], unreachable_since=new)             # a second short of the guard: it stays
+    assert text() == (LIST, {}) and text(T0 + 1) == (WITHOUT_2, {"vy-cpu-2": f"no answer since {new}"})
+    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"], unreachable_since="yesterday")     # no time: nothing is left out on it
+    assert text() == (LIST, {})
+    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"], stopped_since=_stamp(T0))          # a person's mark: at once
+    assert text() == (WITHOUT_2, {"vy-cpu-2": f"stopped since {_stamp(T0)}"})
+    machine(reg, "vy-cpu-2", HOSTS["vy-cpu-2"])                                    # the mark is cleared: the line is back
+    assert text() == (LIST, {})
+    machine(reg, "vy-gate", HOSTS["vy-gate"], stopped_since=_stamp(T0))            # a machine named alone keeps its address
+    assert "gate.example" in deploy.fill(CONF, deploy.register(now=T0), "src/conf.json")[0]
+    for n in ("vy-cpu-1", "vy-cpu-2", "vy-cpu-10"):
+        machine(reg, n, HOSTS[n], stopped_since=_stamp(T0))
+    with pytest.raises(deploy.NoRegister, match=r"holds no live machine matching vy-cpu-\* \(src/peers:3\) that is in placement \(3 are"):
+        text()
+
+
+def test_a_roll_takes_a_stopped_machine_out_of_every_list_only_with_allow_shrink_and_puts_it_back_once_its_mark_is_cleared(
+        fleet, capsys, monkeypatch):
+    """Stopping a machine: mark it, roll, stop it. The roll says on each node which machines it leaves out and since when,
+    passes the marked machine's own node by without asking it, and drift reads a list that still names it stale."""
+    tmp, since = fleet["tmp"], _stamp(T0 - 60)
+    monkeypatch.setattr(deploy, "clock", lambda: T0)
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
+    capsys.readouterr()
+    machine(fleet["reg"], "vy-cpu-2", HOSTS["vy-cpu-2"], stopped_since=since)
+    machine(fleet["reg"], "c", "192.0.2.30", stopped_since=since)           # a node of the roll that is itself stopped
+    read = _read(fleet)
+    assert read["state"] == "stale" and f"it has vy-cpu-2 (stopped since {since})" in read["detail"]
+
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 3
+    err = capsys.readouterr().err
+    assert err.count(f"an install would take out vy-cpu-2 (stopped since {since})") == 2 and "Nothing changed on any node" in err
+    assert all((tmp / n / "etc" / "peers").read_text() == LIST for n in "abc")
+
+    fleet["calls"].clear()
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--allow-shrink") == 0         # the dry run says it all
+    out = capsys.readouterr().out
+    assert out.count(f"names 4 machines now, 3 after; drops vy-cpu-2 (stopped since {since}); the lines that go: line 4 "
+                     f"(vy-cpu-2); leaves out vy-cpu-2 (stopped since {since})") == 2
+    assert f"c  passed by: stopped since {since}" in out and "c" not in {n for n, _ in fleet["calls"]}
+    assert all((tmp / n / "etc" / "peers").read_text() == LIST for n in "abc")
+
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--allow-shrink", "--apply") == 0
+    assert [(tmp / n / "etc" / "peers").read_text() for n in "abc"] == [WITHOUT_2, WITHOUT_2, LIST]
+    assert _read(fleet)["state"] == "ok" and "192.0.2.12" in _keys(fleet)[1], "no address the key is taken from ever goes"
+    capsys.readouterr()
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x") == 0                           # and each later roll still
+    assert capsys.readouterr().out.count(f"unchanged  names 3 machines now, 3 after; leaves out vy-cpu-2 (stopped since {since})") == 2
+
+    machine(fleet["reg"], "vy-cpu-2", HOSTS["vy-cpu-2"])                    # it runs again: the mark is cleared, and one roll
+    machine(fleet["reg"], "c", "192.0.2.30")                                # with no leave puts its line back everywhere
+    read = _read(fleet)
+    assert read["state"] == "stale" and "it lacks vy-cpu-2" in read["detail"]
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
+    assert all((tmp / n / "etc" / "peers").read_text() == LIST for n in "abc") and "leaves out" not in capsys.readouterr().out
 
 
 UNREADABLE = {

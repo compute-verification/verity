@@ -79,8 +79,12 @@ so one register gives one text; a line names one machine or pattern, and a line 
 launcher's, the directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`; the launcher's own
 clone is pulled first unless --no-fetch), and each machine in it is one of three: live, released (`released_host` and no
 `host`: a pattern passes it by, so its line goes at the next install, and a template that names it is refused), or broken (a
-file that doesn't parse or doesn't validate). A stopped machine (`unreachable_since`) is live: its address is still its own,
-and its line stays. Nothing is written from a register that can't be read: `install` refuses, naming the path, when the
+file that doesn't parse or doesn't validate). A live machine the register marks out of placement (`registry.left_out`:
+`stopped_since`, which `research pods stopped NAME` writes, at once; the sampler's `unreachable_since` only once it is
+`registry.UNREACHABLE_OUT_MIN` minutes old, so a machine that misses a few samples keeps its line) is passed by a pattern too,
+and a template that names it alone still takes its address: its line goes from every list at the next install, which is a
+shrink like any other, and comes back at the one after its mark is cleared. `install` and `roll` say which machines each
+file leaves out so and since when, and `drift` reads a list that still names one `stale`. Nothing is written from a register that can't be read: `install` refuses, naming the path, when the
 register is off or isn't a directory, holds no machine, holds a broken file a pattern matches, lacks a machine or a field the
 template names, or gives a value that isn't one plain word. `drift` compares the installed file with the text the register
 gives now: `ok` when they are the same, `stale` when an install wrote the file and the register or the template has changed
@@ -108,8 +112,8 @@ a stopped run left is removed, and one a failing run made goes with it.
 time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that a machine a list comes to name
 already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
 whose file doesn't read `ok`. A node that can't be reached is passed by and named last, with the install that brings it up to
-date (exit 1); a node with no machine (one the register marks released, or a staged one it doesn't hold) is passed by and is
-no failure. So a machine joins the others in three steps: register it, copy the key to it, and `roll`. `--keys-only` stops
+date (exit 1); a node with no machine (one the register marks released or out of placement, or a staged one it doesn't hold)
+is passed by, unasked, and is no failure. So a machine joins the others in three steps: register it, copy the key to it, and `roll`. `--keys-only` stops
 once each node has taken the key and writes no list: it takes nothing away and changes no route, so it goes first where the
 lists were made by hand, and one node's list can then be rolled alone (`--on`) and tried before the rest.
 """
@@ -135,6 +139,7 @@ from typing import Callable
 import research
 from research.flags import renamed
 
+clock = time.time              # what a register mark's age is read against (`register`)
 MANIFEST = Path(research.__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
 SRC = Path(__file__).resolve().parents[3]
 # the git repository REF and origin's branches are read from: this checkout, or $RESEARCH_DEPLOY_REPO where the code runs from a
@@ -878,13 +883,14 @@ class Register:
     live: dict[str, dict] = field(default_factory=dict)        # name -> its file's table
     gone: set[str] = field(default_factory=set)                # released: `released_host` and no `host`
     broken: set[str] = field(default_factory=set)              # a file that doesn't parse or is no machine's
+    out: dict[str, str] = field(default_factory=dict)          # a live one out of placement -> why (`registry.left_out`)
 
     def names(self) -> list[str]:
         return sorted({*self.live, *self.gone, *self.broken}, key=natural)
 
     def says(self, name: str) -> str:
         return ("released in the register" if name in self.gone else "its register file is broken" if name in self.broken else
-                "live in the register" if name in self.live else "not in the register")
+                self.out[name] if name in self.out else "live in the register" if name in self.live else "not in the register")
 
 
 @dataclass
@@ -894,6 +900,7 @@ class Made:
     blob: str
     names: list[str]                   # the machines that fill it
     sources: list[str]                 # their addresses: where the key the list is used with comes from
+    out: dict[str, str] = field(default_factory=dict)       # the machines its patterns pass by as out of placement -> why
 
 
 def natural(name: str) -> list:
@@ -901,9 +908,10 @@ def natural(name: str) -> list:
     return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", name)]
 
 
-def register(environ: dict | None = None) -> Register:
-    """The register a register-made file is filled from: the directory `research pods` finds a machine in. NoRegister when it
-    is off, is no directory or holds no machine: a list is never written from a register that can't be read."""
+def register(environ: dict | None = None, now: float | None = None) -> Register:
+    """The register a register-made file is filled from: the directory `research pods` finds a machine in, with the live
+    machines out of placement at `now` (the clock's when None). NoRegister when it is off, is no directory or holds no
+    machine: a list is never written from a register that can't be read."""
     from research import remote
     from research.pods import registry
 
@@ -914,7 +922,7 @@ def register(environ: dict | None = None) -> Register:
                          "a file made from it can't be: unset it or point it at a machines.d directory")
     if not d.is_dir():
         raise NoRegister(f"the register of machines isn't there: {d} is no directory (`research notes sync` clones the notes)")
-    reg = Register(d)
+    reg, now = Register(d), clock() if now is None else now
     for p in sorted(d.glob("*.toml")):
         if p.name.startswith("_"):
             continue
@@ -929,14 +937,17 @@ def register(environ: dict | None = None) -> Register:
             reg.broken.add(p.stem)
         else:
             reg.live[p.stem] = doc
+            if why := registry.left_out(doc, now):
+                reg.out[p.stem] = why
     if not reg.live:
         raise NoRegister(f"the register of machines holds no machine: {d} has no NAME.toml of a live one")
     return reg
 
 
-def fill(template: str, reg: Register, src: str) -> tuple[str, list[str]]:
-    """The text `template` (the file `src`) gives from the register, and the machines it names (the docstring's rules).
-    NoRegister, naming the path, for each case in which the text would lack a machine or hold a wrong word."""
+def fill(template: str, reg: Register, src: str, passed: dict[str, str] | None = None) -> tuple[str, list[str]]:
+    """The text `template` (the file `src`) gives from the register, and the machines it names (the docstring's rules);
+    `passed` takes each machine a pattern passes by as out of placement, with why. NoRegister, naming the path, for each
+    case in which the text would lack a machine or hold a wrong word."""
     out, filled = [], set()
 
     def file(n: str) -> Path:
@@ -956,8 +967,14 @@ def fill(template: str, reg: Register, src: str) -> tuple[str, list[str]]:
                 raise NoRegister(f"{file(bad[0])} is broken and matches {who} ({at}), so whether its machine belongs in the "
                                  "file can't be told: repair it (`research pods registry` says what is wrong) or remove it")
             names = sorted((n for n in reg.live if fnmatch.fnmatchcase(n, who)), key=natural)
+            away = {n: reg.out[n] for n in names if n in reg.out}
+            names = [n for n in names if n not in away]
+            if passed is not None:
+                passed.update(away)
             if not names:
-                raise NoRegister(f"{reg.where} holds no live machine matching {who} ({at}): the file would be without them")
+                raise NoRegister(f"{reg.where} holds no live machine matching {who} ({at})"
+                                 + (f" that is in placement ({len(away)} are marked out of it)" if away else "")
+                                 + ": the file would be without them")
         elif who in reg.live:
             names = [who]
         else:
@@ -983,9 +1000,11 @@ def fill(template: str, reg: Register, src: str) -> tuple[str, list[str]]:
 def made(e: Entry, sha: str, reg: Register, repo: Path = REPO) -> Made:
     """The register-made entry `e` as the register gives it now, from its template (the blob `sha`)."""
     template = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True, check=True).stdout.decode()
-    data, names = fill(template, reg, e.src)
+    passed: dict[str, str] = {}
+    data, names = fill(template, reg, e.src, passed)
     sources = [h for n in names if isinstance(h := reg.live[n].get("host"), str) and WORD.fullmatch(h)]
-    return Made(data.encode(), hashlib.sha1(b"blob %d\0" % len(data.encode()) + data.encode()).hexdigest(), names, sources)
+    return Made(data.encode(), hashlib.sha1(b"blob %d\0" % len(data.encode()) + data.encode()).hexdigest(), names, sources,
+                {n: passed[n] for n in sorted(passed, key=natural)})
 
 
 def versions(srcs: list[str], *revs: str, since: str | None = None, limit: int | None = None,
@@ -1399,7 +1418,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     docstring's rule); without `apply`, only say what would change. {"commit", "files": [{path, src, changed, run}], "restarts":
     [{unit, why, state}]}: a file's `run` is what still runs its old version, and a path a whole tree's directory holds that
     `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`). A register-made file's entry has
-    `machines` too (`listed`'s) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
+    `machines` too (`listed`'s), `out` (the machines its patterns pass by as out of placement, with why) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
     key is taken, before any file is written and so whatever a file would lose, and "list" writes the files and leaves the
     keys (`roll`'s two passes). An install of the whole node (no `only`) leaves a register-made file that was written by
     hand, or that it would take a machine out of, as it is: `changed` "left", with `why`. An install of the whole node leaves
@@ -1485,7 +1504,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     skipped += [{"path": p, "src": want[p][0], "changed": "left", "run": [], "why": why} for p, why in sorted(left.items())]
     files = [f for f in files if f["path"] not in left]
     gen, want = ({p: v for p, v in d.items() if p not in left} for d in (gen, want))
-    made_of = {p: {"machines": lists[p], **({"accept": accept(node, want[p][3], g.sources, commit, ref, by, run, apply)}
+    made_of = {p: {"machines": lists[p], "out": g.out, **({"accept": accept(node, want[p][3], g.sources, commit, ref, by, run, apply)}
                                             if want[p][3].accept and part != "list" else {})} for p, g in gen.items()}
     if part == "accept":
         return {"commit": commit, "restarts": [], "files": [
@@ -1542,7 +1561,8 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
 
 
 def told(f: dict) -> list[str]:
-    """What an install's line for a register-made file adds: the machines it names now and after, and the key it takes."""
+    """What an install's line for a register-made file adds: the machines it names now and after, those the register marks
+    out of placement, which it leaves out, and the key it takes."""
     out = []
     if m := f.get("machines"):
         now = "isn't installed" if m["now"] is None else f"names {m['now']} machines now"
@@ -1550,6 +1570,8 @@ def told(f: dict) -> list[str]:
         gone = ", ".join(f"line {i}" + (f" ({' '.join(what)})" if what else "") for i, what in m.get("gone", []))
         out.append(f"{now}, {m['after']} after" + (f"; adds {', '.join(m['added'])}" if m["added"] and m["now"] is not None else "")
                    + (f"; drops {drops}" if drops else "") + (f"; the lines that go: {gone}" if gone else ""))
+    if f.get("out"):
+        out.append("leaves out " + ", ".join(f"{n} ({why})" for n, why in f["out"].items()))
     if a := f.get("accept"):
         out.append(f"its key can't be read here ({a['unread']})" if "unread" in a else
                    "its key is taken from anywhere already (its line has no from=), and stays so" if a.get("anywhere") else
@@ -1585,8 +1607,8 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
 
     reg, none, away, refused, todo = register(), {}, {}, {}, []
     for node in picked:
-        if node.name in reg.gone or (node.staged and node.name not in reg.live):
-            none[node.name] = "released in the register" if node.name in reg.gone else \
+        if node.name in reg.gone or node.name in reg.out or (node.staged and node.name not in reg.live):
+            none[node.name] = reg.says(node.name) if node.name in reg.gone or node.name in reg.out else \
                 f"staged ({node.staged}) and not in the register"
             continue
         try:
