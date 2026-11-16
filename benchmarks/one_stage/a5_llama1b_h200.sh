@@ -2,19 +2,19 @@
 # One-stage audit, run A5, over a GPU-served window: Llama-3.2-1B int8 batch-invariant eager on one H200 (ROW, default the B4
 # I256/O32 h200 row), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
 # --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1; or
-# A5_PARTITION's file, whose law is the sample) is committed at its C2 site before the bundle is sealed
+# A5_PARTITION's file, whose sampling design gives the sample) is committed at its C2 site before the bundle is sealed
 # (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte run root. Then the Commit's C2 replay on CPU from
 # the sealed bundle, and the window's audit, in the same job, so the window's private bodies (m*-private.bin,
 # v*-private.bin: rows and salts) never leave the machine. The audit is A5_COINS's:
-#  - dev (default): a5.sh (WINDOW=served, A5_ROW_DIR) on the bundle and window: Lean's draw on in-process development coins,
+#  - dev (default): a5.sh (WINDOW=served, A5_ROW_DIR) on the bundle and window: the Lean verifier's sample on in-process development coins,
 #    each Flock --zk session on a development challenger of its own, accepted by Flock's per-session Lean verify --zk and
-#    Lean's draw; SPOT's one-stage check (OneStageZk) does not run, and refuses such a case (it names no challenger).
+#    the Lean verifier's sample; SPOT's one-stage check (OneStageZk) does not run, and refuses such a case (it names no challenger).
 #  - challenger: records_audit.py audit of the window on ONE local challenger session (`--challenger local --deployed-key`:
 #    the auditor device's service run on this machine, a development stand-in for the auditor's, its key made for the run at
-#    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N units), every
+#    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N proof blocks), every
 #    session's coin tree from that session's release log (a5.window_trees), Flock --zk behind the Lean ZK server; then SPOT's
 #    one-stage check (spot-one-stage-zk, `Spot.OneStageZk` v2) on the case the audit wrote, whose V2 line is the verdict.
-#    A5_PLAIN=1 makes its sessions plain (`records_audit.py --plain`, a5's plain audit) at the partition's law, which must be
+#    A5_PLAIN=1 makes its sessions plain (`records_audit.py --plain`, a5's plain audit) at the partition's sampling design, which must be
 #    a stratified rate (stratified-rate:NUM/DEN, which the Commit registers as the window's stratified design): one session
 #    on its own keyed coin tree from a development challenger of its own (FC_COINS=tree, FLOCK_CHALLENGER=1), served the
 #    challenger session's stratified sample and held to it by Lean's `verify --coins tree --stratified K`; no ZK server, and
@@ -78,10 +78,10 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 [ -n "$CKPT" ] && [ -d "$CKPT" ] || refuse "no $REPO@${REV:0:10} checkpoint under $HF_HOME (HF_HOME): make it with $BOOT"
 [ -e "$FA3G" ] || refuse "no guarded FA3 tap at $FA3G (A5_TAPS): make it with $BOOT"
 [ -e "$NT" ] || refuse "no norm tap at $NT (A5_TAPS): make it with $BOOT"
-[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its law"
+[ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its sampling design (its law key)"
 [ -z "$A5_PLAIN" ] || "$VENV/bin/python" -c 'import json, sys; sys.exit(not json.load(open(sys.argv[1]))["law"].startswith("stratified-rate:"))' "$PART" \
-  || refuse "A5_PLAIN=1 takes a partition whose law is stratified-rate:NUM/DEN (a plain audit's draw is stratified, and the Commit registers the partition's law): $PART"
-command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the row serves on one H200 (sm_90), which this machine doesn't show"
+  || refuse "A5_PLAIN=1 takes a partition whose sampling design (its law key) is stratified-rate:NUM/DEN (a plain audit's sample is stratified, and the Commit registers the partition's sampling design): $PART"
+command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the workload serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 finish() {  # at exit, success or failure: BASE (the row dir, the window, the audit's private files) removed, or with A5_KEEP=1 kept
@@ -192,11 +192,11 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   run=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$B/binding_map.json") || return 21
   law=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' "$PART")
   n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json") || return 22
-  # the audit's rate is the one the Commit registered the window under: subset:K as rate:K/N over the window's N units
+  # the audit's rate is the one the Commit registered the window under: subset:K as rate:K/N over the window's N proof blocks
   case ${A5_PLAIN:+plain}/$law in
     /subset:*) rate=rate:${law#subset:}/$n ;;
     /rate:*|plain/stratified-rate:*) rate=$law ;;
-    *) echo "A5_COINS=challenger takes a partition law subset:K or rate:NUM/DEN, and A5_PLAIN=1 stratified-rate:NUM/DEN: $law" >&2
+    *) echo "A5_COINS=challenger takes a partition whose sampling design (its law key) is subset:K or rate:NUM/DEN, and A5_PLAIN=1 one that is stratified-rate:NUM/DEN: $law" >&2
        return 22 ;;
   esac
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
@@ -302,13 +302,13 @@ if trees not in TREES or (os.environ["A5_COINS"] == "challenger" and not os.envi
              f"challenger's coins must have every session's tree from that challenger session's release log (window)")
 trees = f"coin trees {trees}: {TREES[trees]}"
 sample = (f"{len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'} of {summ.get('population', '?')} proof blocks "
-          f"sampled (law {law.get('law', '?')} k={law.get('k', '?')}, delta {summ.get('delta', '?')}"
+          f"sampled (sampling design {law.get('law', '?')} k={law.get('k', '?')}, delta {summ.get('delta', '?')}"
           + (f", at {rate}" if rate else "") + ")")
 if os.environ["A5_PLAIN"]:
     line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
             f"plain, no ZK server ({trees}); the audit {accepted}" + (", by Flock's plain per-session Lean verification, "
-            "with --coins tree and --stratified K, and Lean's draw" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
+            "with --coins tree and --stratified K, and the Lean verifier's sampler" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
             f"apply (OneStageZk checks --zk sessions); {card}")
 elif os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
@@ -319,10 +319,10 @@ elif os.environ["A5_COINS"] == "challenger":
             f"--zk behind the Lean ZK server ({trees}); the audit {accepted}; SPOT's one-stage check (OneStageZk v2, "
             f"spot-one-stage-zk) {verdict}; {card}")
 else:
-    line = (f"COINS draw: development coins (in-process secrets.token_bytes), no auditor's challenger, by Lean's draw, {sample}; "
+    line = (f"COINS draw: development coins (in-process secrets.token_bytes), no auditor's challenger, by the Lean verifier's sampler, {sample}; "
             f"sessions: Flock {'plain' if summ.get('plain') else '--zk'} ({trees}), arm {summ.get('arm', '?')} "
             f"({'the ZK server' if summ.get('firewall') else 'no ZK server'}); {accepted} by Flock's per-session Lean verification "
-            f"with --zk and Lean's draw, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
+            f"with --zk and the Lean verifier's sampler, not by SPOT's one-stage check (OneStageZk did not run; it refuses a case naming no "
             f"challenger); {card}")
 print(line)
 if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: the line rides as its text
