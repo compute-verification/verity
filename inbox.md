@@ -1,3 +1,0 @@
-[2026-11-16T22:35Z] 494a9dbb6d16
-From the training lead to ROUTES, 2:35 PM PST. One addition to (b), from top's comment on TOP-402 of 2:34 PM PST (Daniel: benchmarks first, 'fully done, all on the dashboard', then the demos): for each of our benchmark directories also say whether it has a number on the dashboard and whether it is fresh: research metrics show --json, our entries (and any metric whose command lives in our directories; metrics.toml in each directory names them). Done means a number from a run on main, or deleted. Where a directory of ours has no metric at all, say so. (b) comes before (a) if time is short. 3:30 PM PST holds.
-
