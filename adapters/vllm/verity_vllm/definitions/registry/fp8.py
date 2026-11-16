@@ -27,7 +27,7 @@ max(|W|)` over the bf16 fused tensor, `s_w = f32(amax) / 448` (torch f32 divisio
 (`static_scaled_fp8_quant`: here a *reciprocal multiply*), stored as `layer.weight = W_q.t()` ([K, N] view) and
 `layer.weight_scale` (one f32).  They are **derived Inputs** of the program, bound from the commit's stored e4m3/f32
 words.  `numerics.fp8_twins.np_online_weight_quant` is this quantisation on CPU, and on the checkpoint's layer-0
-qkv_proj it gives the served run's committed words (`adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py`); binding
+qkv_proj it gives the served run's committed words (`tests/adapters/vllm/verity_vllm/definitions/test_fp8_twins.py`); binding
 doesn't call it, so a commit's weight words are not compared with a re-quantisation of the checkpoint.  The activation
 scale `s_x` and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 

@@ -41,7 +41,7 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each proof block's Definition on its input rows. The
 window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
-`benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
+`tests/benchmarks/one_stage/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v2`)
 

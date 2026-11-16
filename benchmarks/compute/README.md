@@ -151,7 +151,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/), clone thi
 below from the clone's root. The first `uv run` installs the workspace's Python environment (`uv sync` does it alone).
 
 ~~~text
-uv run verity bench compute --from benchmarks/compute/tests/fixtures/record
+uv run verity bench compute --from tests/benchmarks/compute/fixtures/record
 uv run verity bench compute --from DIR --per-call --top 5
 ~~~
 
@@ -182,7 +182,7 @@ on your own card it is not an accept, so PoUW credits nothing of the run, and th
 alone.
 
 To keep what it prints as files too (`compute.json` and `result.json`, below), set `OUT` to a
-directory: `OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
+directory: `OUT=/tmp/compute uv run verity bench compute --from tests/benchmarks/compute/fixtures/record`.
 
 The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
