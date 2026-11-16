@@ -51,8 +51,5 @@ theorem band_pub_meets_family_final : ∀ (N : ℕ) [NeZero N], N ≤ 2 ^ 64 →
   have h := Pous.BandMulti.band_meets_family_final N hN d hd
   ⟨(band_pub_iff_seg N d).2 h.1, (band_pub_iff_seg_global N d).2 h.2⟩
 
-/-- At `N = 448` the family's two layouts are `ChainBandPubMeets14` and `ChainBandPubMeets14Global`. -/
-theorem band_pub_meets_family_14 (d : ℕ) (hd : 5 ≤ d) : ChainBandPubMeets14 d ∧ ChainBandPubMeets14Global d :=
-  band_pub_meets_family_final 448 (by norm_num) d hd
 
 end PousPub

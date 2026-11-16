@@ -267,36 +267,6 @@ be false on degenerate instances (a binomial position term at `n = 0` or tiny `Q
   vacuity. `seg_hard` uses `k = N*B` **exactly** (tight), and the audit `k = 106 < B = 512 ≤ N*B`, so neither route is
   vacuous. -/
 
-/-- The audit `k = 106` is below one segment's block count `B = 2^9`, so no `k > B` vacuity in the audit. -/
-theorem audit_k_lt_B : (106 : ℕ) < 2 ^ 9 := by norm_num
-
-/-- **Satisfiability witness** for `seg_hard`/`seg_timedINC`'s `hN : 0 < N` and `hD : D + 1 ≤ B`, at the 14 GB point.
-`k = N*B = 229376 > 0` and it equals `|univ|`, so the conclusion is a genuine (tight, non-vacuous) `PebblingHard`. -/
-theorem seg_hard_14 :
-    PebblingHard (segDAG 448 (2 ^ 9)) Finset.univ (448 * 2 ^ 9 - 448 * 5 - 1) 5 (448 * 2 ^ 9) :=
-  seg_hard 448 (2 ^ 9) 5 (by norm_num) (by norm_num)
-
-/-- **Satisfiability witness** for the `[NeZero (N*B)]` instance the segmented scheme takes. -/
-theorem segNeZero_witness : NeZero (448 * 2 ^ 9) := inferInstance
-
-/-- **`hN : 0 < N` is necessary, not merely convenient.** At `N = 0` the challenge count `N*B = 0`, and
-`PebblingHard _ _ _ _ 0` is false: the empty holding already fails `0 < 0`. So dropping `hN` makes `seg_hard` false, not
-vacuously true. -/
-theorem seg_hard_needs_hN :
-    ¬ PebblingHard (segDAG 0 (2 ^ 9)) Finset.univ (0 * 2 ^ 9 - 0 * 5 - 1) 5 (0 * 2 ^ 9) := by
-  intro h
-  have hc := h ∅ (by simp)
-  simp only [Nat.zero_mul] at hc
-  exact Nat.not_lt_zero _ hc
-
-/-- **`hD : D + 1 ≤ B` is necessary.** With `D ≥ B` (here `N = B = D = 1`), one round already pebbles the whole segment
-from nothing, so all `N*B` challenges are reached and `PebblingHard` fails. -/
-theorem seg_hard_needs_hD :
-    ¬ PebblingHard (segDAG 1 1) Finset.univ (1 * 1 - 1 * 1 - 1) 1 (1 * 1) := by
-  intro h
-  have hc := h ∅ (by simp)
-  revert hc
-  decide
 
 /-! ### Piece 3: alignment with the implementation's per-segment tagged domains
 

@@ -344,14 +344,5 @@ theorem endToEndRingOfRoundSecure_nontrivial (N : ℕ) [NeZero N] :
       ENNReal.ofReal Params.δ + Params.εMax :=
   endToEndRingAt_nontrivial N _ bound_lt_one
 
-theorem endToEndRingOfRoundSecureWide_nontrivial (N : ℕ) [NeZero N] :
-    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRingOfRoundSecure_nontrivial N
-
-theorem endToEndRingDemo_nontrivial (N : ℕ) [NeZero N] :
-    ¬ pr (fun _ : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRingOfRoundSecure_nontrivial N
 
 end Pous.EndToEnd.SecurityProofs

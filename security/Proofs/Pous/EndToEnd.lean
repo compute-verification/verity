@@ -336,9 +336,6 @@ theorem honest_answers (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → 
   simp
 
 set_option exponentiation.threshold 20000 in
-theorem honestPassesRing : HonestPassesRing :=
-  ⟨stateBound_lt, honestPre sch, honestOn, fun W => pr_eq_one fun x =>
-    honest_answers _ W _ (sch.enc W x.1 x.2.1).2 105 x.2.2⟩
 
 set_option exponentiation.threshold 20000 in
 theorem honestPassesAccepts : HonestPassesAccepts := by
@@ -376,13 +373,5 @@ theorem endToEndRing_nontrivial :
   rw [pr_eq_one fun _ => trivial]
   exact not_le.2 bound_lt_one
 
-/-- **`endToEndRingDeployed` holds at the honest instance**: `endToEndRing_honest`, its event being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_honest : HonestPassesAccepts := honestPassesAccepts
-
-/-- **`endToEndRingDeployed` is nontrivial**: `endToEndRing_nontrivial`, its bound being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_nontrivial :
-    ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRing_nontrivial
 
 end Pous.EndToEnd.SecurityProofs

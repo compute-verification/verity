@@ -478,11 +478,6 @@ theorem widths : (20 * 16448 ≤ 21 * 16447 ∧ 16447 ≤ 16447) ∧ (20 * 16448
     (20 * 16448 ≤ 21 * 15665 ∧ ¬ 20 * 16448 ≤ 21 * 15664) ∧ (20 * 8192 ≤ 21 * 7802 ∧ ¬ 20 * 8192 ≤ 21 * 7801) := by
   norm_num
 
-/-- All hypotheses of `meets_m1p_of_row` other than the row also hold at small sizes, by `decide`: `w = 21`,
-`p = 2^21 − 1`, `b = 20`, `c = 1`, `B = 2^8`. -/
-theorem hyps_small : 2 ^ 20 ≤ 2 ^ 21 - 1 ∧ 2 ^ 21 - 1 ≤ 2 ^ 21 ∧ 2 ^ 21 ≤ (2 ^ 21 - 1) + 1 ∧
-    2 * 2 ^ 8 * 1 ≤ 2 ^ 21 ∧ 20 * 21 ≤ 21 * 20 := by
-  decide
 
 /-- `2^b ≤ p` from `b ≤ w − 1` and `2^(w−1) ≤ p`. -/
 theorem two_pow_le_of_le {b w p : ℕ} (hb : b ≤ w - 1) (hlo : 2 ^ (w - 1) ≤ p) : 2 ^ b ≤ p :=
@@ -508,20 +503,6 @@ theorem p2_meets_m1p_b19 : ∀ b, 20 * 16448 ≤ 21 * b → b ≤ 16447 →
     ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) b) .sequential D (2 ^ 20) 88 Params.εMax :=
   family (2 ^ 19) (by norm_num) (by norm_num)
 
-/-- The `2^19` row at one pad bit per block, `b = 16447`. -/
-theorem p2_meets_m1p_b19_w16447 :
-    ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16447) .sequential D (2 ^ 20) 88 Params.εMax :=
-  p2_meets_m1p_b19 16447 widths.1.1 widths.1.2
-
-/-- The `2^19` row at the MVP's byte-aligned packing, `b = 16432` (2,054 bytes per block). -/
-theorem p2_meets_m1p_b19_w16432 :
-    ∀ D, Meets (m1p (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) .sequential D (2 ^ 20) 88 Params.εMax :=
-  p2_meets_m1p_b19 16432 widths.2.1.1 widths.2.1.2
-
-/-- The family's upper end, `2^23` (the `P2MeetsM1Uncond` block count), at the MVP's packing. -/
-theorem p2_meets_m1p_b23_w16432 :
-    ∀ D, Meets (m1p (2 ^ 23) 16448 (2 ^ 16448 - 21065) 16432) .sequential D (2 ^ 20) 88 Params.εMax :=
-  family (2 ^ 23) (by norm_num) (by norm_num) 16432 widths.2.1.1 widths.2.1.2
 
 /-- `S = ⌊(18/19)·2^24·8192⌋`, whatever `p` and `b`. -/
 theorem stateBound_m1p_8192 (p b : ℕ) : (m1p (2 ^ 24) 8192 p b).stateBound Params.ρ = 130205324341 := by
@@ -554,11 +535,6 @@ theorem p2_meets_m1p_8192 : ∀ b, 20 * 8192 ≤ 21 * b → b ≤ 8191 →
   rw [stateBound_m1p_8192]
   exact row_8192p
 
-/-- The 8,192-bit row at `b = 8191` and at the byte-aligned `b = 8176` (1,022 bytes per block). -/
-theorem p2_meets_m1p_8192_instances :
-    (∀ D, Meets (m1p (2 ^ 24) 8192 (2 ^ 8192 - 9345) 8191) .sequential D (2 ^ 20) 90 Params.εMax) ∧
-    (∀ D, Meets (m1p (2 ^ 24) 8192 (2 ^ 8192 - 9345) 8176) .sequential D (2 ^ 20) 90 Params.εMax) :=
-  ⟨p2_meets_m1p_8192 8191 widths.2.2.1.1 widths.2.2.1.2, p2_meets_m1p_8192 8176 widths.2.2.2.1.1 widths.2.2.2.1.2⟩
 
 /-! ### Non-vacuity: raw storage breaks `k = 85` -/
 

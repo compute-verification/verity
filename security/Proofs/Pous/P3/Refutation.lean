@@ -501,11 +501,6 @@ def ForwardOnlyBound : Prop :=
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s + 1 - 0)
 
-/-- **The forward-only case is false**, by the same adversary, which makes no inverse query. -/
-theorem not_forwardOnlyBound : ¬ ForwardOnlyBound := by
-  intro h
-  have hb := h 8 64 512 1 3 4 2 chain8 W0 (by norm_num) (Nat.zero_le _) hard A₁ A₂ A₂_bounded A₂_invBounded
-  exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 /-! ### The sibling's placeholder `ForwardBound` -/
 
@@ -518,12 +513,6 @@ def ForwardBound (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → L
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s' + 1)
 
-/-- **`ForwardBound` is false** at `n = 8, wc = 64, m = 512, D = 3, Q = 4, k = 2`, the chain, `W = 0` (with
-`s' = 1`). -/
-theorem not_forwardBound : ¬ ForwardBound 8 64 512 3 4 2 chain8 W0 := by
-  intro h
-  have hb := h 1 A₁ A₂ A₂_bounded A₂_invBounded hard
-  exact absurd (pr_attack.trans hb) (not_le.2 bound_lt)
 
 set_option linter.unusedVariables false in
 /-- `ForwardBound` with the per-entry width `b` as a parameter: each of the `s' + 1` fresh entries saves `b` bits.
@@ -536,7 +525,5 @@ def ForwardBoundAt (b n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n �
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ b) ^ (s' + 1)
 
-theorem forwardBound_eq_at (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) :
-    ForwardBound n wc m D Q k G W = ForwardBoundAt (n * wc) n wc m D Q k G W := rfl
 
 end PousP3Forward

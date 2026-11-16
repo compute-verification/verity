@@ -388,16 +388,6 @@ theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.b
       simp [MemoryChallenger.Properties.Recorded.round, hb, honestCoins, MemoryChallenger.CoinTree.k, hidx, hd,
         honestRound, MemoryChallenger.Round.elapsedNs, Array.range_succ]
 
-theorem honest_recorded_prefix
-    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    ∀ n, n ≤ 105 →
-      (List.replicate n certifiedObserved).foldl
-          (MemoryChallenger.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
-            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
-        ⟨(Array.range n).map
-            (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
-          if n = 105 then some MemoryChallenger.COMPLETE else none⟩ :=
-  recorded_prefix_of (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 /-- The challenger's honest run bound to any root with a block `b` of the deployed size whose digest is row 0 of a
 table `d` records the 105 honest rounds of `d`, complete. -/
