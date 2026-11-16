@@ -493,7 +493,7 @@ def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_p
 
 
 #: one type timed both ways by one prover on ten cores: a full statement of 1,024 blocks and a quarter of one, in a
-#: statement's GPU-seconds (read off a split run, which is no steady-state row of record: a fixture only)
+#: statement's GPU-seconds (read off a split run, which is no steady-state benchmark result of record: a fixture only)
 FULL, QUARTER = (1024, 2.384), (256, 0.835)
 
 

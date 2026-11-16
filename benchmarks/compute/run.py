@@ -65,7 +65,7 @@ The line under the number says which coins and parameters the record states the 
 sample source (`profile.source_from`), the piece's salt coins (``coin_source``), whether the Lean verifier ran as of
 record (``--of-record`` in `pearlplus-lean-check.json`'s ``argv``), and the answer's draws and δ. Each that the record
 doesn't state is printed as not stated. ``development`` ends the line where the record holds PoUW's development piece
-(`development.json`, whose credit is the piece's own and no row of record) or any of the three is not live; since the
+(`development.json`, whose credit is the piece's own and no benchmark result of record) or any of the three is not live; since the
 salt coins are stated only in that piece, every record of today's format reads ``development``. ``challenger`` names a
 challenger session, the auditor's or a local one: the record doesn't say whose. None of them refuses a number.
 
@@ -336,7 +336,7 @@ def coins(tree: Path) -> dict:
     ``coin_source``, ``challenger`` or ``in-process``), whether the Lean verifier ran as of record (``--of-record`` in
     the comparison's ``argv``, which `served_passes.py lean` passes only on live coins), the answer's draws and δ, each
     None where the record doesn't state it, and ``development`` where the record holds PoUW's development piece (whose
-    credit is the piece's, not a row of record) or any of the three is not live. ``challenger`` names a challenger
+    credit is the piece's, not a benchmark result of record) or any of the three is not live. ``challenger`` names a challenger
     session, the auditor's or a local one: the record doesn't say whose. Read after `credit`, which has read the answer
     and the comparison; `Unreadable` where the record holds a development piece that doesn't read as JSON."""
     profile = _held(tree, ANSWER).get("profile") or {}
