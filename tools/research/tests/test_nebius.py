@@ -206,7 +206,7 @@ FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"
 
 @pytest.fixture(autouse=True)
 def _no_host_yield_lock(tmp_path, monkeypatch):
-    """fill_runner pauses cpu-sets jobs while a check holds FILL_YIELD_LOCK, by default the node's slot-d lock, which the train
+    """fill_runner pauses cpu-sets jobs while a check holds FILL_YIELD_LOCK, by default the node's slot-d lock, which the candidate's
     check running these tests on a node may hold itself (r20261002-072246-b9fe, -073629-eb44): no test sees the host's."""
     monkeypatch.setenv("FILL_YIELD_LOCK", str(tmp_path / "check-d.lock"))
 
@@ -3622,7 +3622,7 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
 
 
 def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_its_lock(tmp_path, monkeypatch):
-    """GPU 0's verifies run on 0-47 yielding to slot d's train checks. A check runs in
+    """GPU 0's verifies run on 0-47 yielding to slot d's candidates' checks. A check runs in
     a login session's cgroup, where nice 19 can't reach, so the runner starts none and pauses its running ones while the check
     holds slot d's lock; an owner whose CPUs miss 0-47 runs on."""
     fill = tmp_path / "fill"

@@ -1,17 +1,17 @@
-Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
+Part of network certification's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The coin link (`coin_link`)
 
 D7 (`security/Definitions/Certifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
 ingress link of the server's network attester: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
-prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's
-session, and `verity/protocols/compose/verifier/live_challenger/coin_link.py` runs it on the challenger's host.
+prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one execution
+phase's session, and `verity/protocols/compose/verifier/live_challenger/coin_link.py` runs it on the challenger's host.
 
 ### The path
 
 The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
-runs the server's network attester (`trusted-device`). A window's session takes this path:
+runs the server's network attester (`trusted-device`). An execution phase's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
 2. `serve.py` signs the challenger's record, which states the session's coin commitment, then listens on the host's
@@ -74,7 +74,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 - **WitnessPathPrivate.** The coins leave the trusted device only inside the tunnel's ssh channel. That channel goes
   straight to the server's own sshd: the link sets `ProxyJump` and `ProxyCommand` to `none`, and refuses a peer whose
   line names a jump host or a proxy (`jump`). From the server's sshd to the prover's client is the server's loopback.
-  So the hop from the certifier to the server crosses no developer-controlled host beyond the server itself, and what the
+  So the hop from the network attester to the server crosses no developer-controlled host beyond the server itself, and what the
   server's sshd reads is exactly what the link released.
 
 ### What it rests on
@@ -87,7 +87,7 @@ releases them, and the link's ticks read the host's raw monotonic clock, which t
 
 ### Parameters and record
 
-`CoinLinkParams` are public and fixed before the window, and `digest` binds them together with `COUNTED`. The defaults
+`CoinLinkParams` are public and fixed before the execution phase, and `digest` binds them together with `COUNTED`. The defaults
 are D7's, under which each grid's timing charge is 600 bits an execution phase:
 
 | B | r_coin | requests' r | τ | T | Q |
@@ -104,4 +104,4 @@ are D7's, under which each grid's timing charge is 600 bits an execution phase:
 - `charge_bits`: each grid's timing, (ticks)·log2(r + 1), and its content, 8 bits a counted byte.
 
 Each bucket's occupancy and every frame's content stay witness. No audit reads the record yet. The charge reaches K
-once the certifier's records go through the proof system (`publish`).
+once the network attester's records go through the proof system (`publish`).

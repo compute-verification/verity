@@ -128,7 +128,7 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
 
 
 def test_a_train_checked_on_the_one_ahead_lands_after_it_without_a_recheck(tmp_path, monkeypatch, capsys):
-    """B was checked on A's train; A lands as a merge commit B lacks, with A's tree. Merging B then gives B's tree, the checked
+    """B was checked on A's candidate; A lands as a merge commit B lacks, with A's tree. Merging B then gives B's tree, the checked
     one, so B's attempt counts; once main gains a change B lacks, it no longer does."""
     main, _feat, _tip = _repos(tmp_path)
     _branch(main, "A", "x.txt")
@@ -193,9 +193,9 @@ def _remote(tmp_path: Path, main: Path) -> Path:
 
 
 def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path, monkeypatch, capsys):
-    """The lander's train build (a hand-built train that falls back to the main checkout puts an unchecked merge on main):
-    run from a checkout on another branch with changes, the train is built in a scratch worktree from
-    origin's main, pushed as its branch, and the checkout is as it was; a second train stacks on the first's branch."""
+    """The lander's candidate build (a hand-built candidate that falls back to the main checkout puts an unchecked merge on main):
+    run from a checkout on another branch with changes, the candidate is built in a scratch worktree from
+    origin's main, pushed as its branch, and the checkout is as it was; a second candidate stacks on the first's branch."""
     main, _feat, _tip = _repos(tmp_path)
     origin = _remote(tmp_path, main)
     a, b = _git(main, "rev-parse", "A"), _git(main, "rev-parse", "B")
@@ -258,8 +258,8 @@ def test_prepare_refuses_a_moved_head_a_conflict_and_a_failing_lint_and_pushes_n
 
 
 def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_does_not_pin(tmp_path, monkeypatch, capsys):
-    """`--prepare` would push a train holding a PR stacked on another's open head, which only the landing gate then refused.
-    Pinning the base below it builds the train."""
+    """`--prepare` would push a candidate holding a PR stacked on another's open head, which only the landing gate then refused.
+    Pinning the base below it builds the candidate."""
     main, _feat, _tip = _repos(tmp_path)
     origin, heads = _origin_with(tmp_path, main, {"base.txt": "base\n"}, {8: {"e.txt": "8\n"}})
     _git(main, "checkout", "-q", "-b", "pr9", "pr8")
@@ -280,7 +280,7 @@ def test_prepare_refuses_a_train_the_gate_would_refuse_for_a_stacked_base_it_doe
 
 
 def test_a_train_that_would_revert_a_landed_change_is_refused_unless_its_path_is_allowed(tmp_path, monkeypatch, capsys):
-    """A PR whose merge of main dropped another PR's lines would remove them from main without a word when it lands. A line the train loses must be one a ref removes in a commit of its own."""
+    """A PR whose merge of main dropped another PR's lines would remove them from main without a word when it lands. A line the candidate loses must be one a ref removes in a commit of its own."""
     from research.merge import reverted
 
     main, _feat, _tip = _repos(tmp_path)
@@ -354,7 +354,7 @@ def _origin_with(tmp_path: Path, main: Path, files: dict[str, str], prs: dict[in
 
 
 def test_a_conflict_only_on_import_lines_keeps_both_sides_and_any_other_line_refuses(tmp_path, monkeypatch, capsys):
-    """Stacked PRs each adding a module to one root import list (a conflict otherwise resolved by hand): the train keeps ours, then the lines theirs adds, and says so in the
+    """Stacked PRs each adding a module to one root import list (a conflict otherwise resolved by hand): the candidate keeps ours, then the lines theirs adds, and says so in the
     merge's `Imports:` trailer; a conflict holding any other line still refuses, and nothing is pushed."""
     main, _feat, _tip = _repos(tmp_path)
     tail = "\ntheorem t : True := trivial\n"
@@ -391,7 +391,7 @@ print(json.dumps({"regenerated": ["gen.txt"] if new != old else [], "notes": []}
 
 
 def test_a_generated_file_is_regenerated_by_the_tree_s_pins_py_on_each_merge_never_merged_as_text(tmp_path, monkeypatch, capsys):
-    """Two branches each adding a Lake dependency: git merges the manifest's text, and the train's manifest would hold
+    """Two branches each adding a Lake dependency: git merges the manifest's text, and the candidate's manifest would hold
     neither. Each merge runs the tree's own `pins.py --merged`: a conflict in a file it generates is resolved by regenerating
     it, the merge's `Regenerated:` trailer names it, and the lines regeneration drops (a stale `old` no pull request removes)
     don't count as a revert; a conflict in any other file still refuses."""
@@ -429,7 +429,7 @@ def test_a_json_file_git_merges_into_a_repeated_key_refuses_the_train(tmp_path, 
 
 def test_a_change_to_a_lock_goes_into_a_train_and_lands_without_any_label(tmp_path, monkeypatch, capsys):
     """No change waits on a per-head grant: a pull request changing a `lean-audit.json`, with no label at its
-    head and no store remote to read one from, is built into a train and its checked tip lands."""
+    head and no store remote to read one from, is built into a candidate and its checked tip lands."""
     main, _feat, _tip = _repos(tmp_path)
     audit = {"roots": ["P"], "guarantees": {"P.t": {"type_hash": "1"}}, "reads": {}}
     _origin, heads = _origin_with(tmp_path, main, {"lean-audit.json": json.dumps(audit, indent=1)}, {
@@ -465,7 +465,7 @@ def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path
     """A tip merging a PR at a pinned head mustn't land after that PR moved to a head that fixes findings against the pinned
     one, as it would if pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
     on origin must still be the merged one, or add nothing the tip lacks; a check of the tip doesn't stand in for it.  No ready
-    mark is asked: the train's own check is the gate."""
+    mark is asked: the candidate's own check is the gate."""
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
     capsys.readouterr()
     rc, err = merge_main(["train-prep/t", "--dry-run"]), capsys.readouterr().err
@@ -606,7 +606,7 @@ def test_merge_admits_only_a_run_of_the_declared_command_whose_own_result_passed
     """A check that runs nothing: `research run --tool check -- sh -c '<write a check/v1
     result.json>'` would pass the gate, with its verdict failed too, if the gate read neither the attempt's argv nor the result's
     verdict.  An attempt passes only as a run of the command the target declares (`Tool.command`) whose own result passed, and
-    lists no step twice (`step_status` reads the first, the train gate the last)."""
+    lists no step twice (`step_status` reads the first, the candidate gate the last)."""
     main, feat, _tip = _repos(tmp_path)
     for status in ("passed", "failed"):
         assert _record(tmp_path, feat, monkeypatch, "sh", "-c", _FORGED.replace("STATUS", status)) == 0
@@ -682,7 +682,7 @@ def test_a_refused_kind_or_another_runs_result_passes_no_gate_even_where_the_dec
 
 def test_a_train_whose_command_isnt_the_declared_one_is_refused_before_anything_is_checked(tmp_path, monkeypatch, capsys):
     """`research merge --train --command "bash -c '... check.py || true'"`: the gate refuses every attempt of it,
-    so the train's check and its bisection would run for nothing.  Check.py's own flags are still the declared command."""
+    so the candidate's check and its bisection would run for nothing.  Check.py's own flags are still the declared command."""
     monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
     monkeypatch.delenv("FAKE_CHECK", raising=False)
     main, _feat, _tip = _repos(tmp_path)
@@ -893,7 +893,7 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
 
 def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_path):
     """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proofs/flock/prover/\\303\\251.py"`), which no prefix of a
-    `merge_requires` rule matched, so a train changing such a file required no `lean-agreement`."""
+    `merge_requires` rule matched, so a candidate changing such a file required no `lean-agreement`."""
     from research.merge import required_steps
 
     repo = tmp_path / "repo"
@@ -914,9 +914,9 @@ def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_pat
 def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_admits_the_control(tmp_path, monkeypatch, capsys):
     """The monitors' daily `research merge --canary`: under the target's own declaration, each bad attempt (no result, another
     kind or a refused one, a record that can't be read or disagrees with the index, another command, a failed verdict, a step
-    listed twice) must be refused by the gate, the push guard and, where it judges the case, the train gate, and a run of the
+    listed twice) must be refused by the gate, the push guard and, where it judges the case, the candidate gate, and a run of the
     declared command with a passing result admitted by all three.  A gate that stops reading the record (main before this, as
-    `refused` answering None), the command (`unlike`) or the train's result (its `gate`) fails it; so does a declaration that
+    `refused` answering None), the command (`unlike`) or the candidate's result (its `gate`) fails it; so does a declaration that
     produces nothing.  It reads and writes nothing of the evidence store."""
     import research.merge as M
     from research.jobs import trains
@@ -1086,7 +1086,7 @@ def test_a_lock_commit_carries_the_files_its_lock_run_repaired_and_no_other_file
 
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
     """`regenerated_records` returning {} both for a check that regenerated nothing and for one whose records it couldn't
-    read would land the train without them; a record the report names and the run's files lack raises."""
+    read would land the candidate without them; a record the report names and the run's files lack raises."""
     import pytest
     from research.merge import Unreadable, regenerated_records
     from research.store.local import LocalStore
@@ -1120,7 +1120,7 @@ def _relock(feat: Path, text: str, trailer: str | None) -> str:
 
 
 def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(tmp_path, monkeypatch, capsys):
-    """A train's Lean check passes by regenerating records, and drive lands the train with
+    """A candidate's Lean check passes by regenerating records, and drive lands the candidate with
     those locks committed on top.  That commit's tree is the one the check audited, byte for byte, so the check vouches for it;
     other bytes, another file or no `Regenerated:` trailer don't."""
     main, feat, tip = _repos(tmp_path)
@@ -1290,7 +1290,7 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
 
 
 def test_verdicts_cites_an_after_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
-    """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
+    """Drive cancels a candidate's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
     on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
     check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
     tool of anything but the declared command with `--deferred STEPS` once is still another tool's."""
@@ -1342,7 +1342,7 @@ def test_verdicts_admits_a_build_step_only_by_the_cited_passes_of_the_parts_that
 
 
 def test_verdicts_takes_one_ref_and_no_push_and_a_plan_that_prints_nothing_refuses(tmp_path, monkeypatch, capsys):
-    """The push guard admits only a passing attempt of the tree it lands, so --verdicts can't push or run a train."""
+    """The push guard admits only a passing attempt of the tree it lands, so --verdicts can't push or run a candidate."""
     import pytest
 
     import research.merge as M
